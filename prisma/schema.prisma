@@ -1,0 +1,241 @@
+// prisma/schema.prisma
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlserver"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// USER MODULE
+// ============================================================
+
+model User {
+  id                   String    @id @default(uuid())
+  azure_oid            String?   @unique // Azure AD Object ID
+  email                String    @unique
+  email_verified       Boolean   @default(false)
+  first_name           String
+  last_name            String
+  display_name         String?
+  avatar_url           String?
+  phone                String?
+  department           String?
+  job_title            String?
+  is_active            Boolean   @default(true)
+  is_system_user       Boolean   @default(false)
+  last_login_at        DateTime?
+  password_hash        String?   // null for SSO-only users
+  created_at           DateTime  @default(now())
+  updated_at           DateTime  @updatedAt
+  deleted_at           DateTime?
+
+  user_roles           User_Role[]
+  refresh_tokens       Refresh_Token[]
+  audit_logs           Audit_Log[]
+  notifications        Notification[]
+  documents            Document[]
+  
+  @@map("users")
+}
+
+model Role {
+  id          String    @id @default(uuid())
+  name        String    @unique
+  description String?
+  is_system   Boolean   @default(false)
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+
+  user_roles       User_Role[]
+  role_permissions Role_Permission[]
+
+  @@map("roles")
+}
+
+model Permission {
+  id          String    @id @default(uuid())
+  name        String    @unique   // e.g. "audit:read", "audit:write"
+  module      String              // e.g. "audit", "user", "document"
+  action      String              // e.g. "read", "write", "delete", "admin"
+  description String?
+  created_at  DateTime  @default(now())
+
+  role_permissions Role_Permission[]
+
+  @@map("permissions")
+}
+
+model User_Role {
+  id         String    @id @default(uuid())
+  user_id    String
+  role_id    String
+  assigned_by String?
+  assigned_at DateTime  @default(now())
+  expires_at  DateTime?
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, role_id])
+  @@map("user_roles")
+}
+
+model Role_Permission {
+  id            String    @id @default(uuid())
+  role_id       String
+  permission_id String
+  created_at    DateTime  @default(now())
+
+  role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
+  permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
+
+  @@unique([role_id, permission_id])
+  @@map("role_permissions")
+}
+
+model Refresh_Token {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String    @unique
+  expires_at DateTime
+  revoked_at DateTime?
+  ip_address String?
+  user_agent String?
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@map("refresh_tokens")
+}
+
+// ============================================================
+// LOGGING MODULE
+// ============================================================
+
+model Audit_Log {
+  id            String    @id @default(uuid())
+  user_id       String?
+  action        String
+  module        String
+  entity_type   String?
+  entity_id     String?
+  old_values    String?   // JSON string
+  new_values    String?   // JSON string
+  ip_address    String?
+  user_agent    String?
+  status        String    @default("success") // success | failure
+  error_message String?
+  duration_ms   Int?
+  created_at    DateTime  @default(now())
+
+  user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
+
+  @@index([user_id])
+  @@index([module])
+  @@index([created_at])
+  @@map("audit_logs")
+}
+
+// ============================================================
+// MESSAGING MODULE
+// ============================================================
+
+model Notification {
+  id          String    @id @default(uuid())
+  user_id     String
+  title       String
+  body        String
+  type        String    // info | warning | error | success
+  channel     String    // in_app | email | sms
+  is_read     Boolean   @default(false)
+  read_at     DateTime?
+  reference_type String?
+  reference_id   String?
+  metadata    String?   // JSON string
+  created_at  DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id, is_read])
+  @@map("notifications")
+}
+
+model Email_Log {
+  id          String    @id @default(uuid())
+  to_address  String
+  from_address String
+  subject     String
+  template    String?
+  status      String    @default("pending") // pending | sent | failed | bounced
+  error       String?
+  sent_at     DateTime?
+  created_at  DateTime  @default(now())
+
+  @@map("email_logs")
+}
+
+// ============================================================
+// DOCUMENT MODULE
+// ============================================================
+
+model Document {
+  id              String    @id @default(uuid())
+  uploaded_by_id  String
+  original_name   String
+  stored_name     String
+  mime_type       String
+  file_size       Int
+  storage_path    String
+  storage_provider String   // local | azure_blob | aws_s3
+  module          String
+  entity_type     String?
+  entity_id       String?
+  is_deleted      Boolean   @default(false)
+  deleted_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  uploaded_by User @relation(fields: [uploaded_by_id], references: [id])
+
+  @@index([entity_type, entity_id])
+  @@map("documents")
+}
+
+// ============================================================
+// BACKGROUND SERVICE MODULE
+// ============================================================
+
+model Scheduled_Job {
+  id              String    @id @default(uuid())
+  job_key         String    @unique  // e.g. "BG:AUDIT:REMINDER:DAILY"
+  name            String
+  description     String?
+  cron_expression String
+  is_active       Boolean   @default(true)
+  last_run_at     DateTime?
+  next_run_at     DateTime?
+  last_status     String?   // success | failure | running
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  job_runs Scheduled_Job_Run[]
+
+  @@map("scheduled_jobs")
+}
+
+model Scheduled_Job_Run {
+  id           String    @id @default(uuid())
+  job_id       String
+  status       String    // running | success | failure
+  started_at   DateTime  @default(now())
+  completed_at DateTime?
+  error        String?
+  metadata     String?   // JSON string
+
+  scheduled_job Scheduled_Job @relation(fields: [job_id], references: [id])
+
+  @@map("scheduled_job_runs")
+}
