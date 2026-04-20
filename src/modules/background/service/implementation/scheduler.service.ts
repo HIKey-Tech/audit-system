@@ -34,7 +34,7 @@ class SchedulerService {
 
   register(job: RegisteredJob): void {
     this.jobs.push(job);
-    logger.info({ jobKey: job.key }, 'Background job registered');
+    logger.info('Background job registered', { jobKey: job.key });
   }
 
   async startAll(): Promise<void> {
@@ -45,22 +45,22 @@ class SchedulerService {
         runOnInit: false,
       });
       this.tasks.set(job.key, task);
-      logger.info({ jobKey: job.key, cron: job.cronExpression }, 'Background job started');
+      logger.info('Background job started', { jobKey: job.key, cron: job.cronExpression });
     }
   }
 
   stopAll(): void {
     for (const [key, task] of this.tasks) {
       task.stop();
-      logger.info({ jobKey: key }, 'Background job stopped');
+      logger.info('Background job stopped', { jobKey: key });
     }
     this.tasks.clear();
   }
 
   private async _runJob(job: RegisteredJob): Promise<void> {
-    logger.info({ jobKey: job.key }, 'Background job started running');
+    logger.info('Background job started running', { jobKey: job.key });
 
-    const run = await prisma.scheduled_job_run.create({
+    const run = await prisma.scheduled_Job_Run.create({
       data: {
         job_id: await this._getJobId(job.key),
         status: 'running',
@@ -71,22 +71,22 @@ class SchedulerService {
     try {
       await job.handler();
 
-      await prisma.scheduled_job_run.update({
+      await prisma.scheduled_Job_Run.update({
         where: { id: run.id },
         data: { status: 'success', completed_at: new Date() },
       });
 
-      await prisma.scheduled_job.update({
+      await prisma.scheduled_Job.update({
         where: { job_key: job.key },
         data: { last_run_at: new Date(), last_status: 'success' },
       });
 
       logger.info(
-        { jobKey: job.key, durationMs: Date.now() - startMs },
         'Background job completed',
+        { jobKey: job.key, durationMs: Date.now() - startMs },
       );
     } catch (err) {
-      await prisma.scheduled_job_run.update({
+      await prisma.scheduled_Job_Run.update({
         where: { id: run.id },
         data: {
           status: 'failure',
@@ -95,17 +95,17 @@ class SchedulerService {
         },
       });
 
-      await prisma.scheduled_job.update({
+      await prisma.scheduled_Job.update({
         where: { job_key: job.key },
         data: { last_run_at: new Date(), last_status: 'failure' },
       });
 
-      logger.error({ err, jobKey: job.key }, 'Background job failed');
+      logger.error('Background job failed', { err, jobKey: job.key });
     }
   }
 
   private async _upsertJobRecord(job: RegisteredJob): Promise<void> {
-    await prisma.scheduled_job.upsert({
+    await prisma.scheduled_Job.upsert({
       where: { job_key: job.key },
       create: {
         job_key: job.key,
@@ -123,7 +123,7 @@ class SchedulerService {
   }
 
   private async _getJobId(jobKey: string): Promise<string> {
-    const job = await prisma.scheduled_job.findUniqueOrThrow({
+    const job = await prisma.scheduled_Job.findUniqueOrThrow({
       where: { job_key: jobKey },
       select: { id: true },
     });
@@ -144,7 +144,7 @@ export const registerAllJobs = (): void => {
     description: 'Purges expired and revoked refresh tokens from the database',
     cronExpression: '0 * * * *', // Every hour
     handler: async () => {
-      const result = await prisma.refresh_token.deleteMany({
+      const result = await prisma.refresh_Token.deleteMany({
         where: {
           OR: [
             { expires_at: { lt: new Date() } },
@@ -152,7 +152,7 @@ export const registerAllJobs = (): void => {
           ],
         },
       });
-      logger.info({ count: result.count }, 'Expired tokens cleaned up');
+      logger.info('Expired tokens cleaned up', { count: result.count });
     },
   });
 
@@ -163,23 +163,9 @@ export const registerAllJobs = (): void => {
     description: 'Sends reminders for audit engagements approaching their due date',
     cronExpression: '0 8 * * *', // Every day at 08:00
     handler: async () => {
-      const threeDaysFromNow = new Date();
-      threeDaysFromNow.setDate(threeDaysFromNow.getDate() + 3);
-
-      const overdueEngagements = await prisma.audit_engagement.findMany({
-        where: {
-          report_due_date: { lte: threeDaysFromNow },
-          status: { notIn: ['completed'] },
-          deleted_at: null,
-        },
-        include: { assignments: { include: { assigned_auditor: true } } },
-      });
-
-      logger.info(
-        { count: overdueEngagements.length },
-        'Audit reminder job: found engagements approaching due date',
-      );
-      // TODO: integrate notificationService.sendEmail() here
+      // NOTE: stubbed until the Audit module adds `audit_engagement` to the schema.
+      // Restore the real query (due-date window + notification dispatch) once that model exists.
+      logger.info('Audit reminder job: skipped (audit_engagement model not yet defined)');
     },
   });
 
@@ -193,14 +179,14 @@ export const registerAllJobs = (): void => {
       const ninetyDaysAgo = new Date();
       ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
 
-      const oldLogs = await prisma.audit_log.findMany({
+      const oldLogs = await prisma.audit_Log.findMany({
         where: { created_at: { lt: ninetyDaysAgo } },
         take: 10000,
       });
 
       logger.info(
-        { count: oldLogs.length },
         'Log archive job: logs ready for DWH export',
+        { count: oldLogs.length },
       );
       // TODO: push to data warehouse via DataWarehouseClient
     },

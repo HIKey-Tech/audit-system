@@ -9,7 +9,7 @@ import {
 export class AuditLogService implements IAuditLogService {
   async log(dto: CreateAuditLogDto): Promise<void> {
     try {
-      await prisma.audit_log.create({
+      await prisma.audit_Log.create({
         data: {
           user_id: dto.userId ?? null,
           action: dto.action,
@@ -27,14 +27,14 @@ export class AuditLogService implements IAuditLogService {
       });
     } catch (err) {
       // Logging must never crash the application
-      logger.error({ err, dto }, 'Failed to persist audit log');
+      logger.error('Failed to persist audit log', { err, dto });
     }
   }
 
   logAsync(dto: CreateAuditLogDto): void {
     // Fire-and-forget — do not await
     this.log(dto).catch((err) =>
-      logger.error({ err }, 'Async audit log failed'),
+      logger.error('Async audit log failed', { err }),
     );
   }
 }

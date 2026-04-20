@@ -121,7 +121,7 @@ export class AuthService implements IAuthService {
   ): Promise<TokenPair> {
     const tokenHash = hashToken(dto.refreshToken);
 
-    const storedToken = await prisma.refresh_token.findUnique({
+    const storedToken = await prisma.refresh_Token.findUnique({
       where: { token_hash: tokenHash },
       include: { user: { include: userWithRolesInclude } },
     });
@@ -146,7 +146,7 @@ export class AuthService implements IAuthService {
     }
 
     // Rotate: revoke old, issue new
-    await prisma.refresh_token.update({
+    await prisma.refresh_Token.update({
       where: { id: storedToken.id },
       data: { revoked_at: new Date() },
     });
@@ -156,14 +156,14 @@ export class AuthService implements IAuthService {
 
   async logout(refreshToken: string): Promise<void> {
     const tokenHash = hashToken(refreshToken);
-    await prisma.refresh_token.updateMany({
+    await prisma.refresh_Token.updateMany({
       where: { token_hash: tokenHash, revoked_at: null },
       data: { revoked_at: new Date() },
     });
   }
 
   async logoutAll(userId: string): Promise<void> {
-    await prisma.refresh_token.updateMany({
+    await prisma.refresh_Token.updateMany({
       where: { user_id: userId, revoked_at: null },
       data: { revoked_at: new Date() },
     });
@@ -188,7 +188,7 @@ export class AuthService implements IAuthService {
 
     const { raw, hash, expiresAt } = generateRefreshToken();
 
-    await prisma.refresh_token.create({
+    await prisma.refresh_Token.create({
       data: {
         user_id: userId,
         token_hash: hash,

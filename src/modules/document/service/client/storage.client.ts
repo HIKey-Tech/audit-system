@@ -6,7 +6,7 @@ import { config } from '../../../../shared/config/app.config';
 import { logger } from '../../../../shared/utils/logger.util';
 
 export interface IStorageClient {
-  save(buffer: Buffer, fileName: string, mimeType: string): Promise<string>;
+  save(buffer: Buffer, fileName: string): Promise<string>;
   read(storagePath: string): Promise<Buffer>;
   delete(storagePath: string): Promise<void>;
   getUrl(storagePath: string): Promise<string>;
@@ -30,7 +30,7 @@ export class LocalStorageClient implements IStorageClient {
     await fs.mkdir(this.basePath, { recursive: true });
     await fs.writeFile(filePath, buffer);
 
-    logger.debug({ storedName }, 'File saved to local storage');
+    logger.debug('File saved to local storage', { storedName });
     return storedName;
   }
 

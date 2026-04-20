@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
@@ -9,39 +10,39 @@ const prisma = new PrismaClient();
 // ─────────────────────────────────────────────────────────────
 const PERMISSIONS = [
   // user module
-  { name: 'user:read',   module: 'user',     action: 'read',   description: 'View users' },
-  { name: 'user:write',  module: 'user',     action: 'write',  description: 'Create / update users' },
-  { name: 'user:delete', module: 'user',     action: 'delete', description: 'Delete users' },
-  { name: 'user:admin',  module: 'user',     action: 'admin',  description: 'Manage roles & permissions' },
+  { name: 'user:read', module: 'user', action: 'read', description: 'View users' },
+  { name: 'user:write', module: 'user', action: 'write', description: 'Create / update users' },
+  { name: 'user:delete', module: 'user', action: 'delete', description: 'Delete users' },
+  { name: 'user:admin', module: 'user', action: 'admin', description: 'Manage roles & permissions' },
 
   // audit module
-  { name: 'audit:read',   module: 'audit',   action: 'read',   description: 'View audit plans & engagements' },
-  { name: 'audit:write',  module: 'audit',   action: 'write',  description: 'Create / update audit content' },
-  { name: 'audit:delete', module: 'audit',   action: 'delete', description: 'Delete audit content' },
-  { name: 'audit:admin',  module: 'audit',   action: 'admin',  description: 'Full audit administration' },
+  { name: 'audit:read', module: 'audit', action: 'read', description: 'View audit plans & engagements' },
+  { name: 'audit:write', module: 'audit', action: 'write', description: 'Create / update audit content' },
+  { name: 'audit:delete', module: 'audit', action: 'delete', description: 'Delete audit content' },
+  { name: 'audit:admin', module: 'audit', action: 'admin', description: 'Full audit administration' },
 
   // finding module (part of audit)
-  { name: 'finding:read',  module: 'audit',  action: 'read',   description: 'View findings' },
-  { name: 'finding:write', module: 'audit',  action: 'write',  description: 'Create / update findings' },
+  { name: 'finding:read', module: 'audit', action: 'read', description: 'View findings' },
+  { name: 'finding:write', module: 'audit', action: 'write', description: 'Create / update findings' },
 
   // document module
-  { name: 'document:read',   module: 'document', action: 'read',   description: 'Download documents' },
-  { name: 'document:write',  module: 'document', action: 'write',  description: 'Upload documents' },
+  { name: 'document:read', module: 'document', action: 'read', description: 'Download documents' },
+  { name: 'document:write', module: 'document', action: 'write', description: 'Upload documents' },
   { name: 'document:delete', module: 'document', action: 'delete', description: 'Delete documents' },
 
   // messaging module
   { name: 'notification:read', module: 'messaging', action: 'read', description: 'View notifications' },
 
   // logging module
-  { name: 'log:read',  module: 'logging', action: 'read',  description: 'View audit logs' },
+  { name: 'log:read', module: 'logging', action: 'read', description: 'View audit logs' },
   { name: 'log:admin', module: 'logging', action: 'admin', description: 'Manage log settings' },
 
   // background module
-  { name: 'job:read',  module: 'background', action: 'read',  description: 'View scheduled jobs' },
+  { name: 'job:read', module: 'background', action: 'read', description: 'View scheduled jobs' },
   { name: 'job:admin', module: 'background', action: 'admin', description: 'Manage scheduled jobs' },
 
   // predictive module
-  { name: 'predictive:read',  module: 'predictive', action: 'read',  description: 'View ML insights' },
+  { name: 'predictive:read', module: 'predictive', action: 'read', description: 'View ML insights' },
   { name: 'predictive:admin', module: 'predictive', action: 'admin', description: 'Manage ML models' },
 ];
 
@@ -54,75 +55,75 @@ const ROLES: Array<{
   isSystem: boolean;
   permissions: string[];
 }> = [
-  {
-    name: 'super_admin',
-    description: 'Full system access',
-    isSystem: true,
-    permissions: PERMISSIONS.map((p) => p.name),
-  },
-  {
-    name: 'audit_admin',
-    description: 'Full audit management, no system settings',
-    isSystem: true,
-    permissions: [
-      'user:read', 'user:write',
-      'audit:read', 'audit:write', 'audit:delete', 'audit:admin',
-      'finding:read', 'finding:write',
-      'document:read', 'document:write', 'document:delete',
-      'notification:read',
-      'log:read',
-      'job:read',
-      'predictive:read',
-    ],
-  },
-  {
-    name: 'audit_lead',
-    description: 'Lead auditor — manages engagements and team',
-    isSystem: true,
-    permissions: [
-      'user:read',
-      'audit:read', 'audit:write',
-      'finding:read', 'finding:write',
-      'document:read', 'document:write',
-      'notification:read',
-      'log:read',
-      'predictive:read',
-    ],
-  },
-  {
-    name: 'auditor',
-    description: 'Standard auditor — works on assigned engagements',
-    isSystem: true,
-    permissions: [
-      'audit:read', 'audit:write',
-      'finding:read', 'finding:write',
-      'document:read', 'document:write',
-      'notification:read',
-    ],
-  },
-  {
-    name: 'auditee',
-    description: 'Auditee — views relevant findings and responds',
-    isSystem: true,
-    permissions: [
-      'audit:read',
-      'finding:read',
-      'document:read',
-      'notification:read',
-    ],
-  },
-  {
-    name: 'viewer',
-    description: 'Read-only access — default role on SSO provisioning',
-    isSystem: true,
-    permissions: [
-      'audit:read',
-      'finding:read',
-      'document:read',
-      'notification:read',
-    ],
-  },
-];
+    {
+      name: 'super_admin',
+      description: 'Full system access',
+      isSystem: true,
+      permissions: PERMISSIONS.map((p) => p.name),
+    },
+    {
+      name: 'audit_admin',
+      description: 'Full audit management, no system settings',
+      isSystem: true,
+      permissions: [
+        'user:read', 'user:write',
+        'audit:read', 'audit:write', 'audit:delete', 'audit:admin',
+        'finding:read', 'finding:write',
+        'document:read', 'document:write', 'document:delete',
+        'notification:read',
+        'log:read',
+        'job:read',
+        'predictive:read',
+      ],
+    },
+    {
+      name: 'audit_lead',
+      description: 'Lead auditor — manages engagements and team',
+      isSystem: true,
+      permissions: [
+        'user:read',
+        'audit:read', 'audit:write',
+        'finding:read', 'finding:write',
+        'document:read', 'document:write',
+        'notification:read',
+        'log:read',
+        'predictive:read',
+      ],
+    },
+    {
+      name: 'auditor',
+      description: 'Standard auditor — works on assigned engagements',
+      isSystem: true,
+      permissions: [
+        'audit:read', 'audit:write',
+        'finding:read', 'finding:write',
+        'document:read', 'document:write',
+        'notification:read',
+      ],
+    },
+    {
+      name: 'auditee',
+      description: 'Auditee — views relevant findings and responds',
+      isSystem: true,
+      permissions: [
+        'audit:read',
+        'finding:read',
+        'document:read',
+        'notification:read',
+      ],
+    },
+    {
+      name: 'viewer',
+      description: 'Read-only access — default role on SSO provisioning',
+      isSystem: true,
+      permissions: [
+        'audit:read',
+        'finding:read',
+        'document:read',
+        'notification:read',
+      ],
+    },
+  ];
 
 // ─────────────────────────────────────────────────────────────
 // Seed
@@ -153,16 +154,15 @@ async function main(): Promise<void> {
     });
 
     // Clear existing assignments then re-apply (idempotent)
-    await prisma.role_permission.deleteMany({ where: { role_id: role.id } });
+    await prisma.role_Permission.deleteMany({ where: { role_id: role.id } });
 
     const permissions = await prisma.permission.findMany({
       where: { name: { in: roleData.permissions } },
       select: { id: true },
     });
 
-    await prisma.role_permission.createMany({
-      data: permissions.map((p) => ({ role_id: role.id, permission_id: p.id })),
-      skipDuplicates: true,
+    await prisma.role_Permission.createMany({
+      data: permissions.map((p: { id: string }) => ({ role_id: role.id, permission_id: p.id })),
     });
   }
   console.log(`   ✓ ${ROLES.length} roles seeded`);

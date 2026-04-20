@@ -1,4 +1,5 @@
 // src/modules/document/service/implementation/document.service.ts
+import type { Document } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../shared/errors/app.error';
 import { logger } from '../../../../shared/utils/logger.util';
@@ -63,7 +64,7 @@ export class DocumentService implements IDocumentService {
       },
     });
 
-    logger.info({ documentId: document.id, module: dto.module }, 'Document uploaded');
+    logger.info('Document uploaded', { documentId: document.id, module: dto.module });
     const url = await this.storageClient.getUrl(storedName);
     return mapToResponse(document, url);
   }
@@ -98,7 +99,7 @@ export class DocumentService implements IDocumentService {
     });
 
     await this.storageClient.delete(doc.storage_path);
-    logger.info({ documentId: id, actorId }, 'Document deleted');
+    logger.info('Document deleted', { documentId: id, actorId });
   }
 
   async listByEntity(
@@ -111,7 +112,7 @@ export class DocumentService implements IDocumentService {
     });
 
     return Promise.all(
-      docs.map(async (doc) => {
+      docs.map(async (doc: Document) => {
         const url = await this.storageClient.getUrl(doc.storage_path);
         return mapToResponse(doc, url);
       }),

@@ -54,21 +54,21 @@ export const authenticate = async (
       throw AppError.unauthorized('Invalid token');
     }
 
-    const user = await prisma.user.findUnique({
+    const user = await prisma.user.findFirst({
       where: { id: payload.sub, is_active: true, deleted_at: null },
       include: userWithRolesInclude,
-    }) as UserWithRoles | null;
+    });
 
     if (!user) {
       throw AppError.unauthorized('User not found or inactive');
     }
 
-    const roles = user.user_roles.map((ur) => ur.role.name);
+    const roles: string[] = user.user_roles.map((ur: any) => ur.role.name as string);
 
     const permissions: string[] = [
-      ...new Set(
-        user.user_roles.flatMap((ur) =>
-          ur.role.role_permissions.map((rp) => rp.permission.name),
+      ...new Set<string>(
+        user.user_roles.flatMap((ur: any) =>
+          ur.role.role_permissions.map((rp: any) => rp.permission.name as string),
         ),
       ),
     ];

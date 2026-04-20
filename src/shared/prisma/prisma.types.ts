@@ -2,12 +2,12 @@
 import { Prisma } from '@prisma/client';
 
 /**
- * Single source of truth for the user-with-roles include shape.
+ * Single source of truth for the user-with-roles query shape.
  * Used across auth.middleware, auth.service, and user.service
  * to give TypeScript full type inference on nested relations.
  */
-export const userWithRolesInclude = {
-  user_roles:{
+export const userWithRolesInclude = Prisma.validator<Prisma.UserInclude>()({
+  user_roles: {
     include: {
       role: {
         include: {
@@ -18,7 +18,7 @@ export const userWithRolesInclude = {
       },
     },
   },
-} satisfies Prisma.UserInclude;
+});
 
 export type UserWithRoles = Prisma.UserGetPayload<{
   include: typeof userWithRolesInclude;

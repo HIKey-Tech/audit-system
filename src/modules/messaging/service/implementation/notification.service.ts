@@ -24,7 +24,7 @@ export class NotificationService implements INotificationService {
   }
 
   async sendEmail(dto: SendEmailDto): Promise<void> {
-    const logEntry = await prisma.email_log.create({
+    const logEntry = await prisma.email_Log.create({
       data: {
         to_address: Array.isArray(dto.to) ? dto.to.join(', ') : dto.to,
         from_address: config.email.from,
@@ -43,18 +43,18 @@ export class NotificationService implements INotificationService {
         text: dto.text,
       });
 
-      await prisma.email_log.update({
+      await prisma.email_Log.update({
         where: { id: logEntry.id },
         data: { status: 'sent', sent_at: new Date() },
       });
 
-      logger.info({ subject: dto.subject, to: dto.to }, 'Email sent');
+      logger.info('Email sent', { subject: dto.subject, to: dto.to });
     } catch (err) {
-      await prisma.email_log.update({
+      await prisma.email_Log.update({
         where: { id: logEntry.id },
         data: { status: 'failed', error: String(err) },
       });
-      logger.error({ err, subject: dto.subject }, 'Email send failed');
+      logger.error('Email send failed', { err, subject: dto.subject });
       throw err;
     }
   }

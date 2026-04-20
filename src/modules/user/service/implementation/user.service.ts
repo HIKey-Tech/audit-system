@@ -93,8 +93,7 @@ export class UserService implements IUserService {
   ): Promise<{ users: UserResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
 
-    // const where: Prisma.userWhereInput = {
-    const where: Prisma.userWhereInput = {
+    const where: Prisma.UserWhereInput = {
       deleted_at: null,
       ...(query.isActive !== undefined && { is_active: query.isActive }),
       ...(query.department && { department: { contains: query.department } }),
@@ -183,7 +182,7 @@ export class UserService implements IUserService {
     // Upsert each role assignment
     await prisma.$transaction(
       dto.roleIds.map((roleId) =>
-        prisma.user_role.upsert({
+        prisma.user_Role.upsert({
           where: { user_id_role_id: { user_id: userId, role_id: roleId } },
           create: {
             user_id: userId,
@@ -208,7 +207,7 @@ export class UserService implements IUserService {
     roleId: string,
     actorId: string,
   ): Promise<UserResponseDto> {
-    await prisma.user_role.deleteMany({
+    await prisma.user_Role.deleteMany({
       where: { user_id: userId, role_id: roleId },
     });
 
