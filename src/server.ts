@@ -23,6 +23,7 @@ import {
 } from './shared/middleware/error-handler.middleware';
 import { requestAuditLogger } from './modules/logging/utility/request-logger.middleware';
 import { createUserModule } from './modules/user';
+import { createDocumentModule } from './modules/document';
 import {
   schedulerService,
   registerAllJobs,
@@ -91,6 +92,7 @@ const buildApp = (): Application => {
 
   app.use(apiPrefix, apiLimiter);
   app.use(apiPrefix, createUserModule());
+  app.use(apiPrefix, createDocumentModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);

@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-20
+> Last updated: 2026-04-21
 
 ---
 
 ## 1. One-line status
 
-Foundation + User module are complete and production-shaped. Logging, Messaging, Document, and Background exist as service-only scaffolds (no HTTP routes). No app entry point (`server.ts`) has been wired up yet. Audit, Risk, Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). Audit, Risk, Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
 
 ---
 
@@ -101,21 +101,45 @@ Folder: `src/modules/messaging/`
 - HTTP routes to read / mark-read in-app notifications.
 - SMS channel.
 
-### 2.5 Document module — COMPLETE (service-only)
+### 2.5 Document module — COMPLETE
 
 Folder: `src/modules/document/`
 
-- `DocumentService` — `upload`, `getById`, `getDownloadUrl`, `delete` (soft), `listByEntity(entityType, entityId)`.
+- `DocumentService` — file CRUD (`upload`, `getById`, `getDownloadUrl`, `delete` soft, `listByEntity`), versioning (`uploadNewVersion`, `listVersions`, `getVersion`, `getVersionDownloadUrl`), templates (`createTemplate`, `getTemplateById`, `listTemplates`, `updateTemplate`, `deleteTemplate` soft).
 - Storage adapter pattern via `IStorageClient`:
   - `LocalStorageClient` — fully implemented (filesystem + UUID-stamped filenames).
   - `AzureBlobStorageClient` — stub (methods log warnings / throw "not yet implemented").
   - `createStorageClient()` factory picks based on `config.storage.provider`.
+- `DocumentController` + `createDocumentModule()` — mounted at `/api/v1/documents`.
+- Versioning model: `Document` holds the current version; every historical version is snapshotted into `document_versions` on new upload, wrapped in `prisma.$transaction`. `Document.version_number` tracks the current count.
+- Template model: `Document_Template` with soft-delete via `deleted_at`; unique `name`; optional `content` (text) or `document_id` (binary template); `TemplateCategory` enum in `domain/enum/document.enum.ts`.
+
+**Routes mounted by the module:**
+
+```
+/documents                                              POST    multipart   document:write
+/documents                                              GET     by-entity   document:read  (see below)
+/documents/:id                                          GET                 document:read
+/documents/:id                                          DELETE              document:delete
+/documents/:id/download                                 GET                 document:read
+/documents/by-entity/:entityType/:entityId              GET                 document:read
+
+/documents/:id/versions                                 POST    multipart   document:write
+/documents/:id/versions                                 GET                 document:read
+/documents/:id/versions/:version                        GET                 document:read
+/documents/:id/versions/:version/download               GET                 document:read
+
+/documents/templates                                    POST                document:write
+/documents/templates                                    GET                 document:read
+/documents/templates/:id                                GET                 document:read
+/documents/templates/:id                                PATCH               document:write
+/documents/templates/:id                                DELETE              document:delete
+```
 
 **Not yet built:**
-- Versioning (the spec requires version control for working papers; `Document` table has no `version` column yet).
-- Templates (admin-configurable audit report / working paper templates).
-- HTTP controller + routes (no `document.controller.ts`, no `createDocumentModule()`).
+- `/documents/serve/:storedName` — `LocalStorageClient.getUrl()` returns a URL pointing to this route, but no controller handler serves the file stream yet. Download URLs currently 404 until this is added.
 - AWS S3 adapter.
+- File deletion of old versions (version history today retains `storage_path` references forever).
 
 ### 2.6 Background module — PARTIAL
 
@@ -164,23 +188,19 @@ Folder: `src/modules/background/`
 
 ## 3. What is NOT yet built
 
-### 3.1 Application entry point
+### 3.1 Application entry point — COMPLETE
 
-**`src/server.ts` does not exist yet** — but `package.json` references it via `dev: ts-node-dev ... src/server.ts` and `main: dist/server.js`. This is the next mechanical piece of work.
+`src/server.ts` is wired up. Boot order: validate config → `connectDatabase()` → build Express app → listen → `registerAllJobs()` + `schedulerService.startAll()`. Shutdown order (SIGTERM/SIGINT/uncaughtException/unhandledRejection): stop accepting connections → `schedulerService.stopAll()` → `disconnectDatabase()`, with a 10s force-exit timeout.
 
-Expected responsibilities when it is written:
-1. Load config.
-2. `await connectDatabase()`.
-3. Bootstrap Express with: `helmet`, `cors`, `compression`, `cookie-parser`, `morgan`/`pino-http`, `express-rate-limit` (config already present).
-4. Mount `/api/v1/` → `createUserModule()` and any other module routers that exist.
-5. Attach `requestAuditLogger` middleware.
-6. Attach `errorHandlerMiddleware` + `notFoundMiddleware` last.
-7. `schedulerService.startAll()` on boot.
-8. Graceful shutdown: `schedulerService.stopAll()` + `disconnectDatabase()` on SIGTERM/SIGINT.
+App wiring:
+- Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
+- Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
+- Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()` and `createDocumentModule()` mounted under `/api/<version>`.
+- Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ### 3.2 Module routers not yet created
 
-- `modules/document/index.ts` — no `createDocumentModule()` yet.
 - `modules/logging/index.ts` — for a future log-viewer endpoint.
 - `modules/messaging/index.ts` — for in-app notification endpoints.
 - `modules/background/index.ts` — for admin job-control endpoints.
