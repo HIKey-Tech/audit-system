@@ -118,11 +118,11 @@ export class UserService implements IUserService {
         orderBy: { [query.sortBy]: query.sortOrder },
         skip,
         take,
-      }) as Promise<UserWithRoles[]>,
+      }),
     ]);
 
     return {
-      users: users.map(mapUserToResponse),
+      users: (users as UserWithRoles[]).map(mapUserToResponse),
       meta: buildPaginationMeta(total, page, pageSize),
     };
   }

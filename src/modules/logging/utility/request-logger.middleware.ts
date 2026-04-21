@@ -21,12 +21,14 @@ export const requestAuditLogger = (
 
   res.on('finish', () => {
     const durationMs = Date.now() - startAt;
-    const [, , module] = req.path.split('/'); // /api/v1/<module>/...
+    // Path is shaped /api/<version>/<module>/... — segment[2] is the module.
+    const segments = req.path.split('/').filter(Boolean);
+    const module = segments[2] ?? segments[0] ?? 'unknown';
 
     auditLogService.logAsync({
       userId: req.user?.id,
       action: `${req.method}:${req.path}`,
-      module: module ?? 'unknown',
+      module,
       ipAddress: req.ip,
       userAgent: req.headers['user-agent'],
       status: res.statusCode < 400 ? 'success' : 'failure',

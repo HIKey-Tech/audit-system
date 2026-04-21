@@ -5,6 +5,10 @@ import { AuthService } from './service/implementation/auth.service';
 import { AuthController } from './controller/auth.controller';
 import { UserController } from './controller/user.controller';
 
+// Side-effect imports — register OpenAPI paths with the shared registry.
+import './docs/auth.docs';
+import './docs/user.docs';
+
 export const createUserModule = (): Router => {
   const router = Router();
 

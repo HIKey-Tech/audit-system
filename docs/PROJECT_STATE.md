@@ -204,17 +204,6 @@ Expected responsibilities when it is written:
 
 ---
 
-## 4. Known gaps / bugs to fix
-
-| # | Issue | Location | Fix |
-|---|---|---|---|
-| 1 | `BG:AUDIT:REMINDER:DAILY` references `prisma.audit_engagement` which is not in the schema | `modules/background/service/implementation/scheduler.service.ts:169` | Either disable the job until Audit module adds the model, or guard it so the cron tick no-ops when the table is missing. |
-| 2 | OIDC state is kept in an in-memory `Map` | `modules/user/service/client/oidc.client.ts:191-192` | Move to Redis before prod (Redis client is already installed & configured in `app.config.ts`). |
-| 3 | JWT `expiresIn` handling mixes raw `string` and `number` in the token utility | `modules/user/utility/token.utility.ts:55` | `buildTokenPair` does `parseInt(config.jwt.expiresIn) / 1000` but `config.jwt.expiresIn` is a ms-format string like `"15m"`. Should use `ms()` to convert properly. |
-| 4 | `.env` committed with placeholder secrets | `.env` | Move placeholders to `.env.example`; add `.env` to `.gitignore` (currently empty). |
-| 5 | `user.service.ts` has a stray commented-out `const where` duplicate | `modules/user/service/implementation/user.service.ts:96-97` | Cosmetic — remove on next pass. |
-
----
 
 ## 5. Rules of engagement for future sessions
 

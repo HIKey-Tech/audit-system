@@ -172,20 +172,7 @@ modules/<name>/
 
 ---
 
-## 6. Build order (never violate)
 
-1. **Foundation / shared layer** — done.
-2. **User module** — done (auth, RBAC, profile, session).
-3. **Logging module** — done (audit trail + request auto-logger). *Warehouse pipeline is TODO.*
-4. **Messaging module** — done (email + in-app notifications). *Templates module TODO.*
-5. **Document module** — done (service only). *Controller + routes TODO.*
-6. **Background module** — done (scheduler infra + 3 jobs). *Migration sub-module TODO. Audit reminder job references a table that does not exist yet — see Audit.*
-7. **Workflow module** — approval, assignment, escalation. Depends on User + Messaging + Background.
-8. **Risk module** — register, assessment, monitoring. Depends on User.
-9. **Integration module** — Dynafin, IMOC, AD, Project Plus, Shared Drive adapters. Depends on nothing (pure adapters).
-10. **Audit module** — universe, planning, execution, findings, reporting, follow-up, domains. Depends on User + Document + Workflow + Risk + Integration.
-11. **Dashboard module** — analytics, reports, widgets. Depends on all the above.
-12. **Predictive module** — risk model, anomaly detection, NLP. Depends on Logging warehouse.
 
 **Frontend (Next.js) starts only after step 12.**
 
