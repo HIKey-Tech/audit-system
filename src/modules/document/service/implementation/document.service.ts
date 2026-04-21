@@ -9,53 +9,25 @@ import {
   parsePagination,
   buildPaginationMeta,
 } from '../../../../shared/types/api-response.type';
+import { IDocumentService } from '../interface/document.service.interface';
 import {
-  IDocumentService,
   UploadDocumentDto,
   UploadVersionDto,
-  DocumentResponseDto,
-  ServedFileDto,
-} from '../interface/document.service.interface';
-import {
   CreateTemplateRequestDto,
   UpdateTemplateRequestDto,
   TemplateQueryDto,
 } from '../../dto/request/document.request.dto';
 import {
+  DocumentResponseDto,
   DocumentVersionResponseDto,
   DocumentTemplateResponseDto,
+  ServedFileDto,
+  mapDocumentToResponse,
   mapVersionToResponse,
   mapCurrentDocumentToVersion,
   mapTemplateToResponse,
 } from '../../dto/response/document.response.dto';
 import { createStorageClient, IStorageClient } from '../client/storage.client';
-
-const mapToResponse = (doc: {
-  id: string;
-  original_name: string;
-  mime_type: string;
-  file_size: number;
-  storage_provider: string;
-  module: string;
-  entity_type: string | null;
-  entity_id: string | null;
-  uploaded_by_id: string;
-  version_number: number;
-  created_at: Date;
-}, downloadUrl?: string): DocumentResponseDto => ({
-  id: doc.id,
-  originalName: doc.original_name,
-  mimeType: doc.mime_type,
-  fileSize: doc.file_size,
-  storageProvider: doc.storage_provider,
-  module: doc.module,
-  entityType: doc.entity_type,
-  entityId: doc.entity_id,
-  uploadedById: doc.uploaded_by_id,
-  versionNumber: doc.version_number,
-  createdAt: doc.created_at.toISOString(),
-  downloadUrl,
-});
 
 export class DocumentService implements IDocumentService {
   private readonly storageClient: IStorageClient;
@@ -87,7 +59,7 @@ export class DocumentService implements IDocumentService {
 
     logger.info('Document uploaded', { documentId: document.id, module: dto.module });
     const url = await this.storageClient.getUrl(storedName);
-    return mapToResponse(document, url);
+    return mapDocumentToResponse(document, url);
   }
 
   async getById(id: string): Promise<DocumentResponseDto> {
@@ -96,7 +68,7 @@ export class DocumentService implements IDocumentService {
     });
     if (!doc) throw AppError.notFound('Document');
     const url = await this.storageClient.getUrl(doc.storage_path);
-    return mapToResponse(doc, url);
+    return mapDocumentToResponse(doc, url);
   }
 
   async getDownloadUrl(id: string): Promise<string> {
@@ -135,7 +107,7 @@ export class DocumentService implements IDocumentService {
     return Promise.all(
       docs.map(async (doc: Document) => {
         const url = await this.storageClient.getUrl(doc.storage_path);
-        return mapToResponse(doc, url);
+        return mapDocumentToResponse(doc, url);
       }),
     );
   }

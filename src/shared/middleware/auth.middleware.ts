@@ -57,18 +57,23 @@ export const authenticate = async (
     const user = await prisma.user.findFirst({
       where: { id: payload.sub, is_active: true, deleted_at: null },
       include: userWithRolesInclude,
-    });
+    }) as UserWithRoles | null;
 
     if (!user) {
       throw AppError.unauthorized('User not found or inactive');
     }
 
-    const roles: string[] = user.user_roles.map((ur: any) => ur.role.name as string);
+    type UserRoleWithPermissions = UserWithRoles['user_roles'][number];
+    type RolePermission = UserRoleWithPermissions['role']['role_permissions'][number];
+
+    const roles: string[] = user.user_roles.map(
+      (ur: UserRoleWithPermissions) => ur.role.name,
+    );
 
     const permissions: string[] = [
       ...new Set<string>(
-        user.user_roles.flatMap((ur: any) =>
-          ur.role.role_permissions.map((rp: any) => rp.permission.name as string),
+        user.user_roles.flatMap((ur: UserRoleWithPermissions) =>
+          ur.role.role_permissions.map((rp: RolePermission) => rp.permission.name),
         ),
       ),
     ];

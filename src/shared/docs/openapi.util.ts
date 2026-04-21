@@ -75,6 +75,7 @@ export const buildOpenApiDocument = (): ReturnType<OpenApiGeneratorV3['generateD
     tags: [
       { name: 'Auth', description: 'Authentication, SSO, refresh tokens' },
       { name: 'Users', description: 'User CRUD, profile, role assignment' },
+      { name: 'Documents', description: 'Document upload, versioning, templates, file serving' },
     ],
   });
 };

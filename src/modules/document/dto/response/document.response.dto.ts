@@ -1,5 +1,27 @@
 // src/modules/document/dto/response/document.response.dto.ts
 
+export interface DocumentResponseDto {
+  id: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  storageProvider: string;
+  module: string;
+  entityType: string | null;
+  entityId: string | null;
+  uploadedById: string;
+  versionNumber: number;
+  createdAt: string;
+  downloadUrl?: string;
+}
+
+export interface ServedFileDto {
+  buffer: Buffer;
+  mimeType: string;
+  originalName: string;
+  fileSize: number;
+}
+
 export interface DocumentVersionResponseDto {
   id: string;
   documentId: string;
@@ -29,6 +51,37 @@ export interface DocumentTemplateResponseDto {
   createdAt: string;
   updatedAt: string;
 }
+
+// Mapper: Prisma Document → Response DTO
+export const mapDocumentToResponse = (
+  doc: {
+    id: string;
+    original_name: string;
+    mime_type: string;
+    file_size: number;
+    storage_provider: string;
+    module: string;
+    entity_type: string | null;
+    entity_id: string | null;
+    uploaded_by_id: string;
+    version_number: number;
+    created_at: Date;
+  },
+  downloadUrl?: string,
+): DocumentResponseDto => ({
+  id: doc.id,
+  originalName: doc.original_name,
+  mimeType: doc.mime_type,
+  fileSize: doc.file_size,
+  storageProvider: doc.storage_provider,
+  module: doc.module,
+  entityType: doc.entity_type,
+  entityId: doc.entity_id,
+  uploadedById: doc.uploaded_by_id,
+  versionNumber: doc.version_number,
+  createdAt: doc.created_at.toISOString(),
+  downloadUrl,
+});
 
 // Mapper: Prisma Document_Version → Response DTO
 export const mapVersionToResponse = (

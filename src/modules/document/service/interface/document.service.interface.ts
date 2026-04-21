@@ -1,56 +1,18 @@
 // src/modules/document/service/interface/document.service.interface.ts
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 import {
+  DocumentResponseDto,
   DocumentVersionResponseDto,
   DocumentTemplateResponseDto,
+  ServedFileDto,
 } from '../../dto/response/document.response.dto';
 import {
+  UploadDocumentDto,
+  UploadVersionDto,
   CreateTemplateRequestDto,
   UpdateTemplateRequestDto,
   TemplateQueryDto,
 } from '../../dto/request/document.request.dto';
-
-export interface UploadDocumentDto {
-  uploadedById: string;
-  originalName: string;
-  mimeType: string;
-  fileSize: number;
-  buffer: Buffer;
-  module: string;
-  entityType?: string;
-  entityId?: string;
-}
-
-export interface UploadVersionDto {
-  uploadedById: string;
-  originalName: string;
-  mimeType: string;
-  fileSize: number;
-  buffer: Buffer;
-  changeNote?: string;
-}
-
-export interface DocumentResponseDto {
-  id: string;
-  originalName: string;
-  mimeType: string;
-  fileSize: number;
-  storageProvider: string;
-  module: string;
-  entityType: string | null;
-  entityId: string | null;
-  uploadedById: string;
-  versionNumber: number;
-  createdAt: string;
-  downloadUrl?: string;
-}
-
-export interface ServedFileDto {
-  buffer: Buffer;
-  mimeType: string;
-  originalName: string;
-  fileSize: number;
-}
 
 export interface IDocumentService {
   // ──────────── Files ────────────

@@ -2,7 +2,7 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-21
+> Last updated: 2026-04-21 (rev 2)
 
 ---
 
@@ -113,16 +113,18 @@ Folder: `src/modules/document/`
 - `DocumentController` + `createDocumentModule()` — mounted at `/api/v1/documents`.
 - Versioning model: `Document` holds the current version; every historical version is snapshotted into `document_versions` on new upload, wrapped in `prisma.$transaction`. `Document.version_number` tracks the current count.
 - Template model: `Document_Template` with soft-delete via `deleted_at`; unique `name`; optional `content` (text) or `document_id` (binary template); `TemplateCategory` enum in `domain/enum/document.enum.ts`.
+- Soft-delete: `Document` uses `deleted_at` only (aligned with the `User` model and CLAUDE.md §5.4); the legacy `is_deleted` boolean has been removed from both schema and service.
+- DTO layout matches the `user` module exactly: request DTOs (`UploadDocumentDto`, `UploadVersionDto`, Zod schemas) in `dto/request/document.request.dto.ts`; response DTOs + mappers (`DocumentResponseDto`, `DocumentVersionResponseDto`, `DocumentTemplateResponseDto`, `ServedFileDto`, `mapDocumentToResponse`, etc.) in `dto/response/document.response.dto.ts`. The service interface file contains only `IDocumentService`.
 
 **Routes mounted by the module:**
 
 ```
 /documents                                              POST    multipart   document:write
-/documents                                              GET     by-entity   document:read  (see below)
 /documents/:id                                          GET                 document:read
 /documents/:id                                          DELETE              document:delete
 /documents/:id/download                                 GET                 document:read
 /documents/by-entity/:entityType/:entityId              GET                 document:read
+/documents/serve/:storedName                            GET                 document:read   — streams raw file bytes (target of LocalStorageClient.getUrl)
 
 /documents/:id/versions                                 POST    multipart   document:write
 /documents/:id/versions                                 GET                 document:read
@@ -137,8 +139,7 @@ Folder: `src/modules/document/`
 ```
 
 **Not yet built:**
-- `/documents/serve/:storedName` — `LocalStorageClient.getUrl()` returns a URL pointing to this route, but no controller handler serves the file stream yet. Download URLs currently 404 until this is added.
-- AWS S3 adapter.
+- AWS S3 adapter (`service/client/storage.client.ts` has only `LocalStorageClient` + `AzureBlobStorageClient` stub).
 - File deletion of old versions (version history today retains `storage_path` references forever).
 
 ### 2.6 Background module — PARTIAL

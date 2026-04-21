@@ -3,6 +3,30 @@ import { z } from 'zod';
 import { TemplateCategory } from '../../domain/enum/document.enum';
 
 // ──────────────────────────────────────────────────────────────
+// Service input DTOs (non-HTTP; carry the multipart file buffer
+// already parsed out of req.file by multer)
+// ──────────────────────────────────────────────────────────────
+export interface UploadDocumentDto {
+  uploadedById: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  buffer: Buffer;
+  module: string;
+  entityType?: string;
+  entityId?: string;
+}
+
+export interface UploadVersionDto {
+  uploadedById: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  buffer: Buffer;
+  changeNote?: string;
+}
+
+// ──────────────────────────────────────────────────────────────
 // Document upload (multipart metadata — the file buffer is
 // parsed out of req.file separately by multer)
 // ──────────────────────────────────────────────────────────────
