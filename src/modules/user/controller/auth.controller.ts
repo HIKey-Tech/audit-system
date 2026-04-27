@@ -107,7 +107,7 @@ export class AuthController {
 
   private async _ssoCallback(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { code, state } = req.query as { code: string; state?: string };
+      const { code, state } = req.query as { code: string; state: string };
       const result = await this.authService.handleOidcCallback(
         code,
         state,

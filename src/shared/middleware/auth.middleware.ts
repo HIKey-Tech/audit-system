@@ -66,13 +66,18 @@ export const authenticate = async (
     type UserRoleWithPermissions = UserWithRoles['user_roles'][number];
     type RolePermission = UserRoleWithPermissions['role']['role_permissions'][number];
 
-    const roles: string[] = user.user_roles.map(
+    const now = new Date();
+    const activeUserRoles: UserRoleWithPermissions[] = user.user_roles.filter(
+      (ur: UserRoleWithPermissions) => ur.expires_at === null || ur.expires_at > now,
+    );
+
+    const roles: string[] = activeUserRoles.map(
       (ur: UserRoleWithPermissions) => ur.role.name,
     );
 
     const permissions: string[] = [
       ...new Set<string>(
-        user.user_roles.flatMap((ur: UserRoleWithPermissions) =>
+        activeUserRoles.flatMap((ur: UserRoleWithPermissions) =>
           ur.role.role_permissions.map((rp: RolePermission) => rp.permission.name),
         ),
       ),

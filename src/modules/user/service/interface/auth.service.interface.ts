@@ -26,7 +26,7 @@ export interface IAuthService {
    */
   handleOidcCallback(
     code: string,
-    state?: string,
+    state: string,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto>;

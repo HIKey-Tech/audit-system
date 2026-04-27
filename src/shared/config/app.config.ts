@@ -1,6 +1,7 @@
 // src/shared/config/app.config.ts
 import dotenv from 'dotenv';
 import path from 'path';
+import ms from 'ms';
 
 dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 
@@ -12,6 +13,26 @@ const requireEnv = (key: string): string => {
 
 const optionalEnv = (key: string, fallback = ''): string =>
   process.env[key] ?? fallback;
+
+/**
+ * Validates that a duration env value is a string with an explicit time unit
+ * (e.g. "15m", "7d") rather than a bare number, which jsonwebtoken/ms would
+ * silently interpret as milliseconds and produce near-instant expirations.
+ */
+const requireDurationEnv = (key: string, fallback: string): string => {
+  const raw = process.env[key];
+  const value = (raw ?? fallback).trim();
+  if (/^-?\d+(\.\d+)?$/.test(value)) {
+    throw new Error(
+      `Invalid duration for ${key}: "${value}". Must include a time unit (e.g. "15m", "7d", "1h").`,
+    );
+  }
+  const parsed = ms(value);
+  if (typeof parsed !== 'number' || !Number.isFinite(parsed) || parsed <= 0) {
+    throw new Error(`Invalid duration for ${key}: "${value}".`);
+  }
+  return value;
+};
 
 export const config = {
   app: {
@@ -29,10 +50,10 @@ export const config = {
   },
 
   jwt: {
-    secret: optionalEnv('JWT_SECRET', 'fallback-dev-secret-DO-NOT-USE-IN-PROD'),
-    expiresIn: optionalEnv('JWT_EXPIRES_IN', '15'),
-    refreshSecret: optionalEnv('JWT_REFRESH_SECRET', 'fallback-refresh-secret-DO-NOT-USE-IN-PROD'),
-    refreshExpiresIn: optionalEnv('JWT_REFRESH_EXPIRES_IN', '7'),
+    secret: requireEnv('JWT_SECRET'),
+    expiresIn: requireDurationEnv('JWT_EXPIRES_IN', '15m'),
+    refreshSecret: requireEnv('JWT_REFRESH_SECRET'),
+    refreshExpiresIn: requireDurationEnv('JWT_REFRESH_EXPIRES_IN', '7d'),
   },
 
   oidc: {

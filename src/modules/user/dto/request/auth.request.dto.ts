@@ -12,7 +12,7 @@ export const RefreshTokenRequestSchema = z.object({
 
 export const OidcCallbackRequestSchema = z.object({
   code: z.string(),
-  state: z.string().optional(),
+  state: z.string().min(1, 'state is required'),
   session_state: z.string().optional(),
 });
 

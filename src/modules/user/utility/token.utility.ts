@@ -52,7 +52,7 @@ export const buildTokenPair = (
 ): TokenPair => ({
   accessToken,
   refreshToken,
-  expiresIn: Math.floor(parseInt(config.jwt.expiresIn) / 1000),
+  expiresIn: Math.floor(ms(config.jwt.expiresIn) / 1000),
   tokenType: 'Bearer',
 });
 

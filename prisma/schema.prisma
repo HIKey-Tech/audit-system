@@ -13,44 +13,64 @@ datasource db {
 // ============================================================
 
 model User {
-  id                   String    @id @default(uuid())
-  azure_oid            String?   @unique // Azure AD Object ID
-  email                String    @unique
-  email_verified       Boolean   @default(false)
-  first_name           String
-  last_name            String
-  display_name         String?
-  avatar_url           String?
-  phone                String?
-  department           String?
-  job_title            String?
-  is_active            Boolean   @default(true)
-  is_system_user       Boolean   @default(false)
-  last_login_at        DateTime?
-  password_hash        String?   // null for SSO-only users
-  created_at           DateTime  @default(now())
-  updated_at           DateTime  @updatedAt
-  deleted_at           DateTime?
+  id             String    @id @default(uuid())
+  azure_oid      String?   @unique // Azure AD Object ID
+  email          String    @unique
+  email_verified Boolean   @default(false)
+  first_name     String
+  last_name      String
+  display_name   String?
+  avatar_url     String?
+  phone          String?
+  department     String?
+  job_title      String?
+  is_active      Boolean   @default(true)
+  is_system_user Boolean   @default(false)
+  last_login_at  DateTime?
+  password_hash  String? // null for SSO-only users
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+  deleted_at     DateTime?
 
-  user_roles           User_Role[]
-  refresh_tokens       Refresh_Token[]
-  audit_logs           Audit_Log[]
-  notifications        Notification[]
-  documents            Document[]
-  document_versions    Document_Version[]
-  templates_created    Document_Template[] @relation("TemplateCreatedBy")
-  templates_updated    Document_Template[] @relation("TemplateUpdatedBy")
+  user_roles        User_Role[]
+  refresh_tokens    Refresh_Token[]
+  audit_logs        Audit_Log[]
+  notifications     Notification[]
+  documents         Document[]
+  document_versions Document_Version[]
+  templates_created Document_Template[] @relation("TemplateCreatedBy")
+  templates_updated Document_Template[] @relation("TemplateUpdatedBy")
+
+  // Audit module back-relations
+  universes_owned         Audit_Universe[]      @relation("UniverseOwner")
+  universes_created       Audit_Universe[]      @relation("UniverseCreatedBy")
+  plans_created           Audit_Plan[]          @relation("PlanCreatedBy")
+  plans_approved          Audit_Plan[]          @relation("PlanApprovedBy")
+  engagements_led         Audit_Engagement[]    @relation("EngagementLead")
+  engagements_managed     Audit_Engagement[]    @relation("EngagementManager")
+  engagements_as_auditee  Audit_Engagement[]    @relation("EngagementAuditee")
+  engagements_created     Audit_Engagement[]    @relation("EngagementCreatedBy")
+  working_papers_created  Audit_Working_Paper[] @relation("WorkingPaperCreatedBy")
+  working_papers_reviewed Audit_Working_Paper[] @relation("WorkingPaperReviewedBy")
+  evidence_uploaded       Audit_Evidence[]      @relation("EvidenceUploadedBy")
+  findings_as_auditee     Audit_Finding[]       @relation("FindingAuditee")
+  findings_created        Audit_Finding[]       @relation("FindingCreatedBy")
+  findings_closed         Audit_Finding[]       @relation("FindingClosedBy")
+  reports_created         Audit_Report[]        @relation("ReportCreatedBy")
+  follow_up_responses     Audit_Follow_Up[]     @relation("FollowUpResponseBy")
+  follow_ups_verified     Audit_Follow_Up[]     @relation("FollowUpVerifiedBy")
+  checklists_tested       Audit_Checklist[]     @relation("ChecklistTestedBy")
 
   @@map("users")
 }
 
 model Role {
-  id          String    @id @default(uuid())
-  name        String    @unique
+  id          String   @id @default(uuid())
+  name        String   @unique
   description String?
-  is_system   Boolean   @default(false)
-  created_at  DateTime  @default(now())
-  updated_at  DateTime  @updatedAt
+  is_system   Boolean  @default(false)
+  created_at  DateTime @default(now())
+  updated_at  DateTime @updatedAt
 
   user_roles       User_Role[]
   role_permissions Role_Permission[]
@@ -59,12 +79,12 @@ model Role {
 }
 
 model Permission {
-  id          String    @id @default(uuid())
-  name        String    @unique   // e.g. "audit:read", "audit:write"
-  module      String              // e.g. "audit", "user", "document"
-  action      String              // e.g. "read", "write", "delete", "admin"
+  id          String   @id @default(uuid())
+  name        String   @unique // e.g. "audit:read", "audit:write"
+  module      String // e.g. "audit", "user", "document"
+  action      String // e.g. "read", "write", "delete", "admin"
   description String?
-  created_at  DateTime  @default(now())
+  created_at  DateTime @default(now())
 
   role_permissions Role_Permission[]
 
@@ -72,9 +92,9 @@ model Permission {
 }
 
 model User_Role {
-  id         String    @id @default(uuid())
-  user_id    String
-  role_id    String
+  id          String    @id @default(uuid())
+  user_id     String
+  role_id     String
   assigned_by String?
   assigned_at DateTime  @default(now())
   expires_at  DateTime?
@@ -87,10 +107,10 @@ model User_Role {
 }
 
 model Role_Permission {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   role_id       String
   permission_id String
-  created_at    DateTime  @default(now())
+  created_at    DateTime @default(now())
 
   role       Role       @relation(fields: [role_id], references: [id], onDelete: Cascade)
   permission Permission @relation(fields: [permission_id], references: [id], onDelete: Cascade)
@@ -119,20 +139,20 @@ model Refresh_Token {
 // ============================================================
 
 model Audit_Log {
-  id            String    @id @default(uuid())
+  id            String   @id @default(uuid())
   user_id       String?
   action        String
   module        String
   entity_type   String?
   entity_id     String?
-  old_values    String?   // JSON string
-  new_values    String?   // JSON string
+  old_values    String? // JSON string
+  new_values    String? // JSON string
   ip_address    String?
   user_agent    String?
-  status        String    @default("success") // success | failure
+  status        String   @default("success") // success | failure
   error_message String?
   duration_ms   Int?
-  created_at    DateTime  @default(now())
+  created_at    DateTime @default(now())
 
   user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
 
@@ -147,18 +167,18 @@ model Audit_Log {
 // ============================================================
 
 model Notification {
-  id          String    @id @default(uuid())
-  user_id     String
-  title       String
-  body        String
-  type        String    // info | warning | error | success
-  channel     String    // in_app | email | sms
-  is_read     Boolean   @default(false)
-  read_at     DateTime?
+  id             String    @id @default(uuid())
+  user_id        String
+  title          String
+  body           String
+  type           String // info | warning | error | success
+  channel        String // in_app | email | sms
+  is_read        Boolean   @default(false)
+  read_at        DateTime?
   reference_type String?
   reference_id   String?
-  metadata    String?   // JSON string
-  created_at  DateTime  @default(now())
+  metadata       String? // JSON string
+  created_at     DateTime  @default(now())
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
@@ -167,15 +187,15 @@ model Notification {
 }
 
 model Email_Log {
-  id          String    @id @default(uuid())
-  to_address  String
+  id           String    @id @default(uuid())
+  to_address   String
   from_address String
-  subject     String
-  template    String?
-  status      String    @default("pending") // pending | sent | failed | bounced
-  error       String?
-  sent_at     DateTime?
-  created_at  DateTime  @default(now())
+  subject      String
+  template     String?
+  status       String    @default("pending") // pending | sent | failed | bounced
+  error        String?
+  sent_at      DateTime?
+  created_at   DateTime  @default(now())
 
   @@map("email_logs")
 }
@@ -185,43 +205,45 @@ model Email_Log {
 // ============================================================
 
 model Document {
-  id              String    @id @default(uuid())
-  uploaded_by_id  String
-  original_name   String
-  stored_name     String
-  mime_type       String
-  file_size       Int
-  storage_path    String
-  storage_provider String   // local | azure_blob | aws_s3
-  module          String
-  entity_type     String?
-  entity_id       String?
-  version_number  Int       @default(1)
-  deleted_at      DateTime?
-  created_at      DateTime  @default(now())
-  updated_at      DateTime  @updatedAt
+  id               String    @id @default(uuid())
+  uploaded_by_id   String
+  original_name    String
+  stored_name      String
+  mime_type        String
+  file_size        Int
+  storage_path     String
+  storage_provider String // local | azure_blob | aws_s3
+  module           String
+  entity_type      String?
+  entity_id        String?
+  version_number   Int       @default(1)
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
 
   uploaded_by User                @relation(fields: [uploaded_by_id], references: [id])
   versions    Document_Version[]
   templates   Document_Template[]
+  evidence    Audit_Evidence[]
+  reports     Audit_Report[]
 
   @@index([entity_type, entity_id])
   @@map("documents")
 }
 
 model Document_Version {
-  id                String    @id @default(uuid())
-  document_id       String
-  version_number    Int
-  uploaded_by_id    String
-  original_name     String
-  stored_name       String
-  mime_type         String
-  file_size         Int
-  storage_path      String
-  storage_provider  String    // local | azure_blob | aws_s3
-  change_note       String?
-  created_at        DateTime  @default(now())
+  id               String   @id @default(uuid())
+  document_id      String
+  version_number   Int
+  uploaded_by_id   String
+  original_name    String
+  stored_name      String
+  mime_type        String
+  file_size        Int
+  storage_path     String
+  storage_provider String // local | azure_blob | aws_s3
+  change_note      String?
+  created_at       DateTime @default(now())
 
   document    Document @relation(fields: [document_id], references: [id])
   uploaded_by User     @relation(fields: [uploaded_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
@@ -232,23 +254,23 @@ model Document_Version {
 }
 
 model Document_Template {
-  id             String    @id @default(uuid())
-  name           String    @unique
-  description    String?
-  category       String    // working_paper | audit_report | finding | risk_assessment | checklist | policy | procedure
-  content        String?   // HTML / markdown / plaintext body (nullable if linked to a binary template via document_id)
-  document_id    String?
-  metadata       String?   // JSON string — placeholders / field definitions
-  is_active      Boolean   @default(true)
-  created_by_id  String
-  updated_by_id  String?
-  created_at     DateTime  @default(now())
-  updated_at     DateTime  @updatedAt
-  deleted_at     DateTime?
+  id            String    @id @default(uuid())
+  name          String    @unique
+  description   String?
+  category      String // working_paper | audit_report | finding | risk_assessment | checklist | policy | procedure
+  content       String? // HTML / markdown / plaintext body (nullable if linked to a binary template via document_id)
+  document_id   String?
+  metadata      String? // JSON string — placeholders / field definitions
+  is_active     Boolean   @default(true)
+  created_by_id String
+  updated_by_id String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
 
-  document    Document? @relation(fields: [document_id], references: [id])
-  created_by  User      @relation("TemplateCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  updated_by  User?     @relation("TemplateUpdatedBy", fields: [updated_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  document   Document? @relation(fields: [document_id], references: [id])
+  created_by User      @relation("TemplateCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  updated_by User?     @relation("TemplateUpdatedBy", fields: [updated_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
   @@index([category])
   @@index([is_active])
@@ -261,14 +283,14 @@ model Document_Template {
 
 model Scheduled_Job {
   id              String    @id @default(uuid())
-  job_key         String    @unique  // e.g. "BG:AUDIT:REMINDER:DAILY"
+  job_key         String    @unique // e.g. "BG:AUDIT:REMINDER:DAILY"
   name            String
   description     String?
   cron_expression String
   is_active       Boolean   @default(true)
   last_run_at     DateTime?
   next_run_at     DateTime?
-  last_status     String?   // success | failure | running
+  last_status     String? // success | failure | running
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 
@@ -280,13 +302,324 @@ model Scheduled_Job {
 model Scheduled_Job_Run {
   id           String    @id @default(uuid())
   job_id       String
-  status       String    // running | success | failure
+  status       String // running | success | failure
   started_at   DateTime  @default(now())
   completed_at DateTime?
   error        String?
-  metadata     String?   // JSON string
+  metadata     String? // JSON string
 
   scheduled_job Scheduled_Job @relation(fields: [job_id], references: [id])
 
   @@map("scheduled_job_runs")
+}
+
+// ============================================================
+// AUDIT MODULE
+//
+// SQL Server does not support native enums, so all enum-like
+// fields below are modelled as String and mirrored in
+// src/modules/audit/domain/enum/audit.enum.ts for compile-time
+// safety. Allowed values are listed inline next to each field.
+//
+//   audit_type        : it | financial | compliance | systems
+//   priority          : critical | high | medium | low
+//   audit_frequency   : annual | biannual | quarterly | monthly
+//   universe_category : department | system | process | asset | project
+//   universe_status   : active | inactive
+//   plan_status       : draft | submitted | approved | rejected
+//   engagement_status : planned | in_progress | under_review | reported | closed
+//   wp_status         : draft | submitted | approved | rejected
+//   finding_category  : it | financial | compliance | operational
+//   finding_severity  : critical | high | medium | low | informational
+//   finding_status    : open | management_response_received | in_remediation | verified | closed
+//   report_status     : draft | submitted | approved | issued
+//   verification      : pending | verified | rejected
+//   checklist_result  : passed | failed | not_applicable | not_tested
+// ============================================================
+
+model Audit_Universe {
+  id              String    @id @default(uuid())
+  name            String
+  description     String?   @db.NVarChar(Max)
+  category        String // department | system | process | asset | project
+  owner_id        String
+  risk_score      Decimal?  @db.Decimal(5, 2)
+  last_audited_at DateTime?
+  audit_frequency String // annual | biannual | quarterly | monthly
+  status          String    @default("active") // active | inactive
+  created_by_id   String
+  deleted_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  owner       User               @relation("UniverseOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by  User               @relation("UniverseCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  plan_items  Audit_Plan_Item[]
+  engagements Audit_Engagement[]
+
+  @@index([category])
+  @@index([status])
+  @@index([owner_id])
+  @@index([risk_score])
+  @@map("audit_universe")
+}
+
+model Audit_Plan {
+  id               String    @id @default(uuid())
+  title            String
+  year             Int
+  status           String    @default("draft") // draft | submitted | approved | rejected
+  created_by_id    String
+  approved_by_id   String?
+  approved_at      DateTime?
+  rejection_reason String?   @db.NVarChar(Max)
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  created_by  User              @relation("PlanCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  approved_by User?             @relation("PlanApprovedBy", fields: [approved_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  items       Audit_Plan_Item[]
+
+  @@index([status])
+  @@index([year])
+  @@index([created_by_id])
+  @@map("audit_plans")
+}
+
+model Audit_Plan_Item {
+  id                 String   @id @default(uuid())
+  plan_id            String
+  universe_id        String
+  audit_type         String // it | financial | compliance | systems
+  planned_start_date DateTime
+  planned_end_date   DateTime
+  priority           String // critical | high | medium | low
+  engagement_created Boolean  @default(false)
+  created_at         DateTime @default(now())
+  updated_at         DateTime @updatedAt
+
+  plan        Audit_Plan         @relation(fields: [plan_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  universe    Audit_Universe     @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  engagements Audit_Engagement[]
+
+  @@index([plan_id])
+  @@index([universe_id])
+  @@index([audit_type])
+  @@index([priority])
+  @@map("audit_plan_items")
+}
+
+model Audit_Engagement {
+  id                 String    @id @default(uuid())
+  reference_number   String    @unique
+  title              String
+  universe_id        String
+  plan_item_id       String?
+  audit_type         String // it | financial | compliance | systems
+  status             String    @default("planned") // planned | in_progress | under_review | reported | closed
+  priority           String // critical | high | medium | low
+  lead_auditor_id    String
+  audit_manager_id   String
+  auditee_id         String
+  planned_start_date DateTime
+  planned_end_date   DateTime
+  actual_start_date  DateTime?
+  actual_end_date    DateTime?
+  sla_deadline       DateTime
+  is_adhoc           Boolean   @default(false)
+  adhoc_reason       String?   @db.NVarChar(Max)
+  created_by_id      String
+  deleted_at         DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  universe       Audit_Universe        @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  plan_item      Audit_Plan_Item?      @relation(fields: [plan_item_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  lead_auditor   User                  @relation("EngagementLead", fields: [lead_auditor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  audit_manager  User                  @relation("EngagementManager", fields: [audit_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  auditee        User                  @relation("EngagementAuditee", fields: [auditee_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by     User                  @relation("EngagementCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  working_papers Audit_Working_Paper[]
+  evidence       Audit_Evidence[]
+  findings       Audit_Finding[]
+  report         Audit_Report?
+  checklists     Audit_Checklist[]
+
+  @@index([status])
+  @@index([audit_type])
+  @@index([lead_auditor_id])
+  @@index([audit_manager_id])
+  @@index([auditee_id])
+  @@index([sla_deadline])
+  @@index([reference_number])
+  @@map("audit_engagements")
+}
+
+model Audit_Working_Paper {
+  id               String    @id @default(uuid())
+  engagement_id    String
+  title            String
+  content          String    @db.NVarChar(Max)
+  version_number   Int       @default(1)
+  status           String    @default("draft") // draft | submitted | approved | rejected
+  created_by_id    String
+  reviewed_by_id   String?
+  rejection_reason String?   @db.NVarChar(Max)
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  engagement  Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by  User             @relation("WorkingPaperCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  reviewed_by User?            @relation("WorkingPaperReviewedBy", fields: [reviewed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  evidence    Audit_Evidence[]
+  findings    Audit_Finding[]
+
+  @@index([engagement_id])
+  @@index([status])
+  @@index([created_by_id])
+  @@map("audit_working_papers")
+}
+
+model Audit_Evidence {
+  id               String   @id @default(uuid())
+  engagement_id    String
+  working_paper_id String?
+  finding_id       String?
+  document_id      String
+  file_name        String
+  file_type        String
+  uploaded_by_id   String
+  is_disputed      Boolean  @default(false)
+  dispute_reason   String?  @db.NVarChar(Max)
+  uploaded_at      DateTime @default(now())
+  created_at       DateTime @default(now())
+
+  engagement    Audit_Engagement     @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  working_paper Audit_Working_Paper? @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  finding       Audit_Finding?       @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  document      Document             @relation(fields: [document_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  uploaded_by   User                 @relation("EvidenceUploadedBy", fields: [uploaded_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  remediations  Audit_Follow_Up[]    @relation("FollowUpRemediationEvidence")
+  checklists    Audit_Checklist[]
+
+  @@index([engagement_id])
+  @@index([working_paper_id])
+  @@index([finding_id])
+  @@index([uploaded_by_id])
+  @@map("audit_evidence")
+}
+
+model Audit_Finding {
+  id               String    @id @default(uuid())
+  engagement_id    String
+  working_paper_id String?
+  title            String
+  description      String    @db.NVarChar(Max)
+  category         String // it | financial | compliance | operational
+  severity         String // critical | high | medium | low | informational
+  root_cause       String    @db.NVarChar(Max)
+  risk_implication String    @db.NVarChar(Max)
+  recommendation   String    @db.NVarChar(Max)
+  auditee_id       String
+  status           String    @default("open") // open | management_response_received | in_remediation | verified | closed
+  due_date         DateTime
+  created_by_id    String
+  closed_by_id     String?
+  closed_at        DateTime?
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  engagement    Audit_Engagement     @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  working_paper Audit_Working_Paper? @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  auditee       User                 @relation("FindingAuditee", fields: [auditee_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by    User                 @relation("FindingCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  closed_by     User?                @relation("FindingClosedBy", fields: [closed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  evidence      Audit_Evidence[]
+  follow_up     Audit_Follow_Up?
+
+  @@index([engagement_id])
+  @@index([severity])
+  @@index([status])
+  @@index([auditee_id])
+  @@index([due_date])
+  @@index([category])
+  @@map("audit_findings")
+}
+
+model Audit_Report {
+  id                String    @id @default(uuid())
+  engagement_id     String    @unique
+  title             String
+  executive_summary String    @db.NVarChar(Max)
+  scope             String    @db.NVarChar(Max)
+  methodology       String    @db.NVarChar(Max)
+  status            String    @default("draft") // draft | submitted | approved | issued
+  version_number    Int       @default(1)
+  document_id       String?
+  issued_at         DateTime?
+  created_by_id     String
+  deleted_at        DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  document   Document?        @relation(fields: [document_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User             @relation("ReportCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([engagement_id])
+  @@index([status])
+  @@index([created_by_id])
+  @@map("audit_reports")
+}
+
+model Audit_Follow_Up {
+  id                        String    @id @default(uuid())
+  finding_id                String    @unique
+  management_response       String?   @db.NVarChar(Max)
+  management_response_by_id String?
+  management_response_at    DateTime?
+  remediation_evidence_id   String?
+  verification_status       String    @default("pending") // pending | verified | rejected
+  verified_by_id            String?
+  verified_at               DateTime?
+  verification_notes        String?   @db.NVarChar(Max)
+  created_at                DateTime  @default(now())
+  updated_at                DateTime  @updatedAt
+
+  finding                Audit_Finding   @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  management_response_by User?           @relation("FollowUpResponseBy", fields: [management_response_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  remediation_evidence   Audit_Evidence? @relation("FollowUpRemediationEvidence", fields: [remediation_evidence_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  verified_by            User?           @relation("FollowUpVerifiedBy", fields: [verified_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([finding_id])
+  @@index([verification_status])
+  @@map("audit_follow_ups")
+}
+
+model Audit_Checklist {
+  id                  String    @id @default(uuid())
+  engagement_id       String
+  audit_type          String // it | financial | compliance | systems
+  control_reference   String
+  control_description String    @db.NVarChar(Max)
+  test_procedure      String    @db.NVarChar(Max)
+  result              String    @default("not_tested") // passed | failed | not_applicable | not_tested
+  notes               String?   @db.NVarChar(Max)
+  evidence_id         String?
+  tested_by_id        String?
+  tested_at           DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  evidence   Audit_Evidence?  @relation(fields: [evidence_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  tested_by  User?            @relation("ChecklistTestedBy", fields: [tested_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([engagement_id])
+  @@index([audit_type])
+  @@index([result])
+  @@map("audit_checklists")
 }

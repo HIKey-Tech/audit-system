@@ -14,7 +14,7 @@ export interface OidcAuthResult {
 
 export interface IOidcClient {
   getAuthorizationUrl(state?: string): Promise<{ url: string; state: string }>;
-  handleCallback(code: string, state?: string): Promise<OidcAuthResult>;
+  handleCallback(code: string, state: string): Promise<OidcAuthResult>;
 }
 
 // ──────────────────────────────────────────────
@@ -58,10 +58,23 @@ export class AzureAdOidcClient implements IOidcClient {
     return { url, state: generatedState };
   }
 
-  async handleCallback(code: string, state?: string): Promise<OidcAuthResult> {
-    try {
-      const verifier = state ? stateVerifierMap.get(state) : undefined;
+  async handleCallback(code: string, state: string): Promise<OidcAuthResult> {
+    if (!state) {
+      throw AppError.unauthorized('Missing SSO state — possible CSRF attempt');
+    }
 
+    const verifier = stateVerifierMap.get(state);
+    if (!verifier) {
+      throw AppError.unauthorized(
+        'Invalid or expired SSO state — possible CSRF attempt',
+      );
+    }
+
+    // Consume the state immediately so it cannot be replayed, regardless
+    // of whether the token exchange below succeeds or fails.
+    stateVerifierMap.delete(state);
+
+    try {
       const tokenResponse = await this.msalClient.acquireTokenByCode({
         code,
         scopes: ['openid', 'profile', 'email', 'User.Read'],
@@ -88,14 +101,13 @@ export class AzureAdOidcClient implements IOidcClient {
         department: claims['department'] as string | undefined,
       };
 
-      if (state) stateVerifierMap.delete(state);
-
       return {
         profile,
         idToken: tokenResponse.idToken,
         accessToken: tokenResponse.accessToken ?? undefined,
       };
     } catch (err) {
+      if (err instanceof AppError) throw err;
       logger.error('Azure AD OIDC callback failed', { err });
       throw new AppError('SSO authentication failed', 401, ErrorCode.SSO_FAILED);
     }
@@ -148,11 +160,25 @@ export class GenericOidcClient implements IOidcClient {
     return { url, state: generatedState };
   }
 
-  async handleCallback(code: string, state?: string): Promise<OidcAuthResult> {
+  async handleCallback(code: string, state: string): Promise<OidcAuthResult> {
+    if (!state) {
+      throw AppError.unauthorized('Missing SSO state — possible CSRF attempt');
+    }
+
+    const codeVerifier = stateVerifierMap.get(state);
+    const nonce = stateNonceMap.get(state);
+    if (!codeVerifier || !nonce) {
+      throw AppError.unauthorized(
+        'Invalid or expired SSO state — possible CSRF attempt',
+      );
+    }
+
+    // Consume state/nonce/verifier immediately to prevent replay.
+    stateVerifierMap.delete(state);
+    stateNonceMap.delete(state);
+
     try {
       const client = await this.getClient();
-      const codeVerifier = state ? stateVerifierMap.get(state) : undefined;
-      const nonce = state ? stateNonceMap.get(state) : undefined;
 
       const tokenSet: TokenSet = await client.callback(
         config.oidc.generic.redirectUri,
@@ -170,17 +196,13 @@ export class GenericOidcClient implements IOidcClient {
         displayName: claims['name'] as string | undefined,
       };
 
-      if (state) {
-        stateVerifierMap.delete(state);
-        stateNonceMap.delete(state);
-      }
-
       return {
         profile,
         idToken: tokenSet.id_token ?? '',
         accessToken: tokenSet.access_token,
       };
     } catch (err) {
+      if (err instanceof AppError) throw err;
       logger.error('Generic OIDC callback failed', { err });
       throw new AppError('SSO authentication failed', 401, ErrorCode.SSO_FAILED);
     }

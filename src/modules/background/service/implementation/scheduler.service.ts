@@ -39,7 +39,11 @@ class SchedulerService {
 
   async startAll(): Promise<void> {
     for (const job of this.jobs) {
-      await this._upsertJobRecord(job);
+      const record = await this._upsertJobRecord(job);
+      if (!record.is_active) {
+        logger.info('Background job skipped (disabled in database)', { jobKey: job.key });
+        continue;
+      }
       const task = cron.schedule(job.cronExpression, () => this._runJob(job), {
         name: job.key,
         runOnInit: false,
@@ -104,8 +108,8 @@ class SchedulerService {
     }
   }
 
-  private async _upsertJobRecord(job: RegisteredJob): Promise<void> {
-    await prisma.scheduled_Job.upsert({
+  private async _upsertJobRecord(job: RegisteredJob): Promise<{ is_active: boolean }> {
+    return prisma.scheduled_Job.upsert({
       where: { job_key: job.key },
       create: {
         job_key: job.key,
@@ -117,8 +121,8 @@ class SchedulerService {
       update: {
         name: job.name,
         cron_expression: job.cronExpression,
-        is_active: true,
       },
+      select: { is_active: true },
     });
   }
 

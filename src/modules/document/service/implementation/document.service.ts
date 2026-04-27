@@ -37,28 +37,47 @@ export class DocumentService implements IDocumentService {
   }
 
   async upload(dto: UploadDocumentDto): Promise<DocumentResponseDto> {
-    const storedName = await this.storageClient.save(
-      dto.buffer,
-      dto.originalName,
-    );
+    const document = await prisma.$transaction(async (tx) => {
+      const pendingStoragePath = `pending:${dto.originalName}`;
+      const createdDocument = await tx.document.create({
+        data: {
+          uploaded_by_id: dto.uploadedById,
+          original_name: dto.originalName,
+          stored_name: pendingStoragePath,
+          mime_type: dto.mimeType,
+          file_size: dto.fileSize,
+          storage_path: pendingStoragePath,
+          storage_provider: config.storage.provider,
+          module: dto.module,
+          entity_type: dto.entityType,
+          entity_id: dto.entityId,
+        },
+      });
 
-    const document = await prisma.document.create({
-      data: {
-        uploaded_by_id: dto.uploadedById,
-        original_name: dto.originalName,
-        stored_name: storedName,
-        mime_type: dto.mimeType,
-        file_size: dto.fileSize,
-        storage_path: storedName,
-        storage_provider: config.storage.provider,
-        module: dto.module,
-        entity_type: dto.entityType,
-        entity_id: dto.entityId,
-      },
+      let storedName: string | undefined;
+      try {
+        storedName = await this.storageClient.save(
+          dto.buffer,
+          dto.originalName,
+        );
+
+        return await tx.document.update({
+          where: { id: createdDocument.id },
+          data: {
+            stored_name: storedName,
+            storage_path: storedName,
+          },
+        });
+      } catch (err) {
+        if (storedName) {
+          await this.storageClient.delete(storedName).catch(() => undefined);
+        }
+        throw err;
+      }
     });
 
     logger.info('Document uploaded', { documentId: document.id, module: dto.module });
-    const url = await this.storageClient.getUrl(storedName);
+    const url = await this.storageClient.getUrl(document.storage_path);
     return mapDocumentToResponse(document, url);
   }
 
@@ -160,29 +179,52 @@ export class DocumentService implements IDocumentService {
     });
     if (!doc) throw AppError.notFound('Document');
 
-    const storedName = await this.storageClient.save(
-      dto.buffer,
-      dto.originalName,
-    );
-
     const newVersionNumber = doc.version_number + 1;
 
-    // Snapshot current Document state as a historical Document_Version,
-    // then overwrite the Document with the new version's data in a single
-    // transaction so either both succeed or both fail.
+    // Ensure the outgoing current version is present in Document_Version,
+    // then persist the uploaded version with its change note before updating
+    // the Document row that holds the current-version state.
     const version = await prisma.$transaction(async (tx) => {
-      const snapshot = await tx.document_Version.create({
+      const pendingStoragePath = `pending:${doc.id}:${newVersionNumber}`;
+      const existingCurrentVersion = await tx.document_Version.findUnique({
+        where: {
+          document_id_version_number: {
+            document_id: doc.id,
+            version_number: doc.version_number,
+          },
+        },
+        select: { id: true },
+      });
+
+      if (!existingCurrentVersion) {
+        await tx.document_Version.create({
+          data: {
+            document_id: doc.id,
+            version_number: doc.version_number,
+            uploaded_by_id: doc.uploaded_by_id,
+            original_name: doc.original_name,
+            stored_name: doc.stored_name,
+            mime_type: doc.mime_type,
+            file_size: doc.file_size,
+            storage_path: doc.storage_path,
+            storage_provider: doc.storage_provider,
+            change_note: null,
+          },
+        });
+      }
+
+      const newVersion = await tx.document_Version.create({
         data: {
           document_id: doc.id,
-          version_number: doc.version_number,
-          uploaded_by_id: doc.uploaded_by_id,
-          original_name: doc.original_name,
-          stored_name: doc.stored_name,
-          mime_type: doc.mime_type,
-          file_size: doc.file_size,
-          storage_path: doc.storage_path,
-          storage_provider: doc.storage_provider,
-          change_note: null,
+          version_number: newVersionNumber,
+          uploaded_by_id: dto.uploadedById,
+          original_name: dto.originalName,
+          stored_name: pendingStoragePath,
+          mime_type: dto.mimeType,
+          file_size: dto.fileSize,
+          storage_path: pendingStoragePath,
+          storage_provider: config.storage.provider,
+          change_note: dto.changeNote ?? null,
         },
       });
 
@@ -191,42 +233,54 @@ export class DocumentService implements IDocumentService {
         data: {
           uploaded_by_id: dto.uploadedById,
           original_name: dto.originalName,
-          stored_name: storedName,
+          stored_name: pendingStoragePath,
           mime_type: dto.mimeType,
           file_size: dto.fileSize,
-          storage_path: storedName,
+          storage_path: pendingStoragePath,
           storage_provider: config.storage.provider,
           version_number: newVersionNumber,
         },
       });
 
-      return snapshot;
+      let storedName: string | undefined;
+      try {
+        storedName = await this.storageClient.save(
+          dto.buffer,
+          dto.originalName,
+        );
+
+        await tx.document.update({
+          where: { id: doc.id },
+          data: {
+            stored_name: storedName,
+            storage_path: storedName,
+          },
+        });
+
+        return await tx.document_Version.update({
+          where: { id: newVersion.id },
+          data: {
+            stored_name: storedName,
+            storage_path: storedName,
+          },
+        });
+      } catch (err) {
+        if (storedName) {
+          await this.storageClient.delete(storedName).catch(() => undefined);
+        }
+        throw err;
+      }
     });
 
     logger.info('Document new version uploaded', {
       documentId: doc.id,
-      previousVersion: version.version_number,
+      previousVersion: doc.version_number,
       newVersion: newVersionNumber,
       actorId: dto.uploadedById,
     });
 
-    // Return the newly-current version (the uploaded one), which now
-    // lives on the Document row, with change_note from the request.
-    const url = await this.storageClient.getUrl(storedName);
-    return {
-      id: doc.id,
-      documentId: doc.id,
-      versionNumber: newVersionNumber,
-      originalName: dto.originalName,
-      mimeType: dto.mimeType,
-      fileSize: dto.fileSize,
-      storageProvider: config.storage.provider,
-      uploadedById: dto.uploadedById,
-      changeNote: dto.changeNote ?? null,
-      createdAt: new Date().toISOString(),
-      downloadUrl: url,
-      isCurrent: true,
-    };
+    const url = await this.storageClient.getUrl(version.storage_path);
+    return mapVersionToResponse(version, true, url);
   }
 
   async listVersions(
@@ -243,13 +297,20 @@ export class DocumentService implements IDocumentService {
     });
 
     const currentUrl = await this.storageClient.getUrl(doc.storage_path);
-    const current = mapCurrentDocumentToVersion(doc, currentUrl);
+    const currentVersion = history.find(
+      (v) => v.version_number === doc.version_number,
+    );
+    const current = currentVersion
+      ? mapVersionToResponse(currentVersion, true, currentUrl)
+      : mapCurrentDocumentToVersion(doc, currentUrl);
 
     const historical = await Promise.all(
-      history.map(async (v: Document_Version) => {
-        const url = await this.storageClient.getUrl(v.storage_path);
-        return mapVersionToResponse(v, false, url);
-      }),
+      history
+        .filter((v: Document_Version) => v.version_number !== doc.version_number)
+        .map(async (v: Document_Version) => {
+          const url = await this.storageClient.getUrl(v.storage_path);
+          return mapVersionToResponse(v, false, url);
+        }),
     );
 
     return [current, ...historical];
@@ -266,7 +327,17 @@ export class DocumentService implements IDocumentService {
 
     if (versionNumber === doc.version_number) {
       const url = await this.storageClient.getUrl(doc.storage_path);
-      return mapCurrentDocumentToVersion(doc, url);
+      const currentVersion = await prisma.document_Version.findUnique({
+        where: {
+          document_id_version_number: {
+            document_id: documentId,
+            version_number: versionNumber,
+          },
+        },
+      });
+      return currentVersion
+        ? mapVersionToResponse(currentVersion, true, url)
+        : mapCurrentDocumentToVersion(doc, url);
     }
 
     const version = await prisma.document_Version.findUnique({

@@ -79,7 +79,7 @@ export class AuthService implements IAuthService {
 
   async handleOidcCallback(
     code: string,
-    state?: string,
+    state: string,
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto> {
@@ -121,37 +121,83 @@ export class AuthService implements IAuthService {
   ): Promise<TokenPair> {
     const tokenHash = hashToken(dto.refreshToken);
 
-    const storedToken = await prisma.refresh_Token.findUnique({
-      where: { token_hash: tokenHash },
-      include: { user: { include: userWithRolesInclude } },
+    return prisma.$transaction(async (tx) => {
+      const storedToken = await tx.refresh_Token.findUnique({
+        where: { token_hash: tokenHash },
+        include: { user: { include: userWithRolesInclude } },
+      });
+
+      if (!storedToken) {
+        throw AppError.unauthorized('Invalid refresh token');
+      }
+
+      if (storedToken.revoked_at) {
+        // Token reuse detected — revoke all tokens for security
+        await tx.refresh_Token.updateMany({
+          where: { user_id: storedToken.user_id, revoked_at: null },
+          data: { revoked_at: new Date() },
+        });
+        logger.warn('Refresh token reuse detected', { userId: storedToken.user_id });
+        throw AppError.unauthorized('Refresh token has been revoked');
+      }
+
+      if (storedToken.expires_at < new Date()) {
+        throw AppError.unauthorized('Refresh token has expired');
+      }
+
+      if (!storedToken.user.is_active) {
+        throw AppError.unauthorized('Account is deactivated');
+      }
+
+      // Atomic compare-and-swap: the conditional updateMany re-evaluates the
+      // predicate after acquiring the row lock, so only one concurrent
+      // refresh request can flip revoked_at from null to a timestamp.
+      const revokeResult = await tx.refresh_Token.updateMany({
+        where: { id: storedToken.id, revoked_at: null },
+        data: { revoked_at: new Date() },
+      });
+
+      if (revokeResult.count === 0) {
+        logger.warn('Refresh token reuse detected (concurrent rotation)', {
+          userId: storedToken.user_id,
+        });
+        throw AppError.unauthorized('Refresh token has been revoked');
+      }
+
+      // Issue new tokens within the same transaction so the revocation and
+      // issuance commit atomically.
+      const userForToken = await tx.user.findUniqueOrThrow({
+        where: { id: storedToken.user_id },
+        select: {
+          id: true,
+          email: true,
+          display_name: true,
+          first_name: true,
+          last_name: true,
+        },
+      });
+
+      const accessToken = generateAccessToken({
+        sub: userForToken.id,
+        email: userForToken.email,
+        displayName:
+          userForToken.display_name ??
+          `${userForToken.first_name} ${userForToken.last_name}`,
+      });
+
+      const { raw, hash, expiresAt } = generateRefreshToken();
+
+      await tx.refresh_Token.create({
+        data: {
+          user_id: storedToken.user_id,
+          token_hash: hash,
+          expires_at: expiresAt,
+          ip_address: ipAddress,
+        },
+      });
+
+      return buildTokenPair(accessToken, raw);
     });
-
-    if (!storedToken) {
-      throw AppError.unauthorized('Invalid refresh token');
-    }
-
-    if (storedToken.revoked_at) {
-      // Token reuse detected — revoke all tokens for security
-      await this.logoutAll(storedToken.user_id);
-      logger.warn('Refresh token reuse detected', { userId: storedToken.user_id });
-      throw AppError.unauthorized('Refresh token has been revoked');
-    }
-
-    if (storedToken.expires_at < new Date()) {
-      throw AppError.unauthorized('Refresh token has expired');
-    }
-
-    if (!storedToken.user.is_active) {
-      throw AppError.unauthorized('Account is deactivated');
-    }
-
-    // Rotate: revoke old, issue new
-    await prisma.refresh_Token.update({
-      where: { id: storedToken.id },
-      data: { revoked_at: new Date() },
-    });
-
-    return this._issueTokens(storedToken.user_id, ipAddress);
   }
 
   async logout(refreshToken: string): Promise<void> {

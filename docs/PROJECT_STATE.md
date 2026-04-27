@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-21 (rev 2)
+> Last updated: 2026-04-27 (rev 4)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). Audit, Risk, Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). **Audit module schema is complete and migrated (`20260427083830_add_audit_module_tables`) — module code is not started.** Risk, Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
 
 ---
 
@@ -150,7 +150,7 @@ Folder: `src/modules/background/`
 - **Job key convention:** `BG:<MODULE>:<ACTION>:<FREQUENCY>`.
 - Registered jobs (via `registerAllJobs()`):
   - `BG:TOKEN:CLEANUP:HOURLY` — deletes expired / revoked refresh tokens. **Working.**
-  - `BG:AUDIT:REMINDER:DAILY` — queries `audit_engagement` for engagements with due dates in the next 3 days. **Broken** — references `prisma.audit_engagement`, which does not exist in the schema yet. Will fail at runtime until the Audit module adds that model.
+  - `BG:AUDIT:REMINDER:DAILY` — registered + cron-scheduled, but the handler is **stubbed** (logs "skipped" and returns). The original due-date query was removed; needs to be restored now that `Audit_Engagement` exists. See `scheduler.service.ts:165`.
   - `BG:LOG:ARCHIVE:WEEKLY` — pulls audit logs older than 90 days. **Partially working** — reads logs, does not yet push to data warehouse (TODO).
 
 **Not yet built:**
@@ -175,15 +175,40 @@ Folder: `src/modules/background/`
 | `audit_logs` | Tamper-evident action log. Indexed on `user_id`, `module`, `created_at`. |
 | `notifications` | In-app notifications. Indexed on `(user_id, is_read)`. |
 | `email_logs` | Email audit trail. |
-| `documents` | File metadata. `storage_path` points to the provider-specific key. Indexed on `(entity_type, entity_id)`. |
+| `documents` | File metadata. `storage_path` points to the provider-specific key. Soft-delete via `deleted_at`. Indexed on `(entity_type, entity_id)`. |
+| `document_versions` | Historical version snapshots. Unique on `(document_id, version_number)`. Current version lives on `documents`, not here. |
+| `document_templates` | Named reusable templates (working paper / audit report / finding / etc.). Soft-delete via `deleted_at`. Unique `name`. |
 | `scheduled_jobs` | Background job catalogue + last-run status. |
 | `scheduled_job_runs` | Per-execution history. |
+
+**Audit module — schema complete, migrated `20260427083830_add_audit_module_tables`, no application code yet:**
+
+| Table | Purpose |
+|---|---|
+| `audit_universe` | Auditable entities (departments / systems / processes / assets / projects). Risk-scored, owner-assigned, frequency-driven. |
+| `audit_plans` | Annual plan headers. Status: `draft → submitted → approved/rejected`. |
+| `audit_plan_items` | Line items inside a plan, each tied to a universe entry. `engagement_created` flag tracks rollover. |
+| `audit_engagements` | Active audit instances. Reference number, lead/manager/auditee triplet, SLA deadline, ad-hoc support. |
+| `audit_working_papers` | Versioned working papers per engagement. Status: `draft → submitted → approved/rejected`. |
+| `audit_evidence` | Files supporting an engagement / working paper / finding. Wraps `Document`, supports dispute. |
+| `audit_findings` | Issues raised. Category × severity × status workflow ending in `closed`. Each has a single follow-up. |
+| `audit_reports` | One per engagement (`engagement_id` is `@unique`). Status: `draft → submitted → approved → issued`. |
+| `audit_follow_ups` | Management response + remediation evidence + verification per finding. |
+| `audit_checklists` | Control test register per engagement (control reference, test procedure, pass/fail/n_a/not_tested). |
+
+Schema includes:
+- Audit-side back-relations on `User` (18 named relations covering owner / created_by / approved_by / lead / manager / auditee / reviewer / closed_by / verified_by / tested_by / etc.).
+- `Document.evidence` and `Document.reports` back-relations to `Audit_Evidence` and `Audit_Report`.
+- Enum-like fields modelled as `String` with allowed values listed inline (SQL Server has no native enums); to be mirrored in `src/modules/audit/domain/enum/audit.enum.ts` when the module is built.
+- `@db.NVarChar(Max)` on long-text columns (descriptions, root cause, recommendations, executive summary, etc.).
+- `onUpdate: NoAction, onDelete: NoAction` on every audit-side FK to avoid SQL Server's "multiple cascade paths" error.
+- Indexes on every FK + status / severity / due_date / SLA / category / reference_number lookup column.
 
 **Conventions observed:**
 - UUID primary keys (`@default(uuid())`).
 - snake_case columns + `@@map("snake_case")` tables.
-- Soft-delete via `deleted_at` on `users` and `documents` (other mutable tables will follow the same pattern).
-- No explicit DB migrations yet (`prisma/migrations/` does not exist) — only `schema.prisma`. First migration will need to be generated.
+- Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
+- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 
 ---
 
@@ -208,7 +233,7 @@ App wiring:
 
 ### 3.3 Modules entirely missing
 
-- `audit/` — universe, planning, execution, findings, reporting, follow-up, domains (IT / Financial / Compliance / Systems).
+- `audit/` — **schema migrated; module code not started.** Covers universe, planning, execution, working papers, evidence, findings, reporting, follow-up, checklists. Domains: IT / Financial / Compliance / Systems.
 - `risk/` — register, assessment, monitoring.
 - `workflow/` — approval, assignment, escalation (with configurable SLA-driven 4-level escalation chain).
 - `integration/` — Dynafin, IMOC, Active Directory, Project Plus, Shared Drive adapters.
