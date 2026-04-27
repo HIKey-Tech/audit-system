@@ -2,8 +2,35 @@
 // prisma/seed.ts
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { WORKING_PAPER_TEMPLATE_XML } from './templates/working-paper.template';
+import { AUDIT_REPORT_TEMPLATE_XML } from './templates/audit-report.template';
 
 const prisma = new PrismaClient();
+
+// ─────────────────────────────────────────────────────────────
+// Document templates (DOCX placeholder bodies for export)
+// ─────────────────────────────────────────────────────────────
+const DOCUMENT_TEMPLATES: Array<{
+  name: string;
+  description: string;
+  category: string;
+  content: string;
+}> = [
+  {
+    name: 'Working Paper - GBB Default',
+    description:
+      'Default DOCX template for audit working paper exports. Placeholders rendered by docxtemplater.',
+    category: 'working_paper',
+    content: WORKING_PAPER_TEMPLATE_XML,
+  },
+  {
+    name: 'Audit Report - GBB Default',
+    description:
+      'Default DOCX template for internal audit report exports. Placeholders rendered by docxtemplater.',
+    category: 'audit_report',
+    content: AUDIT_REPORT_TEMPLATE_XML,
+  },
+];
 
 // ─────────────────────────────────────────────────────────────
 // Permissions  (module:action)
@@ -175,12 +202,13 @@ async function main(): Promise<void> {
     where: { email: adminEmail },
   });
 
+  let adminUserId: string;
   if (!existingAdmin) {
     const superAdminRole = await prisma.role.findUniqueOrThrow({
       where: { name: 'super_admin' },
     });
 
-    await prisma.user.create({
+    const created = await prisma.user.create({
       data: {
         email: adminEmail,
         first_name: 'Super',
@@ -195,10 +223,44 @@ async function main(): Promise<void> {
         },
       },
     });
+    adminUserId = created.id;
     console.log(`   ✓ Super admin created: ${adminEmail}`);
   } else {
+    adminUserId = existingAdmin.id;
     console.log(`   – Super admin already exists: ${adminEmail}`);
   }
+
+  // 4. Upsert default DOCX export templates
+  for (const tpl of DOCUMENT_TEMPLATES) {
+    const existing = await prisma.document_Template.findUnique({
+      where: { name: tpl.name },
+    });
+    if (existing) {
+      await prisma.document_Template.update({
+        where: { id: existing.id },
+        data: {
+          description: tpl.description,
+          category: tpl.category,
+          content: tpl.content,
+          is_active: true,
+          deleted_at: null,
+          updated_by_id: adminUserId,
+        },
+      });
+    } else {
+      await prisma.document_Template.create({
+        data: {
+          name: tpl.name,
+          description: tpl.description,
+          category: tpl.category,
+          content: tpl.content,
+          is_active: true,
+          created_by_id: adminUserId,
+        },
+      });
+    }
+  }
+  console.log(`   ✓ ${DOCUMENT_TEMPLATES.length} document templates seeded`);
 
   console.log('✅  Seed complete');
 }

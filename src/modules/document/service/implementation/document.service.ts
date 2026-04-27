@@ -28,6 +28,7 @@ import {
   mapTemplateToResponse,
 } from '../../dto/response/document.response.dto';
 import { createStorageClient, IStorageClient } from '../client/storage.client';
+import { renderDocxFromDocumentXml } from '../../utility/docx-template.utility';
 
 export class DocumentService implements IDocumentService {
   private readonly storageClient: IStorageClient;
@@ -525,6 +526,23 @@ export class DocumentService implements IDocumentService {
     });
 
     logger.info('Document template soft-deleted', { templateId: id, actorId });
+  }
+
+  async renderDocxTemplate(
+    category: string,
+    data: Record<string, unknown>,
+  ): Promise<Buffer> {
+    const template = await prisma.document_Template.findFirst({
+      where: { category, is_active: true, deleted_at: null },
+      orderBy: { updated_at: 'desc' },
+      select: { id: true, content: true, name: true },
+    });
+
+    if (!template?.content) {
+      throw AppError.notFound(`Active DOCX template for category '${category}'`);
+    }
+
+    return renderDocxFromDocumentXml(template.content, data);
   }
 
   private async _assertTemplateExists(id: string): Promise<void> {

@@ -22,4 +22,52 @@ export declare const userWithRolesInclude: {
 export type UserWithRoles = Prisma.UserGetPayload<{
     include: typeof userWithRolesInclude;
 }>;
+export declare const riskAssessmentWithAssessorInclude: {
+    assessed_by: {
+        select: {
+            id: true;
+            email: true;
+            display_name: true;
+            first_name: true;
+            last_name: true;
+        };
+    };
+};
+export type RiskAssessmentWithAssessor = Prisma.Risk_AssessmentGetPayload<{
+    include: typeof riskAssessmentWithAssessorInclude;
+}>;
+export declare const riskRegisterWithDetailsInclude: {
+    category: true;
+    owner: {
+        select: {
+            id: true;
+            email: true;
+            display_name: true;
+            first_name: true;
+            last_name: true;
+            department: true;
+            job_title: true;
+        };
+    };
+    assessments: {
+        include: {
+            assessed_by: {
+                select: {
+                    id: true;
+                    email: true;
+                    display_name: true;
+                    first_name: true;
+                    last_name: true;
+                };
+            };
+        };
+        orderBy: {
+            assessed_at: "desc";
+        };
+        take: 1;
+    };
+};
+export type RiskRegisterWithDetails = Prisma.Risk_RegisterGetPayload<{
+    include: typeof riskRegisterWithDetailsInclude;
+}>;
 //# sourceMappingURL=prisma.types.d.ts.map

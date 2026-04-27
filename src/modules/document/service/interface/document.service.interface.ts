@@ -60,4 +60,14 @@ export interface IDocumentService {
   ): Promise<DocumentTemplateResponseDto>;
 
   deleteTemplate(id: string, actorId: string): Promise<void>;
+
+  /**
+   * Look up the latest active template for a category and render it as a
+   * populated .docx buffer using docxtemplater. The stored template `content`
+   * must be a `word/document.xml` body containing docxtemplater placeholders.
+   */
+  renderDocxTemplate(
+    category: string,
+    data: Record<string, unknown>,
+  ): Promise<Buffer>;
 }

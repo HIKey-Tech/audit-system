@@ -24,6 +24,8 @@ const error_handler_middleware_1 = require("./shared/middleware/error-handler.mi
 const request_logger_middleware_1 = require("./modules/logging/utility/request-logger.middleware");
 const user_1 = require("./modules/user");
 const document_1 = require("./modules/document");
+const audit_1 = require("./modules/audit");
+const risk_1 = require("./modules/risk");
 const scheduler_service_1 = require("./modules/background/service/implementation/scheduler.service");
 const openapi_util_1 = require("./shared/docs/openapi.util");
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -73,6 +75,8 @@ const buildApp = () => {
     app.use(apiPrefix, apiLimiter);
     app.use(apiPrefix, (0, user_1.createUserModule)());
     app.use(apiPrefix, (0, document_1.createDocumentModule)());
+    app.use(apiPrefix, (0, audit_1.createAuditModule)());
+    app.use(apiPrefix, (0, risk_1.createRiskModule)());
     app.use(error_handler_middleware_1.notFoundMiddleware);
     app.use(error_handler_middleware_1.errorHandlerMiddleware);
     return app;

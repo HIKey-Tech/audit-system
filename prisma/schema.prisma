@@ -60,6 +60,10 @@ model User {
   follow_up_responses     Audit_Follow_Up[]     @relation("FollowUpResponseBy")
   follow_ups_verified     Audit_Follow_Up[]     @relation("FollowUpVerifiedBy")
   checklists_tested       Audit_Checklist[]     @relation("ChecklistTestedBy")
+  risk_categories_created Risk_Category[]       @relation("RiskCategoryCreatedBy")
+  risks_owned             Risk_Register[]       @relation("RiskOwner")
+  risks_created           Risk_Register[]       @relation("RiskCreatedBy")
+  risk_assessments_done   Risk_Assessment[]     @relation("RiskAssessedBy")
 
   @@map("users")
 }
@@ -356,6 +360,7 @@ model Audit_Universe {
   created_by  User               @relation("UniverseCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   plan_items  Audit_Plan_Item[]
   engagements Audit_Engagement[]
+  risks       Risk_Register[]
 
   @@index([category])
   @@index([status])
@@ -622,4 +627,83 @@ model Audit_Checklist {
   @@index([audit_type])
   @@index([result])
   @@map("audit_checklists")
+}
+
+// ============================================================
+// RISK MODULE
+//
+// SQL Server does not support native enums, so all enum-like
+// fields below are modelled as String and mirrored in
+// src/modules/risk/domain/enum/risk.enum.ts for compile-time
+// safety. Allowed values are listed inline next to each field.
+//
+//   risk_status : open | mitigated | accepted | closed
+//   score bands : low (1-5) | medium (6-12) | high (13-19) | critical (20-25)
+// ============================================================
+
+model Risk_Category {
+  id            String   @id @default(uuid())
+  name          String   @unique
+  description   String?
+  is_active     Boolean  @default(true)
+  created_by_id String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  created_by User            @relation("RiskCategoryCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  risks      Risk_Register[]
+
+  @@map("risk_categories")
+}
+
+model Risk_Register {
+  id               String    @id @default(uuid())
+  title            String
+  description      String    @db.NVarChar(Max)
+  category_id      String
+  owner_id         String
+  likelihood       Int
+  impact           Int
+  current_score    Int
+  status           String    @default("open") // open | mitigated | accepted | closed
+  last_assessed_at DateTime?
+  universe_id      String?
+  created_by_id    String
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  category    Risk_Category     @relation(fields: [category_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  owner       User              @relation("RiskOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  universe    Audit_Universe?   @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by  User              @relation("RiskCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  assessments Risk_Assessment[]
+
+  @@index([category_id])
+  @@index([owner_id])
+  @@index([status])
+  @@index([current_score])
+  @@index([universe_id])
+  @@map("risk_register")
+}
+
+model Risk_Assessment {
+  id             String   @id @default(uuid())
+  risk_id        String
+  likelihood     Int
+  impact         Int
+  score          Int
+  notes          String?  @db.NVarChar(Max)
+  assessed_by_id String
+  assessed_at    DateTime @default(now())
+  created_at     DateTime @default(now())
+
+  risk        Risk_Register @relation(fields: [risk_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  assessed_by User          @relation("RiskAssessedBy", fields: [assessed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([risk_id])
+  @@index([assessed_by_id])
+  @@index([assessed_at])
+  @@index([score])
+  @@map("risk_assessments")
 }

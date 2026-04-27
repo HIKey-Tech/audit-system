@@ -23,3 +23,47 @@ export const userWithRolesInclude = Prisma.validator<Prisma.UserInclude>()({
 export type UserWithRoles = Prisma.UserGetPayload<{
   include: typeof userWithRolesInclude;
 }>;
+
+const riskUserBriefSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  email: true,
+  display_name: true,
+  first_name: true,
+  last_name: true,
+  department: true,
+  job_title: true,
+});
+
+const riskAssessmentUserBriefSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  email: true,
+  display_name: true,
+  first_name: true,
+  last_name: true,
+});
+
+export const riskAssessmentWithAssessorInclude = Prisma.validator<Prisma.Risk_AssessmentInclude>()({
+  assessed_by: {
+    select: riskAssessmentUserBriefSelect,
+  },
+});
+
+export type RiskAssessmentWithAssessor = Prisma.Risk_AssessmentGetPayload<{
+  include: typeof riskAssessmentWithAssessorInclude;
+}>;
+
+export const riskRegisterWithDetailsInclude = Prisma.validator<Prisma.Risk_RegisterInclude>()({
+  category: true,
+  owner: {
+    select: riskUserBriefSelect,
+  },
+  assessments: {
+    include: riskAssessmentWithAssessorInclude,
+    orderBy: { assessed_at: 'desc' },
+    take: 1,
+  },
+});
+
+export type RiskRegisterWithDetails = Prisma.Risk_RegisterGetPayload<{
+  include: typeof riskRegisterWithDetailsInclude;
+}>;

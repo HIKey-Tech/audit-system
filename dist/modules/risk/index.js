@@ -1,0 +1,38 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.RiskMonitoringService = exports.RiskAssessmentService = exports.RiskRegisterService = exports.CategoryService = exports.createRiskModule = void 0;
+const express_1 = require("express");
+const category_controller_1 = require("./categories/controller/category.controller");
+const category_service_1 = require("./categories/service/implementation/category.service");
+const register_controller_1 = require("./register/controller/register.controller");
+const register_service_1 = require("./register/service/implementation/register.service");
+const assessment_controller_1 = require("./assessments/controller/assessment.controller");
+const assessment_service_1 = require("./assessments/service/implementation/assessment.service");
+const monitoring_controller_1 = require("./monitoring/controller/monitoring.controller");
+const monitoring_service_1 = require("./monitoring/service/implementation/monitoring.service");
+const createRiskModule = () => {
+    const router = (0, express_1.Router)();
+    const categoryService = new category_service_1.CategoryService();
+    const registerService = new register_service_1.RiskRegisterService();
+    const assessmentService = new assessment_service_1.RiskAssessmentService();
+    const monitoringService = new monitoring_service_1.RiskMonitoringService();
+    const categoryController = new category_controller_1.CategoryController(categoryService);
+    const registerController = new register_controller_1.RegisterController(registerService);
+    const assessmentController = new assessment_controller_1.AssessmentController(assessmentService);
+    const monitoringController = new monitoring_controller_1.MonitoringController(monitoringService);
+    router.use('/risk/categories', categoryController.router);
+    router.use('/risk/register', registerController.router);
+    router.use('/risk', assessmentController.router);
+    router.use('/risk', monitoringController.router);
+    return router;
+};
+exports.createRiskModule = createRiskModule;
+var category_service_2 = require("./categories/service/implementation/category.service");
+Object.defineProperty(exports, "CategoryService", { enumerable: true, get: function () { return category_service_2.CategoryService; } });
+var register_service_2 = require("./register/service/implementation/register.service");
+Object.defineProperty(exports, "RiskRegisterService", { enumerable: true, get: function () { return register_service_2.RiskRegisterService; } });
+var assessment_service_2 = require("./assessments/service/implementation/assessment.service");
+Object.defineProperty(exports, "RiskAssessmentService", { enumerable: true, get: function () { return assessment_service_2.RiskAssessmentService; } });
+var monitoring_service_2 = require("./monitoring/service/implementation/monitoring.service");
+Object.defineProperty(exports, "RiskMonitoringService", { enumerable: true, get: function () { return monitoring_service_2.RiskMonitoringService; } });
+//# sourceMappingURL=index.js.map

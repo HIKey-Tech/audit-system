@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-27 (rev 4)
+> Last updated: 2026-04-27 (rev 6)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). **Audit module schema is complete and migrated (`20260427083830_add_audit_module_tables`) — module code is not started.** Risk, Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
 
 ---
 
@@ -158,7 +158,67 @@ Folder: `src/modules/background/`
 - Jobs sub-module (bulk processing + report generation).
 - Admin HTTP routes to enable/disable jobs (spec requires `job:admin` permission).
 
-### 2.7 Database schema
+### 2.7 Audit module — COMPLETE (services + HTTP routes)
+
+Folder: `src/modules/audit/`
+
+- `createAuditModule()` is mounted under `/api/v1` and exposes the full audit lifecycle routes: universe, planning, engagements, working papers, evidence, findings, reports, follow-up, and checklists.
+- Services enforce the local lifecycle rules while Workflow is not yet built:
+  - Engagement transitions: `planned -> in_progress -> under_review -> reported -> closed`.
+  - Finding transitions: `open -> management_response_received -> in_remediation -> verified -> closed`.
+  - Working paper review flow: `draft/rejected -> submitted -> approved/rejected`.
+  - Report flow includes `rejected` in code because the requested workflow needs it, although the schema comment omitted it.
+- Checklist default control sets are defined for IT, Financial, Compliance, and Systems audit types.
+- State-changing service methods call `auditLogService.logAsync(...)`.
+- Notification touchpoints call `notificationService.sendInAppNotification(...)` for plan/report submissions, rejections, working-paper review, report issue, and remediation verification.
+- Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
+- Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data because no DOCX merge/rendering service exists yet.
+
+**Verification:**
+- `npm run build` passes.
+- `npm start` was attempted but local startup is blocked by Prisma `P1011` during database initialization in the current environment.
+
+### 2.8 Risk module — COMPLETE (services + HTTP routes)
+
+Folder: `src/modules/risk/`
+
+- `createRiskModule()` is mounted under `/api/v1` and exposes categories, register, assessments, and monitoring routes.
+- Categories support create, update, deactivate, and authenticated listing with `is_active` filtering.
+- Register supports create, update, status update, soft-delete, paginated listing, single-risk lookup with latest assessment, and universe-linked risk lookup.
+- Assessments are immutable snapshots; creation calculates `score = likelihood * impact`.
+- Assessment creation uses a single Prisma transaction to create the assessment, update the parent risk, and update linked `audit_universe.risk_score` when a linked universe entity exists.
+- Monitoring supports high-risk listing, stale high/critical risks requiring attention, score trends, and organization summary by band/status.
+- Audit Universe bridge is wired: `UniverseService.getEntityById()` calls the Risk register service to return linked risks for the universe entity.
+- State-changing service methods call `auditLogService.logAsync(...)`.
+
+**Routes mounted by the module:**
+
+```
+/risk/categories                                  POST    audit:write
+/risk/categories                                  GET     audit:read
+/risk/categories/:id                              PUT     audit:write
+/risk/categories/:id                              DELETE  audit:write
+
+/risk/register                                    POST    audit:write
+/risk/register                                    GET     audit:read
+/risk/register/:id                                GET     audit:read
+/risk/register/:id                                PUT     audit:write
+/risk/register/:id/status                         PATCH   audit:write
+/risk/register/:id                                DELETE  audit:delete
+/risk/register/universe/:universeId               GET     audit:read
+
+/risk/register/:id/assessments                    POST    audit:write
+/risk/register/:id/assessments                    GET     audit:read
+/risk/assessments/:id                             GET     audit:read
+/risk/register/:id/assessments/latest             GET     audit:read
+/risk/register/:id/trend                          GET     audit:read
+
+/risk/monitoring/high-risk                        GET     audit:read
+/risk/monitoring/attention-required               GET     audit:read
+/risk/monitoring/summary                          GET     audit:read
+```
+
+### 2.9 Database schema
 
 `prisma/schema.prisma` — targets SQL Server.
 
@@ -181,7 +241,7 @@ Folder: `src/modules/background/`
 | `scheduled_jobs` | Background job catalogue + last-run status. |
 | `scheduled_job_runs` | Per-execution history. |
 
-**Audit module — schema complete, migrated `20260427083830_add_audit_module_tables`, no application code yet:**
+**Audit module — schema complete, migrated `20260427083830_add_audit_module_tables`, application services/controllers/routes built:**
 
 | Table | Purpose |
 |---|---|
@@ -199,16 +259,32 @@ Folder: `src/modules/background/`
 Schema includes:
 - Audit-side back-relations on `User` (18 named relations covering owner / created_by / approved_by / lead / manager / auditee / reviewer / closed_by / verified_by / tested_by / etc.).
 - `Document.evidence` and `Document.reports` back-relations to `Audit_Evidence` and `Audit_Report`.
-- Enum-like fields modelled as `String` with allowed values listed inline (SQL Server has no native enums); to be mirrored in `src/modules/audit/domain/enum/audit.enum.ts` when the module is built.
+- Enum-like fields modelled as `String` with allowed values listed inline (SQL Server has no native enums); mirrored in `src/modules/audit/domain/enum/audit.enum.ts`.
 - `@db.NVarChar(Max)` on long-text columns (descriptions, root cause, recommendations, executive summary, etc.).
 - `onUpdate: NoAction, onDelete: NoAction` on every audit-side FK to avoid SQL Server's "multiple cascade paths" error.
 - Indexes on every FK + status / severity / due_date / SLA / category / reference_number lookup column.
+
+**Risk module — schema complete, migrated `20260427141955_add_risk_module_tables`, application services/controllers/routes built:**
+
+| Table | Purpose |
+|---|---|
+| `risk_categories` | Active/deactivated lookup categories for enterprise risks. |
+| `risk_register` | Master list of risks with owner, category, status, current score, and optional audit-universe link. |
+| `risk_assessments` | Immutable historical assessment snapshots with likelihood, impact, calculated score, assessor, and assessment date. |
+
+Risk schema includes:
+- Risk-side back-relations on `User` for category creator, risk owner, risk creator, and assessor.
+- `Audit_Universe.risks` back-relation to support universe-linked risks.
+- Enum-like fields modelled as `String`; mirrored in `src/modules/risk/domain/enum/risk.enum.ts`.
+- `@db.NVarChar(Max)` on long-text risk and assessment notes fields.
+- `onUpdate: NoAction, onDelete: NoAction` on every risk-side FK.
+- Indexes on category, owner, status, score, universe, assessed-by, assessed-at, and assessment score lookup columns.
 
 **Conventions observed:**
 - UUID primary keys (`@default(uuid())`).
 - snake_case columns + `@@map("snake_case")` tables.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
-- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
+- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 
 ---
 
@@ -222,7 +298,7 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()` and `createDocumentModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, and `createAuditModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ### 3.2 Module routers not yet created
@@ -233,8 +309,6 @@ App wiring:
 
 ### 3.3 Modules entirely missing
 
-- `audit/` — **schema migrated; module code not started.** Covers universe, planning, execution, working papers, evidence, findings, reporting, follow-up, checklists. Domains: IT / Financial / Compliance / Systems.
-- `risk/` — register, assessment, monitoring.
 - `workflow/` — approval, assignment, escalation (with configurable SLA-driven 4-level escalation chain).
 - `integration/` — Dynafin, IMOC, Active Directory, Project Plus, Shared Drive adapters.
 - `dashboard/` — analytics, reports, widgets.

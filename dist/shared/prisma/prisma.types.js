@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.userWithRolesInclude = void 0;
+exports.riskRegisterWithDetailsInclude = exports.riskAssessmentWithAssessorInclude = exports.userWithRolesInclude = void 0;
 // src/shared/prisma/prisma.types.ts
 const client_1 = require("@prisma/client");
 /**
@@ -19,6 +19,38 @@ exports.userWithRolesInclude = client_1.Prisma.validator()({
                 },
             },
         },
+    },
+});
+const riskUserBriefSelect = client_1.Prisma.validator()({
+    id: true,
+    email: true,
+    display_name: true,
+    first_name: true,
+    last_name: true,
+    department: true,
+    job_title: true,
+});
+const riskAssessmentUserBriefSelect = client_1.Prisma.validator()({
+    id: true,
+    email: true,
+    display_name: true,
+    first_name: true,
+    last_name: true,
+});
+exports.riskAssessmentWithAssessorInclude = client_1.Prisma.validator()({
+    assessed_by: {
+        select: riskAssessmentUserBriefSelect,
+    },
+});
+exports.riskRegisterWithDetailsInclude = client_1.Prisma.validator()({
+    category: true,
+    owner: {
+        select: riskUserBriefSelect,
+    },
+    assessments: {
+        include: exports.riskAssessmentWithAssessorInclude,
+        orderBy: { assessed_at: 'desc' },
+        take: 1,
     },
 });
 //# sourceMappingURL=prisma.types.js.map

@@ -8,6 +8,7 @@ const app_config_1 = require("../../../../shared/config/app.config");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const document_response_dto_1 = require("../../dto/response/document.response.dto");
 const storage_client_1 = require("../client/storage.client");
+const docx_template_utility_1 = require("../../utility/docx-template.utility");
 class DocumentService {
     storageClient;
     constructor() {
@@ -417,6 +418,17 @@ class DocumentService {
             },
         });
         logger_util_1.logger.info('Document template soft-deleted', { templateId: id, actorId });
+    }
+    async renderDocxTemplate(category, data) {
+        const template = await prisma_client_1.prisma.document_Template.findFirst({
+            where: { category, is_active: true, deleted_at: null },
+            orderBy: { updated_at: 'desc' },
+            select: { id: true, content: true, name: true },
+        });
+        if (!template?.content) {
+            throw app_error_1.AppError.notFound(`Active DOCX template for category '${category}'`);
+        }
+        return (0, docx_template_utility_1.renderDocxFromDocumentXml)(template.content, data);
     }
     async _assertTemplateExists(id) {
         const template = await prisma_client_1.prisma.document_Template.findFirst({

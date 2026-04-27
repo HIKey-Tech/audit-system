@@ -1,0 +1,1 @@
+{"version":3,"file":"checklist.request.dto.d.ts","sourceRoot":"","sources":["../../../../../../src/modules/audit/checklists/dto/request/checklist.request.dto.ts"],"names":[],"mappings":"AAAA,OAAO,EAAE,CAAC,EAAE,MAAM,KAAK,CAAC;AACxB,OAAO,EAAE,eAAe,EAAE,MAAM,iCAAiC,CAAC;AAElE,eAAO,MAAM,gCAAgC;;;;;;;;;EAG3C,CAAC;AAEH,MAAM,MAAM,6BAA6B,GAAG,CAAC,CAAC,KAAK,CAAC,OAAO,gCAAgC,CAAC,CAAC"}
