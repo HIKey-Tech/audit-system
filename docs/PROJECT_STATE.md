@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-28 (rev 7)
+> Last updated: 2026-04-28 (rev 9)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services), and app entry point (`server.ts`) are complete and production-shaped. Logging and Background still exist as service-only scaffolds (no HTTP routes). Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
 
 ---
 
@@ -43,7 +43,7 @@ Folder: `src/modules/user/`
 | User CRUD + soft-delete | Done | `controller/user.controller.ts`, `service/implementation/user.service.ts` |
 | Self-service profile (`/users/me`, `/users/me/change-password`) | Done | `user.controller.ts` |
 | Role assignment / removal | Done | `user.service.ts#assignRoles`, `#removeRole` |
-| RBAC seed (6 roles, 19 permissions) | Done | `prisma/seed.ts` |
+| RBAC seed (8 roles, 20 permissions) | Done | `prisma/seed.ts` |
 | Module factory | Done | `modules/user/index.ts` — `createUserModule(): Router` |
 
 **Routes mounted by the module:**
@@ -70,7 +70,7 @@ Folder: `src/modules/user/`
 
 **Permission catalogue (from seed):** `user:*`, `audit:*`, `finding:*`, `document:*`, `notification:read`, `log:*`, `job:*`, `predictive:*`.
 
-**Roles:** `super_admin`, `audit_admin`, `audit_lead`, `auditor`, `auditee`, `viewer`.
+**Roles:** `super_admin`, `audit_admin`, `audit_lead`, `auditor`, `director`, `cae`, `auditee`, `viewer`.
 
 ### 2.3 Logging module — COMPLETE (service-only)
 
@@ -86,19 +86,30 @@ Folder: `src/modules/logging/`
 - Warehouse pipeline (the module description calls for a feed to the data warehouse that trains the Predictive module).
 - HTTP routes to read the audit trail (log viewer endpoints).
 
-### 2.4 Messaging module — COMPLETE (service-only)
+### 2.4 Messaging module — COMPLETE (services + HTTP routes)
 
 Folder: `src/modules/messaging/`
 
 - `NotificationService` (singleton export: `notificationService`) — uses nodemailer.
   - `sendEmail(dto)` — persists to `email_logs` first (`pending`), then updates to `sent` / `failed` after SMTP.
   - `sendInAppNotification(dto)` — persists to `notifications` table.
+  - `listForUser(userId, query)` — paginated list of the caller's notifications, optional `isRead` filter, sortable by `created_at` / `read_at`.
   - `markNotificationRead(id, userId)`.
+  - `markAllRead(userId)` — bulk-marks every unread notification for the user; returns the count updated.
   - `getUnreadCount(userId)`.
+- `NotificationController` + `createMessagingModule()` — mounted at `/api/v1/notifications`.
+
+**Routes mounted by the module:**
+
+```
+/notifications                                    GET     notification:read
+/notifications/unread-count                       GET     notification:read
+/notifications/read-all                           POST    notification:read
+/notifications/:id/read                           POST    notification:read
+```
 
 **Not yet built:**
 - Notification templates sub-module (per event type, per escalation level).
-- HTTP routes to read / mark-read in-app notifications.
 - SMS channel.
 
 ### 2.5 Document module — COMPLETE
@@ -168,12 +179,12 @@ Folder: `src/modules/audit/`
   - Engagement transitions: `planned -> in_progress -> under_review -> reported -> closed`.
   - Finding transitions: `open -> management_response_received -> in_remediation -> verified -> closed`.
   - Working paper review flow: `draft/rejected -> submitted`, then Workflow approval updates `approved/rejected`.
-  - Report flow includes `rejected` in code because the requested workflow needs it, although the schema comment omitted it; Workflow records report rejection reason on `workflow_approvals.rejection_reason` because `audit_reports` has no reason column.
+  - Report flow includes `rejected` in code because the requested workflow needs it, although the schema comment omitted it; rejection reason is now persisted directly on `audit_reports.rejection_reason` (migration `20260428085630_add_rejection_reason_to_audit_reports`) and mirrored on `workflow_approvals.rejection_reason`.
 - Checklist default control sets are defined for IT, Financial, Compliance, and Systems audit types.
 - State-changing service methods call `auditLogService.logAsync(...)`.
 - Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit still sends direct notifications for report issue and remediation verification.
 - Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
-- Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data because no DOCX merge/rendering service exists yet.
+- Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data, rendered via the shared `docx-template.utility.ts`. Two default DOCX templates (`Working Paper - GBB Default`, `Audit Report - GBB Default`) are seeded into `document_templates` from `prisma/templates/`.
 
 **Verification:**
 - `npm run build` passes.
@@ -252,8 +263,8 @@ Folder: `src/modules/workflow/`
 ```
 
 **Known decisions / gaps:**
-- Level 3 and Level 4 escalation currently notify users with the seeded `audit_admin` role because separate Director / CAE roles are not seeded.
-- Audit report rejection reason is stored on `workflow_approvals.rejection_reason`; `audit_reports` has no rejection reason column.
+- Level 3 escalations notify users with the seeded `director` role; Level 4 escalations notify users with the seeded `cae` role. Both roles ship in `prisma/seed.ts`.
+- Audit report rejection reason is stored on both `audit_reports.rejection_reason` and `workflow_approvals.rejection_reason` for audit-side and workflow-side reads respectively.
 
 ### 2.10 Database schema
 
@@ -289,7 +300,7 @@ Folder: `src/modules/workflow/`
 | `audit_working_papers` | Versioned working papers per engagement. Status: `draft → submitted → approved/rejected`. |
 | `audit_evidence` | Files supporting an engagement / working paper / finding. Wraps `Document`, supports dispute. |
 | `audit_findings` | Issues raised. Category × severity × status workflow ending in `closed`. Each has a single follow-up. |
-| `audit_reports` | One per engagement (`engagement_id` is `@unique`). Status: `draft → submitted → approved → issued`. |
+| `audit_reports` | One per engagement (`engagement_id` is `@unique`). Status: `draft → submitted → approved → issued`. Includes `rejection_reason` (NVarChar(Max)) for rejected submissions. |
 | `audit_follow_ups` | Management response + remediation evidence + verification per finding. |
 | `audit_checklists` | Control test register per engagement (control reference, test procedure, pass/fail/n_a/not_tested). |
 
@@ -339,7 +350,7 @@ Workflow schema includes:
 - UUID primary keys (`@default(uuid())`).
 - snake_case columns + `@@map("snake_case")` tables.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
-- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
+- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 
 ---
 
@@ -353,13 +364,12 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, and `createWorkflowModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, and `createMessagingModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ### 3.2 Module routers not yet created
 
 - `modules/logging/index.ts` — for a future log-viewer endpoint.
-- `modules/messaging/index.ts` — for in-app notification endpoints.
 - `modules/background/index.ts` — for admin job-control endpoints.
 
 ### 3.3 Modules entirely missing

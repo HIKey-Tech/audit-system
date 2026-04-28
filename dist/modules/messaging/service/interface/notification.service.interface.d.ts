@@ -1,3 +1,6 @@
+import { PaginationMeta } from '../../../../shared/types/api-response.type';
+import { NotificationQueryDto } from '../../dto/request/notification.request.dto';
+import { NotificationResponseDto } from '../../dto/response/notification.response.dto';
 export interface SendEmailDto {
     to: string | string[];
     subject: string;
@@ -18,7 +21,12 @@ export interface CreateInAppNotificationDto {
 export interface INotificationService {
     sendEmail(dto: SendEmailDto): Promise<void>;
     sendInAppNotification(dto: CreateInAppNotificationDto): Promise<void>;
+    listForUser(userId: string, query: NotificationQueryDto): Promise<{
+        notifications: NotificationResponseDto[];
+        meta: PaginationMeta;
+    }>;
     markNotificationRead(notificationId: string, userId: string): Promise<void>;
+    markAllRead(userId: string): Promise<number>;
     getUnreadCount(userId: string): Promise<number>;
 }
 //# sourceMappingURL=notification.service.interface.d.ts.map

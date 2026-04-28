@@ -4,11 +4,12 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationService = exports.NotificationService = void 0;
-// src/modules/messaging/service/implementation/notification.service.ts
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_config_1 = require("../../../../shared/config/app.config");
+const api_response_type_1 = require("../../../../shared/types/api-response.type");
+const notification_response_dto_1 = require("../../dto/response/notification.response.dto");
 class NotificationService {
     transporter;
     constructor() {
@@ -68,11 +69,39 @@ class NotificationService {
             },
         });
     }
+    async listForUser(userId, query) {
+        const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const where = {
+            user_id: userId,
+            ...(query.isRead !== undefined && { is_read: query.isRead }),
+        };
+        const [total, notifications] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.notification.count({ where }),
+            prisma_client_1.prisma.notification.findMany({
+                where,
+                orderBy: { [query.sortBy]: query.sortOrder },
+                skip,
+                take,
+            }),
+        ]);
+        return {
+            notifications: notifications.map(notification_response_dto_1.mapNotificationToResponse),
+            meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
+        };
+    }
     async markNotificationRead(notificationId, userId) {
         await prisma_client_1.prisma.notification.updateMany({
             where: { id: notificationId, user_id: userId },
             data: { is_read: true, read_at: new Date() },
         });
+    }
+    async markAllRead(userId) {
+        const result = await prisma_client_1.prisma.notification.updateMany({
+            where: { user_id: userId, is_read: false },
+            data: { is_read: true, read_at: new Date() },
+        });
+        logger_util_1.logger.info('Notifications marked all read', { userId, count: result.count });
+        return result.count;
     }
     async getUnreadCount(userId) {
         return prisma_client_1.prisma.notification.count({

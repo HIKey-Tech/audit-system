@@ -8,6 +8,8 @@ exports.registerAllJobs = exports.schedulerService = exports.JOB_KEYS = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
+const app_error_1 = require("../../../../shared/errors/app.error");
+const notification_service_1 = require("../../../messaging/service/implementation/notification.service");
 const escalation_service_1 = require("../../../workflow/escalation/service/implementation/escalation.service");
 /**
  * Job Key Naming Convention:
@@ -53,6 +55,44 @@ class SchedulerService {
         }
         this.tasks.clear();
     }
+    async startJob(jobKey) {
+        const job = this.jobs.find((j) => j.key === jobKey);
+        if (!job) {
+            throw app_error_1.AppError.notFound(`Background job ${jobKey}`);
+        }
+        await this._upsertJobRecord(job, true);
+        const existingTask = this.tasks.get(jobKey);
+        if (existingTask) {
+            existingTask.start();
+            logger_util_1.logger.info('Background job already registered; ensured running', { jobKey });
+            return;
+        }
+        const task = node_cron_1.default.schedule(job.cronExpression, () => this._runJob(job), {
+            name: job.key,
+            runOnInit: false,
+        });
+        this.tasks.set(job.key, task);
+        logger_util_1.logger.info('Background job started', { jobKey: job.key, cron: job.cronExpression });
+    }
+    async stopJob(jobKey) {
+        const job = this.jobs.find((j) => j.key === jobKey);
+        if (!job) {
+            throw app_error_1.AppError.notFound(`Background job ${jobKey}`);
+        }
+        await prisma_client_1.prisma.scheduled_Job.update({
+            where: { job_key: jobKey },
+            data: { is_active: false },
+        });
+        const task = this.tasks.get(jobKey);
+        if (task) {
+            task.stop();
+            this.tasks.delete(jobKey);
+            logger_util_1.logger.info('Background job stopped', { jobKey });
+        }
+        else {
+            logger_util_1.logger.info('Background job already stopped', { jobKey });
+        }
+    }
     async _runJob(job) {
         logger_util_1.logger.info('Background job started running', { jobKey: job.key });
         const run = await prisma_client_1.prisma.scheduled_Job_Run.create({
@@ -90,7 +130,7 @@ class SchedulerService {
             logger_util_1.logger.error('Background job failed', { err, jobKey: job.key });
         }
     }
-    async _upsertJobRecord(job) {
+    async _upsertJobRecord(job, isActive) {
         return prisma_client_1.prisma.scheduled_Job.upsert({
             where: { job_key: job.key },
             create: {
@@ -98,11 +138,12 @@ class SchedulerService {
                 name: job.name,
                 description: job.description,
                 cron_expression: job.cronExpression,
-                is_active: true,
+                is_active: isActive ?? true,
             },
             update: {
                 name: job.name,
                 cron_expression: job.cronExpression,
+                ...(isActive === undefined ? {} : { is_active: isActive }),
             },
             select: { is_active: true },
         });
@@ -145,9 +186,65 @@ const registerAllJobs = () => {
         description: 'Sends reminders for audit engagements approaching their due date',
         cronExpression: '0 8 * * *', // Every day at 08:00
         handler: async () => {
-            // NOTE: stubbed until the Audit module adds `audit_engagement` to the schema.
-            // Restore the real query (due-date window + notification dispatch) once that model exists.
-            logger_util_1.logger.info('Audit reminder job: skipped (audit_engagement model not yet defined)');
+            const now = new Date();
+            const reminderWindowEnd = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+            const engagements = await prisma_client_1.prisma.audit_Engagement.findMany({
+                where: {
+                    deleted_at: null,
+                    status: { notIn: ['closed', 'reported'] },
+                    sla_deadline: {
+                        gte: now,
+                        lte: reminderWindowEnd,
+                    },
+                },
+                select: {
+                    id: true,
+                    reference_number: true,
+                    title: true,
+                    sla_deadline: true,
+                    lead_auditor_id: true,
+                    audit_manager_id: true,
+                },
+                orderBy: { sla_deadline: 'asc' },
+            });
+            let notificationsSent = 0;
+            for (const engagement of engagements) {
+                const slaDeadline = engagement.sla_deadline.toISOString();
+                const recipients = [
+                    engagement.lead_auditor_id,
+                    engagement.audit_manager_id,
+                ];
+                for (const recipientId of recipients) {
+                    try {
+                        await notification_service_1.notificationService.sendInAppNotification({
+                            userId: recipientId,
+                            title: 'Audit SLA deadline approaching',
+                            body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                            type: 'warning',
+                            referenceType: 'audit_engagement',
+                            referenceId: engagement.id,
+                            metadata: {
+                                referenceNumber: engagement.reference_number,
+                                title: engagement.title,
+                                slaDeadline,
+                            },
+                        });
+                        notificationsSent += 1;
+                    }
+                    catch (err) {
+                        logger_util_1.logger.error('Audit reminder notification failed', {
+                            err,
+                            engagementId: engagement.id,
+                            referenceNumber: engagement.reference_number,
+                            recipientId,
+                        });
+                    }
+                }
+            }
+            logger_util_1.logger.info('Audit reminder job completed', {
+                engagementsFound: engagements.length,
+                notificationsSent,
+            });
         },
     });
     // BG:WORKFLOW:ESCALATION:HOURLY — check stalled approvals and breached audit engagement SLAs

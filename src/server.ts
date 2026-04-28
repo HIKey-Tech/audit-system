@@ -27,10 +27,12 @@ import { createDocumentModule } from './modules/document';
 import { createAuditModule } from './modules/audit';
 import { createRiskModule } from './modules/risk';
 import { createWorkflowModule } from './modules/workflow';
+import { createMessagingModule } from './modules/messaging';
 import {
+  createBackgroundModule,
   schedulerService,
   registerAllJobs,
-} from './modules/background/service/implementation/scheduler.service';
+} from './modules/background';
 import { buildOpenApiDocument } from './shared/docs/openapi.util';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -99,6 +101,8 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createAuditModule());
   app.use(apiPrefix, createRiskModule());
   app.use(apiPrefix, createWorkflowModule());
+  app.use(apiPrefix, createMessagingModule());
+  app.use(apiPrefix, createBackgroundModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);

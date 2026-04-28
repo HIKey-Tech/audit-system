@@ -27,6 +27,8 @@ declare class SchedulerService {
     register(job: RegisteredJob): void;
     startAll(): Promise<void>;
     stopAll(): void;
+    startJob(jobKey: string): Promise<void>;
+    stopJob(jobKey: string): Promise<void>;
     private _runJob;
     private _upsertJobRecord;
     private _getJobId;

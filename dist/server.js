@@ -27,7 +27,8 @@ const document_1 = require("./modules/document");
 const audit_1 = require("./modules/audit");
 const risk_1 = require("./modules/risk");
 const workflow_1 = require("./modules/workflow");
-const scheduler_service_1 = require("./modules/background/service/implementation/scheduler.service");
+const messaging_1 = require("./modules/messaging");
+const background_1 = require("./modules/background");
 const openapi_util_1 = require("./shared/docs/openapi.util");
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 const buildApp = () => {
@@ -79,6 +80,8 @@ const buildApp = () => {
     app.use(apiPrefix, (0, audit_1.createAuditModule)());
     app.use(apiPrefix, (0, risk_1.createRiskModule)());
     app.use(apiPrefix, (0, workflow_1.createWorkflowModule)());
+    app.use(apiPrefix, (0, messaging_1.createMessagingModule)());
+    app.use(apiPrefix, (0, background_1.createBackgroundModule)());
     app.use(error_handler_middleware_1.notFoundMiddleware);
     app.use(error_handler_middleware_1.errorHandlerMiddleware);
     return app;
@@ -101,8 +104,8 @@ const startServer = async () => {
         apiPrefix: `/api/${app_config_1.config.app.apiVersion}`,
         docs: `${app_config_1.config.app.url}/docs`,
     });
-    (0, scheduler_service_1.registerAllJobs)();
-    await scheduler_service_1.schedulerService.startAll();
+    (0, background_1.registerAllJobs)();
+    await background_1.schedulerService.startAll();
     return server;
 };
 const shutdown = async (server, signal) => {
@@ -117,7 +120,7 @@ const shutdown = async (server, signal) => {
             server.close((err) => (err ? reject(err) : resolve()));
         });
         logger_util_1.logger.info('HTTP server closed');
-        scheduler_service_1.schedulerService.stopAll();
+        background_1.schedulerService.stopAll();
         logger_util_1.logger.info('Scheduler stopped');
         await (0, prisma_client_1.disconnectDatabase)();
         clearTimeout(forceExit);
