@@ -50,7 +50,7 @@ class NotificationService {
                 where: { id: logEntry.id },
                 data: { status: 'failed', error: String(err) },
             });
-            logger_util_1.logger.error('Email send failed', { err, subject: dto.subject });
+            logger_util_1.logger.error('Email send failed', { err, to: dto.to, subject: dto.subject });
             throw err;
         }
     }

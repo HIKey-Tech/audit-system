@@ -2,6 +2,7 @@
 import cron from 'node-cron';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../shared/utils/logger.util';
+import { workflowEscalationService } from '../../../workflow/escalation/service/implementation/escalation.service';
 
 /**
  * Job Key Naming Convention:
@@ -14,6 +15,7 @@ import { logger } from '../../../../shared/utils/logger.util';
 export const JOB_KEYS = {
   TOKEN_CLEANUP_HOURLY: 'BG:TOKEN:CLEANUP:HOURLY',
   AUDIT_REMINDER_DAILY: 'BG:AUDIT:REMINDER:DAILY',
+  WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
   LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
   REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
 } as const;
@@ -170,6 +172,18 @@ export const registerAllJobs = (): void => {
       // NOTE: stubbed until the Audit module adds `audit_engagement` to the schema.
       // Restore the real query (due-date window + notification dispatch) once that model exists.
       logger.info('Audit reminder job: skipped (audit_engagement model not yet defined)');
+    },
+  });
+
+  // BG:WORKFLOW:ESCALATION:HOURLY — check stalled approvals and breached audit engagement SLAs
+  schedulerService.register({
+    key: JOB_KEYS.WORKFLOW_ESCALATION_HOURLY,
+    name: 'Workflow Escalation Check',
+    description: 'Escalates stalled approvals and overdue audit engagements',
+    cronExpression: '0 * * * *', // Every hour
+    handler: async () => {
+      const result = await workflowEscalationService.checkAndEscalate();
+      logger.info('Workflow escalation job completed', result);
     },
   });
 

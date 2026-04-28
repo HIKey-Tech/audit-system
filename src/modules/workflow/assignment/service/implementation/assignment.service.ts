@@ -1,0 +1,224 @@
+import { Prisma } from '@prisma/client';
+import { prisma } from '../../../../../shared/prisma/prisma.client';
+import { AppError } from '../../../../../shared/errors/app.error';
+import { logger } from '../../../../../shared/utils/logger.util';
+import {
+  PaginationMeta,
+  buildPaginationMeta,
+  parsePagination,
+} from '../../../../../shared/types/api-response.type';
+import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
+import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
+import { WorkflowAssignmentRole } from '../../../domain/enum/workflow.enum';
+import { WORKFLOW_ADMIN_ROLES, assertHasRole } from '../../../utility/workflow.utility';
+import { AssignStaffRequestDto, MyAssignmentsQueryDto } from '../../dto/request/assignment.request.dto';
+import {
+  AssignmentResponseDto,
+  WorkloadResponseDto,
+  mapAssignmentToResponse,
+} from '../../dto/response/assignment.response.dto';
+import { IAssignmentService } from '../interface/assignment.service.interface';
+
+const workflowUserSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  email: true,
+  display_name: true,
+  first_name: true,
+  last_name: true,
+  department: true,
+  job_title: true,
+});
+
+const assignmentInclude = Prisma.validator<Prisma.Workflow_AssignmentInclude>()({
+  user: { select: workflowUserSelect },
+  assigned_by: { select: workflowUserSelect },
+  engagement: true,
+});
+
+export class AssignmentService implements IAssignmentService {
+  async assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto> {
+    assertHasRole(assignedBy.roles, WORKFLOW_ADMIN_ROLES);
+
+    const [engagement, user, existing] = await prisma.$transaction([
+      prisma.audit_Engagement.findFirst({
+        where: { id: dto.engagementId, deleted_at: null },
+        select: { id: true, title: true },
+      }),
+      prisma.user.findFirst({
+        where: { id: dto.userId, deleted_at: null, is_active: true },
+        select: { id: true, email: true },
+      }),
+      prisma.workflow_Assignment.findFirst({
+        where: {
+          engagement_id: dto.engagementId,
+          user_id: dto.userId,
+          role: dto.role,
+        },
+        select: { id: true },
+      }),
+    ]);
+
+    if (!engagement) throw AppError.notFound('Audit engagement');
+    if (!user) throw AppError.notFound('User');
+    if (existing) throw AppError.conflict('User is already assigned to this engagement in that role');
+
+    const assignment = await prisma.workflow_Assignment.create({
+      data: {
+        engagement_id: dto.engagementId,
+        user_id: dto.userId,
+        role: dto.role,
+        assigned_by_id: assignedBy.id,
+      },
+      include: assignmentInclude,
+    });
+
+    await notificationService.sendInAppNotification({
+      userId: dto.userId,
+      title: 'Audit assignment',
+      body: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+      type: 'info',
+      referenceType: 'audit_engagement',
+      referenceId: dto.engagementId,
+    });
+
+    await notificationService.sendEmail({
+      to: user.email,
+      subject: 'Audit assignment',
+      text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+    }).catch((err: unknown) => {
+      logger.warn('Workflow assignment email notification failed', { err, userId: dto.userId });
+    });
+
+    logger.info('Workflow assignment created', {
+      assignmentId: assignment.id,
+      engagementId: dto.engagementId,
+      userId: dto.userId,
+      actorId: assignedBy.id,
+    });
+    auditLogService.logAsync({
+      userId: assignedBy.id,
+      action: 'workflow.assignment.create',
+      module: 'workflow',
+      entityType: 'audit_engagement',
+      entityId: dto.engagementId,
+      newValues: dto,
+    });
+
+    return mapAssignmentToResponse(assignment);
+  }
+
+  async removeAssignment(assignmentId: string, removedBy: WorkflowActorContext): Promise<void> {
+    assertHasRole(removedBy.roles, WORKFLOW_ADMIN_ROLES);
+
+    const assignment = await prisma.workflow_Assignment.findUnique({
+      where: { id: assignmentId },
+      include: {
+        user: { select: { id: true, email: true } },
+        engagement: { select: { id: true, title: true } },
+      },
+    });
+    if (!assignment) throw AppError.notFound('Workflow assignment');
+
+    await prisma.workflow_Assignment.delete({ where: { id: assignmentId } });
+
+    await notificationService.sendInAppNotification({
+      userId: assignment.user_id,
+      title: 'Audit assignment removed',
+      body: `You have been unassigned from ${assignment.engagement.title}.`,
+      type: 'warning',
+      referenceType: 'audit_engagement',
+      referenceId: assignment.engagement_id,
+    });
+
+    await notificationService.sendEmail({
+      to: assignment.user.email,
+      subject: 'Audit assignment removed',
+      text: `You have been unassigned from ${assignment.engagement.title}.`,
+    }).catch((err: unknown) => {
+      logger.warn('Workflow unassignment email notification failed', { err, userId: assignment.user_id });
+    });
+
+    logger.info('Workflow assignment removed', { assignmentId, actorId: removedBy.id });
+    auditLogService.logAsync({
+      userId: removedBy.id,
+      action: 'workflow.assignment.remove',
+      module: 'workflow',
+      entityType: 'audit_engagement',
+      entityId: assignment.engagement_id,
+      oldValues: { userId: assignment.user_id, role: assignment.role },
+    });
+  }
+
+  async getAssignments(engagementId: string): Promise<AssignmentResponseDto[]> {
+    const assignments = await prisma.workflow_Assignment.findMany({
+      where: { engagement_id: engagementId },
+      include: assignmentInclude,
+      orderBy: { assigned_at: 'asc' },
+    });
+    return assignments.map(mapAssignmentToResponse);
+  }
+
+  async getMyAssignments(
+    userId: string,
+    filters: MyAssignmentsQueryDto,
+  ): Promise<{ assignments: AssignmentResponseDto[]; meta: PaginationMeta }> {
+    const { skip, take, page, pageSize } = parsePagination(filters);
+    const where: Prisma.Workflow_AssignmentWhereInput = {
+      user_id: userId,
+      engagement: {
+        deleted_at: null,
+        ...(filters.status && { status: filters.status }),
+      },
+    };
+
+    const [total, assignments] = await prisma.$transaction([
+      prisma.workflow_Assignment.count({ where }),
+      prisma.workflow_Assignment.findMany({
+        where,
+        include: assignmentInclude,
+        orderBy: { assigned_at: 'desc' },
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      assignments: assignments.map(mapAssignmentToResponse),
+      meta: buildPaginationMeta(total, page, pageSize),
+    };
+  }
+
+  async getUserWorkload(userId: string): Promise<WorkloadResponseDto> {
+    const user = await prisma.user.findFirst({
+      where: { id: userId, deleted_at: null, is_active: true },
+      select: { id: true },
+    });
+    if (!user) throw AppError.notFound('User');
+
+    const assignments = await prisma.workflow_Assignment.findMany({
+      where: {
+        user_id: userId,
+        engagement: {
+          deleted_at: null,
+          status: { notIn: ['reported', 'closed'] },
+        },
+      },
+      select: { engagement: { select: { status: true } } },
+    });
+
+    const counts = new Map<string, number>();
+    for (const assignment of assignments) {
+      const status = assignment.engagement.status;
+      counts.set(status, (counts.get(status) ?? 0) + 1);
+    }
+
+    return {
+      userId,
+      totalActive: assignments.length,
+      byStatus: Array.from(counts.entries()).map(([status, count]) => ({ status, count })),
+    };
+  }
+}
+
+export const workflowAssignmentService = new AssignmentService();

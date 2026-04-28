@@ -4,7 +4,9 @@ import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
+import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
+import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { PlanStatus } from '../../../domain/enum/audit.enum';
 import { AUDIT_ADMIN_ROLES, assertHasRole } from '../../../utility/audit.utility';
@@ -21,6 +23,8 @@ const planInclude = {
 };
 
 export class PlanningService implements IPlanningService {
+  constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
+
   async createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
 
@@ -117,7 +121,10 @@ export class PlanningService implements IPlanningService {
       include: planInclude,
     });
 
-    await this._notifyAuditAdmins('Audit plan submitted', `Audit plan "${updated.title}" has been submitted for approval.`, planId);
+    await this.approvalService.createApproval({
+      entityType: WorkflowEntityType.AuditPlan,
+      entityId: planId,
+    }, actor);
     logger.info('Audit plan submitted', { planId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.submit', module: 'audit', entityType: 'audit_plan', entityId: planId });
     return mapPlanToResponse(updated);
@@ -128,20 +135,13 @@ export class PlanningService implements IPlanningService {
     const plan = await this._getPlanForMutation(planId);
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be approved');
 
-    const updated = await prisma.audit_Plan.update({
-      where: { id: planId },
-      data: {
-        status: PlanStatus.Approved,
-        approved_by_id: actor.id,
-        approved_at: new Date(),
-        rejection_reason: null,
-      },
-      include: planInclude,
-    });
+    const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditPlan, planId);
+    await this.approvalService.approve(approval.id, actor.id);
+    const updated = await this.getPlanById(planId);
 
     logger.info('Audit plan approved', { planId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.approve', module: 'audit', entityType: 'audit_plan', entityId: planId });
-    return mapPlanToResponse(updated);
+    return updated;
   }
 
   async rejectPlan(planId: string, reason: string, actor: ActorContext): Promise<PlanResponseDto> {
@@ -149,29 +149,13 @@ export class PlanningService implements IPlanningService {
     const plan = await this._getPlanForMutation(planId);
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be rejected');
 
-    const updated = await prisma.audit_Plan.update({
-      where: { id: planId },
-      data: {
-        status: PlanStatus.Rejected,
-        approved_by_id: null,
-        approved_at: null,
-        rejection_reason: reason,
-      },
-      include: planInclude,
-    });
-
-    await notificationService.sendInAppNotification({
-      userId: plan.created_by_id,
-      title: 'Audit plan rejected',
-      body: `Audit plan "${plan.title}" was rejected: ${reason}`,
-      type: 'warning',
-      referenceType: 'audit_plan',
-      referenceId: planId,
-    });
+    const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditPlan, planId);
+    await this.approvalService.reject(approval.id, actor.id, reason);
+    const updated = await this.getPlanById(planId);
 
     logger.info('Audit plan rejected', { planId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.reject', module: 'audit', entityType: 'audit_plan', entityId: planId, newValues: { reason } });
-    return mapPlanToResponse(updated);
+    return updated;
   }
 
   async getPlanById(id: string): Promise<PlanResponseDto> {
@@ -230,25 +214,4 @@ export class PlanningService implements IPlanningService {
     if (!universe) throw AppError.notFound('Audit universe entity');
   }
 
-  private async _notifyAuditAdmins(title: string, body: string, planId: string): Promise<void> {
-    const admins = await prisma.user.findMany({
-      where: {
-        deleted_at: null,
-        is_active: true,
-        user_roles: { some: { role: { name: { in: ['audit_admin', 'super_admin'] } } } },
-      },
-      select: { id: true },
-    });
-
-    await Promise.all(admins.map((admin) =>
-      notificationService.sendInAppNotification({
-        userId: admin.id,
-        title,
-        body,
-        type: 'info',
-        referenceType: 'audit_plan',
-        referenceId: planId,
-      }),
-    ));
-  }
 }

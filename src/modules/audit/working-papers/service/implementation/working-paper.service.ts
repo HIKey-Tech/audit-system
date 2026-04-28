@@ -2,8 +2,10 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
+import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
+import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
 import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, WP_REVIEWABLE_STATUSES, assertHasRole } from '../../../utility/audit.utility';
@@ -15,7 +17,10 @@ import { WorkingPaperResponseDto, mapWorkingPaperToResponse } from '../../dto/re
 import { IWorkingPaperService } from '../interface/working-paper.service.interface';
 
 export class WorkingPaperService implements IWorkingPaperService {
-  constructor(private readonly documentService: IDocumentService) {}
+  constructor(
+    private readonly documentService: IDocumentService,
+    private readonly approvalService: IApprovalService = workflowApprovalService,
+  ) {}
 
   async createWorkingPaper(engagementId: string, dto: CreateWorkingPaperRequestDto, actor: ActorContext): Promise<WorkingPaperResponseDto> {
     assertHasRole(actor.roles, AUDIT_WORK_ROLES);
@@ -81,14 +86,10 @@ export class WorkingPaperService implements IWorkingPaperService {
       data: { status: WorkingPaperStatus.Submitted, rejection_reason: null },
     });
 
-    await notificationService.sendInAppNotification({
-      userId: paper.engagement.audit_manager_id,
-      title: 'Working paper submitted',
-      body: `Working paper "${paper.title}" has been submitted for review.`,
-      type: 'info',
-      referenceType: 'audit_working_paper',
-      referenceId: id,
-    });
+    await this.approvalService.createApproval({
+      entityType: WorkflowEntityType.AuditWorkingPaper,
+      entityId: id,
+    }, actor);
 
     logger.info('Audit working paper submitted', { workingPaperId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.submit', module: 'audit', entityType: 'audit_working_paper', entityId: id });
@@ -100,10 +101,9 @@ export class WorkingPaperService implements IWorkingPaperService {
     const paper = await this._getPaper(id);
     if (paper.status !== WorkingPaperStatus.Submitted) throw AppError.badRequest('Only submitted working papers can be approved');
 
-    const updated = await prisma.audit_Working_Paper.update({
-      where: { id },
-      data: { status: WorkingPaperStatus.Approved, reviewed_by_id: actor.id, rejection_reason: null },
-    });
+    const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditWorkingPaper, id);
+    await this.approvalService.approve(approval.id, actor.id);
+    const updated = await this._getPaper(id);
 
     logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.approve', module: 'audit', entityType: 'audit_working_paper', entityId: id });
@@ -115,19 +115,9 @@ export class WorkingPaperService implements IWorkingPaperService {
     const paper = await this._getPaper(id);
     if (paper.status !== WorkingPaperStatus.Submitted) throw AppError.badRequest('Only submitted working papers can be rejected');
 
-    const updated = await prisma.audit_Working_Paper.update({
-      where: { id },
-      data: { status: WorkingPaperStatus.Rejected, reviewed_by_id: actor.id, rejection_reason: reason },
-    });
-
-    await notificationService.sendInAppNotification({
-      userId: paper.created_by_id,
-      title: 'Working paper rejected',
-      body: `Working paper "${paper.title}" was rejected: ${reason}`,
-      type: 'warning',
-      referenceType: 'audit_working_paper',
-      referenceId: id,
-    });
+    const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditWorkingPaper, id);
+    await this.approvalService.reject(approval.id, actor.id, reason);
+    const updated = await this._getPaper(id);
 
     logger.info('Audit working paper rejected', { workingPaperId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.reject', module: 'audit', entityType: 'audit_working_paper', entityId: id, newValues: { reason } });

@@ -1,0 +1,31 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+exports.workflowEscalationService = exports.EscalationService = exports.workflowAssignmentService = exports.AssignmentService = exports.workflowApprovalService = exports.ApprovalService = exports.createWorkflowModule = void 0;
+const express_1 = require("express");
+const approval_controller_1 = require("./approval/controller/approval.controller");
+const approval_service_1 = require("./approval/service/implementation/approval.service");
+const assignment_controller_1 = require("./assignment/controller/assignment.controller");
+const assignment_service_1 = require("./assignment/service/implementation/assignment.service");
+const escalation_controller_1 = require("./escalation/controller/escalation.controller");
+const escalation_service_1 = require("./escalation/service/implementation/escalation.service");
+const createWorkflowModule = () => {
+    const router = (0, express_1.Router)();
+    const approvalController = new approval_controller_1.ApprovalController(approval_service_1.workflowApprovalService);
+    const assignmentController = new assignment_controller_1.AssignmentController(assignment_service_1.workflowAssignmentService);
+    const escalationController = new escalation_controller_1.EscalationController(escalation_service_1.workflowEscalationService);
+    router.use('/workflow/approvals', approvalController.router);
+    router.use('/workflow/assignments', assignmentController.router);
+    router.use('/workflow', escalationController.router);
+    return router;
+};
+exports.createWorkflowModule = createWorkflowModule;
+var approval_service_2 = require("./approval/service/implementation/approval.service");
+Object.defineProperty(exports, "ApprovalService", { enumerable: true, get: function () { return approval_service_2.ApprovalService; } });
+Object.defineProperty(exports, "workflowApprovalService", { enumerable: true, get: function () { return approval_service_2.workflowApprovalService; } });
+var assignment_service_2 = require("./assignment/service/implementation/assignment.service");
+Object.defineProperty(exports, "AssignmentService", { enumerable: true, get: function () { return assignment_service_2.AssignmentService; } });
+Object.defineProperty(exports, "workflowAssignmentService", { enumerable: true, get: function () { return assignment_service_2.workflowAssignmentService; } });
+var escalation_service_2 = require("./escalation/service/implementation/escalation.service");
+Object.defineProperty(exports, "EscalationService", { enumerable: true, get: function () { return escalation_service_2.EscalationService; } });
+Object.defineProperty(exports, "workflowEscalationService", { enumerable: true, get: function () { return escalation_service_2.workflowEscalationService; } });
+//# sourceMappingURL=index.js.map

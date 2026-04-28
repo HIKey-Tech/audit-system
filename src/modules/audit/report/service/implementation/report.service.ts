@@ -4,6 +4,9 @@ import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { notificationService } from '../../../../messaging/service/implementation/notification.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
+import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
+import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, ReportStatus } from '../../../domain/enum/audit.enum';
 import { AUDIT_ADMIN_ROLES, AUDIT_REVIEW_ROLES, REPORT_EDITABLE_STATUSES, assertHasRole } from '../../../utility/audit.utility';
@@ -27,6 +30,7 @@ export class ReportService implements IReportService {
   constructor(
     private readonly followUpService: IFollowUpService,
     private readonly documentService: IDocumentService,
+    private readonly approvalService: IApprovalService = workflowApprovalService,
   ) {}
 
   async generateReport(engagementId: string, actor: ActorContext): Promise<ReportResponseDto> {
@@ -98,7 +102,10 @@ export class ReportService implements IReportService {
       include: reportInclude,
     });
 
-    await this._notifyAuditAdmins('Audit report submitted', `Audit report "${report.title}" has been submitted for approval.`, id);
+    await this.approvalService.createApproval({
+      entityType: WorkflowEntityType.AuditReport,
+      entityId: id,
+    }, actor);
     logger.info('Audit report submitted', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.submit', module: 'audit', entityType: 'audit_report', entityId: id });
     return mapReportToResponse(updated);
@@ -109,11 +116,13 @@ export class ReportService implements IReportService {
     const report = await this._getReport(id);
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be approved');
 
-    const updated = await prisma.audit_Report.update({
-      where: { id },
-      data: { status: ReportStatus.Approved },
+    const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditReport, id);
+    await this.approvalService.approve(approval.id, actor.id);
+    const updated = await prisma.audit_Report.findFirst({
+      where: { id, deleted_at: null },
       include: reportInclude,
     });
+    if (!updated) throw AppError.notFound('Audit report');
 
     logger.info('Audit report approved', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.approve', module: 'audit', entityType: 'audit_report', entityId: id });
@@ -125,20 +134,13 @@ export class ReportService implements IReportService {
     const report = await this._getReport(id);
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be rejected');
 
-    const updated = await prisma.audit_Report.update({
-      where: { id },
-      data: { status: ReportStatus.Rejected },
+    const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditReport, id);
+    await this.approvalService.reject(approval.id, actor.id, reason);
+    const updated = await prisma.audit_Report.findFirst({
+      where: { id, deleted_at: null },
       include: reportInclude,
     });
-
-    await notificationService.sendInAppNotification({
-      userId: report.created_by_id,
-      title: 'Audit report rejected',
-      body: `Audit report "${report.title}" was rejected: ${reason}`,
-      type: 'warning',
-      referenceType: 'audit_report',
-      referenceId: id,
-    });
+    if (!updated) throw AppError.notFound('Audit report');
 
     logger.info('Audit report rejected', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.reject', module: 'audit', entityType: 'audit_report', entityId: id, newValues: { reason } });
@@ -239,25 +241,4 @@ export class ReportService implements IReportService {
     return report;
   }
 
-  private async _notifyAuditAdmins(title: string, body: string, reportId: string): Promise<void> {
-    const admins = await prisma.user.findMany({
-      where: {
-        deleted_at: null,
-        is_active: true,
-        user_roles: { some: { role: { name: { in: ['audit_admin', 'super_admin'] } } } },
-      },
-      select: { id: true },
-    });
-
-    await Promise.all(admins.map((admin) =>
-      notificationService.sendInAppNotification({
-        userId: admin.id,
-        title,
-        body,
-        type: 'info',
-        referenceType: 'audit_report',
-        referenceId: reportId,
-      }),
-    ));
-  }
 }

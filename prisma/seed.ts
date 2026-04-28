@@ -129,6 +129,26 @@ const ROLES: Array<{
       ],
     },
     {
+      name: 'director',
+      description: 'Director - read-only audit oversight and report escalation approval',
+      isSystem: true,
+      permissions: [
+        'audit:read',
+        'finding:read',
+        'document:read',
+      ],
+    },
+    {
+      name: 'cae',
+      description: 'Chief Audit Executive - full audit oversight',
+      isSystem: true,
+      permissions: [
+        'audit:read', 'audit:write', 'audit:admin',
+        'finding:read', 'finding:write',
+        'document:read', 'document:write',
+      ],
+    },
+    {
       name: 'auditee',
       description: 'Auditee — views relevant findings and responds',
       isSystem: true,

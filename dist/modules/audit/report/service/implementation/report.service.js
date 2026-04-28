@@ -6,6 +6,8 @@ const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const notification_service_1 = require("../../../../messaging/service/implementation/notification.service");
+const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
+const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const report_response_dto_1 = require("../../dto/response/report.response.dto");
@@ -22,9 +24,11 @@ const reportInclude = {
 class ReportService {
     followUpService;
     documentService;
-    constructor(followUpService, documentService) {
+    approvalService;
+    constructor(followUpService, documentService, approvalService = approval_service_1.workflowApprovalService) {
         this.followUpService = followUpService;
         this.documentService = documentService;
+        this.approvalService = approvalService;
     }
     async generateReport(engagementId, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
@@ -92,7 +96,10 @@ class ReportService {
             data: { status: audit_enum_1.ReportStatus.Submitted },
             include: reportInclude,
         });
-        await this._notifyAuditAdmins('Audit report submitted', `Audit report "${report.title}" has been submitted for approval.`, id);
+        await this.approvalService.createApproval({
+            entityType: workflow_enum_1.WorkflowEntityType.AuditReport,
+            entityId: id,
+        }, actor);
         logger_util_1.logger.info('Audit report submitted', { reportId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.submit', module: 'audit', entityType: 'audit_report', entityId: id });
         return (0, report_response_dto_1.mapReportToResponse)(updated);
@@ -102,11 +109,14 @@ class ReportService {
         const report = await this._getReport(id);
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be approved');
-        const updated = await prisma_client_1.prisma.audit_Report.update({
-            where: { id },
-            data: { status: audit_enum_1.ReportStatus.Approved },
+        const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, id);
+        await this.approvalService.approve(approval.id, actor.id);
+        const updated = await prisma_client_1.prisma.audit_Report.findFirst({
+            where: { id, deleted_at: null },
             include: reportInclude,
         });
+        if (!updated)
+            throw app_error_1.AppError.notFound('Audit report');
         logger_util_1.logger.info('Audit report approved', { reportId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.approve', module: 'audit', entityType: 'audit_report', entityId: id });
         return (0, report_response_dto_1.mapReportToResponse)(updated);
@@ -116,19 +126,14 @@ class ReportService {
         const report = await this._getReport(id);
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be rejected');
-        const updated = await prisma_client_1.prisma.audit_Report.update({
-            where: { id },
-            data: { status: audit_enum_1.ReportStatus.Rejected },
+        const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, id);
+        await this.approvalService.reject(approval.id, actor.id, reason);
+        const updated = await prisma_client_1.prisma.audit_Report.findFirst({
+            where: { id, deleted_at: null },
             include: reportInclude,
         });
-        await notification_service_1.notificationService.sendInAppNotification({
-            userId: report.created_by_id,
-            title: 'Audit report rejected',
-            body: `Audit report "${report.title}" was rejected: ${reason}`,
-            type: 'warning',
-            referenceType: 'audit_report',
-            referenceId: id,
-        });
+        if (!updated)
+            throw app_error_1.AppError.notFound('Audit report');
         logger_util_1.logger.info('Audit report rejected', { reportId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.reject', module: 'audit', entityType: 'audit_report', entityId: id, newValues: { reason } });
         return (0, report_response_dto_1.mapReportToResponse)(updated);
@@ -221,24 +226,6 @@ class ReportService {
         if (!report)
             throw app_error_1.AppError.notFound('Audit report');
         return report;
-    }
-    async _notifyAuditAdmins(title, body, reportId) {
-        const admins = await prisma_client_1.prisma.user.findMany({
-            where: {
-                deleted_at: null,
-                is_active: true,
-                user_roles: { some: { role: { name: { in: ['audit_admin', 'super_admin'] } } } },
-            },
-            select: { id: true },
-        });
-        await Promise.all(admins.map((admin) => notification_service_1.notificationService.sendInAppNotification({
-            userId: admin.id,
-            title,
-            body,
-            type: 'info',
-            referenceType: 'audit_report',
-            referenceId: reportId,
-        })));
     }
 }
 exports.ReportService = ReportService;

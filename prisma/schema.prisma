@@ -42,28 +42,34 @@ model User {
   templates_updated Document_Template[] @relation("TemplateUpdatedBy")
 
   // Audit module back-relations
-  universes_owned         Audit_Universe[]      @relation("UniverseOwner")
-  universes_created       Audit_Universe[]      @relation("UniverseCreatedBy")
-  plans_created           Audit_Plan[]          @relation("PlanCreatedBy")
-  plans_approved          Audit_Plan[]          @relation("PlanApprovedBy")
-  engagements_led         Audit_Engagement[]    @relation("EngagementLead")
-  engagements_managed     Audit_Engagement[]    @relation("EngagementManager")
-  engagements_as_auditee  Audit_Engagement[]    @relation("EngagementAuditee")
-  engagements_created     Audit_Engagement[]    @relation("EngagementCreatedBy")
-  working_papers_created  Audit_Working_Paper[] @relation("WorkingPaperCreatedBy")
-  working_papers_reviewed Audit_Working_Paper[] @relation("WorkingPaperReviewedBy")
-  evidence_uploaded       Audit_Evidence[]      @relation("EvidenceUploadedBy")
-  findings_as_auditee     Audit_Finding[]       @relation("FindingAuditee")
-  findings_created        Audit_Finding[]       @relation("FindingCreatedBy")
-  findings_closed         Audit_Finding[]       @relation("FindingClosedBy")
-  reports_created         Audit_Report[]        @relation("ReportCreatedBy")
-  follow_up_responses     Audit_Follow_Up[]     @relation("FollowUpResponseBy")
-  follow_ups_verified     Audit_Follow_Up[]     @relation("FollowUpVerifiedBy")
-  checklists_tested       Audit_Checklist[]     @relation("ChecklistTestedBy")
-  risk_categories_created Risk_Category[]       @relation("RiskCategoryCreatedBy")
-  risks_owned             Risk_Register[]       @relation("RiskOwner")
-  risks_created           Risk_Register[]       @relation("RiskCreatedBy")
-  risk_assessments_done   Risk_Assessment[]     @relation("RiskAssessedBy")
+  universes_owned              Audit_Universe[]         @relation("UniverseOwner")
+  universes_created            Audit_Universe[]         @relation("UniverseCreatedBy")
+  plans_created                Audit_Plan[]             @relation("PlanCreatedBy")
+  plans_approved               Audit_Plan[]             @relation("PlanApprovedBy")
+  engagements_led              Audit_Engagement[]       @relation("EngagementLead")
+  engagements_managed          Audit_Engagement[]       @relation("EngagementManager")
+  engagements_as_auditee       Audit_Engagement[]       @relation("EngagementAuditee")
+  engagements_created          Audit_Engagement[]       @relation("EngagementCreatedBy")
+  working_papers_created       Audit_Working_Paper[]    @relation("WorkingPaperCreatedBy")
+  working_papers_reviewed      Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
+  evidence_uploaded            Audit_Evidence[]         @relation("EvidenceUploadedBy")
+  findings_as_auditee          Audit_Finding[]          @relation("FindingAuditee")
+  findings_created             Audit_Finding[]          @relation("FindingCreatedBy")
+  findings_closed              Audit_Finding[]          @relation("FindingClosedBy")
+  reports_created              Audit_Report[]           @relation("ReportCreatedBy")
+  follow_up_responses          Audit_Follow_Up[]        @relation("FollowUpResponseBy")
+  follow_ups_verified          Audit_Follow_Up[]        @relation("FollowUpVerifiedBy")
+  checklists_tested            Audit_Checklist[]        @relation("ChecklistTestedBy")
+  risk_categories_created      Risk_Category[]          @relation("RiskCategoryCreatedBy")
+  risks_owned                  Risk_Register[]          @relation("RiskOwner")
+  risks_created                Risk_Register[]          @relation("RiskCreatedBy")
+  risk_assessments_done        Risk_Assessment[]        @relation("RiskAssessedBy")
+  workflow_approvals_submitted Workflow_Approval[]      @relation("WorkflowApprovalSubmittedBy")
+  workflow_approval_steps      Workflow_Approval_Step[] @relation("WorkflowApprovalStepApprover")
+  workflow_assignments         Workflow_Assignment[]    @relation("WorkflowAssignmentUser")
+  workflow_assignments_made    Workflow_Assignment[]    @relation("WorkflowAssignmentAssignedBy")
+  workflow_escalations         Workflow_Escalation[]    @relation("WorkflowEscalationEscalatedTo")
+  escalation_policies_created  Escalation_Policy[]      @relation("EscalationPolicyCreatedBy")
 
   @@map("users")
 }
@@ -439,17 +445,18 @@ model Audit_Engagement {
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
 
-  universe       Audit_Universe        @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  plan_item      Audit_Plan_Item?      @relation(fields: [plan_item_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  lead_auditor   User                  @relation("EngagementLead", fields: [lead_auditor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  audit_manager  User                  @relation("EngagementManager", fields: [audit_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  auditee        User                  @relation("EngagementAuditee", fields: [auditee_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  created_by     User                  @relation("EngagementCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  working_papers Audit_Working_Paper[]
-  evidence       Audit_Evidence[]
-  findings       Audit_Finding[]
-  report         Audit_Report?
-  checklists     Audit_Checklist[]
+  universe             Audit_Universe        @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  plan_item            Audit_Plan_Item?      @relation(fields: [plan_item_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  lead_auditor         User                  @relation("EngagementLead", fields: [lead_auditor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  audit_manager        User                  @relation("EngagementManager", fields: [audit_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  auditee              User                  @relation("EngagementAuditee", fields: [auditee_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by           User                  @relation("EngagementCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  working_papers       Audit_Working_Paper[]
+  evidence             Audit_Evidence[]
+  findings             Audit_Finding[]
+  report               Audit_Report?
+  checklists           Audit_Checklist[]
+  workflow_assignments Workflow_Assignment[]
 
   @@index([status])
   @@index([audit_type])
@@ -565,6 +572,7 @@ model Audit_Report {
   version_number    Int       @default(1)
   document_id       String?
   issued_at         DateTime?
+  rejection_reason  String?   @db.NVarChar(Max)
   created_by_id     String
   deleted_at        DateTime?
   created_at        DateTime  @default(now())
@@ -706,4 +714,120 @@ model Risk_Assessment {
   @@index([assessed_at])
   @@index([score])
   @@map("risk_assessments")
+}
+
+// ============================================================
+// WORKFLOW MODULE
+//
+// SQL Server does not support native enums, so all enum-like
+// fields below are modelled as String and mirrored in
+// src/modules/workflow/domain/enum/workflow.enum.ts.
+//
+//   workflow_entity_type      : audit_plan | audit_working_paper | audit_report
+//   workflow_approval_status  : pending | approved | rejected | cancelled
+//   workflow_step_status      : pending | approved | rejected
+//   workflow_assignment_role  : lead_auditor | supporting_auditor
+//   escalation_entity_type    : audit_engagement | workflow_approval
+//   escalation_reason         : sla_breach | approval_inaction
+//   escalation_policy_type    : it | financial | compliance | systems | all
+// ============================================================
+
+model Workflow_Approval {
+  id               String    @id @default(uuid())
+  entity_type      String // audit_plan | audit_working_paper | audit_report
+  entity_id        String
+  submitted_by_id  String
+  current_level    Int       @default(1)
+  status           String    @default("pending") // pending | approved | rejected | cancelled
+  rejection_reason String?   @db.NVarChar(Max)
+  completed_at     DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  submitted_by User                     @relation("WorkflowApprovalSubmittedBy", fields: [submitted_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  steps        Workflow_Approval_Step[]
+
+  @@index([entity_type])
+  @@index([entity_id])
+  @@index([status])
+  @@index([submitted_by_id])
+  @@map("workflow_approvals")
+}
+
+model Workflow_Approval_Step {
+  id          String    @id @default(uuid())
+  approval_id String
+  level       Int
+  approver_id String
+  status      String    @default("pending") // pending | approved | rejected
+  comment     String?   @db.NVarChar(Max)
+  acted_at    DateTime?
+  created_at  DateTime  @default(now())
+
+  approval Workflow_Approval @relation(fields: [approval_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approver User              @relation("WorkflowApprovalStepApprover", fields: [approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([approval_id])
+  @@index([approver_id])
+  @@index([status])
+  @@index([level])
+  @@map("workflow_approval_steps")
+}
+
+model Workflow_Assignment {
+  id             String   @id @default(uuid())
+  engagement_id  String
+  user_id        String
+  role           String // lead_auditor | supporting_auditor
+  assigned_by_id String
+  assigned_at    DateTime @default(now())
+  created_at     DateTime @default(now())
+
+  engagement  Audit_Engagement @relation(fields: [engagement_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  user        User             @relation("WorkflowAssignmentUser", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  assigned_by User             @relation("WorkflowAssignmentAssignedBy", fields: [assigned_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([engagement_id])
+  @@index([user_id])
+  @@index([role])
+  @@map("workflow_assignments")
+}
+
+model Workflow_Escalation {
+  id               String    @id @default(uuid())
+  entity_type      String // audit_engagement | workflow_approval
+  entity_id        String
+  escalation_level Int
+  escalated_to_id  String
+  reason           String // sla_breach | approval_inaction
+  notified_at      DateTime  @default(now())
+  acknowledged_at  DateTime?
+  created_at       DateTime  @default(now())
+
+  escalated_to User @relation("WorkflowEscalationEscalatedTo", fields: [escalated_to_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([entity_type])
+  @@index([entity_id])
+  @@index([escalation_level])
+  @@index([escalated_to_id])
+  @@map("workflow_escalations")
+}
+
+model Escalation_Policy {
+  id            String   @id @default(uuid())
+  audit_type    String   @unique // it | financial | compliance | systems | all
+  level_1_hours Int      @default(24)
+  level_2_hours Int      @default(72)
+  level_3_hours Int      @default(120)
+  level_4_hours Int      @default(168)
+  is_active     Boolean  @default(true)
+  created_by_id String
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  created_by User @relation("EscalationPolicyCreatedBy", fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([audit_type])
+  @@index([is_active])
+  @@map("escalation_policies")
 }

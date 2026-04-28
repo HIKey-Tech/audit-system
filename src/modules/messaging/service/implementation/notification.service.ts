@@ -54,7 +54,7 @@ export class NotificationService implements INotificationService {
         where: { id: logEntry.id },
         data: { status: 'failed', error: String(err) },
       });
-      logger.error('Email send failed', { err, subject: dto.subject });
+      logger.error('Email send failed', { err, to: dto.to, subject: dto.subject });
       throw err;
     }
   }

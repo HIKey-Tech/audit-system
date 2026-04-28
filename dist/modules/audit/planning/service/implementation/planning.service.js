@@ -6,7 +6,8 @@ const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
-const notification_service_1 = require("../../../../messaging/service/implementation/notification.service");
+const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
+const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const planning_response_dto_1 = require("../../dto/response/planning.response.dto");
@@ -14,6 +15,10 @@ const planInclude = {
     items: { include: { universe: true }, orderBy: { created_at: 'asc' } },
 };
 class PlanningService {
+    approvalService;
+    constructor(approvalService = approval_service_1.workflowApprovalService) {
+        this.approvalService = approvalService;
+    }
     async createPlan(dto, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
         const existingCount = await prisma_client_1.prisma.audit_Plan.count({
@@ -95,7 +100,10 @@ class PlanningService {
             data: { status: audit_enum_1.PlanStatus.Submitted, rejection_reason: null },
             include: planInclude,
         });
-        await this._notifyAuditAdmins('Audit plan submitted', `Audit plan "${updated.title}" has been submitted for approval.`, planId);
+        await this.approvalService.createApproval({
+            entityType: workflow_enum_1.WorkflowEntityType.AuditPlan,
+            entityId: planId,
+        }, actor);
         logger_util_1.logger.info('Audit plan submitted', { planId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.submit', module: 'audit', entityType: 'audit_plan', entityId: planId });
         return (0, planning_response_dto_1.mapPlanToResponse)(updated);
@@ -105,46 +113,24 @@ class PlanningService {
         const plan = await this._getPlanForMutation(planId);
         if (plan.status !== audit_enum_1.PlanStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted plans can be approved');
-        const updated = await prisma_client_1.prisma.audit_Plan.update({
-            where: { id: planId },
-            data: {
-                status: audit_enum_1.PlanStatus.Approved,
-                approved_by_id: actor.id,
-                approved_at: new Date(),
-                rejection_reason: null,
-            },
-            include: planInclude,
-        });
+        const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditPlan, planId);
+        await this.approvalService.approve(approval.id, actor.id);
+        const updated = await this.getPlanById(planId);
         logger_util_1.logger.info('Audit plan approved', { planId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.approve', module: 'audit', entityType: 'audit_plan', entityId: planId });
-        return (0, planning_response_dto_1.mapPlanToResponse)(updated);
+        return updated;
     }
     async rejectPlan(planId, reason, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
         const plan = await this._getPlanForMutation(planId);
         if (plan.status !== audit_enum_1.PlanStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted plans can be rejected');
-        const updated = await prisma_client_1.prisma.audit_Plan.update({
-            where: { id: planId },
-            data: {
-                status: audit_enum_1.PlanStatus.Rejected,
-                approved_by_id: null,
-                approved_at: null,
-                rejection_reason: reason,
-            },
-            include: planInclude,
-        });
-        await notification_service_1.notificationService.sendInAppNotification({
-            userId: plan.created_by_id,
-            title: 'Audit plan rejected',
-            body: `Audit plan "${plan.title}" was rejected: ${reason}`,
-            type: 'warning',
-            referenceType: 'audit_plan',
-            referenceId: planId,
-        });
+        const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditPlan, planId);
+        await this.approvalService.reject(approval.id, actor.id, reason);
+        const updated = await this.getPlanById(planId);
         logger_util_1.logger.info('Audit plan rejected', { planId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.reject', module: 'audit', entityType: 'audit_plan', entityId: planId, newValues: { reason } });
-        return (0, planning_response_dto_1.mapPlanToResponse)(updated);
+        return updated;
     }
     async getPlanById(id) {
         const plan = await prisma_client_1.prisma.audit_Plan.findFirst({
@@ -199,24 +185,6 @@ class PlanningService {
         });
         if (!universe)
             throw app_error_1.AppError.notFound('Audit universe entity');
-    }
-    async _notifyAuditAdmins(title, body, planId) {
-        const admins = await prisma_client_1.prisma.user.findMany({
-            where: {
-                deleted_at: null,
-                is_active: true,
-                user_roles: { some: { role: { name: { in: ['audit_admin', 'super_admin'] } } } },
-            },
-            select: { id: true },
-        });
-        await Promise.all(admins.map((admin) => notification_service_1.notificationService.sendInAppNotification({
-            userId: admin.id,
-            title,
-            body,
-            type: 'info',
-            referenceType: 'audit_plan',
-            referenceId: planId,
-        })));
     }
 }
 exports.PlanningService = PlanningService;

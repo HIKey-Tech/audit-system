@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-27 (rev 6)
+> Last updated: 2026-04-28 (rev 7)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). Workflow, Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. Logging, Messaging, and Background still exist as service-only scaffolds (no HTTP routes). Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
 
 ---
 
@@ -151,6 +151,7 @@ Folder: `src/modules/background/`
 - Registered jobs (via `registerAllJobs()`):
   - `BG:TOKEN:CLEANUP:HOURLY` — deletes expired / revoked refresh tokens. **Working.**
   - `BG:AUDIT:REMINDER:DAILY` — registered + cron-scheduled, but the handler is **stubbed** (logs "skipped" and returns). The original due-date query was removed; needs to be restored now that `Audit_Engagement` exists. See `scheduler.service.ts:165`.
+  - `BG:WORKFLOW:ESCALATION:HOURLY` — calls `workflowEscalationService.checkAndEscalate()` every hour for breached engagement SLAs and stalled approvals. **Working logic; runtime depends on database connectivity.**
   - `BG:LOG:ARCHIVE:WEEKLY` — pulls audit logs older than 90 days. **Partially working** — reads logs, does not yet push to data warehouse (TODO).
 
 **Not yet built:**
@@ -163,14 +164,14 @@ Folder: `src/modules/background/`
 Folder: `src/modules/audit/`
 
 - `createAuditModule()` is mounted under `/api/v1` and exposes the full audit lifecycle routes: universe, planning, engagements, working papers, evidence, findings, reports, follow-up, and checklists.
-- Services enforce the local lifecycle rules while Workflow is not yet built:
+- Services enforce the local lifecycle rules and delegate plan / working-paper / report approvals to Workflow:
   - Engagement transitions: `planned -> in_progress -> under_review -> reported -> closed`.
   - Finding transitions: `open -> management_response_received -> in_remediation -> verified -> closed`.
-  - Working paper review flow: `draft/rejected -> submitted -> approved/rejected`.
-  - Report flow includes `rejected` in code because the requested workflow needs it, although the schema comment omitted it.
+  - Working paper review flow: `draft/rejected -> submitted`, then Workflow approval updates `approved/rejected`.
+  - Report flow includes `rejected` in code because the requested workflow needs it, although the schema comment omitted it; Workflow records report rejection reason on `workflow_approvals.rejection_reason` because `audit_reports` has no reason column.
 - Checklist default control sets are defined for IT, Financial, Compliance, and Systems audit types.
 - State-changing service methods call `auditLogService.logAsync(...)`.
-- Notification touchpoints call `notificationService.sendInAppNotification(...)` for plan/report submissions, rejections, working-paper review, report issue, and remediation verification.
+- Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit still sends direct notifications for report issue and remediation verification.
 - Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
 - Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data because no DOCX merge/rendering service exists yet.
 
@@ -218,7 +219,43 @@ Folder: `src/modules/risk/`
 /risk/monitoring/summary                          GET     audit:read
 ```
 
-### 2.9 Database schema
+### 2.9 Workflow module — COMPLETE (services + HTTP routes)
+
+Folder: `src/modules/workflow/`
+
+- Approval service creates ordered approval chains for audit plans, working papers, and reports; validates current-level approvers; advances or rejects approval chains; updates the underlying audit entity status when approval completes or rejects.
+- Assignment service assigns and removes engagement staff, lists engagement/user assignments, and returns active workload grouped by engagement status.
+- Escalation service checks overdue engagements and stalled approvals, escalates levels 1-4, sends in-app/email notifications through Messaging, and persists immutable escalation history.
+- Escalation policies are configurable per audit type (`it`, `financial`, `compliance`, `systems`, `all`) and use defaults in the checker when no DB policy exists yet.
+- Audit trail logging is wired via `auditLogService.logAsync(...)` for approval, assignment, escalation, and policy state changes.
+
+**Routes mounted by the module:**
+
+```
+/workflow/approvals/pending                       GET     audit:read
+/workflow/approvals/:id                           GET     audit:read
+/workflow/approvals/entity/:type/:id              GET     audit:read
+/workflow/approvals/:id/approve                   POST    audit:write
+/workflow/approvals/:id/reject                    POST    audit:write
+/workflow/approvals/:id/cancel                    POST    audit:admin
+
+/workflow/assignments                             POST    audit:write
+/workflow/assignments/engagement/:id              GET     audit:read
+/workflow/assignments/mine                        GET     audit:read
+/workflow/assignments/workload/:userId            GET     audit:read
+/workflow/assignments/:id                         DELETE  audit:write
+
+/workflow/escalations/entity/:type/:id            GET     audit:read
+/workflow/escalations/:id/acknowledge             POST    audit:write
+/workflow/escalation-policy                       GET     audit:read
+/workflow/escalation-policy                       POST    audit:admin
+```
+
+**Known decisions / gaps:**
+- Level 3 and Level 4 escalation currently notify users with the seeded `audit_admin` role because separate Director / CAE roles are not seeded.
+- Audit report rejection reason is stored on `workflow_approvals.rejection_reason`; `audit_reports` has no rejection reason column.
+
+### 2.10 Database schema
 
 `prisma/schema.prisma` — targets SQL Server.
 
@@ -280,11 +317,29 @@ Risk schema includes:
 - `onUpdate: NoAction, onDelete: NoAction` on every risk-side FK.
 - Indexes on category, owner, status, score, universe, assessed-by, assessed-at, and assessment score lookup columns.
 
+**Workflow module — schema complete, migrated `20260427170000_add_workflow_module_tables`, application services/controllers/routes built:**
+
+| Table | Purpose |
+|---|---|
+| `workflow_approvals` | Header record for approval instances against audit plans, working papers, and reports. |
+| `workflow_approval_steps` | Immutable ordered approver steps for each approval chain. |
+| `workflow_assignments` | Immutable staff assignment records for audit engagements. |
+| `workflow_escalations` | Immutable escalation event history for engagements and approvals. |
+| `escalation_policies` | Configurable escalation wait times per audit type. |
+
+Workflow schema includes:
+- Workflow-side back-relations on `User` for submitter, approver, assignee, assigner, escalation target, and policy creator.
+- `Audit_Engagement.workflow_assignments` back-relation.
+- Enum-like fields modelled as `String`; mirrored in `src/modules/workflow/domain/enum/workflow.enum.ts`.
+- `@db.NVarChar(Max)` on approval rejection/comment fields.
+- `onUpdate: NoAction, onDelete: NoAction` on every workflow-side FK.
+- Indexes on entity type/id, status, level, assignment role, escalation level/target, and policy active/audit-type lookup columns.
+
 **Conventions observed:**
 - UUID primary keys (`@default(uuid())`).
 - snake_case columns + `@@map("snake_case")` tables.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
-- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
+- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 
 ---
 
@@ -298,7 +353,7 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, and `createAuditModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, and `createWorkflowModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ### 3.2 Module routers not yet created
@@ -309,7 +364,6 @@ App wiring:
 
 ### 3.3 Modules entirely missing
 
-- `workflow/` — approval, assignment, escalation (with configurable SLA-driven 4-level escalation chain).
 - `integration/` — Dynafin, IMOC, Active Directory, Project Plus, Shared Drive adapters.
 - `dashboard/` — analytics, reports, widgets.
 - `predictive/` — risk model, anomaly detection, NLP.

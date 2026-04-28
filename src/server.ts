@@ -26,6 +26,7 @@ import { createUserModule } from './modules/user';
 import { createDocumentModule } from './modules/document';
 import { createAuditModule } from './modules/audit';
 import { createRiskModule } from './modules/risk';
+import { createWorkflowModule } from './modules/workflow';
 import {
   schedulerService,
   registerAllJobs,
@@ -97,6 +98,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createDocumentModule());
   app.use(apiPrefix, createAuditModule());
   app.use(apiPrefix, createRiskModule());
+  app.use(apiPrefix, createWorkflowModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);
