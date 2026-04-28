@@ -179,7 +179,7 @@ const registerAllJobs = () => {
             logger_util_1.logger.info('Expired tokens cleaned up', { count: result.count });
         },
     });
-    // BG:AUDIT:REMINDER:DAILY — send reminders for overdue audit tasks
+    // BG:AUDIT:REMINDER:DAILY — send reminders for audit engagement SLA deadlines
     exports.schedulerService.register({
         key: exports.JOB_KEYS.AUDIT_REMINDER_DAILY,
         name: 'Audit Due Date Reminder',
