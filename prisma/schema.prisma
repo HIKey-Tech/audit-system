@@ -14,7 +14,7 @@ datasource db {
 
 model User {
   id             String    @id @default(uuid())
-  azure_oid      String?   @unique // Azure AD Object ID
+  azure_oid      String? // Azure AD Object ID
   email          String    @unique
   email_verified Boolean   @default(false)
   first_name     String
@@ -208,6 +208,23 @@ model Email_Log {
   created_at   DateTime  @default(now())
 
   @@map("email_logs")
+}
+
+model Notification_Queue {
+  id            String    @id @default(uuid())
+  type          String // email | in_app
+  payload       String    @db.NVarChar(Max) // JSON string
+  status        String    @default("pending") // pending | processing | sent | failed
+  attempts      Int       @default(0)
+  max_attempts  Int       @default(3)
+  last_error    String?   @db.NVarChar(Max)
+  scheduled_at  DateTime  @default(now())
+  processed_at  DateTime?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+
+  @@index([status, scheduled_at])
+  @@map("notification_queue")
 }
 
 // ============================================================

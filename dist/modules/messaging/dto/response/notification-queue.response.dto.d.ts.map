@@ -1,0 +1,1 @@
+{"version":3,"file":"notification-queue.response.dto.d.ts","sourceRoot":"","sources":["../../../../../src/modules/messaging/dto/response/notification-queue.response.dto.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,iCAAiC;IAChD,OAAO,EAAE,MAAM,CAAC;IAChB,UAAU,EAAE,MAAM,CAAC;IACnB,IAAI,EAAE,MAAM,CAAC;IACb,MAAM,EAAE,MAAM,CAAC;IACf,KAAK,EAAE,MAAM,CAAC;CACf"}

@@ -3,9 +3,6 @@ import { AuditPriority, AuditType, EngagementStatus } from '../../../domain/enum
 
 const EngagementBaseSchema = z.object({
   title: z.string().min(1).max(200),
-  universeId: z.string().uuid(),
-  auditType: z.nativeEnum(AuditType),
-  priority: z.nativeEnum(AuditPriority),
   leadAuditorId: z.string().uuid(),
   auditManagerId: z.string().uuid(),
   auditeeId: z.string().uuid(),
@@ -14,11 +11,17 @@ const EngagementBaseSchema = z.object({
   slaDeadline: z.string().datetime(),
 });
 
-export const CreateEngagementFromPlanRequestSchema = EngagementBaseSchema.extend({
-  planItemId: z.string().uuid(),
+const EngagementScopeSchema = z.object({
+  universeId: z.string().uuid(),
+  auditType: z.nativeEnum(AuditType),
+  priority: z.nativeEnum(AuditPriority),
 });
 
-export const CreateAdhocEngagementRequestSchema = EngagementBaseSchema.extend({
+export const CreateEngagementFromPlanRequestSchema = EngagementBaseSchema.extend({
+  planItemId: z.string().uuid(),
+}).merge(EngagementScopeSchema.partial());
+
+export const CreateAdhocEngagementRequestSchema = EngagementBaseSchema.merge(EngagementScopeSchema).extend({
   adhocReason: z.string().min(1).max(5000),
 });
 

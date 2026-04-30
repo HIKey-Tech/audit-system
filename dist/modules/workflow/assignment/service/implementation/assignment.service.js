@@ -7,7 +7,7 @@ const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
-const notification_service_1 = require("../../../../messaging/service/implementation/notification.service");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const workflow_utility_1 = require("../../../utility/workflow.utility");
 const assignment_response_dto_1 = require("../../dto/response/assignment.response.dto");
 const workflowUserSelect = client_1.Prisma.validator()({
@@ -60,7 +60,7 @@ class AssignmentService {
             },
             include: assignmentInclude,
         });
-        await notification_service_1.notificationService.sendInAppNotification({
+        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: dto.userId,
             title: 'Audit assignment',
             body: `You have been assigned to ${engagement.title} as ${dto.role}.`,
@@ -68,12 +68,10 @@ class AssignmentService {
             referenceType: 'audit_engagement',
             referenceId: dto.engagementId,
         });
-        await notification_service_1.notificationService.sendEmail({
+        await notification_queue_service_1.notificationQueueService.enqueue('email', {
             to: user.email,
             subject: 'Audit assignment',
             text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
-        }).catch((err) => {
-            logger_util_1.logger.warn('Workflow assignment email notification failed', { err, userId: dto.userId });
         });
         logger_util_1.logger.info('Workflow assignment created', {
             assignmentId: assignment.id,
@@ -103,7 +101,7 @@ class AssignmentService {
         if (!assignment)
             throw app_error_1.AppError.notFound('Workflow assignment');
         await prisma_client_1.prisma.workflow_Assignment.delete({ where: { id: assignmentId } });
-        await notification_service_1.notificationService.sendInAppNotification({
+        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: assignment.user_id,
             title: 'Audit assignment removed',
             body: `You have been unassigned from ${assignment.engagement.title}.`,
@@ -111,12 +109,10 @@ class AssignmentService {
             referenceType: 'audit_engagement',
             referenceId: assignment.engagement_id,
         });
-        await notification_service_1.notificationService.sendEmail({
+        await notification_queue_service_1.notificationQueueService.enqueue('email', {
             to: assignment.user.email,
             subject: 'Audit assignment removed',
             text: `You have been unassigned from ${assignment.engagement.title}.`,
-        }).catch((err) => {
-            logger_util_1.logger.warn('Workflow unassignment email notification failed', { err, userId: assignment.user_id });
         });
         logger_util_1.logger.info('Workflow assignment removed', { assignmentId, actorId: removedBy.id });
         audit_log_service_1.auditLogService.logAsync({

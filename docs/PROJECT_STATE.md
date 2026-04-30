@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-28 (rev 9)
+> Last updated: 2026-04-30 (rev 10)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services), and app entry point (`server.ts`) are complete and production-shaped. Logging and Background still exist as service-only scaffolds (no HTTP routes). Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. Logging still exists as service-only scaffolding. Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
 
 ---
 
@@ -97,12 +97,17 @@ Folder: `src/modules/messaging/`
   - `markNotificationRead(id, userId)`.
   - `markAllRead(userId)` — bulk-marks every unread notification for the user; returns the count updated.
   - `getUnreadCount(userId)`.
+- `NotificationQueueService` (singleton export: `notificationQueueService`) - persists notification work to `notification_queue`.
+  - `enqueue(type, payload)` - fast DB write used by audit/workflow/background services instead of direct sending.
+  - `processQueue()` - background processor for up to 50 pending items per run; retries failed work until `max_attempts`, then marks permanently failed.
+  - `getQueueStats()` - returns counts by queue status for monitoring.
 - `NotificationController` + `createMessagingModule()` — mounted at `/api/v1/notifications`.
 
 **Routes mounted by the module:**
 
 ```
 /notifications                                    GET     notification:read
+/notifications/queue/stats                        GET     notification:read
 /notifications/unread-count                       GET     notification:read
 /notifications/read-all                           POST    notification:read
 /notifications/:id/read                           POST    notification:read
@@ -159,6 +164,8 @@ Folder: `src/modules/background/`
 
 - `SchedulerService` — wraps `node-cron`. Persists job definitions to `scheduled_jobs` and every run to `scheduled_job_runs`. Exposes `register({...})`, `startAll()`, `stopAll()`.
 - **Job key convention:** `BG:<MODULE>:<ACTION>:<FREQUENCY>`.
+- `BackgroundJobController` + `createBackgroundModule()` - mounted at `/api/v1/jobs` with list/detail/run-history and enable/disable routes.
+- Notification queue processing is registered as `BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE` and runs every minute.
 - Registered jobs (via `registerAllJobs()`):
   - `BG:TOKEN:CLEANUP:HOURLY` — deletes expired / revoked refresh tokens. **Working.**
   - `BG:AUDIT:REMINDER:DAILY` — registered + cron-scheduled, but the handler is **stubbed** (logs "skipped" and returns). The original due-date query was removed; needs to be restored now that `Audit_Engagement` exists. See `scheduler.service.ts:165`.
@@ -168,7 +175,6 @@ Folder: `src/modules/background/`
 **Not yet built:**
 - Migration sub-module (bulk import of legacy audit spreadsheets).
 - Jobs sub-module (bulk processing + report generation).
-- Admin HTTP routes to enable/disable jobs (spec requires `job:admin` permission).
 
 ### 2.7 Audit module — COMPLETE (services + HTTP routes)
 
@@ -182,7 +188,7 @@ Folder: `src/modules/audit/`
   - Report flow includes `rejected` in code because the requested workflow needs it, although the schema comment omitted it; rejection reason is now persisted directly on `audit_reports.rejection_reason` (migration `20260428085630_add_rejection_reason_to_audit_reports`) and mirrored on `workflow_approvals.rejection_reason`.
 - Checklist default control sets are defined for IT, Financial, Compliance, and Systems audit types.
 - State-changing service methods call `auditLogService.logAsync(...)`.
-- Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit still sends direct notifications for report issue and remediation verification.
+- Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit queues report-issue and remediation-verification notifications through Messaging.
 - Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
 - Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data, rendered via the shared `docx-template.utility.ts`. Two default DOCX templates (`Working Paper - GBB Default`, `Audit Report - GBB Default`) are seeded into `document_templates` from `prisma/templates/`.
 
@@ -283,6 +289,7 @@ Folder: `src/modules/workflow/`
 | `audit_logs` | Tamper-evident action log. Indexed on `user_id`, `module`, `created_at`. |
 | `notifications` | In-app notifications. Indexed on `(user_id, is_read)`. |
 | `email_logs` | Email audit trail. |
+| `notification_queue` | Reliable queued email/in-app notification work. Indexed on `(status, scheduled_at)`. |
 | `documents` | File metadata. `storage_path` points to the provider-specific key. Soft-delete via `deleted_at`. Indexed on `(entity_type, entity_id)`. |
 | `document_versions` | Historical version snapshots. Unique on `(document_id, version_number)`. Current version lives on `documents`, not here. |
 | `document_templates` | Named reusable templates (working paper / audit report / finding / etc.). Soft-delete via `deleted_at`. Unique `name`. |
@@ -349,6 +356,7 @@ Workflow schema includes:
 **Conventions observed:**
 - UUID primary keys (`@default(uuid())`).
 - snake_case columns + `@@map("snake_case")` tables.
+- Notification queue migration added via `prisma/migrations/20260430111912_add_notification_queue/`.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
 - Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 

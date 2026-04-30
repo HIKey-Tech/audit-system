@@ -43,6 +43,18 @@ class UserController {
          */
         this.router.get('/', (0, auth_middleware_1.requirePermission)('user:read'), (0, validate_middleware_1.validate)(user_request_dto_1.UserQuerySchema, 'query'), this._listUsers.bind(this));
         /**
+         * @route  GET /users/roles
+         * @desc   List all roles with permissions (paginated)
+         * @access Private — user:read
+         */
+        this.router.get('/roles', (0, auth_middleware_1.requirePermission)('user:read'), (0, validate_middleware_1.validate)(user_request_dto_1.RoleQuerySchema, 'query'), this._listRoles.bind(this));
+        /**
+         * @route  GET /users/permissions
+         * @desc   List all permissions
+         * @access Private — user:read
+         */
+        this.router.get('/permissions', (0, auth_middleware_1.requirePermission)('user:read'), this._listPermissions.bind(this));
+        /**
          * @route  POST /users
          * @desc   Create a user
          * @access Private — user:write
@@ -110,6 +122,24 @@ class UserController {
         try {
             const { users, meta } = await this.userService.listUsers(req.query);
             res.status(200).json({ ...(0, api_response_type_1.buildResponse)(users), meta });
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listRoles(req, res, next) {
+        try {
+            const { roles, meta } = await this.userService.listRoles(req.query);
+            res.status(200).json((0, api_response_type_1.buildResponse)(roles, 'Success', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listPermissions(req, res, next) {
+        try {
+            const permissions = await this.userService.listPermissions();
+            res.status(200).json((0, api_response_type_1.buildResponse)(permissions));
         }
         catch (err) {
             next(err);

@@ -4,11 +4,25 @@ export interface PermissionResponseDto {
     module: string;
     action: string;
 }
+export interface PermissionListResponseDto {
+    id: string;
+    name: string;
+    module: string;
+    action: string;
+    description: string | null;
+}
 export interface RoleResponseDto {
     id: string;
     name: string;
     description: string | null;
     permissions: PermissionResponseDto[];
+}
+export interface RoleListResponseDto {
+    id: string;
+    name: string;
+    description: string | null;
+    isSystem: boolean;
+    permissions: PermissionListResponseDto[];
 }
 export interface UserResponseDto {
     id: string;
@@ -39,6 +53,28 @@ export interface SsoRedirectResponseDto {
     authorizationUrl: string;
     state: string;
 }
+export declare const mapPermissionToResponse: (permission: {
+    id: string;
+    name: string;
+    module: string;
+    action: string;
+    description: string | null;
+}) => PermissionListResponseDto;
+export declare const mapRoleToResponse: (role: {
+    id: string;
+    name: string;
+    description: string | null;
+    is_system: boolean;
+    role_permissions: Array<{
+        permission: {
+            id: string;
+            name: string;
+            module: string;
+            action: string;
+            description: string | null;
+        };
+    }>;
+}) => RoleListResponseDto;
 export declare const mapUserToResponse: (user: {
     id: string;
     email: string;

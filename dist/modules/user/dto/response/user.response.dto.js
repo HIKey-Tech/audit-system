@@ -1,7 +1,23 @@
 "use strict";
 // src/modules/user/dto/response/user.response.dto.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapUserToResponse = void 0;
+exports.mapUserToResponse = exports.mapRoleToResponse = exports.mapPermissionToResponse = void 0;
+const mapPermissionToResponse = (permission) => ({
+    id: permission.id,
+    name: permission.name,
+    module: permission.module,
+    action: permission.action,
+    description: permission.description,
+});
+exports.mapPermissionToResponse = mapPermissionToResponse;
+const mapRoleToResponse = (role) => ({
+    id: role.id,
+    name: role.name,
+    description: role.description,
+    isSystem: role.is_system,
+    permissions: role.role_permissions.map((rp) => (0, exports.mapPermissionToResponse)(rp.permission)),
+});
+exports.mapRoleToResponse = mapRoleToResponse;
 // Mapper: Prisma model → Response DTO
 const mapUserToResponse = (user) => {
     const roles = user.user_roles.map((ur) => ({

@@ -6,12 +6,12 @@ export declare const AssignStaffRequestSchema: z.ZodObject<{
     role: z.ZodNativeEnum<typeof WorkflowAssignmentRole>;
 }, "strip", z.ZodTypeAny, {
     role: WorkflowAssignmentRole;
-    engagementId: string;
     userId: string;
+    engagementId: string;
 }, {
     role: WorkflowAssignmentRole;
-    engagementId: string;
     userId: string;
+    engagementId: string;
 }>;
 export declare const MyAssignmentsQuerySchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;

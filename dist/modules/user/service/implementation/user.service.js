@@ -96,6 +96,37 @@ class UserService {
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
+    async listRoles(query) {
+        const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const [total, roles] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.role.count(),
+            prisma_client_1.prisma.role.findMany({
+                include: {
+                    role_permissions: {
+                        include: { permission: true },
+                        orderBy: { permission: { name: 'asc' } },
+                    },
+                },
+                orderBy: { [query.sortBy]: query.sortOrder },
+                skip,
+                take,
+            }),
+        ]);
+        return {
+            roles: roles.map(user_response_dto_1.mapRoleToResponse),
+            meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
+        };
+    }
+    async listPermissions() {
+        const permissions = await prisma_client_1.prisma.permission.findMany({
+            orderBy: [
+                { module: 'asc' },
+                { action: 'asc' },
+                { name: 'asc' },
+            ],
+        });
+        return permissions.map(user_response_dto_1.mapPermissionToResponse);
+    }
     async updateUser(id, dto, actorId) {
         await this._assertUserExists(id);
         const user = await prisma_client_1.prisma.user.update({

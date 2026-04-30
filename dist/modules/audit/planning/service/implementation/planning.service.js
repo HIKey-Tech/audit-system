@@ -95,18 +95,22 @@ class PlanningService {
             throw app_error_1.AppError.badRequest('Only draft plans can be submitted');
         if (plan.items.length === 0)
             throw app_error_1.AppError.badRequest('Plan must have at least one item before submission');
-        const updated = await prisma_client_1.prisma.audit_Plan.update({
-            where: { id: planId },
-            data: { status: audit_enum_1.PlanStatus.Submitted, rejection_reason: null },
-            include: planInclude,
-        });
-        await this.approvalService.createApproval({
-            entityType: workflow_enum_1.WorkflowEntityType.AuditPlan,
-            entityId: planId,
-        }, actor);
+        const { submittedPlan, approval } = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const submittedPlan = await tx.audit_Plan.update({
+                where: { id: planId },
+                data: { status: audit_enum_1.PlanStatus.Submitted, rejection_reason: null },
+                include: planInclude,
+            });
+            const approval = await this.approvalService.createApproval({
+                entityType: workflow_enum_1.WorkflowEntityType.AuditPlan,
+                entityId: planId,
+            }, actor, tx);
+            return { submittedPlan, approval };
+        }, { timeout: 15000 });
+        this.approvalService.queueApprovalRequiredNotification(approval);
         logger_util_1.logger.info('Audit plan submitted', { planId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.submit', module: 'audit', entityType: 'audit_plan', entityId: planId });
-        return (0, planning_response_dto_1.mapPlanToResponse)(updated);
+        return (0, planning_response_dto_1.mapPlanToResponse)(submittedPlan);
     }
     async approvePlan(planId, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);

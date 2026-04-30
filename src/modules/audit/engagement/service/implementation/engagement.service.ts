@@ -51,10 +51,10 @@ export class EngagementService implements IEngagementService {
         data: {
           reference_number: referenceNumber,
           title: dto.title,
-          universe_id: dto.universeId,
+          universe_id: planItem.universe_id,
           plan_item_id: planItemId,
-          audit_type: dto.auditType,
-          priority: dto.priority,
+          audit_type: planItem.audit_type,
+          priority: planItem.priority,
           lead_auditor_id: dto.leadAuditorId,
           audit_manager_id: dto.auditManagerId,
           auditee_id: dto.auditeeId,

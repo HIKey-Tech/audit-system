@@ -5,7 +5,7 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
-const notification_service_1 = require("../../../../messaging/service/implementation/notification.service");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const follow_up_response_dto_1 = require("../../dto/response/follow-up.response.dto");
@@ -113,7 +113,7 @@ class FollowUpService {
                 },
             });
         });
-        await notification_service_1.notificationService.sendInAppNotification({
+        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: finding.auditee_id,
             title: dto.verificationStatus === audit_enum_1.VerificationStatus.Verified ? 'Remediation verified' : 'Remediation rejected',
             body: dto.verificationStatus === audit_enum_1.VerificationStatus.Verified

@@ -9,7 +9,7 @@ import {
   parsePagination,
 } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import {
   AuditApprovalEntityType,
   IApprovalStatusService,
@@ -54,8 +54,13 @@ interface NotificationTarget {
 export class ApprovalService implements IApprovalService {
   constructor(private readonly approvalStatusService: IApprovalStatusService = defaultApprovalStatusService) {}
 
-  async createApproval(dto: CreateApprovalRequestDto, submittedBy: WorkflowActorContext): Promise<ApprovalResponseDto> {
-    const existing = await prisma.workflow_Approval.findFirst({
+  async createApproval(
+    dto: CreateApprovalRequestDto,
+    submittedBy: WorkflowActorContext,
+    tx?: Prisma.TransactionClient,
+  ): Promise<ApprovalResponseDto> {
+    const db = tx ?? prisma;
+    const existing = await db.workflow_Approval.findFirst({
       where: {
         entity_type: dto.entityType,
         entity_id: dto.entityId,
@@ -65,11 +70,11 @@ export class ApprovalService implements IApprovalService {
     });
     if (existing) throw AppError.conflict('A pending approval already exists for this entity');
 
-    const approverIds = await this._resolveApproverChain(dto.entityType, dto.entityId);
+    const approverIds = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
     if (approverIds.length === 0) throw AppError.badRequest('No approvers configured for this approval');
 
-    const approval = await prisma.$transaction(async (tx) => {
-      const created = await tx.workflow_Approval.create({
+    const createApprovalRecord = async (client: Prisma.TransactionClient) => {
+      const created = await client.workflow_Approval.create({
         data: {
           entity_type: dto.entityType,
           entity_id: dto.entityId,
@@ -78,7 +83,7 @@ export class ApprovalService implements IApprovalService {
         },
       });
 
-      await tx.workflow_Approval_Step.createMany({
+      await client.workflow_Approval_Step.createMany({
         data: approverIds.map((approverId, index) => ({
           approval_id: created.id,
           level: index + 1,
@@ -86,19 +91,17 @@ export class ApprovalService implements IApprovalService {
         })),
       });
 
-      return tx.workflow_Approval.findUniqueOrThrow({
+      return client.workflow_Approval.findUniqueOrThrow({
         where: { id: created.id },
         include: approvalInclude,
       });
-    });
+    };
 
-    await this._notifyUser(approverIds[0], {
-      title: 'Approval required',
-      body: `A ${dto.entityType} requires your approval.`,
-      type: 'info',
-      referenceType: 'workflow_approval',
-      referenceId: approval.id,
-    });
+    const approval = tx
+      ? await createApprovalRecord(tx)
+      : await prisma.$transaction(createApprovalRecord, { timeout: 15000 });
+
+    if (!tx) this.queueApprovalRequiredNotification(mapApprovalToResponse(approval));
 
     logger.info('Workflow approval created', {
       approvalId: approval.id,
@@ -116,6 +119,19 @@ export class ApprovalService implements IApprovalService {
     });
 
     return mapApprovalToResponse(approval);
+  }
+
+  queueApprovalRequiredNotification(approval: ApprovalResponseDto): void {
+    const currentStep = approval.steps?.find((step) => step.level === approval.currentLevel);
+    if (!currentStep) return;
+
+    this._queueNotification(currentStep.approverId, {
+      title: 'Approval required',
+      body: `A ${approval.entityType} requires your approval.`,
+      type: 'info',
+      referenceType: 'workflow_approval',
+      referenceId: approval.id,
+    });
   }
 
   async approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResponseDto> {
@@ -160,10 +176,10 @@ export class ApprovalService implements IApprovalService {
         where: { id: approvalId },
         include: approvalInclude,
       });
-    });
+    }, { timeout: 15000 });
 
     if (nextStep) {
-      await this._notifyUser(nextStep.approver_id, {
+      this._queueNotification(nextStep.approver_id, {
         title: 'Approval required',
         body: `A ${approval.entity_type} requires your approval.`,
         type: 'info',
@@ -171,7 +187,7 @@ export class ApprovalService implements IApprovalService {
         referenceId: approvalId,
       });
     } else {
-      await this._notifyUser(approval.submitted_by_id, {
+      this._queueNotification(approval.submitted_by_id, {
         title: 'Approval completed',
         body: `Your ${approval.entity_type} has been approved.`,
         type: 'success',
@@ -229,9 +245,9 @@ export class ApprovalService implements IApprovalService {
         where: { id: approvalId },
         include: approvalInclude,
       });
-    });
+    }, { timeout: 15000 });
 
-    await this._notifyUser(approval.submitted_by_id, {
+    this._queueNotification(approval.submitted_by_id, {
       title: 'Approval rejected',
       body: `Your ${approval.entity_type} was rejected: ${reason}`,
       type: 'warning',
@@ -311,15 +327,15 @@ export class ApprovalService implements IApprovalService {
     });
 
     const approverIds = [...new Set(approval.steps.map((step) => step.approver_id))];
-    await Promise.all(approverIds.map((approverId) =>
-      this._notifyUser(approverId, {
+    approverIds.forEach((approverId) =>
+      this._queueNotification(approverId, {
         title: 'Approval cancelled',
         body: `The ${approval.entity_type} approval request has been cancelled.`,
         type: 'warning',
         referenceType: 'workflow_approval',
         referenceId: approvalId,
       }),
-    ));
+    );
 
     logger.info('Workflow approval cancelled', { approvalId, actorId: cancelledBy.id });
     auditLogService.logAsync({
@@ -334,9 +350,13 @@ export class ApprovalService implements IApprovalService {
     return mapApprovalToResponse(updated);
   }
 
-  private async _resolveApproverChain(entityType: WorkflowEntityType, entityId: string): Promise<string[]> {
+  private async _resolveApproverChain(
+    db: Prisma.TransactionClient | typeof prisma,
+    entityType: WorkflowEntityType,
+    entityId: string,
+  ): Promise<string[]> {
     if (entityType === WorkflowEntityType.AuditWorkingPaper) {
-      const paper = await prisma.audit_Working_Paper.findFirst({
+      const paper = await db.audit_Working_Paper.findFirst({
         where: { id: entityId, deleted_at: null },
         select: { engagement: { select: { audit_manager_id: true } } },
       });
@@ -345,24 +365,24 @@ export class ApprovalService implements IApprovalService {
     }
 
     if (entityType === WorkflowEntityType.AuditPlan) {
-      const plan = await prisma.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
+      const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
       if (!plan) throw AppError.notFound('Audit plan');
     }
 
     if (entityType === WorkflowEntityType.AuditReport) {
-      const report = await prisma.audit_Report.findFirst({
+      const report = await db.audit_Report.findFirst({
         where: { id: entityId, deleted_at: null },
         select: { engagement: { select: { audit_manager_id: true } } },
       });
       if (!report) throw AppError.notFound('Audit report');
-      const directorId = await this._getFirstActiveUserByRole('director');
-      const caeId = await this._getFirstActiveUserByRole('cae');
+      const directorId = await this._getFirstActiveUserByRole(db, 'director');
+      const caeId = await this._getFirstActiveUserByRole(db, 'cae');
       if (!directorId) throw AppError.badRequest('No active director user configured for audit report approval');
       if (!caeId) throw AppError.badRequest('No active CAE user configured for audit report approval');
       return [report.engagement.audit_manager_id, directorId, caeId];
     }
 
-    const approvers = await prisma.user.findMany({
+    const approvers = await db.user.findMany({
       where: {
         deleted_at: null,
         is_active: true,
@@ -374,8 +394,11 @@ export class ApprovalService implements IApprovalService {
     return approvers.map((approver) => approver.id);
   }
 
-  private async _getFirstActiveUserByRole(roleName: string): Promise<string | null> {
-    const user = await prisma.user.findFirst({
+  private async _getFirstActiveUserByRole(
+    db: Prisma.TransactionClient | typeof prisma,
+    roleName: string,
+  ): Promise<string | null> {
+    const user = await db.user.findFirst({
       where: {
         deleted_at: null,
         is_active: true,
@@ -427,21 +450,40 @@ export class ApprovalService implements IApprovalService {
     });
     if (!user) return;
 
-    await notificationService.sendInAppNotification({
-      userId: user.id,
-      title: notification.title,
-      body: notification.body,
-      type: notification.type,
-      referenceType: notification.referenceType,
-      referenceId: notification.referenceId,
-    });
+    await notificationQueueService.enqueue(
+      'in_app',
+      {
+        userId: user.id,
+        title: notification.title,
+        body: notification.body,
+        type: notification.type,
+        referenceType: notification.referenceType,
+        referenceId: notification.referenceId,
+      },
+    );
 
-    await notificationService.sendEmail({
-      to: user.email,
-      subject: notification.title,
-      text: notification.body,
-    }).catch((err: unknown) => {
-      logger.warn('Workflow approval email notification failed', { err, userId: user.id });
+    await notificationQueueService.enqueue(
+      'email',
+      {
+        to: user.email,
+        subject: notification.title,
+        text: notification.body,
+      },
+    );
+  }
+
+  private _queueNotification(
+    userId: string,
+    notification: {
+      title: string;
+      body: string;
+      type: 'info' | 'warning' | 'error' | 'success';
+      referenceType: string;
+      referenceId: string;
+    },
+  ): void {
+    void this._notifyUser(userId, notification).catch((err: unknown) => {
+      logger.warn('Workflow approval notification failed', { err, userId });
     });
   }
 }

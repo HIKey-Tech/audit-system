@@ -66,6 +66,23 @@ openapi_util_1.openApiRegistry.registerPath({
     responses: { 200: okResponse('Paginated user list') },
 });
 openapi_util_1.openApiRegistry.registerPath({
+    method: 'get',
+    path: '/users/roles',
+    tags: [tag],
+    summary: 'List roles with permissions (paginated). Requires `user:read`.',
+    security: openapi_util_1.bearerAuth,
+    request: { query: user_request_dto_1.RoleQuerySchema },
+    responses: { 200: okResponse('Paginated role list') },
+});
+openapi_util_1.openApiRegistry.registerPath({
+    method: 'get',
+    path: '/users/permissions',
+    tags: [tag],
+    summary: 'List permissions. Requires `user:read`.',
+    security: openapi_util_1.bearerAuth,
+    responses: { 200: okResponse('Permission list') },
+});
+openapi_util_1.openApiRegistry.registerPath({
     method: 'post',
     path: '/users',
     tags: [tag],

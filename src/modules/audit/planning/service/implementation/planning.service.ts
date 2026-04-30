@@ -115,19 +115,24 @@ export class PlanningService implements IPlanningService {
     if (plan.status !== PlanStatus.Draft) throw AppError.badRequest('Only draft plans can be submitted');
     if (plan.items.length === 0) throw AppError.badRequest('Plan must have at least one item before submission');
 
-    const updated = await prisma.audit_Plan.update({
-      where: { id: planId },
-      data: { status: PlanStatus.Submitted, rejection_reason: null },
-      include: planInclude,
-    });
+    const { submittedPlan, approval } = await prisma.$transaction(async (tx) => {
+      const submittedPlan = await tx.audit_Plan.update({
+        where: { id: planId },
+        data: { status: PlanStatus.Submitted, rejection_reason: null },
+        include: planInclude,
+      });
 
-    await this.approvalService.createApproval({
-      entityType: WorkflowEntityType.AuditPlan,
-      entityId: planId,
-    }, actor);
+      const approval = await this.approvalService.createApproval({
+        entityType: WorkflowEntityType.AuditPlan,
+        entityId: planId,
+      }, actor, tx);
+
+      return { submittedPlan, approval };
+    }, { timeout: 15000 });
+    this.approvalService.queueApprovalRequiredNotification(approval);
     logger.info('Audit plan submitted', { planId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.submit', module: 'audit', entityType: 'audit_plan', entityId: planId });
-    return mapPlanToResponse(updated);
+    return mapPlanToResponse(submittedPlan);
   }
 
   async approvePlan(planId: string, actor: ActorContext): Promise<PlanResponseDto> {

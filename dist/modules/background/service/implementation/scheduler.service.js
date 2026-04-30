@@ -9,7 +9,7 @@ const node_cron_1 = __importDefault(require("node-cron"));
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_error_1 = require("../../../../shared/errors/app.error");
-const notification_service_1 = require("../../../messaging/service/implementation/notification.service");
+const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
 const escalation_service_1 = require("../../../workflow/escalation/service/implementation/escalation.service");
 /**
  * Job Key Naming Convention:
@@ -22,6 +22,7 @@ const escalation_service_1 = require("../../../workflow/escalation/service/imple
 exports.JOB_KEYS = {
     TOKEN_CLEANUP_HOURLY: 'BG:TOKEN:CLEANUP:HOURLY',
     AUDIT_REMINDER_DAILY: 'BG:AUDIT:REMINDER:DAILY',
+    MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
     WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
     LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
     REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
@@ -216,7 +217,7 @@ const registerAllJobs = () => {
                 ];
                 for (const recipientId of recipients) {
                     try {
-                        await notification_service_1.notificationService.sendInAppNotification({
+                        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
                             userId: recipientId,
                             title: 'Audit SLA deadline approaching',
                             body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
@@ -256,6 +257,16 @@ const registerAllJobs = () => {
         handler: async () => {
             const result = await escalation_service_1.workflowEscalationService.checkAndEscalate();
             logger_util_1.logger.info('Workflow escalation job completed', result);
+        },
+    });
+    // BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE - process queued notifications
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE,
+        name: 'Notification Queue Processor',
+        description: 'Processes pending email and in-app notifications from the queue',
+        cronExpression: '* * * * *',
+        handler: async () => {
+            await notification_queue_service_1.notificationQueueService.processQueue();
         },
     });
     // BG:LOG:ARCHIVE:WEEKLY — archive old audit logs to data warehouse

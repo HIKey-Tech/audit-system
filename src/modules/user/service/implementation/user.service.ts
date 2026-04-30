@@ -14,10 +14,15 @@ import {
   AssignRoleRequestDto,
   ChangePasswordRequestDto,
   UserQueryDto,
+  RoleQueryDto,
 } from '../../dto/request/user.request.dto';
 import {
   UserResponseDto,
+  RoleListResponseDto,
+  PermissionListResponseDto,
   mapUserToResponse,
+  mapRoleToResponse,
+  mapPermissionToResponse,
 } from '../../dto/response/user.response.dto';
 import { hashPassword, comparePassword } from '../../utility/token.utility';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
@@ -125,6 +130,44 @@ export class UserService implements IUserService {
       users: (users as UserWithRoles[]).map(mapUserToResponse),
       meta: buildPaginationMeta(total, page, pageSize),
     };
+  }
+
+  async listRoles(
+    query: RoleQueryDto,
+  ): Promise<{ roles: RoleListResponseDto[]; meta: PaginationMeta }> {
+    const { skip, take, page, pageSize } = parsePagination(query);
+
+    const [total, roles] = await prisma.$transaction([
+      prisma.role.count(),
+      prisma.role.findMany({
+        include: {
+          role_permissions: {
+            include: { permission: true },
+            orderBy: { permission: { name: 'asc' } },
+          },
+        },
+        orderBy: { [query.sortBy]: query.sortOrder },
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      roles: roles.map(mapRoleToResponse),
+      meta: buildPaginationMeta(total, page, pageSize),
+    };
+  }
+
+  async listPermissions(): Promise<PermissionListResponseDto[]> {
+    const permissions = await prisma.permission.findMany({
+      orderBy: [
+        { module: 'asc' },
+        { action: 'asc' },
+        { name: 'asc' },
+      ],
+    });
+
+    return permissions.map(mapPermissionToResponse);
   }
 
   async updateUser(

@@ -5,7 +5,7 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
-const notification_service_1 = require("../../../../messaging/service/implementation/notification.service");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
@@ -161,7 +161,7 @@ class ReportService {
             return issued;
         });
         await Promise.all(report.engagement.findings.map((finding) => this.followUpService.createFollowUp(finding.id)));
-        await notification_service_1.notificationService.sendInAppNotification({
+        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: report.engagement.auditee_id,
             title: 'Audit report issued',
             body: `Audit report "${report.title}" has been issued.`,

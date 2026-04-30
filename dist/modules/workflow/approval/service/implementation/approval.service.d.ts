@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { PaginationMeta, PaginationQuery } from '../../../../../shared/types/api-response.type';
 import { IApprovalStatusService } from '../../../../audit/approval-status/service/interface/approval-status.service.interface';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
@@ -8,7 +9,8 @@ import { IApprovalService } from '../interface/approval.service.interface';
 export declare class ApprovalService implements IApprovalService {
     private readonly approvalStatusService;
     constructor(approvalStatusService?: IApprovalStatusService);
-    createApproval(dto: CreateApprovalRequestDto, submittedBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
+    createApproval(dto: CreateApprovalRequestDto, submittedBy: WorkflowActorContext, tx?: Prisma.TransactionClient): Promise<ApprovalResponseDto>;
+    queueApprovalRequiredNotification(approval: ApprovalResponseDto): void;
     approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResponseDto>;
     reject(approvalId: string, approverId: string, reason: string): Promise<ApprovalResponseDto>;
     getApprovalById(approvalId: string): Promise<ApprovalResponseDto>;
@@ -23,6 +25,7 @@ export declare class ApprovalService implements IApprovalService {
     private _getPendingApproval;
     private _getCurrentStepForApprover;
     private _notifyUser;
+    private _queueNotification;
 }
 export declare const workflowApprovalService: ApprovalService;
 //# sourceMappingURL=approval.service.d.ts.map

@@ -3,7 +3,7 @@ import cron from 'node-cron';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../shared/utils/logger.util';
 import { AppError } from '../../../../shared/errors/app.error';
-import { notificationService } from '../../../messaging/service/implementation/notification.service';
+import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
 import { workflowEscalationService } from '../../../workflow/escalation/service/implementation/escalation.service';
 
 /**
@@ -17,6 +17,7 @@ import { workflowEscalationService } from '../../../workflow/escalation/service/
 export const JOB_KEYS = {
   TOKEN_CLEANUP_HOURLY: 'BG:TOKEN:CLEANUP:HOURLY',
   AUDIT_REMINDER_DAILY: 'BG:AUDIT:REMINDER:DAILY',
+  MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
   WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
   LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
   REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
@@ -253,19 +254,22 @@ export const registerAllJobs = (): void => {
 
         for (const recipientId of recipients) {
           try {
-            await notificationService.sendInAppNotification({
-              userId: recipientId,
-              title: 'Audit SLA deadline approaching',
-              body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
-              type: 'warning',
-              referenceType: 'audit_engagement',
-              referenceId: engagement.id,
-              metadata: {
-                referenceNumber: engagement.reference_number,
-                title: engagement.title,
-                slaDeadline,
+            await notificationQueueService.enqueue(
+              'in_app',
+              {
+                userId: recipientId,
+                title: 'Audit SLA deadline approaching',
+                body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                type: 'warning',
+                referenceType: 'audit_engagement',
+                referenceId: engagement.id,
+                metadata: {
+                  referenceNumber: engagement.reference_number,
+                  title: engagement.title,
+                  slaDeadline,
+                },
               },
-            });
+            );
             notificationsSent += 1;
           } catch (err) {
             logger.error('Audit reminder notification failed', {
@@ -294,6 +298,17 @@ export const registerAllJobs = (): void => {
     handler: async () => {
       const result = await workflowEscalationService.checkAndEscalate();
       logger.info('Workflow escalation job completed', result);
+    },
+  });
+
+  // BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE - process queued notifications
+  schedulerService.register({
+    key: JOB_KEYS.MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE,
+    name: 'Notification Queue Processor',
+    description: 'Processes pending email and in-app notifications from the queue',
+    cronExpression: '* * * * *',
+    handler: async () => {
+      await notificationQueueService.processQueue();
     },
   });
 

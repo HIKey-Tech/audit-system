@@ -2,7 +2,7 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, VerificationStatus } from '../../../domain/enum/audit.enum';
 import { AUDIT_REVIEW_ROLES, assertHasRole } from '../../../utility/audit.utility';
@@ -126,16 +126,19 @@ export class FollowUpService implements IFollowUpService {
       });
     });
 
-    await notificationService.sendInAppNotification({
-      userId: finding.auditee_id,
-      title: dto.verificationStatus === VerificationStatus.Verified ? 'Remediation verified' : 'Remediation rejected',
-      body: dto.verificationStatus === VerificationStatus.Verified
-        ? `Remediation for "${finding.title}" has been verified.`
-        : `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
-      type: dto.verificationStatus === VerificationStatus.Verified ? 'success' : 'warning',
-      referenceType: 'audit_finding',
-      referenceId: findingId,
-    });
+    await notificationQueueService.enqueue(
+      'in_app',
+      {
+        userId: finding.auditee_id,
+        title: dto.verificationStatus === VerificationStatus.Verified ? 'Remediation verified' : 'Remediation rejected',
+        body: dto.verificationStatus === VerificationStatus.Verified
+          ? `Remediation for "${finding.title}" has been verified.`
+          : `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
+        type: dto.verificationStatus === VerificationStatus.Verified ? 'success' : 'warning',
+        referenceType: 'audit_finding',
+        referenceId: findingId,
+      },
+    );
 
     logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });

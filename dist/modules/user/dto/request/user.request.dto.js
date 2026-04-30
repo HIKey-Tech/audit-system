@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UserQuerySchema = exports.ChangePasswordRequestSchema = exports.AssignRoleRequestSchema = exports.UpdateUserRequestSchema = exports.CreateUserRequestSchema = void 0;
+exports.RoleQuerySchema = exports.UserQuerySchema = exports.ChangePasswordRequestSchema = exports.AssignRoleRequestSchema = exports.UpdateUserRequestSchema = exports.CreateUserRequestSchema = void 0;
 // src/modules/user/dto/request/user.request.dto.ts
 const zod_1 = require("zod");
 exports.CreateUserRequestSchema = zod_1.z.object({
@@ -47,5 +47,11 @@ exports.UserQuerySchema = zod_1.z.object({
     roleId: zod_1.z.string().uuid().optional(),
     sortBy: zod_1.z.enum(['email', 'first_name', 'created_at', 'last_login_at']).default('created_at'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
+});
+exports.RoleQuerySchema = zod_1.z.object({
+    page: zod_1.z.coerce.number().int().positive().default(1),
+    pageSize: zod_1.z.coerce.number().int().positive().max(100).default(20),
+    sortBy: zod_1.z.enum(['name', 'created_at']).default('name'),
+    sortOrder: zod_1.z.enum(['asc', 'desc']).default('asc'),
 });
 //# sourceMappingURL=user.request.dto.js.map

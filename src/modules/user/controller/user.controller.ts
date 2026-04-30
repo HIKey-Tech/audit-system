@@ -10,6 +10,7 @@ import {
   AssignRoleRequestSchema,
   ChangePasswordRequestSchema,
   UserQuerySchema,
+  RoleQuerySchema,
 } from '../dto/request/user.request.dto';
 
 export class UserController {
@@ -63,6 +64,29 @@ export class UserController {
       requirePermission('user:read'),
       validate(UserQuerySchema, 'query'),
       this._listUsers.bind(this),
+    );
+
+    /**
+     * @route  GET /users/roles
+     * @desc   List all roles with permissions (paginated)
+     * @access Private — user:read
+     */
+    this.router.get(
+      '/roles',
+      requirePermission('user:read'),
+      validate(RoleQuerySchema, 'query'),
+      this._listRoles.bind(this),
+    );
+
+    /**
+     * @route  GET /users/permissions
+     * @desc   List all permissions
+     * @access Private — user:read
+     */
+    this.router.get(
+      '/permissions',
+      requirePermission('user:read'),
+      this._listPermissions.bind(this),
     );
 
     /**
@@ -170,6 +194,24 @@ export class UserController {
     try {
       const { users, meta } = await this.userService.listUsers(req.query as never);
       res.status(200).json({ ...buildResponse(users), meta });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listRoles(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { roles, meta } = await this.userService.listRoles(req.query as never);
+      res.status(200).json(buildResponse(roles, 'Success', meta));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listPermissions(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const permissions = await this.userService.listPermissions();
+      res.status(200).json(buildResponse(permissions));
     } catch (err) {
       next(err);
     }

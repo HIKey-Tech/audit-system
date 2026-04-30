@@ -103,9 +103,26 @@ export declare const UserQuerySchema: z.ZodObject<{
     sortBy?: "email" | "first_name" | "last_login_at" | "created_at" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
 }>;
+export declare const RoleQuerySchema: z.ZodObject<{
+    page: z.ZodDefault<z.ZodNumber>;
+    pageSize: z.ZodDefault<z.ZodNumber>;
+    sortBy: z.ZodDefault<z.ZodEnum<["name", "created_at"]>>;
+    sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
+}, "strip", z.ZodTypeAny, {
+    page: number;
+    pageSize: number;
+    sortBy: "name" | "created_at";
+    sortOrder: "asc" | "desc";
+}, {
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    sortBy?: "name" | "created_at" | undefined;
+    sortOrder?: "asc" | "desc" | undefined;
+}>;
 export type CreateUserRequestDto = z.infer<typeof CreateUserRequestSchema>;
 export type UpdateUserRequestDto = z.infer<typeof UpdateUserRequestSchema>;
 export type AssignRoleRequestDto = z.infer<typeof AssignRoleRequestSchema>;
 export type ChangePasswordRequestDto = z.infer<typeof ChangePasswordRequestSchema>;
 export type UserQueryDto = z.infer<typeof UserQuerySchema>;
+export type RoleQueryDto = z.infer<typeof RoleQuerySchema>;
 //# sourceMappingURL=user.request.dto.d.ts.map

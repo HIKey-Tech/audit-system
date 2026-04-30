@@ -57,8 +57,16 @@ export const UserQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+export const RoleQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  sortBy: z.enum(['name', 'created_at']).default('name'),
+  sortOrder: z.enum(['asc', 'desc']).default('asc'),
+});
+
 export type CreateUserRequestDto = z.infer<typeof CreateUserRequestSchema>;
 export type UpdateUserRequestDto = z.infer<typeof UpdateUserRequestSchema>;
 export type AssignRoleRequestDto = z.infer<typeof AssignRoleRequestSchema>;
 export type ChangePasswordRequestDto = z.infer<typeof ChangePasswordRequestSchema>;
 export type UserQueryDto = z.infer<typeof UserQuerySchema>;
+export type RoleQueryDto = z.infer<typeof RoleQuerySchema>;

@@ -6,7 +6,7 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
-const notification_service_1 = require("../../../../messaging/service/implementation/notification.service");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const workflow_enum_1 = require("../../../domain/enum/workflow.enum");
 const workflow_utility_1 = require("../../../utility/workflow.utility");
 const escalation_response_dto_1 = require("../../dto/response/escalation.response.dto");
@@ -291,7 +291,7 @@ class EscalationService {
     async _notifyTarget(target, entityType, entityId, level, reason) {
         const title = `Workflow escalation level ${level}`;
         const body = `Escalation level ${level} fired for ${entityType} due to ${reason}.`;
-        await notification_service_1.notificationService.sendInAppNotification({
+        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: target.id,
             title,
             body,
@@ -299,12 +299,10 @@ class EscalationService {
             referenceType: entityType,
             referenceId: entityId,
         });
-        await notification_service_1.notificationService.sendEmail({
+        await notification_queue_service_1.notificationQueueService.enqueue('email', {
             to: target.email,
             subject: title,
             text: body,
-        }).catch((err) => {
-            logger_util_1.logger.warn('Workflow escalation email notification failed', { err, userId: target.id });
         });
     }
 }

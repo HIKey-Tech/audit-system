@@ -5,9 +5,14 @@ import {
   AssignRoleRequestDto,
   ChangePasswordRequestDto,
   UserQueryDto,
-} from '../../dto/request/user.request.dto'
-import { UserResponseDto } from '../../dto/response/user.response.dto';
-import { ApiResponse, PaginationMeta } from '../../../../shared/types/api-response.type';
+  RoleQueryDto,
+} from '../../dto/request/user.request.dto';
+import {
+  UserResponseDto,
+  RoleListResponseDto,
+  PermissionListResponseDto,
+} from '../../dto/response/user.response.dto';
+import { PaginationMeta } from '../../../../shared/types/api-response.type';
 
 export interface IUserService {
   createUser(
@@ -22,6 +27,12 @@ export interface IUserService {
   listUsers(
     query: UserQueryDto,
   ): Promise<{ users: UserResponseDto[]; meta: PaginationMeta }>;
+
+  listRoles(
+    query: RoleQueryDto,
+  ): Promise<{ roles: RoleListResponseDto[]; meta: PaginationMeta }>;
+
+  listPermissions(): Promise<PermissionListResponseDto[]>;
 
   updateUser(
     id: string,

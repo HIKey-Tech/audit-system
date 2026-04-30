@@ -8,7 +8,7 @@ import {
   parsePagination,
 } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { WorkflowAssignmentRole } from '../../../domain/enum/workflow.enum';
 import { WORKFLOW_ADMIN_ROLES, assertHasRole } from '../../../utility/workflow.utility';
@@ -73,22 +73,26 @@ export class AssignmentService implements IAssignmentService {
       include: assignmentInclude,
     });
 
-    await notificationService.sendInAppNotification({
-      userId: dto.userId,
-      title: 'Audit assignment',
-      body: `You have been assigned to ${engagement.title} as ${dto.role}.`,
-      type: 'info',
-      referenceType: 'audit_engagement',
-      referenceId: dto.engagementId,
-    });
+    await notificationQueueService.enqueue(
+      'in_app',
+      {
+        userId: dto.userId,
+        title: 'Audit assignment',
+        body: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+        type: 'info',
+        referenceType: 'audit_engagement',
+        referenceId: dto.engagementId,
+      },
+    );
 
-    await notificationService.sendEmail({
-      to: user.email,
-      subject: 'Audit assignment',
-      text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
-    }).catch((err: unknown) => {
-      logger.warn('Workflow assignment email notification failed', { err, userId: dto.userId });
-    });
+    await notificationQueueService.enqueue(
+      'email',
+      {
+        to: user.email,
+        subject: 'Audit assignment',
+        text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+      },
+    );
 
     logger.info('Workflow assignment created', {
       assignmentId: assignment.id,
@@ -122,22 +126,26 @@ export class AssignmentService implements IAssignmentService {
 
     await prisma.workflow_Assignment.delete({ where: { id: assignmentId } });
 
-    await notificationService.sendInAppNotification({
-      userId: assignment.user_id,
-      title: 'Audit assignment removed',
-      body: `You have been unassigned from ${assignment.engagement.title}.`,
-      type: 'warning',
-      referenceType: 'audit_engagement',
-      referenceId: assignment.engagement_id,
-    });
+    await notificationQueueService.enqueue(
+      'in_app',
+      {
+        userId: assignment.user_id,
+        title: 'Audit assignment removed',
+        body: `You have been unassigned from ${assignment.engagement.title}.`,
+        type: 'warning',
+        referenceType: 'audit_engagement',
+        referenceId: assignment.engagement_id,
+      },
+    );
 
-    await notificationService.sendEmail({
-      to: assignment.user.email,
-      subject: 'Audit assignment removed',
-      text: `You have been unassigned from ${assignment.engagement.title}.`,
-    }).catch((err: unknown) => {
-      logger.warn('Workflow unassignment email notification failed', { err, userId: assignment.user_id });
-    });
+    await notificationQueueService.enqueue(
+      'email',
+      {
+        to: assignment.user.email,
+        subject: 'Audit assignment removed',
+        text: `You have been unassigned from ${assignment.engagement.title}.`,
+      },
+    );
 
     logger.info('Workflow assignment removed', { assignmentId, actorId: removedBy.id });
     auditLogService.logAsync({

@@ -5,9 +5,6 @@ const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const EngagementBaseSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200),
-    universeId: zod_1.z.string().uuid(),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType),
-    priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority),
     leadAuditorId: zod_1.z.string().uuid(),
     auditManagerId: zod_1.z.string().uuid(),
     auditeeId: zod_1.z.string().uuid(),
@@ -15,10 +12,15 @@ const EngagementBaseSchema = zod_1.z.object({
     plannedEndDate: zod_1.z.string().datetime(),
     slaDeadline: zod_1.z.string().datetime(),
 });
+const EngagementScopeSchema = zod_1.z.object({
+    universeId: zod_1.z.string().uuid(),
+    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType),
+    priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority),
+});
 exports.CreateEngagementFromPlanRequestSchema = EngagementBaseSchema.extend({
     planItemId: zod_1.z.string().uuid(),
-});
-exports.CreateAdhocEngagementRequestSchema = EngagementBaseSchema.extend({
+}).merge(EngagementScopeSchema.partial());
+exports.CreateAdhocEngagementRequestSchema = EngagementBaseSchema.merge(EngagementScopeSchema).extend({
     adhocReason: zod_1.z.string().min(1).max(5000),
 });
 exports.UpdateEngagementRequestSchema = zod_1.z.object({

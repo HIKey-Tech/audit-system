@@ -2,9 +2,6 @@ import { z } from 'zod';
 import { AuditPriority, AuditType, EngagementStatus } from '../../../domain/enum/audit.enum';
 export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     title: z.ZodString;
-    universeId: z.ZodString;
-    auditType: z.ZodNativeEnum<typeof AuditType>;
-    priority: z.ZodNativeEnum<typeof AuditPriority>;
     leadAuditorId: z.ZodString;
     auditManagerId: z.ZodString;
     auditeeId: z.ZodString;
@@ -13,11 +10,12 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     slaDeadline: z.ZodString;
 } & {
     planItemId: z.ZodString;
+} & {
+    universeId: z.ZodOptional<z.ZodString>;
+    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    priority: z.ZodOptional<z.ZodNativeEnum<typeof AuditPriority>>;
 }, "strip", z.ZodTypeAny, {
     title: string;
-    priority: AuditPriority;
-    universeId: string;
-    auditType: AuditType;
     plannedStartDate: string;
     plannedEndDate: string;
     leadAuditorId: string;
@@ -25,11 +23,11 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     auditeeId: string;
     slaDeadline: string;
     planItemId: string;
+    priority?: AuditPriority | undefined;
+    universeId?: string | undefined;
+    auditType?: AuditType | undefined;
 }, {
     title: string;
-    priority: AuditPriority;
-    universeId: string;
-    auditType: AuditType;
     plannedStartDate: string;
     plannedEndDate: string;
     leadAuditorId: string;
@@ -37,18 +35,22 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     auditeeId: string;
     slaDeadline: string;
     planItemId: string;
+    priority?: AuditPriority | undefined;
+    universeId?: string | undefined;
+    auditType?: AuditType | undefined;
 }>;
 export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     title: z.ZodString;
-    universeId: z.ZodString;
-    auditType: z.ZodNativeEnum<typeof AuditType>;
-    priority: z.ZodNativeEnum<typeof AuditPriority>;
     leadAuditorId: z.ZodString;
     auditManagerId: z.ZodString;
     auditeeId: z.ZodString;
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     slaDeadline: z.ZodString;
+} & {
+    universeId: z.ZodString;
+    auditType: z.ZodNativeEnum<typeof AuditType>;
+    priority: z.ZodNativeEnum<typeof AuditPriority>;
 } & {
     adhocReason: z.ZodString;
 }, "strip", z.ZodTypeAny, {

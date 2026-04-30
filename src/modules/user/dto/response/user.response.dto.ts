@@ -7,11 +7,27 @@ export interface PermissionResponseDto {
   action: string;
 }
 
+export interface PermissionListResponseDto {
+  id: string;
+  name: string;
+  module: string;
+  action: string;
+  description: string | null;
+}
+
 export interface RoleResponseDto {
   id: string;
   name: string;
   description: string | null;
   permissions: PermissionResponseDto[];
+}
+
+export interface RoleListResponseDto {
+  id: string;
+  name: string;
+  description: string | null;
+  isSystem: boolean;
+  permissions: PermissionListResponseDto[];
 }
 
 export interface UserResponseDto {
@@ -45,6 +61,42 @@ export interface SsoRedirectResponseDto {
   authorizationUrl: string;
   state: string;
 }
+
+export const mapPermissionToResponse = (permission: {
+  id: string;
+  name: string;
+  module: string;
+  action: string;
+  description: string | null;
+}): PermissionListResponseDto => ({
+  id: permission.id,
+  name: permission.name,
+  module: permission.module,
+  action: permission.action,
+  description: permission.description,
+});
+
+export const mapRoleToResponse = (role: {
+  id: string;
+  name: string;
+  description: string | null;
+  is_system: boolean;
+  role_permissions: Array<{
+    permission: {
+      id: string;
+      name: string;
+      module: string;
+      action: string;
+      description: string | null;
+    };
+  }>;
+}): RoleListResponseDto => ({
+  id: role.id,
+  name: role.name,
+  description: role.description,
+  isSystem: role.is_system,
+  permissions: role.role_permissions.map((rp) => mapPermissionToResponse(rp.permission)),
+});
 
 // Mapper: Prisma model → Response DTO
 export const mapUserToResponse = (user: {

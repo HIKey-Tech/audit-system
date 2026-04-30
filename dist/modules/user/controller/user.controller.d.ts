@@ -9,6 +9,8 @@ export declare class UserController {
     private _updateMe;
     private _changePassword;
     private _listUsers;
+    private _listRoles;
+    private _listPermissions;
     private _createUser;
     private _getUserById;
     private _updateUser;

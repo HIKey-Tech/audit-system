@@ -9,9 +9,11 @@ const api_response_type_1 = require("../../../shared/types/api-response.type");
 const notification_request_dto_1 = require("../dto/request/notification.request.dto");
 class NotificationController {
     notificationService;
+    notificationQueueService;
     router;
-    constructor(notificationService) {
+    constructor(notificationService, notificationQueueService) {
         this.notificationService = notificationService;
+        this.notificationQueueService = notificationQueueService;
         this.router = (0, express_1.Router)();
         this._registerRoutes();
     }
@@ -30,6 +32,12 @@ class NotificationController {
          * @access Private — notification:read
          */
         this.router.post('/read-all', (0, auth_middleware_1.requirePermission)('notification:read'), this._markAllRead.bind(this));
+        /**
+         * @route  GET /notifications/queue/stats
+         * @desc   Get notification queue counts by status
+         * @access Private â€” notification:read
+         */
+        this.router.get('/queue/stats', (0, auth_middleware_1.requirePermission)('notification:read'), this._getQueueStats.bind(this));
         /**
          * @route  GET /notifications
          * @desc   List notifications for the current user (paginated, filterable by isRead)
@@ -74,6 +82,15 @@ class NotificationController {
         try {
             const count = await this.notificationService.markAllRead(req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)({ count }, 'All notifications marked as read'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getQueueStats(_req, res, next) {
+        try {
+            const stats = await this.notificationQueueService.getQueueStats();
+            res.status(200).json((0, api_response_type_1.buildResponse)(stats));
         }
         catch (err) {
             next(err);

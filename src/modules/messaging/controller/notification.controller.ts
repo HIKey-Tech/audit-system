@@ -4,12 +4,16 @@ import { authenticate, requirePermission } from '../../../shared/middleware/auth
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { INotificationService } from '../service/interface/notification.service.interface';
+import { INotificationQueueService } from '../service/interface/notification-queue.service.interface';
 import { NotificationQuerySchema } from '../dto/request/notification.request.dto';
 
 export class NotificationController {
   public readonly router: Router;
 
-  constructor(private readonly notificationService: INotificationService) {
+  constructor(
+    private readonly notificationService: INotificationService,
+    private readonly notificationQueueService: INotificationQueueService,
+  ) {
     this.router = Router();
     this._registerRoutes();
   }
@@ -38,6 +42,17 @@ export class NotificationController {
       '/read-all',
       requirePermission('notification:read'),
       this._markAllRead.bind(this),
+    );
+
+    /**
+     * @route  GET /notifications/queue/stats
+     * @desc   Get notification queue counts by status
+     * @access Private â€” notification:read
+     */
+    this.router.get(
+      '/queue/stats',
+      requirePermission('notification:read'),
+      this._getQueueStats.bind(this),
     );
 
     /**
@@ -98,6 +113,15 @@ export class NotificationController {
     try {
       const count = await this.notificationService.markAllRead(req.user!.id);
       res.status(200).json(buildResponse({ count }, 'All notifications marked as read'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getQueueStats(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const stats = await this.notificationQueueService.getQueueStats();
+      res.status(200).json(buildResponse(stats));
     } catch (err) {
       next(err);
     }

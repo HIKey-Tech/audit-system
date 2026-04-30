@@ -3,7 +3,7 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { WorkflowActorContext, WorkflowEscalationRunResult } from '../../../domain/entity/workflow.entity';
 import {
   EscalationPolicyAuditType,
@@ -369,22 +369,26 @@ export class EscalationService implements IEscalationService {
     const title = `Workflow escalation level ${level}`;
     const body = `Escalation level ${level} fired for ${entityType} due to ${reason}.`;
 
-    await notificationService.sendInAppNotification({
-      userId: target.id,
-      title,
-      body,
-      type: 'warning',
-      referenceType: entityType,
-      referenceId: entityId,
-    });
+    await notificationQueueService.enqueue(
+      'in_app',
+      {
+        userId: target.id,
+        title,
+        body,
+        type: 'warning',
+        referenceType: entityType,
+        referenceId: entityId,
+      },
+    );
 
-    await notificationService.sendEmail({
-      to: target.email,
-      subject: title,
-      text: body,
-    }).catch((err: unknown) => {
-      logger.warn('Workflow escalation email notification failed', { err, userId: target.id });
-    });
+    await notificationQueueService.enqueue(
+      'email',
+      {
+        to: target.email,
+        subject: title,
+        text: body,
+      },
+    );
   }
 }
 

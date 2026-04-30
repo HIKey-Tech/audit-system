@@ -2,7 +2,7 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationService } from '../../../../messaging/service/implementation/notification.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
@@ -170,14 +170,17 @@ export class ReportService implements IReportService {
     });
 
     await Promise.all(report.engagement.findings.map((finding) => this.followUpService.createFollowUp(finding.id)));
-    await notificationService.sendInAppNotification({
-      userId: report.engagement.auditee_id,
-      title: 'Audit report issued',
-      body: `Audit report "${report.title}" has been issued.`,
-      type: 'info',
-      referenceType: 'audit_report',
-      referenceId: id,
-    });
+    await notificationQueueService.enqueue(
+      'in_app',
+      {
+        userId: report.engagement.auditee_id,
+        title: 'Audit report issued',
+        body: `Audit report "${report.title}" has been issued.`,
+        type: 'info',
+        referenceType: 'audit_report',
+        referenceId: id,
+      },
+    );
 
     logger.info('Audit report issued', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.issue', module: 'audit', entityType: 'audit_report', entityId: id });

@@ -15,6 +15,7 @@ import {
   AssignRoleRequestSchema,
   ChangePasswordRequestSchema,
   UserQuerySchema,
+  RoleQuerySchema,
 } from '../dto/request/user.request.dto';
 
 const tag = 'Users';
@@ -81,6 +82,25 @@ openApiRegistry.registerPath({
   security: bearerAuth,
   request: { query: UserQuerySchema },
   responses: { 200: okResponse('Paginated user list') },
+});
+
+openApiRegistry.registerPath({
+  method: 'get',
+  path: '/users/roles',
+  tags: [tag],
+  summary: 'List roles with permissions (paginated). Requires `user:read`.',
+  security: bearerAuth,
+  request: { query: RoleQuerySchema },
+  responses: { 200: okResponse('Paginated role list') },
+});
+
+openApiRegistry.registerPath({
+  method: 'get',
+  path: '/users/permissions',
+  tags: [tag],
+  summary: 'List permissions. Requires `user:read`.',
+  security: bearerAuth,
+  responses: { 200: okResponse('Permission list') },
 });
 
 openApiRegistry.registerPath({
