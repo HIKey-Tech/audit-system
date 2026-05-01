@@ -43,11 +43,11 @@ export class AssignmentService implements IAssignmentService {
     const [engagement, user, existing] = await prisma.$transaction([
       prisma.audit_Engagement.findFirst({
         where: { id: dto.engagementId, deleted_at: null },
-        select: { id: true, title: true },
+        select: { id: true, title: true, reference_number: true, sla_deadline: true },
       }),
       prisma.user.findFirst({
         where: { id: dto.userId, deleted_at: null, is_active: true },
-        select: { id: true, email: true },
+        select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
       }),
       prisma.workflow_Assignment.findFirst({
         where: {
@@ -73,6 +73,15 @@ export class AssignmentService implements IAssignmentService {
       include: assignmentInclude,
     });
 
+    const assigneeName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+    const assignmentVariables = {
+      assigneeName,
+      engagementTitle: engagement.title,
+      engagementReference: engagement.reference_number,
+      assignmentRole: dto.role,
+      slaDeadline: engagement.sla_deadline.toISOString(),
+    };
+
     await notificationQueueService.enqueue(
       'in_app',
       {
@@ -82,6 +91,8 @@ export class AssignmentService implements IAssignmentService {
         type: 'info',
         referenceType: 'audit_engagement',
         referenceId: dto.engagementId,
+        eventKey: 'workflow.assignment.created',
+        variables: assignmentVariables,
       },
     );
 
@@ -91,6 +102,8 @@ export class AssignmentService implements IAssignmentService {
         to: user.email,
         subject: 'Audit assignment',
         text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+        eventKey: 'workflow.assignment.created',
+        variables: assignmentVariables,
       },
     );
 

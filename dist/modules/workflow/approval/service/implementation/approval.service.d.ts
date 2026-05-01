@@ -11,6 +11,9 @@ export declare class ApprovalService implements IApprovalService {
     constructor(approvalStatusService?: IApprovalStatusService);
     createApproval(dto: CreateApprovalRequestDto, submittedBy: WorkflowActorContext, tx?: Prisma.TransactionClient): Promise<ApprovalResponseDto>;
     queueApprovalRequiredNotification(approval: ApprovalResponseDto): void;
+    private _queueApprovalCreatedAsync;
+    private _queueApprovalApprovedAsync;
+    private _queueApprovalRejectedAsync;
     approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResponseDto>;
     reject(approvalId: string, approverId: string, reason: string): Promise<ApprovalResponseDto>;
     getApprovalById(approvalId: string): Promise<ApprovalResponseDto>;
@@ -26,6 +29,8 @@ export declare class ApprovalService implements IApprovalService {
     private _getCurrentStepForApprover;
     private _notifyUser;
     private _queueNotification;
+    private _resolveEntityReference;
+    private _resolveActorName;
 }
 export declare const workflowApprovalService: ApprovalService;
 //# sourceMappingURL=approval.service.d.ts.map

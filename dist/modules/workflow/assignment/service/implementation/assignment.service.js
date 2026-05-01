@@ -30,11 +30,11 @@ class AssignmentService {
         const [engagement, user, existing] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.findFirst({
                 where: { id: dto.engagementId, deleted_at: null },
-                select: { id: true, title: true },
+                select: { id: true, title: true, reference_number: true, sla_deadline: true },
             }),
             prisma_client_1.prisma.user.findFirst({
                 where: { id: dto.userId, deleted_at: null, is_active: true },
-                select: { id: true, email: true },
+                select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
             }),
             prisma_client_1.prisma.workflow_Assignment.findFirst({
                 where: {
@@ -60,6 +60,14 @@ class AssignmentService {
             },
             include: assignmentInclude,
         });
+        const assigneeName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+        const assignmentVariables = {
+            assigneeName,
+            engagementTitle: engagement.title,
+            engagementReference: engagement.reference_number,
+            assignmentRole: dto.role,
+            slaDeadline: engagement.sla_deadline.toISOString(),
+        };
         await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: dto.userId,
             title: 'Audit assignment',
@@ -67,11 +75,15 @@ class AssignmentService {
             type: 'info',
             referenceType: 'audit_engagement',
             referenceId: dto.engagementId,
+            eventKey: 'workflow.assignment.created',
+            variables: assignmentVariables,
         });
         await notification_queue_service_1.notificationQueueService.enqueue('email', {
             to: user.email,
             subject: 'Audit assignment',
             text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+            eventKey: 'workflow.assignment.created',
+            variables: assignmentVariables,
         });
         logger_util_1.logger.info('Workflow assignment created', {
             assignmentId: assignment.id,

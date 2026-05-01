@@ -134,11 +134,11 @@ export declare const TemplateQuerySchema: z.ZodObject<{
 }, {
     search?: string | undefined;
     category?: TemplateCategory | undefined;
-    isActive?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
     sortBy?: "name" | "created_at" | "updated_at" | "category" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
+    isActive?: boolean | undefined;
 }>;
 export type UploadDocumentMetadataDto = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UploadVersionMetadataDto = z.infer<typeof UploadVersionMetadataSchema>;

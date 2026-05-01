@@ -113,16 +113,56 @@ class FollowUpService {
                 },
             });
         });
-        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
-            userId: finding.auditee_id,
-            title: dto.verificationStatus === audit_enum_1.VerificationStatus.Verified ? 'Remediation verified' : 'Remediation rejected',
-            body: dto.verificationStatus === audit_enum_1.VerificationStatus.Verified
-                ? `Remediation for "${finding.title}" has been verified.`
-                : `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
-            type: dto.verificationStatus === audit_enum_1.VerificationStatus.Verified ? 'success' : 'warning',
-            referenceType: 'audit_finding',
-            referenceId: findingId,
-        });
+        const isVerified = dto.verificationStatus === audit_enum_1.VerificationStatus.Verified;
+        if (isVerified) {
+            const [auditee, auditor] = await Promise.all([
+                prisma_client_1.prisma.user.findUnique({
+                    where: { id: finding.auditee_id },
+                    select: { email: true, display_name: true, first_name: true, last_name: true },
+                }),
+                prisma_client_1.prisma.user.findUnique({
+                    where: { id: actor.id },
+                    select: { display_name: true, first_name: true, last_name: true },
+                }),
+            ]);
+            const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
+            const auditorName = auditor?.display_name ?? `${auditor?.first_name ?? ''} ${auditor?.last_name ?? ''}`.trim();
+            const verifiedVariables = {
+                auditeeName,
+                auditorName,
+                findingTitle: finding.title,
+                verificationNotes: dto.verificationNotes ?? '',
+            };
+            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+                userId: finding.auditee_id,
+                title: 'Remediation verified',
+                body: `Remediation for "${finding.title}" has been verified.`,
+                type: 'success',
+                referenceType: 'audit_finding',
+                referenceId: findingId,
+                eventKey: 'audit.followup.verified',
+                variables: verifiedVariables,
+            });
+            if (auditee?.email) {
+                await notification_queue_service_1.notificationQueueService.enqueue('email', {
+                    to: auditee.email,
+                    subject: `Finding Verified: ${finding.title}`,
+                    text: `Remediation for "${finding.title}" has been verified.`,
+                    eventKey: 'audit.followup.verified',
+                    variables: verifiedVariables,
+                });
+            }
+        }
+        else {
+            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+                userId: finding.auditee_id,
+                title: 'Remediation rejected',
+                body: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
+                type: 'warning',
+                referenceType: 'audit_finding',
+                referenceId: findingId,
+            });
+        }
         logger_util_1.logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);

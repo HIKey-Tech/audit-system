@@ -189,6 +189,29 @@ export class ReportService implements IReportService {
     });
 
     await Promise.all(report.engagement.findings.map((finding) => this.followUpService.createFollowUp(finding.id)));
+
+    const [auditee, issuer] = await Promise.all([
+      prisma.user.findUnique({
+        where: { id: report.engagement.auditee_id },
+        select: { email: true, display_name: true, first_name: true, last_name: true },
+      }),
+      prisma.user.findUnique({
+        where: { id: actor.id },
+        select: { display_name: true, first_name: true, last_name: true },
+      }),
+    ]);
+
+    const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
+    const issuedBy = issuer?.display_name ?? `${issuer?.first_name ?? ''} ${issuer?.last_name ?? ''}`.trim();
+    const reportVariables = {
+      auditeeName,
+      reportTitle: report.title,
+      engagementTitle: report.engagement.title,
+      engagementReference: report.engagement.reference_number,
+      issuedBy,
+      findingCount: String(report.engagement.findings.length),
+    };
+
     await notificationQueueService.enqueue(
       'in_app',
       {
@@ -198,8 +221,23 @@ export class ReportService implements IReportService {
         type: 'info',
         referenceType: 'audit_report',
         referenceId: id,
+        eventKey: 'audit.report.issued',
+        variables: reportVariables,
       },
     );
+
+    if (auditee?.email) {
+      await notificationQueueService.enqueue(
+        'email',
+        {
+          to: auditee.email,
+          subject: `Audit Report Issued: ${report.title}`,
+          text: `Audit report "${report.title}" has been issued.`,
+          eventKey: 'audit.report.issued',
+          variables: reportVariables,
+        },
+      );
+    }
 
     logger.info('Audit report issued', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.issue', module: 'audit', entityType: 'audit_report', entityId: id });

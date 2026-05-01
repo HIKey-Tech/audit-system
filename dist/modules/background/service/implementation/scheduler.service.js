@@ -203,22 +203,32 @@ const registerAllJobs = () => {
                     reference_number: true,
                     title: true,
                     sla_deadline: true,
-                    lead_auditor_id: true,
-                    audit_manager_id: true,
+                    lead_auditor: {
+                        select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+                    },
+                    audit_manager: {
+                        select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+                    },
                 },
                 orderBy: { sla_deadline: 'asc' },
             });
             let notificationsSent = 0;
             for (const engagement of engagements) {
                 const slaDeadline = engagement.sla_deadline.toISOString();
-                const recipients = [
-                    engagement.lead_auditor_id,
-                    engagement.audit_manager_id,
-                ];
-                for (const recipientId of recipients) {
+                const daysRemaining = Math.max(0, Math.ceil((engagement.sla_deadline.getTime() - now.getTime()) / 86_400_000));
+                const recipients = [engagement.lead_auditor, engagement.audit_manager];
+                for (const recipient of recipients) {
+                    const recipientName = recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+                    const slaVariables = {
+                        recipientName,
+                        engagementTitle: engagement.title,
+                        engagementReference: engagement.reference_number,
+                        slaDeadline,
+                        daysRemaining: String(daysRemaining),
+                    };
                     try {
                         await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
-                            userId: recipientId,
+                            userId: recipient.id,
                             title: 'Audit SLA deadline approaching',
                             body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
                             type: 'warning',
@@ -229,15 +239,24 @@ const registerAllJobs = () => {
                                 title: engagement.title,
                                 slaDeadline,
                             },
+                            eventKey: 'audit.sla.reminder',
+                            variables: slaVariables,
                         });
-                        notificationsSent += 1;
+                        await notification_queue_service_1.notificationQueueService.enqueue('email', {
+                            to: recipient.email,
+                            subject: `SLA Deadline Approaching: ${engagement.reference_number}`,
+                            text: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                            eventKey: 'audit.sla.reminder',
+                            variables: slaVariables,
+                        });
+                        notificationsSent += 2;
                     }
                     catch (err) {
                         logger_util_1.logger.error('Audit reminder notification failed', {
                             err,
                             engagementId: engagement.id,
                             referenceNumber: engagement.reference_number,
-                            recipientId,
+                            recipientId: recipient.id,
                         });
                     }
                 }

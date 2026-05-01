@@ -15,9 +15,9 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     lastName: string;
     phone?: string | undefined;
     department?: string | undefined;
+    password?: string | undefined;
     displayName?: string | undefined;
     jobTitle?: string | undefined;
-    password?: string | undefined;
     roleIds?: string[] | undefined;
 }, {
     email: string;
@@ -25,9 +25,9 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     lastName: string;
     phone?: string | undefined;
     department?: string | undefined;
+    password?: string | undefined;
     displayName?: string | undefined;
     jobTitle?: string | undefined;
-    password?: string | undefined;
     roleIds?: string[] | undefined;
 }>;
 export declare const UpdateUserRequestSchema: z.ZodObject<{
@@ -96,12 +96,12 @@ export declare const UserQuerySchema: z.ZodObject<{
 }, {
     search?: string | undefined;
     department?: string | undefined;
-    isActive?: boolean | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
-    roleId?: string | undefined;
     sortBy?: "email" | "first_name" | "last_login_at" | "created_at" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
+    isActive?: boolean | undefined;
+    roleId?: string | undefined;
 }>;
 export declare const RoleQuerySchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;

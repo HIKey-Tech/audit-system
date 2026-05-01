@@ -22,6 +22,7 @@ const logger_util_1 = require("./shared/utils/logger.util");
 const prisma_client_1 = require("./shared/prisma/prisma.client");
 const error_handler_middleware_1 = require("./shared/middleware/error-handler.middleware");
 const request_logger_middleware_1 = require("./modules/logging/utility/request-logger.middleware");
+const logging_1 = require("./modules/logging");
 const user_1 = require("./modules/user");
 const document_1 = require("./modules/document");
 const audit_1 = require("./modules/audit");
@@ -81,6 +82,7 @@ const buildApp = () => {
     app.use(apiPrefix, (0, risk_1.createRiskModule)());
     app.use(apiPrefix, (0, workflow_1.createWorkflowModule)());
     app.use(apiPrefix, (0, messaging_1.createMessagingModule)());
+    app.use(apiPrefix, (0, logging_1.createLoggingModule)());
     app.use(apiPrefix, (0, background_1.createBackgroundModule)());
     app.use(error_handler_middleware_1.notFoundMiddleware);
     app.use(error_handler_middleware_1.errorHandlerMiddleware);

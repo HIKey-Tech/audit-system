@@ -46,6 +46,9 @@ interface EscalationThresholds {
 interface NotificationTarget {
   id: string;
   email: string;
+  display_name: string | null;
+  first_name: string;
+  last_name: string;
 }
 
 export class EscalationService implements IEscalationService {
@@ -268,12 +271,20 @@ export class EscalationService implements IEscalationService {
     entityId: string,
     level: number,
   ): Promise<NotificationTarget[]> {
+    const targetSelect = {
+      id: true,
+      email: true,
+      display_name: true,
+      first_name: true,
+      last_name: true,
+    } as const;
+
     if (entityType === WorkflowEscalationEntityType.AuditEngagement) {
       const engagement = await prisma.audit_Engagement.findFirst({
         where: { id: entityId, deleted_at: null },
         select: {
-          lead_auditor: { select: { id: true, email: true } },
-          audit_manager: { select: { id: true, email: true } },
+          lead_auditor: { select: targetSelect },
+          audit_manager: { select: targetSelect },
         },
       });
       if (!engagement) throw AppError.notFound('Audit engagement');
@@ -291,7 +302,7 @@ export class EscalationService implements IEscalationService {
           where: { status: WorkflowApprovalStepStatus.Pending },
           select: {
             level: true,
-            approver: { select: { id: true, email: true } },
+            approver: { select: targetSelect },
           },
         },
       },
@@ -313,7 +324,13 @@ export class EscalationService implements IEscalationService {
         is_active: true,
         user_roles: { some: { role: { name: roleName } } },
       },
-      select: { id: true, email: true },
+      select: {
+        id: true,
+        email: true,
+        display_name: true,
+        first_name: true,
+        last_name: true,
+      },
     });
   }
 
@@ -368,6 +385,33 @@ export class EscalationService implements IEscalationService {
   ): Promise<void> {
     const title = `Workflow escalation level ${level}`;
     const body = `Escalation level ${level} fired for ${entityType} due to ${reason}.`;
+    const recipientName = target.display_name ?? `${target.first_name} ${target.last_name}`.trim();
+
+    let eventKey: string | undefined;
+    let variables: Record<string, string> | undefined;
+
+    if (entityType === WorkflowEscalationEntityType.AuditEngagement) {
+      const engagement = await prisma.audit_Engagement.findUnique({
+        where: { id: entityId },
+        select: { title: true, reference_number: true, sla_deadline: true, status: true },
+      });
+      if (engagement) {
+        const now = new Date();
+        const daysOverdue = Math.max(
+          0,
+          Math.ceil((now.getTime() - engagement.sla_deadline.getTime()) / 86_400_000),
+        );
+        eventKey = `audit.escalation.level_${level}`;
+        variables = {
+          recipientName,
+          engagementTitle: engagement.title,
+          engagementReference: engagement.reference_number,
+          slaDeadline: engagement.sla_deadline.toISOString(),
+          currentStatus: engagement.status,
+          daysOverdue: String(daysOverdue),
+        };
+      }
+    }
 
     await notificationQueueService.enqueue(
       'in_app',
@@ -378,6 +422,8 @@ export class EscalationService implements IEscalationService {
         type: 'warning',
         referenceType: entityType,
         referenceId: entityId,
+        eventKey,
+        variables,
       },
     );
 
@@ -387,6 +433,8 @@ export class EscalationService implements IEscalationService {
         to: target.email,
         subject: title,
         text: body,
+        eventKey,
+        variables,
       },
     );
   }

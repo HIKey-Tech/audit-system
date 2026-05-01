@@ -237,8 +237,12 @@ export const registerAllJobs = (): void => {
           reference_number: true,
           title: true,
           sla_deadline: true,
-          lead_auditor_id: true,
-          audit_manager_id: true,
+          lead_auditor: {
+            select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+          },
+          audit_manager: {
+            select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+          },
         },
         orderBy: { sla_deadline: 'asc' },
       });
@@ -247,17 +251,28 @@ export const registerAllJobs = (): void => {
 
       for (const engagement of engagements) {
         const slaDeadline = engagement.sla_deadline.toISOString();
-        const recipients = [
-          engagement.lead_auditor_id,
-          engagement.audit_manager_id,
-        ];
+        const daysRemaining = Math.max(
+          0,
+          Math.ceil((engagement.sla_deadline.getTime() - now.getTime()) / 86_400_000),
+        );
+        const recipients = [engagement.lead_auditor, engagement.audit_manager];
 
-        for (const recipientId of recipients) {
+        for (const recipient of recipients) {
+          const recipientName =
+            recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+          const slaVariables = {
+            recipientName,
+            engagementTitle: engagement.title,
+            engagementReference: engagement.reference_number,
+            slaDeadline,
+            daysRemaining: String(daysRemaining),
+          };
+
           try {
             await notificationQueueService.enqueue(
               'in_app',
               {
-                userId: recipientId,
+                userId: recipient.id,
                 title: 'Audit SLA deadline approaching',
                 body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
                 type: 'warning',
@@ -268,15 +283,27 @@ export const registerAllJobs = (): void => {
                   title: engagement.title,
                   slaDeadline,
                 },
+                eventKey: 'audit.sla.reminder',
+                variables: slaVariables,
               },
             );
-            notificationsSent += 1;
+            await notificationQueueService.enqueue(
+              'email',
+              {
+                to: recipient.email,
+                subject: `SLA Deadline Approaching: ${engagement.reference_number}`,
+                text: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                eventKey: 'audit.sla.reminder',
+                variables: slaVariables,
+              },
+            );
+            notificationsSent += 2;
           } catch (err) {
             logger.error('Audit reminder notification failed', {
               err,
               engagementId: engagement.id,
               referenceNumber: engagement.reference_number,
-              recipientId,
+              recipientId: recipient.id,
             });
           }
         }

@@ -10,6 +10,8 @@ export interface SendEmailDto {
   html?: string;
   text?: string;
   data?: Record<string, unknown>;
+  eventKey?: string;
+  variables?: Record<string, string>;
 }
 
 export interface CreateInAppNotificationDto {
@@ -20,6 +22,8 @@ export interface CreateInAppNotificationDto {
   referenceType?: string;
   referenceId?: string;
   metadata?: Record<string, unknown>;
+  eventKey?: string;
+  variables?: Record<string, string>;
 }
 
 export interface INotificationService {

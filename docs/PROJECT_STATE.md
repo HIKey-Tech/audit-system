@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-05-01 (rev 12)
+> Last updated: 2026-05-01 (rev 14)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Logging still exists as service-only scaffolding. Integration, Dashboard, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Dashboard, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
 
 ---
 
@@ -85,19 +85,32 @@ Folder: `src/modules/user/`
 | `director@gbb.gov.ng` | Test Director | `director` | Active |
 | `cae@gbb.gov.ng` | Test CAE | `cae` | Active |
 
-### 2.3 Logging module — COMPLETE (service-only)
+### 2.3 Logging module — COMPLETE (services + HTTP routes)
 
 Folder: `src/modules/logging/`
 
-- `AuditLogService` (singleton export: `auditLogService`) — persists to `audit_logs`. Two methods:
+- `AuditLogService` (singleton export: `auditLogService`) — persists to and reads from `audit_logs`. Methods:
   - `log(dto)` — awaited. Swallows internal errors so logging never crashes the app.
   - `logAsync(dto)` — fire-and-forget.
-- `requestAuditLogger` middleware — drops into Express. Auto-logs every **mutating** request (POST/PUT/PATCH/DELETE) after the response is sent, including `userId`, `action`, `module` (derived from path), `status`, `durationMs`.
+  - `listLogs(query)` — paginated, filterable (by `userId`, `module`, `entityType`, `entityId`, `action`, `status`, `dateFrom`, `dateTo`), sortable on `createdAt`.
+  - `getLogById(id)` — single audit-log lookup.
+  - `getDistinctModules()` — list of modules that have produced at least one log entry.
+  - `getLogSummary(query)` — aggregate counts grouped by module and status, optionally bounded by date range.
+- `requestAuditLogger` middleware — drops into Express. Auto-logs every **mutating** request (POST/PUT/PATCH/DELETE) after the response is sent, including `userId`, `action`, `module` (derived from path with aliases for `users → user`, `documents → document`, `notifications → messaging`, `jobs → background`, `logs → logging`), `status`, `durationMs`.
+- `LoggingController` + `createLoggingModule()` — mounted at `/api/v1/logs`.
+
+**Routes mounted by the module:**
+
+```
+/logs                   GET     log:read    — paginated, filterable, sortable list
+/logs/modules           GET     log:read    — distinct modules that have produced log entries
+/logs/summary           GET     log:admin   — aggregate counts grouped by module + status
+/logs/:id               GET     log:read    — single audit-log entry
+```
 
 **Not yet built:**
 - System-log persistence (application errors / warnings → DB).
 - Warehouse pipeline (the module description calls for a feed to the data warehouse that trains the Predictive module).
-- HTTP routes to read the audit trail (log viewer endpoints).
 
 ### 2.4 Messaging module — COMPLETE (services + HTTP routes)
 
@@ -125,10 +138,20 @@ Folder: `src/modules/messaging/`
 /notifications/unread-count                       GET     notification:read
 /notifications/read-all                           POST    notification:read
 /notifications/:id/read                           POST    notification:read
+
+/notifications/templates                          GET     notification:read
+/notifications/templates                          POST    audit:admin
+/notifications/templates/:id                      GET     notification:read
+/notifications/templates/:id                      PATCH   audit:admin
+/notifications/templates/:id                      DELETE  audit:admin
 ```
 
+- `TemplateService` (singleton export: `templateService`) — DB-driven notification templates with `{{placeholder}}` substitution via `renderTemplate(body, variables)` in `utility/template.utility.ts`. Methods: `createTemplate`, `updateTemplate`, `deactivateTemplate` (soft delete), `getTemplateByEventAndChannel` (used internally by the queue), `getTemplateById`, `listTemplates`.
+- Queue payloads (email + in_app) accept optional `eventKey` and `variables` fields. `processQueue` looks up the active template for `(eventKey, channel)`, renders body (and email subject) with the variables, and falls back to the raw subject/body when no template is found.
+- Existing enqueue call sites updated to populate `eventKey` + `variables` for: workflow approval created/approved/rejected, workflow assignment created, audit engagement escalation levels 1-4, audit report issued, audit follow-up verified, and audit SLA reminder.
+- Seeded default templates: 12 events × 2 channels = 24 templates (covers `workflow.approval.created/approved/rejected`, `workflow.assignment.created`, `audit.escalation.level_1..4`, `audit.report.issued`, `audit.followup.response.submitted`, `audit.followup.verified`, `audit.sla.reminder`).
+
 **Not yet built:**
-- Notification templates sub-module (per event type, per escalation level).
 - SMS channel.
 
 ### 2.5 Document module — COMPLETE
@@ -320,6 +343,7 @@ Folder: `src/modules/workflow/`
 | `notifications` | In-app notifications. Indexed on `(user_id, is_read)`. |
 | `email_logs` | Email audit trail. |
 | `notification_queue` | Reliable queued email/in-app notification work. Indexed on `(status, scheduled_at)`. |
+| `notification_templates` | DB-driven email/in-app notification templates. Unique `(event_key, channel)`. Indexed on `event_key`, `channel`, `is_active`. Soft-delete via `deleted_at`. |
 | `documents` | File metadata. `storage_path` points to the provider-specific key. Soft-delete via `deleted_at`. Indexed on `(entity_type, entity_id)`. |
 | `document_versions` | Historical version snapshots. Unique on `(document_id, version_number)`. Current version lives on `documents`, not here. |
 | `document_templates` | Named reusable templates (working paper / audit report / finding / etc.). Soft-delete via `deleted_at`. Unique `name`. |
@@ -388,6 +412,7 @@ Workflow schema includes:
 - snake_case columns + `@@map("snake_case")` tables.
 - Notification queue migration added via `prisma/migrations/20260430111912_add_notification_queue/`.
 - Document template content widened to `NVARCHAR(max)` via `prisma/migrations/20260430170000_widen_document_template_content/` so seeded DOCX XML templates fit.
+- Notification templates table added via `prisma/migrations/20260501191923_add_notification_templates/`.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
 - Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 
@@ -401,7 +426,7 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, and `createBackgroundModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, `createLoggingModule()`, and `createBackgroundModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ---
@@ -426,7 +451,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 
 ### 4.1 Module routers not yet created
 
-- `modules/logging/index.ts` — for a future log-viewer endpoint.
+- _None._ Every built module now mounts an HTTP router under `/api/v1`.
 
 ### 4.2 Modules entirely missing
 

@@ -5,6 +5,8 @@ const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const notification_service_1 = require("./notification.service");
+const template_service_1 = require("./template.service");
+const template_utility_1 = require("../../utility/template.utility");
 const BATCH_SIZE = 50;
 const PENDING_STATUS = 'pending';
 const PROCESSING_STATUS = 'processing';
@@ -12,8 +14,10 @@ const SENT_STATUS = 'sent';
 const FAILED_STATUS = 'failed';
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isStringArray = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string');
+const isStringRecord = (value) => isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
 const optionalString = (value) => value === undefined || typeof value === 'string';
 const optionalRecord = (value) => value === undefined || isRecord(value);
+const optionalStringRecord = (value) => value === undefined || isStringRecord(value);
 const isQueueStatus = (status) => status === PENDING_STATUS
     || status === PROCESSING_STATUS
     || status === SENT_STATUS
@@ -42,6 +46,12 @@ const parseEmailPayload = (payload) => {
     if (!optionalRecord(parsed.data)) {
         throw app_error_1.AppError.badRequest('Email notification data must be an object');
     }
+    if (!optionalString(parsed.eventKey)) {
+        throw app_error_1.AppError.badRequest('Email notification eventKey must be a string');
+    }
+    if (!optionalStringRecord(parsed.variables)) {
+        throw app_error_1.AppError.badRequest('Email notification variables must be a string-to-string map');
+    }
     return {
         to,
         subject: parsed.subject,
@@ -49,6 +59,8 @@ const parseEmailPayload = (payload) => {
         html: parsed.html,
         text: parsed.text,
         data: parsed.data,
+        eventKey: parsed.eventKey,
+        variables: parsed.variables,
     };
 };
 const parseInAppPayload = (payload) => {
@@ -80,6 +92,12 @@ const parseInAppPayload = (payload) => {
     if (!optionalRecord(parsed.metadata)) {
         throw app_error_1.AppError.badRequest('In-app notification metadata must be an object');
     }
+    if (!optionalString(parsed.eventKey)) {
+        throw app_error_1.AppError.badRequest('In-app notification eventKey must be a string');
+    }
+    if (!optionalStringRecord(parsed.variables)) {
+        throw app_error_1.AppError.badRequest('In-app notification variables must be a string-to-string map');
+    }
     return {
         userId: parsed.userId,
         title: parsed.title,
@@ -88,6 +106,38 @@ const parseInAppPayload = (payload) => {
         referenceType: parsed.referenceType,
         referenceId: parsed.referenceId,
         metadata: parsed.metadata,
+        eventKey: parsed.eventKey,
+        variables: parsed.variables,
+    };
+};
+const renderEmailWithTemplate = async (dto) => {
+    if (!dto.eventKey)
+        return dto;
+    const template = await template_service_1.templateService.getTemplateByEventAndChannel(dto.eventKey, 'email');
+    if (!template)
+        return dto;
+    const variables = dto.variables ?? {};
+    const renderedBody = (0, template_utility_1.renderTemplate)(template.body, variables);
+    const renderedSubject = template.subject
+        ? (0, template_utility_1.renderTemplate)(template.subject, variables)
+        : dto.subject;
+    return {
+        ...dto,
+        subject: renderedSubject,
+        html: renderedBody,
+        text: renderedBody,
+    };
+};
+const renderInAppWithTemplate = async (dto) => {
+    if (!dto.eventKey)
+        return dto;
+    const template = await template_service_1.templateService.getTemplateByEventAndChannel(dto.eventKey, 'in_app');
+    if (!template)
+        return dto;
+    const variables = dto.variables ?? {};
+    return {
+        ...dto,
+        body: (0, template_utility_1.renderTemplate)(template.body, variables),
     };
 };
 class NotificationQueueService {
@@ -141,10 +191,12 @@ class NotificationQueueService {
                     continue;
                 }
                 if (item.type === 'email') {
-                    await notification_service_1.notificationService.sendEmail(parseEmailPayload(item.payload));
+                    const emailDto = await renderEmailWithTemplate(parseEmailPayload(item.payload));
+                    await notification_service_1.notificationService.sendEmail(emailDto);
                 }
                 else if (item.type === 'in_app') {
-                    await notification_service_1.notificationService.sendInAppNotification(parseInAppPayload(item.payload));
+                    const inAppDto = await renderInAppWithTemplate(parseInAppPayload(item.payload));
+                    await notification_service_1.notificationService.sendInAppNotification(inAppDto);
                 }
                 else {
                     throw app_error_1.AppError.badRequest(`Unsupported notification queue type: ${item.type}`);

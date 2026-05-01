@@ -33,6 +33,258 @@ const DOCUMENT_TEMPLATES: Array<{
 ];
 
 // ─────────────────────────────────────────────────────────────
+// Notification templates (event-driven body + subject)
+// ─────────────────────────────────────────────────────────────
+const NOTIFICATION_TEMPLATES: Array<{
+  eventKey: string;
+  channel: 'email' | 'in_app';
+  name: string;
+  subject: string | null;
+  body: string;
+  description: string;
+}> = [
+  // workflow.approval.created
+  {
+    eventKey: 'workflow.approval.created',
+    channel: 'email',
+    name: 'Approval Required — Email',
+    subject: 'Action Required: {{entityType}} Awaiting Your Approval',
+    body: 'Dear {{approverName}},\n\nA {{entityType}} has been submitted for your approval.\n\nReference: {{entityReference}}\nSubmitted by: {{submitterName}}\nSubmitted at: {{submittedAt}}\n\nPlease log in to IAMS to review and approve or reject.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the next approver when an entity (audit plan, working paper, report) is submitted for approval. Variables: approverName, entityType, entityReference, submitterName, submittedAt.',
+  },
+  {
+    eventKey: 'workflow.approval.created',
+    channel: 'in_app',
+    name: 'Approval Required — In-App',
+    subject: null,
+    body: "{{entityType}} '{{entityReference}}' submitted by {{submitterName}} requires your approval.",
+    description:
+      'In-app variant of approval-required notification. Variables: entityType, entityReference, submitterName.',
+  },
+
+  // workflow.approval.approved
+  {
+    eventKey: 'workflow.approval.approved',
+    channel: 'email',
+    name: 'Approval Completed — Email',
+    subject: 'Approved: {{entityType}} {{entityReference}}',
+    body: 'Dear {{submitterName}},\n\nYour {{entityType}} has been approved.\n\nReference: {{entityReference}}\nApproved by: {{approverName}}\nComment: {{comment}}\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the submitter when their submission is fully approved. Variables: submitterName, entityType, entityReference, approverName, comment.',
+  },
+  {
+    eventKey: 'workflow.approval.approved',
+    channel: 'in_app',
+    name: 'Approval Completed — In-App',
+    subject: null,
+    body: "{{entityType}} '{{entityReference}}' has been approved by {{approverName}}.",
+    description:
+      'In-app variant of approval-completed notification. Variables: entityType, entityReference, approverName.',
+  },
+
+  // workflow.approval.rejected
+  {
+    eventKey: 'workflow.approval.rejected',
+    channel: 'email',
+    name: 'Approval Rejected — Email',
+    subject: 'Rejected: {{entityType}} {{entityReference}}',
+    body: 'Dear {{submitterName}},\n\nYour {{entityType}} has been rejected and requires revision.\n\nReference: {{entityReference}}\nRejected by: {{approverName}}\nReason: {{rejectionReason}}\n\nPlease log in to IAMS to review and resubmit.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the submitter when an approval is rejected. Variables: submitterName, entityType, entityReference, approverName, rejectionReason.',
+  },
+  {
+    eventKey: 'workflow.approval.rejected',
+    channel: 'in_app',
+    name: 'Approval Rejected — In-App',
+    subject: null,
+    body: "{{entityType}} '{{entityReference}}' has been rejected by {{approverName}}. Reason: {{rejectionReason}}",
+    description:
+      'In-app variant of approval-rejected notification. Variables: entityType, entityReference, approverName, rejectionReason.',
+  },
+
+  // workflow.assignment.created
+  {
+    eventKey: 'workflow.assignment.created',
+    channel: 'email',
+    name: 'Audit Assignment — Email',
+    subject: 'New Audit Assignment: {{engagementTitle}}',
+    body: 'Dear {{assigneeName}},\n\nYou have been assigned to an audit engagement.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nRole: {{assignmentRole}}\nSLA Deadline: {{slaDeadline}}\n\nPlease log in to IAMS to begin your work.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to a user when assigned to an audit engagement. Variables: assigneeName, engagementTitle, engagementReference, assignmentRole, slaDeadline.',
+  },
+  {
+    eventKey: 'workflow.assignment.created',
+    channel: 'in_app',
+    name: 'Audit Assignment — In-App',
+    subject: null,
+    body: "You have been assigned to engagement '{{engagementTitle}}' ({{engagementReference}}) as {{assignmentRole}}.",
+    description:
+      'In-app variant of assignment notification. Variables: engagementTitle, engagementReference, assignmentRole.',
+  },
+
+  // audit.escalation.level_1
+  {
+    eventKey: 'audit.escalation.level_1',
+    channel: 'email',
+    name: 'Audit Escalation Level 1 — Email',
+    subject: 'Reminder: Audit Engagement SLA Approaching — {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nThis is a reminder that the following audit engagement requires attention.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\nCurrent Status: {{currentStatus}}\n\nPlease log in to IAMS and take action.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Level-1 escalation reminder for an overdue audit engagement. Variables: recipientName, engagementTitle, engagementReference, slaDeadline, currentStatus.',
+  },
+  {
+    eventKey: 'audit.escalation.level_1',
+    channel: 'in_app',
+    name: 'Audit Escalation Level 1 — In-App',
+    subject: null,
+    body: "Reminder: Engagement '{{engagementTitle}}' ({{engagementReference}}) SLA deadline is {{slaDeadline}}.",
+    description:
+      'In-app variant of level-1 escalation. Variables: engagementTitle, engagementReference, slaDeadline.',
+  },
+
+  // audit.escalation.level_2
+  {
+    eventKey: 'audit.escalation.level_2',
+    channel: 'email',
+    name: 'Audit Escalation Level 2 — Email',
+    subject: 'ESCALATION — Audit Manager Action Required: {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nAn audit engagement has been escalated to you as Audit Manager due to inaction.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\nDays Overdue: {{daysOverdue}}\n\nImmediate action is required. Please log in to IAMS.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Level-2 escalation to audit manager. Variables: recipientName, engagementTitle, engagementReference, slaDeadline, daysOverdue.',
+  },
+  {
+    eventKey: 'audit.escalation.level_2',
+    channel: 'in_app',
+    name: 'Audit Escalation Level 2 — In-App',
+    subject: null,
+    body: "ESCALATED: Engagement '{{engagementTitle}}' ({{engagementReference}}) is {{daysOverdue}} days overdue. Action required.",
+    description:
+      'In-app variant of level-2 escalation. Variables: engagementTitle, engagementReference, daysOverdue.',
+  },
+
+  // audit.escalation.level_3
+  {
+    eventKey: 'audit.escalation.level_3',
+    channel: 'email',
+    name: 'Audit Escalation Level 3 — Email',
+    subject: 'ESCALATION — Director Action Required: {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nAn audit engagement has been escalated to you as Director.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\nDays Overdue: {{daysOverdue}}\n\nPlease review and ensure immediate resolution.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Level-3 escalation to director. Variables: recipientName, engagementTitle, engagementReference, slaDeadline, daysOverdue.',
+  },
+  {
+    eventKey: 'audit.escalation.level_3',
+    channel: 'in_app',
+    name: 'Audit Escalation Level 3 — In-App',
+    subject: null,
+    body: "ESCALATED to Director: Engagement '{{engagementTitle}}' ({{engagementReference}}) is {{daysOverdue}} days overdue.",
+    description:
+      'In-app variant of level-3 escalation. Variables: engagementTitle, engagementReference, daysOverdue.',
+  },
+
+  // audit.escalation.level_4
+  {
+    eventKey: 'audit.escalation.level_4',
+    channel: 'email',
+    name: 'Audit Escalation Level 4 — Email',
+    subject: 'CRITICAL ESCALATION — CAE Action Required: {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nAn audit engagement has been escalated to you as Chief Audit Executive.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\nDays Overdue: {{daysOverdue}}\n\nThis requires your immediate attention and intervention.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Level-4 escalation to CAE. Variables: recipientName, engagementTitle, engagementReference, slaDeadline, daysOverdue.',
+  },
+  {
+    eventKey: 'audit.escalation.level_4',
+    channel: 'in_app',
+    name: 'Audit Escalation Level 4 — In-App',
+    subject: null,
+    body: "CRITICAL: Engagement '{{engagementTitle}}' ({{engagementReference}}) escalated to CAE. {{daysOverdue}} days overdue.",
+    description:
+      'In-app variant of level-4 escalation. Variables: engagementTitle, engagementReference, daysOverdue.',
+  },
+
+  // audit.report.issued
+  {
+    eventKey: 'audit.report.issued',
+    channel: 'email',
+    name: 'Audit Report Issued — Email',
+    subject: 'Audit Report Issued: {{reportTitle}}',
+    body: 'Dear {{auditeeName}},\n\nAn audit report has been issued for your area.\n\nReport: {{reportTitle}}\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nIssued by: {{issuedBy}}\nFindings: {{findingCount}} finding(s) requiring your response\n\nPlease log in to IAMS to review the findings and submit your management responses.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the auditee when an audit report is issued. Variables: auditeeName, reportTitle, engagementTitle, engagementReference, issuedBy, findingCount.',
+  },
+  {
+    eventKey: 'audit.report.issued',
+    channel: 'in_app',
+    name: 'Audit Report Issued — In-App',
+    subject: null,
+    body: "Audit report '{{reportTitle}}' has been issued. {{findingCount}} finding(s) require your response.",
+    description:
+      'In-app variant of audit-report-issued notification. Variables: reportTitle, findingCount.',
+  },
+
+  // audit.followup.response.submitted
+  {
+    eventKey: 'audit.followup.response.submitted',
+    channel: 'email',
+    name: 'Management Response Submitted — Email',
+    subject: 'Management Response Received: {{findingTitle}}',
+    body: 'Dear {{auditorName}},\n\nA management response has been submitted for a finding.\n\nFinding: {{findingTitle}}\nSeverity: {{severity}}\nResponse by: {{auditeeName}}\n\nPlease log in to IAMS to review the response and verify remediation.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the auditor when a management response is submitted. Variables: auditorName, findingTitle, severity, auditeeName.',
+  },
+  {
+    eventKey: 'audit.followup.response.submitted',
+    channel: 'in_app',
+    name: 'Management Response Submitted — In-App',
+    subject: null,
+    body: "Management response submitted for finding '{{findingTitle}}' by {{auditeeName}}.",
+    description:
+      'In-app variant of management-response-submitted notification. Variables: findingTitle, auditeeName.',
+  },
+
+  // audit.followup.verified
+  {
+    eventKey: 'audit.followup.verified',
+    channel: 'email',
+    name: 'Finding Verified — Email',
+    subject: 'Finding Verified: {{findingTitle}}',
+    body: 'Dear {{auditeeName}},\n\nYour remediation for the following finding has been verified.\n\nFinding: {{findingTitle}}\nVerified by: {{auditorName}}\nNotes: {{verificationNotes}}\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the auditee when their remediation is verified. Variables: auditeeName, findingTitle, auditorName, verificationNotes.',
+  },
+  {
+    eventKey: 'audit.followup.verified',
+    channel: 'in_app',
+    name: 'Finding Verified — In-App',
+    subject: null,
+    body: "Finding '{{findingTitle}}' has been verified as resolved by {{auditorName}}.",
+    description:
+      'In-app variant of finding-verified notification. Variables: findingTitle, auditorName.',
+  },
+
+  // audit.sla.reminder
+  {
+    eventKey: 'audit.sla.reminder',
+    channel: 'email',
+    name: 'SLA Reminder — Email',
+    subject: 'SLA Deadline Approaching: {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nThe following audit engagement SLA deadline is approaching in {{daysRemaining}} day(s).\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\n\nPlease ensure the audit is completed on time.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Reminder sent before an audit engagement SLA deadline. Variables: recipientName, daysRemaining, engagementTitle, engagementReference, slaDeadline.',
+  },
+  {
+    eventKey: 'audit.sla.reminder',
+    channel: 'in_app',
+    name: 'SLA Reminder — In-App',
+    subject: null,
+    body: "SLA reminder: Engagement '{{engagementTitle}}' ({{engagementReference}}) deadline in {{daysRemaining}} day(s).",
+    description:
+      'In-app variant of SLA reminder. Variables: engagementTitle, engagementReference, daysRemaining.',
+  },
+];
+
+// ─────────────────────────────────────────────────────────────
 // Permissions  (module:action)
 // ─────────────────────────────────────────────────────────────
 const PERMISSIONS = [
@@ -281,6 +533,35 @@ async function main(): Promise<void> {
     }
   }
   console.log(`   ✓ ${DOCUMENT_TEMPLATES.length} document templates seeded`);
+
+  // 5. Upsert default notification templates (event_key + channel is unique)
+  for (const tpl of NOTIFICATION_TEMPLATES) {
+    await prisma.notification_Template.upsert({
+      where: {
+        event_key_channel: { event_key: tpl.eventKey, channel: tpl.channel },
+      },
+      create: {
+        event_key: tpl.eventKey,
+        channel: tpl.channel,
+        name: tpl.name,
+        subject: tpl.subject,
+        body: tpl.body,
+        description: tpl.description,
+        is_active: true,
+        created_by_id: adminUserId,
+      },
+      update: {
+        name: tpl.name,
+        subject: tpl.subject,
+        body: tpl.body,
+        description: tpl.description,
+        is_active: true,
+        deleted_at: null,
+        updated_by_id: adminUserId,
+      },
+    });
+  }
+  console.log(`   ✓ ${NOTIFICATION_TEMPLATES.length} notification templates seeded`);
 
   console.log('✅  Seed complete');
 }

@@ -49,6 +49,14 @@ type ApprovalWithDetails = Prisma.Workflow_ApprovalGetPayload<{ include: typeof 
 interface NotificationTarget {
   id: string;
   email: string;
+  display_name: string | null;
+  first_name: string;
+  last_name: string;
+}
+
+interface ApprovalNotificationContext {
+  eventKey?: string;
+  variables?: Record<string, string>;
 }
 
 export class ApprovalService implements IApprovalService {
@@ -125,13 +133,103 @@ export class ApprovalService implements IApprovalService {
     const currentStep = approval.steps?.find((step) => step.level === approval.currentLevel);
     if (!currentStep) return;
 
-    this._queueNotification(currentStep.approverId, {
-      title: 'Approval required',
-      body: `A ${approval.entityType} requires your approval.`,
-      type: 'info',
-      referenceType: 'workflow_approval',
-      referenceId: approval.id,
-    });
+    void this._queueApprovalCreatedAsync(approval, currentStep.approverId);
+  }
+
+  private async _queueApprovalCreatedAsync(
+    approval: ApprovalResponseDto,
+    approverId: string,
+  ): Promise<void> {
+    const [entityReference, submitterName] = await Promise.all([
+      this._resolveEntityReference(approval.entityType, approval.entityId),
+      this._resolveActorName(approval.submittedById),
+    ]);
+
+    this._queueNotification(
+      approverId,
+      {
+        title: 'Approval required',
+        body: `A ${approval.entityType} requires your approval.`,
+        type: 'info',
+        referenceType: 'workflow_approval',
+        referenceId: approval.id,
+      },
+      {
+        eventKey: 'workflow.approval.created',
+        variables: {
+          entityType: approval.entityType,
+          entityReference,
+          submitterName,
+          submittedAt: approval.createdAt,
+        },
+      },
+    );
+  }
+
+  private async _queueApprovalApprovedAsync(
+    approval: ApprovalWithDetails,
+    approverId: string,
+    comment: string | undefined,
+  ): Promise<void> {
+    const [entityReference, submitterName, approverName] = await Promise.all([
+      this._resolveEntityReference(approval.entity_type, approval.entity_id),
+      this._resolveActorName(approval.submitted_by_id),
+      this._resolveActorName(approverId),
+    ]);
+
+    this._queueNotification(
+      approval.submitted_by_id,
+      {
+        title: 'Approval completed',
+        body: `Your ${approval.entity_type} has been approved.`,
+        type: 'success',
+        referenceType: approval.entity_type,
+        referenceId: approval.entity_id,
+      },
+      {
+        eventKey: 'workflow.approval.approved',
+        variables: {
+          entityType: approval.entity_type,
+          entityReference,
+          submitterName,
+          approverName,
+          comment: comment ?? '',
+        },
+      },
+    );
+  }
+
+  private async _queueApprovalRejectedAsync(
+    approval: ApprovalWithDetails,
+    approverId: string,
+    reason: string,
+  ): Promise<void> {
+    const [entityReference, submitterName, approverName] = await Promise.all([
+      this._resolveEntityReference(approval.entity_type, approval.entity_id),
+      this._resolveActorName(approval.submitted_by_id),
+      this._resolveActorName(approverId),
+    ]);
+
+    this._queueNotification(
+      approval.submitted_by_id,
+      {
+        title: 'Approval rejected',
+        body: `Your ${approval.entity_type} was rejected: ${reason}`,
+        type: 'warning',
+        referenceType: approval.entity_type,
+        referenceId: approval.entity_id,
+      },
+      {
+        eventKey: 'workflow.approval.rejected',
+        variables: {
+          entityType: approval.entity_type,
+          entityReference,
+          submitterName,
+          approverName,
+          rejectionReason: reason,
+        },
+      },
+    );
   }
 
   async approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResponseDto> {
@@ -179,21 +277,9 @@ export class ApprovalService implements IApprovalService {
     }, { timeout: 15000 });
 
     if (nextStep) {
-      this._queueNotification(nextStep.approver_id, {
-        title: 'Approval required',
-        body: `A ${approval.entity_type} requires your approval.`,
-        type: 'info',
-        referenceType: 'workflow_approval',
-        referenceId: approvalId,
-      });
+      void this._queueApprovalCreatedAsync(mapApprovalToResponse(updated), nextStep.approver_id);
     } else {
-      this._queueNotification(approval.submitted_by_id, {
-        title: 'Approval completed',
-        body: `Your ${approval.entity_type} has been approved.`,
-        type: 'success',
-        referenceType: approval.entity_type,
-        referenceId: approval.entity_id,
-      });
+      void this._queueApprovalApprovedAsync(approval, approverId, comment);
     }
 
     logger.info('Workflow approval step approved', { approvalId, approverId });
@@ -247,13 +333,7 @@ export class ApprovalService implements IApprovalService {
       });
     }, { timeout: 15000 });
 
-    this._queueNotification(approval.submitted_by_id, {
-      title: 'Approval rejected',
-      body: `Your ${approval.entity_type} was rejected: ${reason}`,
-      type: 'warning',
-      referenceType: approval.entity_type,
-      referenceId: approval.entity_id,
-    });
+    void this._queueApprovalRejectedAsync(approval, approverId, reason);
 
     logger.info('Workflow approval rejected', { approvalId, approverId });
     auditLogService.logAsync({
@@ -443,12 +523,18 @@ export class ApprovalService implements IApprovalService {
       referenceType: string;
       referenceId: string;
     },
+    context: ApprovalNotificationContext = {},
   ): Promise<void> {
     const user: NotificationTarget | null = await prisma.user.findFirst({
       where: { id: userId, deleted_at: null, is_active: true },
-      select: { id: true, email: true },
+      select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
     });
     if (!user) return;
+
+    const recipientName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+    const variables = context.variables
+      ? { recipientName, ...context.variables }
+      : undefined;
 
     await notificationQueueService.enqueue(
       'in_app',
@@ -459,6 +545,8 @@ export class ApprovalService implements IApprovalService {
         type: notification.type,
         referenceType: notification.referenceType,
         referenceId: notification.referenceId,
+        eventKey: context.eventKey,
+        variables,
       },
     );
 
@@ -468,6 +556,8 @@ export class ApprovalService implements IApprovalService {
         to: user.email,
         subject: notification.title,
         text: notification.body,
+        eventKey: context.eventKey,
+        variables,
       },
     );
   }
@@ -481,10 +571,48 @@ export class ApprovalService implements IApprovalService {
       referenceType: string;
       referenceId: string;
     },
+    context: ApprovalNotificationContext = {},
   ): void {
-    void this._notifyUser(userId, notification).catch((err: unknown) => {
+    void this._notifyUser(userId, notification, context).catch((err: unknown) => {
       logger.warn('Workflow approval notification failed', { err, userId });
     });
+  }
+
+  private async _resolveEntityReference(
+    entityType: string,
+    entityId: string,
+  ): Promise<string> {
+    if (entityType === WorkflowEntityType.AuditReport) {
+      const report = await prisma.audit_Report.findUnique({
+        where: { id: entityId },
+        select: { title: true, engagement: { select: { reference_number: true } } },
+      });
+      return report?.engagement.reference_number ?? entityId;
+    }
+    if (entityType === WorkflowEntityType.AuditWorkingPaper) {
+      const wp = await prisma.audit_Working_Paper.findUnique({
+        where: { id: entityId },
+        select: { title: true },
+      });
+      return wp?.title ?? entityId;
+    }
+    if (entityType === WorkflowEntityType.AuditPlan) {
+      const plan = await prisma.audit_Plan.findUnique({
+        where: { id: entityId },
+        select: { title: true },
+      });
+      return plan?.title ?? entityId;
+    }
+    return entityId;
+  }
+
+  private async _resolveActorName(userId: string): Promise<string> {
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { display_name: true, first_name: true, last_name: true },
+    });
+    if (!user) return '';
+    return user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
   }
 }
 

@@ -11,6 +11,8 @@ import {
   NotificationQueueType,
 } from '../interface/notification-queue.service.interface';
 import { notificationService } from './notification.service';
+import { templateService } from './template.service';
+import { renderTemplate } from '../../utility/template.utility';
 import { NotificationQueueStatsResponseDto } from '../../dto/response/notification-queue.response.dto';
 
 const BATCH_SIZE = 50;
@@ -30,11 +32,17 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
 const isStringArray = (value: unknown): value is string[] =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
 
+const isStringRecord = (value: unknown): value is Record<string, string> =>
+  isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
+
 const optionalString = (value: unknown): value is string | undefined =>
   value === undefined || typeof value === 'string';
 
 const optionalRecord = (value: unknown): value is Record<string, unknown> | undefined =>
   value === undefined || isRecord(value);
+
+const optionalStringRecord = (value: unknown): value is Record<string, string> | undefined =>
+  value === undefined || isStringRecord(value);
 
 const isQueueStatus = (status: string): status is QueueStatus =>
   status === PENDING_STATUS
@@ -67,6 +75,12 @@ const parseEmailPayload = (payload: string): SendEmailDto => {
   if (!optionalRecord(parsed.data)) {
     throw AppError.badRequest('Email notification data must be an object');
   }
+  if (!optionalString(parsed.eventKey)) {
+    throw AppError.badRequest('Email notification eventKey must be a string');
+  }
+  if (!optionalStringRecord(parsed.variables)) {
+    throw AppError.badRequest('Email notification variables must be a string-to-string map');
+  }
 
   return {
     to,
@@ -75,6 +89,8 @@ const parseEmailPayload = (payload: string): SendEmailDto => {
     html: parsed.html,
     text: parsed.text,
     data: parsed.data,
+    eventKey: parsed.eventKey,
+    variables: parsed.variables,
   };
 };
 
@@ -109,6 +125,12 @@ const parseInAppPayload = (payload: string): CreateInAppNotificationDto => {
   if (!optionalRecord(parsed.metadata)) {
     throw AppError.badRequest('In-app notification metadata must be an object');
   }
+  if (!optionalString(parsed.eventKey)) {
+    throw AppError.badRequest('In-app notification eventKey must be a string');
+  }
+  if (!optionalStringRecord(parsed.variables)) {
+    throw AppError.badRequest('In-app notification variables must be a string-to-string map');
+  }
 
   return {
     userId: parsed.userId,
@@ -118,6 +140,43 @@ const parseInAppPayload = (payload: string): CreateInAppNotificationDto => {
     referenceType: parsed.referenceType,
     referenceId: parsed.referenceId,
     metadata: parsed.metadata,
+    eventKey: parsed.eventKey,
+    variables: parsed.variables,
+  };
+};
+
+const renderEmailWithTemplate = async (dto: SendEmailDto): Promise<SendEmailDto> => {
+  if (!dto.eventKey) return dto;
+
+  const template = await templateService.getTemplateByEventAndChannel(dto.eventKey, 'email');
+  if (!template) return dto;
+
+  const variables = dto.variables ?? {};
+  const renderedBody = renderTemplate(template.body, variables);
+  const renderedSubject = template.subject
+    ? renderTemplate(template.subject, variables)
+    : dto.subject;
+
+  return {
+    ...dto,
+    subject: renderedSubject,
+    html: renderedBody,
+    text: renderedBody,
+  };
+};
+
+const renderInAppWithTemplate = async (
+  dto: CreateInAppNotificationDto,
+): Promise<CreateInAppNotificationDto> => {
+  if (!dto.eventKey) return dto;
+
+  const template = await templateService.getTemplateByEventAndChannel(dto.eventKey, 'in_app');
+  if (!template) return dto;
+
+  const variables = dto.variables ?? {};
+  return {
+    ...dto,
+    body: renderTemplate(template.body, variables),
   };
 };
 
@@ -181,9 +240,11 @@ export class NotificationQueueService implements INotificationQueueService {
         }
 
         if (item.type === 'email') {
-          await notificationService.sendEmail(parseEmailPayload(item.payload));
+          const emailDto = await renderEmailWithTemplate(parseEmailPayload(item.payload));
+          await notificationService.sendEmail(emailDto);
         } else if (item.type === 'in_app') {
-          await notificationService.sendInAppNotification(parseInAppPayload(item.payload));
+          const inAppDto = await renderInAppWithTemplate(parseInAppPayload(item.payload));
+          await notificationService.sendInAppNotification(inAppDto);
         } else {
           throw AppError.badRequest(`Unsupported notification queue type: ${item.type}`);
         }

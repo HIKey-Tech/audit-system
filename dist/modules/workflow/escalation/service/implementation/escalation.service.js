@@ -198,12 +198,19 @@ class EscalationService {
         return targets.length;
     }
     async _resolveEscalationTargets(entityType, entityId, level) {
+        const targetSelect = {
+            id: true,
+            email: true,
+            display_name: true,
+            first_name: true,
+            last_name: true,
+        };
         if (entityType === workflow_enum_1.WorkflowEscalationEntityType.AuditEngagement) {
             const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
                 where: { id: entityId, deleted_at: null },
                 select: {
-                    lead_auditor: { select: { id: true, email: true } },
-                    audit_manager: { select: { id: true, email: true } },
+                    lead_auditor: { select: targetSelect },
+                    audit_manager: { select: targetSelect },
                 },
             });
             if (!engagement)
@@ -224,7 +231,7 @@ class EscalationService {
                     where: { status: workflow_enum_1.WorkflowApprovalStepStatus.Pending },
                     select: {
                         level: true,
-                        approver: { select: { id: true, email: true } },
+                        approver: { select: targetSelect },
                     },
                 },
             },
@@ -248,7 +255,13 @@ class EscalationService {
                 is_active: true,
                 user_roles: { some: { role: { name: roleName } } },
             },
-            select: { id: true, email: true },
+            select: {
+                id: true,
+                email: true,
+                display_name: true,
+                first_name: true,
+                last_name: true,
+            },
         });
     }
     async _getLatestEscalation(entityType, entityId) {
@@ -291,6 +304,28 @@ class EscalationService {
     async _notifyTarget(target, entityType, entityId, level, reason) {
         const title = `Workflow escalation level ${level}`;
         const body = `Escalation level ${level} fired for ${entityType} due to ${reason}.`;
+        const recipientName = target.display_name ?? `${target.first_name} ${target.last_name}`.trim();
+        let eventKey;
+        let variables;
+        if (entityType === workflow_enum_1.WorkflowEscalationEntityType.AuditEngagement) {
+            const engagement = await prisma_client_1.prisma.audit_Engagement.findUnique({
+                where: { id: entityId },
+                select: { title: true, reference_number: true, sla_deadline: true, status: true },
+            });
+            if (engagement) {
+                const now = new Date();
+                const daysOverdue = Math.max(0, Math.ceil((now.getTime() - engagement.sla_deadline.getTime()) / 86_400_000));
+                eventKey = `audit.escalation.level_${level}`;
+                variables = {
+                    recipientName,
+                    engagementTitle: engagement.title,
+                    engagementReference: engagement.reference_number,
+                    slaDeadline: engagement.sla_deadline.toISOString(),
+                    currentStatus: engagement.status,
+                    daysOverdue: String(daysOverdue),
+                };
+            }
+        }
         await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: target.id,
             title,
@@ -298,11 +333,15 @@ class EscalationService {
             type: 'warning',
             referenceType: entityType,
             referenceId: entityId,
+            eventKey,
+            variables,
         });
         await notification_queue_service_1.notificationQueueService.enqueue('email', {
             to: target.email,
             subject: title,
             text: body,
+            eventKey,
+            variables,
         });
     }
 }

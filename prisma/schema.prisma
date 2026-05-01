@@ -70,6 +70,8 @@ model User {
   workflow_assignments_made    Workflow_Assignment[]    @relation("WorkflowAssignmentAssignedBy")
   workflow_escalations         Workflow_Escalation[]    @relation("WorkflowEscalationEscalatedTo")
   escalation_policies_created  Escalation_Policy[]      @relation("EscalationPolicyCreatedBy")
+  notification_templates_created Notification_Template[] @relation("NotificationTemplateCreatedBy")
+  notification_templates_updated Notification_Template[] @relation("NotificationTemplateUpdatedBy")
 
   @@map("users")
 }
@@ -225,6 +227,31 @@ model Notification_Queue {
 
   @@index([status, scheduled_at])
   @@map("notification_queue")
+}
+
+model Notification_Template {
+  id            String    @id @default(uuid())
+  event_key     String // e.g. workflow.approval.created | audit.escalation.level_1
+  channel       String // email | in_app
+  name          String
+  subject       String?
+  body          String    @db.NVarChar(Max)
+  description   String?
+  is_active     Boolean   @default(true)
+  created_by_id String?
+  updated_by_id String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
+
+  created_by User? @relation("NotificationTemplateCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  updated_by User? @relation("NotificationTemplateUpdatedBy", fields: [updated_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([event_key, channel])
+  @@index([event_key])
+  @@index([channel])
+  @@index([is_active])
+  @@map("notification_templates")
 }
 
 // ============================================================
