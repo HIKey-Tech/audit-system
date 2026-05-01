@@ -22,6 +22,7 @@ import {
   notFoundMiddleware,
 } from './shared/middleware/error-handler.middleware';
 import { requestAuditLogger } from './modules/logging/utility/request-logger.middleware';
+import { createLoggingModule } from './modules/logging';
 import { createUserModule } from './modules/user';
 import { createDocumentModule } from './modules/document';
 import { createAuditModule } from './modules/audit';
@@ -102,6 +103,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createRiskModule());
   app.use(apiPrefix, createWorkflowModule());
   app.use(apiPrefix, createMessagingModule());
+  app.use(apiPrefix, createLoggingModule());
   app.use(apiPrefix, createBackgroundModule());
 
   app.use(notFoundMiddleware);

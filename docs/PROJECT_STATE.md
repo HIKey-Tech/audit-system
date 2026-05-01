@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-30 (rev 11)
+> Last updated: 2026-05-01 (rev 12)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. Logging still exists as service-only scaffolding. Integration, Dashboard, Predictive, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Logging still exists as service-only scaffolding. Integration, Dashboard, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
 
 ---
 
@@ -43,6 +43,7 @@ Folder: `src/modules/user/`
 | User CRUD + soft-delete | Done | `controller/user.controller.ts`, `service/implementation/user.service.ts` |
 | Self-service profile (`/users/me`, `/users/me/change-password`) | Done | `user.controller.ts` |
 | Role assignment / removal | Done | `user.service.ts#assignRoles`, `#removeRole` |
+| Role + permission catalogue endpoints | Done | `GET /users/roles`, `GET /users/permissions` |
 | RBAC seed (8 roles, 20 permissions) | Done | `prisma/seed.ts` — `director` and `cae` include `audit:write` for audit report approval |
 | Module factory | Done | `modules/user/index.ts` — `createUserModule(): Router` |
 
@@ -60,6 +61,8 @@ Folder: `src/modules/user/`
 /users/me                     PATCH   private
 /users/me/change-password     POST    private
 /users                        GET     user:read
+/users/roles                  GET     user:read
+/users/permissions            GET     user:read
 /users                        POST    user:write
 /users/:id                    GET     user:read
 /users/:id                    PATCH   user:write
@@ -71,6 +74,16 @@ Folder: `src/modules/user/`
 **Permission catalogue (from seed):** `user:*`, `audit:*`, `finding:*`, `document:*`, `notification:read`, `log:*`, `job:*`, `predictive:*`.
 
 **Roles:** `super_admin`, `audit_admin`, `audit_lead`, `auditor`, `director`, `cae`, `auditee`, `viewer`.
+
+**Local smoke-test users present as of 2026-05-01:**
+
+| Email | Display name | Roles | Status |
+|---|---|---|---|
+| `admin@example.com` | Super Admin | `super_admin`, `audit_admin` | Active system user |
+| `auditor@gbb.gov.ng` | Test Auditor | `audit_lead` | Active |
+| `auditee@gbb.gov.ng` | Test Auditee | `auditee` | Active |
+| `director@gbb.gov.ng` | Test Director | `director` | Active |
+| `cae@gbb.gov.ng` | Test CAE | `cae` | Active |
 
 ### 2.3 Logging module — COMPLETE (service-only)
 
@@ -101,6 +114,7 @@ Folder: `src/modules/messaging/`
   - `enqueue(type, payload)` - fast DB write used by audit/workflow/background services instead of direct sending.
   - `processQueue()` - background processor for up to 50 pending items per run; retries failed work until `max_attempts`, then marks permanently failed.
   - `getQueueStats()` - returns counts by queue status for monitoring.
+- Queue status after the 2026-05-01 smoke test: 18 queued notifications were processed and all are `sent`; there are no pending or failed queue items in the local database snapshot.
 - `NotificationController` + `createMessagingModule()` — mounted at `/api/v1/notifications`.
 
 **Routes mounted by the module:**
@@ -158,7 +172,7 @@ Folder: `src/modules/document/`
 - AWS S3 adapter (`service/client/storage.client.ts` has only `LocalStorageClient` + `AzureBlobStorageClient` stub).
 - File deletion of old versions (version history today retains `storage_path` references forever).
 
-### 2.6 Background module — PARTIAL
+### 2.6 Background module — COMPLETE HTTP/control plane, PARTIAL job catalogue
 
 Folder: `src/modules/background/`
 
@@ -166,11 +180,22 @@ Folder: `src/modules/background/`
 - **Job key convention:** `BG:<MODULE>:<ACTION>:<FREQUENCY>`.
 - `BackgroundJobController` + `createBackgroundModule()` - mounted at `/api/v1/jobs` with list/detail/run-history and enable/disable routes.
 - Notification queue processing is registered as `BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE` and runs every minute.
+- Local database snapshot as of 2026-05-01 has 5 registered jobs and 303 recorded job runs. `BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE`, `BG:TOKEN:CLEANUP:HOURLY`, and `BG:WORKFLOW:ESCALATION:HOURLY` have successful last runs.
 - Registered jobs (via `registerAllJobs()`):
   - `BG:TOKEN:CLEANUP:HOURLY` — deletes expired / revoked refresh tokens. **Working.**
   - `BG:AUDIT:REMINDER:DAILY` — registered + cron-scheduled, but the handler is **stubbed** (logs "skipped" and returns). The original due-date query was removed; needs to be restored now that `Audit_Engagement` exists. See `scheduler.service.ts:165`.
   - `BG:WORKFLOW:ESCALATION:HOURLY` — calls `workflowEscalationService.checkAndEscalate()` every hour for breached engagement SLAs and stalled approvals. **Working logic; runtime depends on database connectivity.**
   - `BG:LOG:ARCHIVE:WEEKLY` — pulls audit logs older than 90 days. **Partially working** — reads logs, does not yet push to data warehouse (TODO).
+
+**Routes mounted by the module:**
+
+```
+/jobs                         GET     job:read
+/jobs/:id                     GET     job:read
+/jobs/:id/runs                GET     job:read
+/jobs/:id/enable              POST    job:admin
+/jobs/:id/disable             POST    job:admin
+```
 
 **Not yet built:**
 - Migration sub-module (bulk import of legacy audit spreadsheets).
@@ -191,10 +216,13 @@ Folder: `src/modules/audit/`
 - Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit queues report-issue and remediation-verification notifications through Messaging.
 - Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
 - Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data, rendered via the shared `docx-template.utility.ts`. Two default DOCX templates (`Working Paper - GBB Default`, `Audit Report - GBB Default`) are seeded into `document_templates` from `prisma/templates/`.
+- Report generation accepts optional report body fields (`executiveSummary`, `scope`, `methodology`) and falls back to generated defaults when omitted.
 
 **Verification:**
 - `npm run build` passes.
-- `npm start` was attempted but local startup is blocked by Prisma `P1011` during database initialization in the current environment.
+- Full backend smoke test completed on 2026-05-01 against the local SQL Server database. Verified end-to-end path: login/RBAC, risk category/register/assessment, audit universe, audit plan + approval, engagement creation, assignment, checklist creation/testing, working-paper submission/approval/export, finding lifecycle, report generation/submission/three-level approval/issue/export, follow-up creation, notifications, email logs, queue processing, and scheduled job runs.
+- Smoke-test data currently includes 1 audit universe item, 2 audit plans, 2 plan items, 1 engagement, 1 working paper, 1 finding, 1 issued report, 1 follow-up, 3 checklist rows, 1 risk category, 1 risk, 1 risk assessment, 3 workflow approvals, 5 approval steps, 1 assignment, 15 in-app notifications, 13 email logs, 18 sent queue rows, 5 scheduled jobs, 303 scheduled job runs, and 145 audit-log rows.
+- Smoke-test bug fixes completed: nullable `users.azure_oid` is no longer unique so multiple local users can exist without Azure IDs; role/permission listing endpoints were added for RBAC setup; plan-derived engagements now take `universeId`, `auditType`, and `priority` from the plan item instead of requiring duplicate request fields; report generation now accepts the request body; plan/report approval creation is transactional with the parent status update; approval-required notifications are queued after transaction commit; submitted reports without an approval can be resubmitted once to repair the missing approval; all audit/workflow/background notification send paths now enqueue work instead of blocking on SMTP; Director and CAE seeded roles can approve reports via `audit:write`; Prisma seed command is registered in `prisma.config.ts`; document template content is widened to `NVARCHAR(max)` so seeded DOCX XML templates fit.
 
 ### 2.8 Risk module — COMPLETE (services + HTTP routes)
 
@@ -241,8 +269,9 @@ Folder: `src/modules/risk/`
 Folder: `src/modules/workflow/`
 
 - Approval service creates ordered approval chains for audit plans, working papers, and reports; validates current-level approvers; advances or rejects approval chains; updates the underlying audit entity status when approval completes or rejects.
-- Assignment service assigns and removes engagement staff, lists engagement/user assignments, and returns active workload grouped by engagement status.
-- Escalation service checks overdue engagements and stalled approvals, escalates levels 1-4, sends in-app/email notifications through Messaging, and persists immutable escalation history.
+- Approval creation can run inside a caller-owned Prisma transaction so plan/report status changes and approval records commit together. Approval notifications are queued after commit to avoid orphaned or missing workflow state.
+- Assignment service assigns and removes engagement staff, lists engagement/user assignments, returns active workload grouped by engagement status, and queues in-app/email assignment notifications through Messaging.
+- Escalation service checks overdue engagements and stalled approvals, escalates levels 1-4, queues in-app/email notifications through Messaging, and persists immutable escalation history.
 - Escalation policies are configurable per audit type (`it`, `financial`, `compliance`, `systems`, `all`) and use defaults in the checker when no DB policy exists yet.
 - Audit trail logging is wired via `auditLogService.logAsync(...)` for approval, assignment, escalation, and policy state changes.
 
@@ -271,6 +300,7 @@ Folder: `src/modules/workflow/`
 **Known decisions / gaps:**
 - Level 3 escalations notify users with the seeded `director` role; Level 4 escalations notify users with the seeded `cae` role. Both roles ship in `prisma/seed.ts`.
 - Audit report rejection reason is stored on both `audit_reports.rejection_reason` and `workflow_approvals.rejection_reason` for audit-side and workflow-side reads respectively.
+- Local smoke-test approvals as of 2026-05-01: audit plan approved, audit working paper approved, and audit report approved through all three levels (audit manager -> director -> CAE).
 
 ### 2.10 Database schema
 
@@ -363,9 +393,7 @@ Workflow schema includes:
 
 ---
 
-## 3. What is NOT yet built
-
-### 3.1 Application entry point — COMPLETE
+### 2.11 Application entry point — COMPLETE
 
 `src/server.ts` is wired up. Boot order: validate config → `connectDatabase()` → build Express app → listen → `registerAllJobs()` + `schedulerService.startAll()`. Shutdown order (SIGTERM/SIGINT/uncaughtException/unhandledRejection): stop accepting connections → `schedulerService.stopAll()` → `disconnectDatabase()`, with a 10s force-exit timeout.
 
@@ -373,25 +401,45 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, and `createMessagingModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, and `createBackgroundModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
-### 3.2 Module routers not yet created
+---
+
+## 3. Current local database snapshot
+
+Snapshot queried on 2026-05-01 after the full smoke test:
+
+| Area | Current state |
+|---|---|
+| Users/RBAC | 5 active users, 8 roles, 20 permissions |
+| Audit | 1 universe item, 2 plans, 2 plan items, 1 engagement, 1 working paper, 1 finding, 1 issued report, 1 follow-up, 3 checklist rows |
+| Risk | 1 category, 1 risk register item, 1 assessment |
+| Workflow | 3 approvals, 5 approval steps, 1 assignment, 0 escalations, 0 custom escalation policies |
+| Messaging | 15 in-app notifications, 13 email logs, 18 notification-queue rows, all queue rows `sent` |
+| Documents | 2 seeded document templates, 0 uploaded documents, 0 document versions |
+| Background/logging | 5 scheduled jobs, 303 job-run rows, 145 audit-log rows |
+
+---
+
+## 4. What is NOT yet built
+
+### 4.1 Module routers not yet created
 
 - `modules/logging/index.ts` — for a future log-viewer endpoint.
-- `modules/background/index.ts` — for admin job-control endpoints.
 
-### 3.3 Modules entirely missing
+### 4.2 Modules entirely missing
 
 - `integration/` — Dynafin, IMOC, Active Directory, Project Plus, Shared Drive adapters.
 - `dashboard/` — analytics, reports, widgets.
 - `predictive/` — risk model, anomaly detection, NLP.
 
-### 3.4 Tests
+### 4.3 Tests
 
-- Jest is installed. Zero tests written. `__tests__/` directories do not exist.
+- Jest is installed. Zero automated tests are written; `__tests__/` directories do not exist.
+- Manual/API smoke testing was completed on 2026-05-01 and drove the fixes listed in the Audit module verification section.
 
-### 3.5 Frontend
+### 4.4 Frontend
 
 - Next.js not yet scaffolded. Not started until backend is complete (build order rule).
 
