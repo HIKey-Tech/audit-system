@@ -78,7 +78,7 @@ export class ReportController {
 
   private async _generateReport(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const report = await this.reportService.generateReport(req.params.id, req.user!);
+      const report = await this.reportService.generateReport(req.params.id, req.body ?? {}, req.user!);
       res.status(201).json(buildResponse(report, 'Audit report generated'));
     } catch (err) {
       next(err);

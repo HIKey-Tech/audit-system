@@ -133,7 +133,7 @@ const ROLES: Array<{
       description: 'Director - read-only audit oversight and report escalation approval',
       isSystem: true,
       permissions: [
-        'audit:read',
+        'audit:read', 'audit:write',
         'finding:read',
         'document:read',
       ],
@@ -153,7 +153,7 @@ const ROLES: Array<{
       description: 'Auditee — views relevant findings and responds',
       isSystem: true,
       permissions: [
-        'audit:read',
+        'audit:read', 'audit:write',
         'finding:read',
         'document:read',
         'notification:read',

@@ -10,7 +10,7 @@ export declare class ReportService implements IReportService {
     private readonly documentService;
     private readonly approvalService;
     constructor(followUpService: IFollowUpService, documentService: IDocumentService, approvalService?: IApprovalService);
-    generateReport(engagementId: string, actor: ActorContext): Promise<ReportResponseDto>;
+    generateReport(engagementId: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
     updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
     submitReportForApproval(id: string, actor: ActorContext): Promise<ReportResponseDto>;
     approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
@@ -19,5 +19,6 @@ export declare class ReportService implements IReportService {
     getReport(engagementId: string): Promise<ReportResponseDto>;
     exportReport(id: string): Promise<ExportedAuditFile>;
     private _getReport;
+    private _assertSubmittedReportHasNoApproval;
 }
 //# sourceMappingURL=report.service.d.ts.map

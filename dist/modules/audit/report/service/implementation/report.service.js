@@ -30,7 +30,7 @@ class ReportService {
         this.documentService = documentService;
         this.approvalService = approvalService;
     }
-    async generateReport(engagementId, actor) {
+    async generateReport(engagementId, dto, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
@@ -46,13 +46,16 @@ class ReportService {
         });
         if (existing)
             throw app_error_1.AppError.conflict('A report already exists for this engagement');
+        const defaultExecutiveSummary = `Generated draft report for ${engagement.title}. Findings count: ${engagement.findings.length}.`;
+        const defaultScope = `Scope based on engagement ${engagement.reference_number}.`;
+        const defaultMethodology = 'Internal audit procedures performed using working papers, evidence, checklist testing, and finding validation.';
         const report = await prisma_client_1.prisma.audit_Report.create({
             data: {
                 engagement_id: engagementId,
                 title: `${engagement.title} Audit Report`,
-                executive_summary: `Generated draft report for ${engagement.title}. Findings count: ${engagement.findings.length}.`,
-                scope: `Scope based on engagement ${engagement.reference_number}.`,
-                methodology: 'Internal audit procedures performed using working papers, evidence, checklist testing, and finding validation.',
+                executive_summary: dto.executiveSummary ?? defaultExecutiveSummary,
+                scope: dto.scope ?? defaultScope,
+                methodology: dto.methodology ?? defaultMethodology,
                 created_by_id: actor.id,
             },
             include: reportInclude,
@@ -89,20 +92,33 @@ class ReportService {
         const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
         if (report.created_by_id !== actor.id && !isAdmin)
             throw app_error_1.AppError.forbidden('Only the creator or audit admin can submit this report');
-        if (report.status !== audit_enum_1.ReportStatus.Draft)
+        if (report.status === audit_enum_1.ReportStatus.Submitted) {
+            await this._assertSubmittedReportHasNoApproval(id);
+        }
+        else if (report.status !== audit_enum_1.ReportStatus.Draft) {
             throw app_error_1.AppError.badRequest('Only draft reports can be submitted');
-        const updated = await prisma_client_1.prisma.audit_Report.update({
-            where: { id },
-            data: { status: audit_enum_1.ReportStatus.Submitted },
-            include: reportInclude,
-        });
-        await this.approvalService.createApproval({
-            entityType: workflow_enum_1.WorkflowEntityType.AuditReport,
-            entityId: id,
-        }, actor);
+        }
+        const { submittedReport, approval } = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const submittedReport = report.status === audit_enum_1.ReportStatus.Draft
+                ? await tx.audit_Report.update({
+                    where: { id },
+                    data: { status: audit_enum_1.ReportStatus.Submitted },
+                    include: reportInclude,
+                })
+                : await tx.audit_Report.findFirstOrThrow({
+                    where: { id, deleted_at: null },
+                    include: reportInclude,
+                });
+            const approval = await this.approvalService.createApproval({
+                entityType: workflow_enum_1.WorkflowEntityType.AuditReport,
+                entityId: id,
+            }, actor, tx);
+            return { submittedReport, approval };
+        }, { timeout: 15000 });
+        this.approvalService.queueApprovalRequiredNotification(approval);
         logger_util_1.logger.info('Audit report submitted', { reportId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.submit', module: 'audit', entityType: 'audit_report', entityId: id });
-        return (0, report_response_dto_1.mapReportToResponse)(updated);
+        return (0, report_response_dto_1.mapReportToResponse)(submittedReport);
     }
     async approveReport(id, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
@@ -226,6 +242,17 @@ class ReportService {
         if (!report)
             throw app_error_1.AppError.notFound('Audit report');
         return report;
+    }
+    async _assertSubmittedReportHasNoApproval(id) {
+        try {
+            await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, id);
+        }
+        catch (err) {
+            if (err instanceof app_error_1.AppError && err.errorCode === app_error_1.ErrorCode.NOT_FOUND)
+                return;
+            throw err;
+        }
+        throw app_error_1.AppError.badRequest('Only draft reports can be submitted');
     }
 }
 exports.ReportService = ReportService;

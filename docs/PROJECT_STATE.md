@@ -2,7 +2,7 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-04-30 (rev 10)
+> Last updated: 2026-04-30 (rev 11)
 
 ---
 
@@ -43,7 +43,7 @@ Folder: `src/modules/user/`
 | User CRUD + soft-delete | Done | `controller/user.controller.ts`, `service/implementation/user.service.ts` |
 | Self-service profile (`/users/me`, `/users/me/change-password`) | Done | `user.controller.ts` |
 | Role assignment / removal | Done | `user.service.ts#assignRoles`, `#removeRole` |
-| RBAC seed (8 roles, 20 permissions) | Done | `prisma/seed.ts` |
+| RBAC seed (8 roles, 20 permissions) | Done | `prisma/seed.ts` — `director` and `cae` include `audit:write` for audit report approval |
 | Module factory | Done | `modules/user/index.ts` — `createUserModule(): Router` |
 
 **Routes mounted by the module:**
@@ -357,6 +357,7 @@ Workflow schema includes:
 - UUID primary keys (`@default(uuid())`).
 - snake_case columns + `@@map("snake_case")` tables.
 - Notification queue migration added via `prisma/migrations/20260430111912_add_notification_queue/`.
+- Document template content widened to `NVARCHAR(max)` via `prisma/migrations/20260430170000_widen_document_template_content/` so seeded DOCX XML templates fit.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
 - Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 

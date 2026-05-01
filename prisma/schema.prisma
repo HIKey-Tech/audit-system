@@ -285,7 +285,7 @@ model Document_Template {
   name          String    @unique
   description   String?
   category      String // working_paper | audit_report | finding | risk_assessment | checklist | policy | procedure
-  content       String? // HTML / markdown / plaintext body (nullable if linked to a binary template via document_id)
+  content       String?   @db.NVarChar(Max) // HTML / markdown / plaintext body (nullable if linked to a binary template via document_id)
   document_id   String?
   metadata      String? // JSON string — placeholders / field definitions
   is_active     Boolean   @default(true)

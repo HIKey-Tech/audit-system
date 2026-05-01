@@ -67,7 +67,7 @@ class ReportController {
     }
     async _generateReport(req, res, next) {
         try {
-            const report = await this.reportService.generateReport(req.params.id, req.user);
+            const report = await this.reportService.generateReport(req.params.id, req.body ?? {}, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(report, 'Audit report generated'));
         }
         catch (err) {

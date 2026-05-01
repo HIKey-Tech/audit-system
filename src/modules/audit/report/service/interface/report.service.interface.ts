@@ -3,7 +3,7 @@ import { UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto } from '../../dto/response/report.response.dto';
 
 export interface IReportService {
-  generateReport(engagementId: string, actor: ActorContext): Promise<ReportResponseDto>;
+  generateReport(engagementId: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
   updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
   submitReportForApproval(id: string, actor: ActorContext): Promise<ReportResponseDto>;
   approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
