@@ -1,0 +1,1 @@
+{"version":3,"file":"dashboard.request.dto.js","sourceRoot":"","sources":["../../../../../src/modules/dashboard/dto/request/dashboard.request.dto.ts"],"names":[],"mappings":";;;AAAA,6BAAwB;AAEX,QAAA,mBAAmB,GAAG,OAAC,CAAC,MAAM,CAAC;IAC1C,KAAK,EAAE,OAAC,CAAC,MAAM,CAAC,MAAM,EAAE,CAAC,GAAG,EAAE,CAAC,QAAQ,EAAE,CAAC,GAAG,CAAC,EAAE,CAAC,CAAC,OAAO,CAAC,EAAE,CAAC;CAC9D,CAAC,CAAC"}

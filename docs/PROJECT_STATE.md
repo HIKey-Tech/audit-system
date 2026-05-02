@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-05-01 (rev 14)
+> Last updated: 2026-05-01 (rev 15)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Dashboard, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
 
 ---
 
@@ -325,7 +325,34 @@ Folder: `src/modules/workflow/`
 - Audit report rejection reason is stored on both `audit_reports.rejection_reason` and `workflow_approvals.rejection_reason` for audit-side and workflow-side reads respectively.
 - Local smoke-test approvals as of 2026-05-01: audit plan approved, audit working paper approved, and audit report approved through all three levels (audit manager -> director -> CAE).
 
-### 2.10 Database schema
+### 2.10 Dashboard module — COMPLETE (services + HTTP routes)
+
+Folder: `src/modules/dashboard/`
+
+- `DashboardService` (singleton export: `dashboardService`) — pure read aggregator; queries data already owned by the Audit, Risk, Workflow, and Logging modules; no new tables, no writes. Methods:
+  - `getAuditSummary(actor)` — engagement counts this year, status breakdown, overdue / due-soon counts, completion rate, plan counts.
+  - `getFindingsSummary(actor)` — total open, severity / status breakdowns, overdue, average days to close (raw `DATEDIFF` SQL), resolved this month.
+  - `getRiskOverview(actor)` — total risks, score-band breakdown (critical 20-25 / high 13-19 / medium 6-12 / low 1-5), status breakdown, top five risks with category + owner names, stale risk count (90-day cutoff).
+  - `getRecentActivity(actor, limit)` — last N audit-log entries scoped to modules audit / workflow / risk / document / user.
+  - `getEscalationOverview(actor)` — count of active escalations (engagement still open or approval still pending), level breakdown, recent 10.
+  - `getMyWork(userId)` — current user's active engagements, current-level pending approval steps, overdue engagements, findings in remediation on engagements they lead.
+  - `getApprovalInboxSummary(userId)` — current-level pending approval-step count for the caller plus oldest-pending days.
+- Role-aware filtering enforced in the service: `super_admin` / `audit_admin` / `director` / `cae` see everything; `audit_lead` / `auditor` see only engagements / activity / escalations they lead; `auditee` sees only findings against them.
+- `DashboardController` + `createDashboardModule()` — mounted at `/api/v1/dashboard`.
+
+**Routes mounted by the module:**
+
+```
+/dashboard/summary               GET     audit:read     — audit programme summary
+/dashboard/findings              GET     finding:read   — findings summary
+/dashboard/risks                 GET     audit:read     — risk overview + top 5
+/dashboard/activity              GET     audit:read     — recent audit-trail entries (limit ≤ 50)
+/dashboard/escalations           GET     audit:read     — active escalations + breakdown
+/dashboard/my-work               GET     audit:read     — caller's personal work bundle
+/dashboard/approval-inbox        GET     audit:read     — caller's approval inbox summary
+```
+
+### 2.11 Database schema
 
 `prisma/schema.prisma` — targets SQL Server.
 
@@ -418,7 +445,7 @@ Workflow schema includes:
 
 ---
 
-### 2.11 Application entry point — COMPLETE
+### 2.12 Application entry point — COMPLETE
 
 `src/server.ts` is wired up. Boot order: validate config → `connectDatabase()` → build Express app → listen → `registerAllJobs()` + `schedulerService.startAll()`. Shutdown order (SIGTERM/SIGINT/uncaughtException/unhandledRejection): stop accepting connections → `schedulerService.stopAll()` → `disconnectDatabase()`, with a 10s force-exit timeout.
 
@@ -426,7 +453,7 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, `createLoggingModule()`, and `createBackgroundModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, `createLoggingModule()`, `createBackgroundModule()`, and `createDashboardModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ---
@@ -456,7 +483,6 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 ### 4.2 Modules entirely missing
 
 - `integration/` — Dynafin, IMOC, Active Directory, Project Plus, Shared Drive adapters.
-- `dashboard/` — analytics, reports, widgets.
 - `predictive/` — risk model, anomaly detection, NLP.
 
 ### 4.3 Tests

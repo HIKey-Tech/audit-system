@@ -1,0 +1,175 @@
+// =============================================================
+// Audit summary
+// =============================================================
+
+export interface EngagementStatusBreakdown {
+  planned: number;
+  in_progress: number;
+  under_review: number;
+  reported: number;
+  closed: number;
+}
+
+export interface AuditSummaryResponseDto {
+  totalEngagementsThisYear: number;
+  byStatus: EngagementStatusBreakdown;
+  overdueEngagements: number;
+  dueSoon: number;
+  completionRate: number;
+  totalPlansThisYear: number;
+  approvedPlans: number;
+}
+
+// =============================================================
+// Findings summary
+// =============================================================
+
+export interface FindingSeverityBreakdown {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+  informational: number;
+}
+
+export interface FindingStatusBreakdown {
+  open: number;
+  management_response_received: number;
+  in_remediation: number;
+  verified: number;
+  closed: number;
+}
+
+export interface FindingsSummaryResponseDto {
+  totalOpen: number;
+  bySeverity: FindingSeverityBreakdown;
+  byStatus: FindingStatusBreakdown;
+  overdue: number;
+  averageDaysToClose: number | null;
+  resolvedThisMonth: number;
+}
+
+// =============================================================
+// Risk overview
+// =============================================================
+
+export interface RiskScoreBandBreakdown {
+  critical: number;
+  high: number;
+  medium: number;
+  low: number;
+}
+
+export interface RiskStatusBreakdown {
+  open: number;
+  mitigated: number;
+  accepted: number;
+  closed: number;
+}
+
+export interface TopRiskItemDto {
+  id: string;
+  title: string;
+  score: number;
+  status: string;
+  categoryName: string;
+  ownerName: string;
+}
+
+export interface RiskOverviewResponseDto {
+  totalRisks: number;
+  byScoreBand: RiskScoreBandBreakdown;
+  byStatus: RiskStatusBreakdown;
+  topFiveRisks: TopRiskItemDto[];
+  staleRisks: number;
+}
+
+// =============================================================
+// Recent activity
+// =============================================================
+
+export interface RecentActivityItemDto {
+  id: string;
+  action: string;
+  module: string;
+  entityType: string | null;
+  entityId: string | null;
+  status: string;
+  userId: string | null;
+  createdAt: string;
+}
+
+// =============================================================
+// Escalation overview
+// =============================================================
+
+export interface EscalationLevelBreakdown {
+  level1: number;
+  level2: number;
+  level3: number;
+  level4: number;
+}
+
+export interface RecentEscalationItemDto {
+  id: string;
+  entityType: string;
+  entityId: string;
+  escalationLevel: number;
+  reason: string;
+  notifiedUserName: string;
+  notifiedAt: string;
+}
+
+export interface EscalationOverviewResponseDto {
+  totalActive: number;
+  byLevel: EscalationLevelBreakdown;
+  recentEscalations: RecentEscalationItemDto[];
+}
+
+// =============================================================
+// My work
+// =============================================================
+
+export interface MyEngagementItemDto {
+  id: string;
+  title: string;
+  referenceNumber: string;
+  status: string;
+  slaDeadline: string;
+  priority: string;
+}
+
+export interface MyPendingApprovalItemDto {
+  stepId: string;
+  approvalId: string;
+  entityType: string;
+  entityId: string;
+  currentLevel: number;
+  createdAt: string;
+}
+
+export interface MyFindingToVerifyDto {
+  id: string;
+  title: string;
+  severity: string;
+  status: string;
+  dueDate: string;
+  engagementId: string;
+  engagementReference: string;
+}
+
+export interface MyWorkResponseDto {
+  myActiveEngagements: MyEngagementItemDto[];
+  myPendingApprovals: MyPendingApprovalItemDto[];
+  myOverdueEngagements: MyEngagementItemDto[];
+  myFindingsToVerify: MyFindingToVerifyDto[];
+}
+
+// =============================================================
+// Approval inbox
+// =============================================================
+
+export interface ApprovalInboxSummaryResponseDto {
+  pendingCount: number;
+  oldestPendingDays: number;
+}

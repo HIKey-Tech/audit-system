@@ -1,0 +1,1 @@
+{"version":3,"file":"dashboard.entity.d.ts","sourceRoot":"","sources":["../../../../../src/modules/dashboard/domain/entity/dashboard.entity.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,qBAAqB;IACpC,EAAE,EAAE,MAAM,CAAC;IACX,KAAK,EAAE,MAAM,EAAE,CAAC;IAChB,WAAW,EAAE,MAAM,EAAE,CAAC;CACvB"}

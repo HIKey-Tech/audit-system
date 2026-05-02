@@ -171,6 +171,7 @@ model Audit_Log {
   @@index([user_id])
   @@index([module])
   @@index([created_at])
+  @@index([module, created_at])
   @@map("audit_logs")
 }
 
@@ -852,7 +853,9 @@ model Workflow_Escalation {
 
   @@index([entity_type])
   @@index([entity_id])
+  @@index([entity_type, entity_id])
   @@index([escalation_level])
+  @@index([escalation_level, notified_at])
   @@index([escalated_to_id])
   @@map("workflow_escalations")
 }
