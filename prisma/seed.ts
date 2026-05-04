@@ -424,6 +424,89 @@ const ROLES: Array<{
     },
   ];
 
+type SeedUser = {
+  email: string;
+  legacyEmail?: string;
+  password: string;
+  firstName: string;
+  lastName: string;
+  department: string;
+  jobTitle: string;
+  roles: string[];
+  isSystemUser?: boolean;
+};
+
+const SEEDED_USERS: SeedUser[] = [
+  {
+    email: 'admin@example.com',
+    password: 'Bello@123456!',
+    firstName: 'Bello',
+    lastName: 'Adesanya',
+    department: 'Internal Audit',
+    jobTitle: 'Chief Audit Executive',
+    roles: ['super_admin', 'audit_admin'],
+    isSystemUser: true,
+  },
+  {
+    email: 'adaeze@gbb.gov.ng',
+    password: 'Adaeze@123456!',
+    firstName: 'Adaeze',
+    lastName: 'Okonkwo',
+    department: 'Internal Audit',
+    jobTitle: 'Audit Manager',
+    roles: ['audit_admin'],
+  },
+  {
+    email: 'tunde@gbb.gov.ng',
+    legacyEmail: 'auditor@gbb.gov.ng',
+    password: 'Tunde@123456!',
+    firstName: 'Tunde',
+    lastName: 'Bakare',
+    department: 'Internal Audit',
+    jobTitle: 'Lead Auditor',
+    roles: ['audit_lead'],
+  },
+  {
+    email: 'chisom@gbb.gov.ng',
+    legacyEmail: 'auditee@gbb.gov.ng',
+    password: 'Chisom@123456!',
+    firstName: 'Chisom',
+    lastName: 'Okafor',
+    department: 'Finance',
+    jobTitle: 'Head of Finance',
+    roles: ['auditee'],
+  },
+  {
+    email: 'ibrahim@gbb.gov.ng',
+    legacyEmail: 'director@gbb.gov.ng',
+    password: 'Ibrahim@123456!',
+    firstName: 'Ibrahim',
+    lastName: 'Musa',
+    department: 'Executive',
+    jobTitle: 'Director',
+    roles: ['director'],
+  },
+  {
+    email: 'fatima@gbb.gov.ng',
+    legacyEmail: 'cae@gbb.gov.ng',
+    password: 'Fatima@123456!',
+    firstName: 'Fatima',
+    lastName: 'Aliyu',
+    department: 'Executive',
+    jobTitle: 'Chief Audit Executive',
+    roles: ['cae'],
+  },
+  {
+    email: 'emeka@gbb.gov.ng',
+    password: 'Emeka@123456!',
+    firstName: 'Emeka',
+    lastName: 'Eze',
+    department: 'Internal Audit',
+    jobTitle: 'Staff Auditor',
+    roles: ['auditor'],
+  },
+];
+
 // ─────────────────────────────────────────────────────────────
 // Seed
 // ─────────────────────────────────────────────────────────────
@@ -466,40 +549,69 @@ async function main(): Promise<void> {
   }
   console.log(`   ✓ ${ROLES.length} roles seeded`);
 
-  // 3. Seed super-admin user (only if it doesn't exist)
-  const adminEmail = process.env.SEED_ADMIN_EMAIL ?? 'admin@example.com';
-  const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@123456!';
+  // 3. Upsert seed users + role assignments
+  let adminUserId = '';
+  for (const seedUser of SEEDED_USERS) {
+    const displayName = `${seedUser.firstName} ${seedUser.lastName}`;
+    const passwordHash = await bcrypt.hash(seedUser.password, 12);
 
-  const existingAdmin = await prisma.user.findUnique({
-    where: { email: adminEmail },
-  });
+    if (seedUser.legacyEmail) {
+      const existingTarget = await prisma.user.findUnique({
+        where: { email: seedUser.email },
+      });
+      const existingLegacy = await prisma.user.findUnique({
+        where: { email: seedUser.legacyEmail },
+      });
 
-  let adminUserId: string;
-  if (!existingAdmin) {
-    const superAdminRole = await prisma.role.findUniqueOrThrow({
-      where: { name: 'super_admin' },
-    });
+      if (!existingTarget && existingLegacy) {
+        await prisma.user.update({
+          where: { id: existingLegacy.id },
+          data: { email: seedUser.email },
+        });
+      }
+    }
 
-    const created = await prisma.user.create({
-      data: {
-        email: adminEmail,
-        first_name: 'Super',
-        last_name: 'Admin',
-        display_name: 'Super Admin',
-        password_hash: await bcrypt.hash(adminPassword, 12),
+    const user = await prisma.user.upsert({
+      where: { email: seedUser.email },
+      create: {
+        email: seedUser.email,
+        first_name: seedUser.firstName,
+        last_name: seedUser.lastName,
+        display_name: displayName,
+        password_hash: passwordHash,
+        department: seedUser.department,
+        job_title: seedUser.jobTitle,
         email_verified: true,
-        is_system_user: true,
+        is_system_user: seedUser.isSystemUser ?? false,
         is_active: true,
-        user_roles: {
-          create: [{ role_id: superAdminRole.id }],
-        },
+      },
+      update: {
+        first_name: seedUser.firstName,
+        last_name: seedUser.lastName,
+        display_name: displayName,
+        password_hash: passwordHash,
+        department: seedUser.department,
+        job_title: seedUser.jobTitle,
+        email_verified: true,
+        is_system_user: seedUser.isSystemUser ?? false,
+        is_active: true,
+        deleted_at: null,
       },
     });
-    adminUserId = created.id;
-    console.log(`   ✓ Super admin created: ${adminEmail}`);
-  } else {
-    adminUserId = existingAdmin.id;
-    console.log(`   – Super admin already exists: ${adminEmail}`);
+    const roles = await prisma.role.findMany({
+      where: { name: { in: seedUser.roles } },
+      select: { id: true, name: true },
+    });
+
+    await prisma.user_Role.deleteMany({ where: { user_id: user.id } });
+    await prisma.user_Role.createMany({
+      data: roles.map((role: { id: string }) => ({ user_id: user.id, role_id: role.id })),
+    });
+
+    if (seedUser.email === 'admin@example.com') {
+      adminUserId = user.id;
+    }
+    console.log(`   - User seeded: ${seedUser.email} (${roles.map((role) => role.name).join(', ')})`);
   }
 
   // 4. Upsert default DOCX export templates

@@ -381,9 +381,26 @@ export class DashboardService {
     actor: DashboardActorContext,
     limit: number,
   ): Promise<RecentActivityItemDto[]> {
+    const HTTP_PREFIXES = ['POST:', 'GET:', 'PUT:', 'PATCH:', 'DELETE:'];
+
     const where: Prisma.Audit_LogWhereInput = {
       module: { in: ACTIVITY_MODULES as unknown as string[] },
       ...(isRestrictedAuditor(actor.roles) ? { user_id: actor.id } : {}),
+      // Exclude raw HTTP request logs — only keep structured service audit logs.
+      // A structured log either has a proper entityType or uses dot.notation for action.
+      AND: [
+        // Reject any action that starts with an HTTP method prefix
+        ...HTTP_PREFIXES.map((prefix) => ({
+          action: { not: { startsWith: prefix } },
+        })),
+        // Accept only logs that have an entityType OR a dot-notation action
+        {
+          OR: [
+            { entity_type: { not: null } },
+            { action: { contains: '.' } },
+          ],
+        },
+      ],
     };
 
     const logs = await prisma.audit_Log.findMany({
