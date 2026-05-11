@@ -30,6 +30,7 @@ import { createRiskModule } from './modules/risk';
 import { createWorkflowModule } from './modules/workflow';
 import { createMessagingModule } from './modules/messaging';
 import { createDashboardModule } from './modules/dashboard';
+import { createSettingsModule } from './modules/settings';
 import {
   createBackgroundModule,
   schedulerService,
@@ -107,6 +108,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createLoggingModule());
   app.use(apiPrefix, createBackgroundModule());
   app.use(apiPrefix, createDashboardModule());
+  app.use(apiPrefix, createSettingsModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);

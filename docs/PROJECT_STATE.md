@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-05-01 (rev 15)
+> Last updated: 2026-05-11 (rev 16)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), Settings module (role admin, working paper templates, report templates, system config), and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
 
 ---
 
@@ -352,7 +352,53 @@ Folder: `src/modules/dashboard/`
 /dashboard/approval-inbox        GET     audit:read     — caller's approval inbox summary
 ```
 
-### 2.11 Database schema
+### 2.11 Settings module - COMPLETE
+
+Folder: `src/modules/settings/`
+
+- `createSettingsModule()` owns the `/api/v1/settings/*` URL space and preserves Phase 1 role/permission administration by wiring the existing user service/controller.
+- `WorkingPaperTemplateService` supports create, update, deactivate, set-default-per-audit-type, default lookup by audit type, single lookup, and paginated listing filtered by `audit_type` and `is_active`.
+- `ReportTemplateService` supports create, update, deactivate, single system default, default lookup, available-variable lookup from the default template, single lookup, and paginated listing filtered by `is_active`.
+- `SystemConfigService` supports private/public config reads, single-key update, and transactional bulk update.
+- SQL Server does not support Prisma `Json`, so template JSON payloads are validated at the API boundary and stored as `NVARCHAR(MAX)` JSON strings, matching the existing metadata/audit-log convention.
+- Seeded defaults: 4 working paper templates (financial, IT, compliance, systems), 1 GBB audit report template, and 10 system config keys.
+
+**Routes mounted by the module:**
+
+```
+/settings/roles                                      GET     settings:read
+/settings/roles/:id                                  GET     settings:read
+/settings/roles                                      POST    settings:manage
+/settings/roles/:id                                  PUT     settings:manage
+/settings/roles/:id                                  DELETE  settings:manage
+/settings/roles/:id/permissions                      PUT     settings:manage
+/settings/permissions                                GET     settings:read
+
+/settings/working-paper-templates                    GET     settings:read
+/settings/working-paper-templates/default/:auditType GET     settings:read
+/settings/working-paper-templates/:id                GET     settings:read
+/settings/working-paper-templates                    POST    settings:manage
+/settings/working-paper-templates/:id                PUT     settings:manage
+/settings/working-paper-templates/:id/set-default    POST    settings:manage
+/settings/working-paper-templates/:id                DELETE  settings:manage
+
+/settings/report-templates                           GET     settings:read
+/settings/report-templates/default                   GET     settings:read
+/settings/report-templates/variables                 GET     settings:read
+/settings/report-templates/:id                       GET     settings:read
+/settings/report-templates                           POST    settings:manage
+/settings/report-templates/:id                       PUT     settings:manage
+/settings/report-templates/:id/set-default           POST    settings:manage
+/settings/report-templates/:id                       DELETE  settings:manage
+
+/settings/config                                     GET     settings:read
+/settings/config/public                              GET     authenticated
+/settings/config/:key                                GET     settings:read
+/settings/config/:key                                PUT     settings:manage
+/settings/config/bulk-update                         POST    settings:manage
+```
+
+### 2.12 Database schema
 
 `prisma/schema.prisma` — targets SQL Server.
 
@@ -376,6 +422,9 @@ Folder: `src/modules/dashboard/`
 | `document_templates` | Named reusable templates (working paper / audit report / finding / etc.). Soft-delete via `deleted_at`. Unique `name`. |
 | `scheduled_jobs` | Background job catalogue + last-run status. |
 | `scheduled_job_runs` | Per-execution history. |
+| `working_paper_templates` | Settings-managed working paper section templates. JSON sections stored as `NVARCHAR(MAX)`. One default enforced per audit type by service transaction. |
+| `report_templates` | Settings-managed audit report templates with section/header/footer/signature/variable JSON stored as `NVARCHAR(MAX)`. One default enforced by service transaction. |
+| `system_config` | Key/value system configuration with public/private visibility and updater tracking. |
 
 **Audit module — schema complete, migrated `20260427083830_add_audit_module_tables`, application services/controllers/routes built:**
 
@@ -440,12 +489,13 @@ Workflow schema includes:
 - Notification queue migration added via `prisma/migrations/20260430111912_add_notification_queue/`.
 - Document template content widened to `NVARCHAR(max)` via `prisma/migrations/20260430170000_widen_document_template_content/` so seeded DOCX XML templates fit.
 - Notification templates table added via `prisma/migrations/20260501191923_add_notification_templates/`.
+- Settings tables added via `prisma/migrations/20260511083936_add_settings_module_tables/`.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
 - Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
 
 ---
 
-### 2.12 Application entry point — COMPLETE
+### 2.13 Application entry point — COMPLETE
 
 `src/server.ts` is wired up. Boot order: validate config → `connectDatabase()` → build Express app → listen → `registerAllJobs()` + `schedulerService.startAll()`. Shutdown order (SIGTERM/SIGINT/uncaughtException/unhandledRejection): stop accepting connections → `schedulerService.stopAll()` → `disconnectDatabase()`, with a 10s force-exit timeout.
 
@@ -453,7 +503,7 @@ App wiring:
 - Security + parsing: `helmet`, `cors` (origin = `config.app.url`, credentials on), `compression`, `cookie-parser`, `express.json`, `express.urlencoded`.
 - Logging: `morgan` (`dev` in dev, `combined` in prod) piped into the Winston logger; `requestAuditLogger` attached globally.
 - Rate limiting: `express-rate-limit` applied to the `/api/<version>` prefix.
-- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, `createLoggingModule()`, `createBackgroundModule()`, and `createDashboardModule()` mounted under `/api/<version>`.
+- Routes: `GET /health`, `GET /docs.json`, `GET /docs` (Swagger UI via `buildOpenApiDocument()`), then `createUserModule()`, `createDocumentModule()`, `createAuditModule()`, `createRiskModule()`, `createWorkflowModule()`, `createMessagingModule()`, `createLoggingModule()`, `createBackgroundModule()`, `createDashboardModule()`, and `createSettingsModule()` mounted under `/api/<version>`.
 - Tail middleware: `notFoundMiddleware`, `errorHandlerMiddleware`.
 
 ---
@@ -471,6 +521,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 | Messaging | 15 in-app notifications, 13 email logs, 18 notification-queue rows, all queue rows `sent` |
 | Documents | 2 seeded document templates, 0 uploaded documents, 0 document versions |
 | Background/logging | 5 scheduled jobs, 303 job-run rows, 145 audit-log rows |
+| Settings | 4 working paper templates, 1 default report template, 10 system config keys |
 
 ---
 

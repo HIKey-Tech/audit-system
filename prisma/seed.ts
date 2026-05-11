@@ -583,6 +583,170 @@ const ROLES: Array<{
   },
 ];
 
+// ------------------------------------------------------------
+// Settings templates and system configuration
+// ------------------------------------------------------------
+type WorkingPaperSectionSeed = {
+  title: string;
+  description: string;
+  placeholder: string;
+  required: boolean;
+};
+
+type ReportSectionSeed = {
+  key: string;
+  title: string;
+  description: string;
+  include_findings: boolean;
+};
+
+type ReportVariableSeed = {
+  key: string;
+  description: string;
+  example: string;
+};
+
+const WORKING_PAPER_TEMPLATES: Array<{
+  name: string;
+  description: string;
+  auditType: string;
+  isDefault: boolean;
+  sections: WorkingPaperSectionSeed[];
+}> = [
+  {
+    name: 'Standard Financial Audit Working Paper',
+    description: 'Default working paper structure for financial audit procedures.',
+    auditType: 'financial',
+    isDefault: true,
+    sections: [
+      { title: 'Audit Objective', description: 'State the specific objective of this working paper', placeholder: 'Describe what this working paper aims to test or verify...', required: true },
+      { title: 'Scope', description: 'Define the scope of testing for this working paper', placeholder: 'Define the transactions, periods, accounts, or systems covered...', required: true },
+      { title: 'Test Procedure', description: 'Describe the testing steps performed', placeholder: 'List the steps taken to test the control or transaction...', required: true },
+      { title: 'Sample Selection', description: 'Document the sample size and selection methodology', placeholder: 'Describe how the sample was selected and the sample size...', required: false },
+      { title: 'Observations', description: 'Record findings and observations from testing', placeholder: 'Document what was observed during testing, including any exceptions...', required: true },
+      { title: 'Conclusion', description: 'State the conclusion based on testing results', placeholder: 'Based on the testing performed, conclude whether the control is operating effectively...', required: true },
+    ],
+  },
+  {
+    name: 'Standard IT Audit Working Paper',
+    description: 'Default working paper structure for IT audit procedures.',
+    auditType: 'it',
+    isDefault: true,
+    sections: [
+      { title: 'Control Objective', description: 'State the IT control objective being tested', placeholder: 'Describe the control objective from the applicable framework (ISO 27001, etc)...', required: true },
+      { title: 'Control Description', description: 'Describe the control being tested', placeholder: 'Describe how the control is designed to operate...', required: true },
+      { title: 'Test Procedure', description: 'Describe the testing steps performed', placeholder: 'List the steps taken to test the control...', required: true },
+      { title: 'Evidence Reviewed', description: 'List all evidence reviewed during testing', placeholder: 'List the documents, logs, screenshots, or configurations reviewed...', required: true },
+      { title: 'Exceptions Noted', description: 'Document any exceptions or control failures identified', placeholder: 'List any instances where the control was not operating as designed...', required: false },
+      { title: 'Risk Rating', description: 'Assess the risk rating of any exceptions found', placeholder: 'If exceptions were noted, rate the risk as Critical, High, Medium, or Low...', required: false },
+      { title: 'Conclusion', description: 'State the conclusion based on testing', placeholder: 'Conclude whether the control is operating effectively...', required: true },
+    ],
+  },
+  {
+    name: 'Standard Compliance Audit Working Paper',
+    description: 'Default working paper structure for compliance audit procedures.',
+    auditType: 'compliance',
+    isDefault: true,
+    sections: [
+      { title: 'Regulatory Requirement', description: 'State the specific regulation or standard being tested', placeholder: 'Cite the specific section of the regulation or standard...', required: true },
+      { title: 'Compliance Criteria', description: 'Define what constitutes compliance', placeholder: 'Describe the criteria that must be met to be compliant...', required: true },
+      { title: 'Test Procedure', description: 'Describe the testing steps', placeholder: 'List the steps taken to assess compliance...', required: true },
+      { title: 'Evidence Reviewed', description: 'List evidence reviewed', placeholder: 'List the policies, procedures, records, or systems reviewed...', required: true },
+      { title: 'Compliance Status', description: 'State whether the requirement is met', placeholder: 'State Compliant, Partially Compliant, or Non-Compliant and explain...', required: true },
+      { title: 'Conclusion', description: 'Overall conclusion', placeholder: 'Summarise the compliance position...', required: true },
+    ],
+  },
+  {
+    name: 'Standard Systems Audit Working Paper',
+    description: 'Default working paper structure for systems audit procedures.',
+    auditType: 'systems',
+    isDefault: true,
+    sections: [
+      { title: 'System Overview', description: 'Describe the system being audited', placeholder: 'Describe the system, its purpose, and its criticality to GBB operations...', required: true },
+      { title: 'Audit Objective', description: 'State the objective', placeholder: 'Describe what aspect of the system is being reviewed...', required: true },
+      { title: 'Test Procedure', description: 'Describe testing steps', placeholder: 'List the technical steps performed to assess the system...', required: true },
+      { title: 'Technical Findings', description: 'Document technical observations', placeholder: 'Document any technical issues, vulnerabilities, or weaknesses identified...', required: false },
+      { title: 'Impact Assessment', description: 'Assess the impact of findings', placeholder: 'Describe the potential impact of any findings on GBB operations...', required: false },
+      { title: 'Conclusion', description: 'Overall conclusion', placeholder: "Conclude on the system's control environment...", required: true },
+    ],
+  },
+];
+
+const REPORT_TEMPLATES: Array<{
+  name: string;
+  description: string;
+  isDefault: boolean;
+  sections: ReportSectionSeed[];
+  availableVariables: ReportVariableSeed[];
+  headerConfig: Record<string, string>;
+  footerConfig: { confidentialityNotice: string; includePageNumbers: boolean };
+  signatureConfig: Record<string, { label: string; showName: boolean; showTitle: boolean; showDate: boolean }>;
+}> = [
+  {
+    name: 'GBB Standard Audit Report',
+    description: 'Default internal audit report structure for Galaxy Backbone Limited.',
+    isDefault: true,
+    sections: [
+      { key: 'executive_summary', title: 'Executive Summary', description: 'High-level summary of the audit for senior management', include_findings: false },
+      { key: 'background', title: 'Background', description: 'Context and background of the audited entity', include_findings: false },
+      { key: 'objectives', title: 'Audit Objectives and Scope', description: 'What the audit set out to achieve and what was covered', include_findings: false },
+      { key: 'methodology', title: 'Audit Methodology', description: 'How the audit was conducted', include_findings: false },
+      { key: 'findings_summary', title: 'Summary of Findings', description: 'Table of all findings with severity ratings', include_findings: true },
+      { key: 'detailed_findings', title: 'Detailed Findings', description: 'Full detail of each finding with recommendations and management responses', include_findings: true },
+      { key: 'conclusion', title: 'Conclusion', description: 'Overall audit conclusion and opinion', include_findings: false },
+    ],
+    availableVariables: [
+      { key: '{{engagementTitle}}', description: 'Title of the audit engagement', example: 'Finance Department Financial Audit 2027' },
+      { key: '{{engagementReference}}', description: 'Engagement reference number', example: 'AUD-2027-001' },
+      { key: '{{auditType}}', description: 'Type of audit', example: 'Financial' },
+      { key: '{{auditPeriod}}', description: 'Period covered by the audit', example: 'Q1 2027 (January - March 2027)' },
+      { key: '{{universeName}}', description: 'Name of the audited entity', example: 'Finance Department' },
+      { key: '{{leadAuditorName}}', description: 'Name of the lead auditor', example: 'Tunde Bakare' },
+      { key: '{{auditManagerName}}', description: 'Name of the audit manager', example: 'Adaeze Okonkwo' },
+      { key: '{{auditeeName}}', description: 'Name of the auditee', example: 'Chisom Okafor' },
+      { key: '{{reportDate}}', description: 'Date the report was issued', example: '30 June 2027' },
+      { key: '{{findingCount}}', description: 'Total number of findings', example: '3' },
+      { key: '{{criticalCount}}', description: 'Number of critical findings', example: '0' },
+      { key: '{{highCount}}', description: 'Number of high findings', example: '1' },
+      { key: '{{mediumCount}}', description: 'Number of medium findings', example: '2' },
+      { key: '{{lowCount}}', description: 'Number of low findings', example: '0' },
+      { key: '{{orgName}}', description: 'Organisation name from system config', example: 'Galaxy Backbone Limited' },
+    ],
+    headerConfig: {
+      orgName: 'Galaxy Backbone Limited',
+      address: 'Plot 1510, Cadastral Zone, Abuja',
+      reportTitle: 'INTERNAL AUDIT REPORT',
+    },
+    footerConfig: {
+      confidentialityNotice: 'This report is confidential and intended solely for the use of Galaxy Backbone Limited Internal Audit Department.',
+      includePageNumbers: true,
+    },
+    signatureConfig: {
+      preparedBy: { label: 'Prepared by', showName: true, showTitle: true, showDate: true },
+      reviewedBy: { label: 'Reviewed by', showName: true, showTitle: true, showDate: true },
+      approvedBy: { label: 'Approved by', showName: true, showTitle: true, showDate: true },
+    },
+  },
+];
+
+const SYSTEM_CONFIGS: Array<{
+  key: string;
+  value: string;
+  description: string;
+  isPublic: boolean;
+}> = [
+  { key: 'org_name', value: 'Galaxy Backbone Limited', description: 'Full organisation name displayed in reports and public metadata.', isPublic: true },
+  { key: 'org_short_name', value: 'GBB', description: 'Short organisation name used in compact UI and references.', isPublic: true },
+  { key: 'org_address', value: 'Plot 1510, Cadastral Zone, Abuja, Nigeria', description: 'Organisation address displayed in report headers.', isPublic: true },
+  { key: 'org_email', value: 'info@galaxybackbone.com.ng', description: 'Organisation contact email.', isPublic: true },
+  { key: 'org_phone', value: '+234 9 291 5555', description: 'Organisation contact phone number.', isPublic: true },
+  { key: 'org_website', value: 'https://galaxybackbone.com.ng', description: 'Organisation website URL.', isPublic: true },
+  { key: 'audit_dept_name', value: 'Internal Audit Department', description: 'Name of the internal audit department.', isPublic: true },
+  { key: 'default_sla_days', value: '30', description: 'Default SLA days for audit engagements.', isPublic: false },
+  { key: 'finding_due_days', value: '90', description: 'Default due days assigned to audit findings.', isPublic: false },
+  { key: 'report_footer_notice', value: 'This report is confidential and intended solely for the use of Galaxy Backbone Limited Internal Audit Department.', description: 'Default confidentiality notice displayed in audit report footers.', isPublic: false },
+];
+
 type SeedUser = {
   email: string;
   legacyEmail?: string;
@@ -863,6 +1027,102 @@ async function main(): Promise<void> {
     });
   }
   logger.info('Notification templates seeded', { count: NOTIFICATION_TEMPLATES.length });
+
+  // 6. Upsert default working paper templates.
+  for (const tpl of WORKING_PAPER_TEMPLATES) {
+    if (tpl.isDefault) {
+      await prisma.working_Paper_Template.updateMany({
+        where: {
+          audit_type: tpl.auditType,
+          name: { not: tpl.name },
+        },
+        data: { is_default: false },
+      });
+    }
+
+    await prisma.working_Paper_Template.upsert({
+      where: { name: tpl.name },
+      create: {
+        name: tpl.name,
+        description: tpl.description,
+        audit_type: tpl.auditType,
+        sections: JSON.stringify(tpl.sections),
+        is_active: true,
+        is_default: tpl.isDefault,
+        created_by_id: adminUserId || null,
+      },
+      update: {
+        description: tpl.description,
+        audit_type: tpl.auditType,
+        sections: JSON.stringify(tpl.sections),
+        is_active: true,
+        is_default: tpl.isDefault,
+        deleted_at: null,
+        updated_by_id: adminUserId || null,
+      },
+    });
+  }
+  logger.info('Working paper templates seeded', { count: WORKING_PAPER_TEMPLATES.length });
+
+  // 7. Upsert default report templates.
+  for (const tpl of REPORT_TEMPLATES) {
+    if (tpl.isDefault) {
+      await prisma.report_Template.updateMany({
+        where: { name: { not: tpl.name } },
+        data: { is_default: false },
+      });
+    }
+
+    await prisma.report_Template.upsert({
+      where: { name: tpl.name },
+      create: {
+        name: tpl.name,
+        description: tpl.description,
+        sections: JSON.stringify(tpl.sections),
+        header_config: JSON.stringify(tpl.headerConfig),
+        footer_config: JSON.stringify(tpl.footerConfig),
+        signature_config: JSON.stringify(tpl.signatureConfig),
+        available_variables: JSON.stringify(tpl.availableVariables),
+        is_active: true,
+        is_default: tpl.isDefault,
+        created_by_id: adminUserId || null,
+      },
+      update: {
+        description: tpl.description,
+        sections: JSON.stringify(tpl.sections),
+        header_config: JSON.stringify(tpl.headerConfig),
+        footer_config: JSON.stringify(tpl.footerConfig),
+        signature_config: JSON.stringify(tpl.signatureConfig),
+        available_variables: JSON.stringify(tpl.availableVariables),
+        is_active: true,
+        is_default: tpl.isDefault,
+        deleted_at: null,
+        updated_by_id: adminUserId || null,
+      },
+    });
+  }
+  logger.info('Report templates seeded', { count: REPORT_TEMPLATES.length });
+
+  // 8. Upsert system configuration keys.
+  for (const cfg of SYSTEM_CONFIGS) {
+    await prisma.system_Config.upsert({
+      where: { key: cfg.key },
+      create: {
+        key: cfg.key,
+        value: cfg.value,
+        description: cfg.description,
+        is_public: cfg.isPublic,
+        updated_by_id: adminUserId || null,
+      },
+      update: {
+        value: cfg.value,
+        description: cfg.description,
+        is_public: cfg.isPublic,
+        updated_by_id: adminUserId || null,
+      },
+    });
+  }
+  logger.info('System configuration seeded', { count: SYSTEM_CONFIGS.length });
 
   logger.info('Seed complete');
 }

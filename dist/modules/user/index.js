@@ -7,7 +7,6 @@ const user_service_1 = require("./service/implementation/user.service");
 const auth_service_1 = require("./service/implementation/auth.service");
 const auth_controller_1 = require("./controller/auth.controller");
 const user_controller_1 = require("./controller/user.controller");
-const settings_controller_1 = require("./controller/settings.controller");
 // Side-effect imports — register OpenAPI paths with the shared registry.
 require("./docs/auth.docs");
 require("./docs/user.docs");
@@ -19,11 +18,9 @@ const createUserModule = () => {
     // Controllers
     const authController = new auth_controller_1.AuthController(authService);
     const userController = new user_controller_1.UserController(userService);
-    const settingsController = new settings_controller_1.SettingsController(userService);
     // Mount
     router.use('/auth', authController.router);
     router.use('/users', userController.router);
-    router.use('/settings', settingsController.router);
     return router;
 };
 exports.createUserModule = createUserModule;

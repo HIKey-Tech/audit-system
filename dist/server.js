@@ -30,6 +30,7 @@ const risk_1 = require("./modules/risk");
 const workflow_1 = require("./modules/workflow");
 const messaging_1 = require("./modules/messaging");
 const dashboard_1 = require("./modules/dashboard");
+const settings_1 = require("./modules/settings");
 const background_1 = require("./modules/background");
 const openapi_util_1 = require("./shared/docs/openapi.util");
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -86,6 +87,7 @@ const buildApp = () => {
     app.use(apiPrefix, (0, logging_1.createLoggingModule)());
     app.use(apiPrefix, (0, background_1.createBackgroundModule)());
     app.use(apiPrefix, (0, dashboard_1.createDashboardModule)());
+    app.use(apiPrefix, (0, settings_1.createSettingsModule)());
     app.use(error_handler_middleware_1.notFoundMiddleware);
     app.use(error_handler_middleware_1.errorHandlerMiddleware);
     return app;

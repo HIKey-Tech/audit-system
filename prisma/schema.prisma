@@ -43,36 +43,41 @@ model User {
   templates_updated Document_Template[] @relation("TemplateUpdatedBy")
 
   // Audit module back-relations
-  universes_owned              Audit_Universe[]         @relation("UniverseOwner")
-  universes_created            Audit_Universe[]         @relation("UniverseCreatedBy")
-  plans_created                Audit_Plan[]             @relation("PlanCreatedBy")
-  plans_approved               Audit_Plan[]             @relation("PlanApprovedBy")
-  engagements_led              Audit_Engagement[]       @relation("EngagementLead")
-  engagements_managed          Audit_Engagement[]       @relation("EngagementManager")
-  engagements_as_auditee       Audit_Engagement[]       @relation("EngagementAuditee")
-  engagements_created          Audit_Engagement[]       @relation("EngagementCreatedBy")
-  working_papers_created       Audit_Working_Paper[]    @relation("WorkingPaperCreatedBy")
-  working_papers_reviewed      Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
-  evidence_uploaded            Audit_Evidence[]         @relation("EvidenceUploadedBy")
-  findings_as_auditee          Audit_Finding[]          @relation("FindingAuditee")
-  findings_created             Audit_Finding[]          @relation("FindingCreatedBy")
-  findings_closed              Audit_Finding[]          @relation("FindingClosedBy")
-  reports_created              Audit_Report[]           @relation("ReportCreatedBy")
-  follow_up_responses          Audit_Follow_Up[]        @relation("FollowUpResponseBy")
-  follow_ups_verified          Audit_Follow_Up[]        @relation("FollowUpVerifiedBy")
-  checklists_tested            Audit_Checklist[]        @relation("ChecklistTestedBy")
-  risk_categories_created      Risk_Category[]          @relation("RiskCategoryCreatedBy")
-  risks_owned                  Risk_Register[]          @relation("RiskOwner")
-  risks_created                Risk_Register[]          @relation("RiskCreatedBy")
-  risk_assessments_done        Risk_Assessment[]        @relation("RiskAssessedBy")
-  workflow_approvals_submitted Workflow_Approval[]      @relation("WorkflowApprovalSubmittedBy")
-  workflow_approval_steps      Workflow_Approval_Step[] @relation("WorkflowApprovalStepApprover")
-  workflow_assignments         Workflow_Assignment[]    @relation("WorkflowAssignmentUser")
-  workflow_assignments_made    Workflow_Assignment[]    @relation("WorkflowAssignmentAssignedBy")
-  workflow_escalations         Workflow_Escalation[]    @relation("WorkflowEscalationEscalatedTo")
-  escalation_policies_created  Escalation_Policy[]      @relation("EscalationPolicyCreatedBy")
-  notification_templates_created Notification_Template[] @relation("NotificationTemplateCreatedBy")
-  notification_templates_updated Notification_Template[] @relation("NotificationTemplateUpdatedBy")
+  universes_owned                 Audit_Universe[]         @relation("UniverseOwner")
+  universes_created               Audit_Universe[]         @relation("UniverseCreatedBy")
+  plans_created                   Audit_Plan[]             @relation("PlanCreatedBy")
+  plans_approved                  Audit_Plan[]             @relation("PlanApprovedBy")
+  engagements_led                 Audit_Engagement[]       @relation("EngagementLead")
+  engagements_managed             Audit_Engagement[]       @relation("EngagementManager")
+  engagements_as_auditee          Audit_Engagement[]       @relation("EngagementAuditee")
+  engagements_created             Audit_Engagement[]       @relation("EngagementCreatedBy")
+  working_papers_created          Audit_Working_Paper[]    @relation("WorkingPaperCreatedBy")
+  working_papers_reviewed         Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
+  evidence_uploaded               Audit_Evidence[]         @relation("EvidenceUploadedBy")
+  findings_as_auditee             Audit_Finding[]          @relation("FindingAuditee")
+  findings_created                Audit_Finding[]          @relation("FindingCreatedBy")
+  findings_closed                 Audit_Finding[]          @relation("FindingClosedBy")
+  reports_created                 Audit_Report[]           @relation("ReportCreatedBy")
+  follow_up_responses             Audit_Follow_Up[]        @relation("FollowUpResponseBy")
+  follow_ups_verified             Audit_Follow_Up[]        @relation("FollowUpVerifiedBy")
+  checklists_tested               Audit_Checklist[]        @relation("ChecklistTestedBy")
+  risk_categories_created         Risk_Category[]          @relation("RiskCategoryCreatedBy")
+  risks_owned                     Risk_Register[]          @relation("RiskOwner")
+  risks_created                   Risk_Register[]          @relation("RiskCreatedBy")
+  risk_assessments_done           Risk_Assessment[]        @relation("RiskAssessedBy")
+  workflow_approvals_submitted    Workflow_Approval[]      @relation("WorkflowApprovalSubmittedBy")
+  workflow_approval_steps         Workflow_Approval_Step[] @relation("WorkflowApprovalStepApprover")
+  workflow_assignments            Workflow_Assignment[]    @relation("WorkflowAssignmentUser")
+  workflow_assignments_made       Workflow_Assignment[]    @relation("WorkflowAssignmentAssignedBy")
+  workflow_escalations            Workflow_Escalation[]    @relation("WorkflowEscalationEscalatedTo")
+  escalation_policies_created     Escalation_Policy[]      @relation("EscalationPolicyCreatedBy")
+  notification_templates_created  Notification_Template[]  @relation("NotificationTemplateCreatedBy")
+  notification_templates_updated  Notification_Template[]  @relation("NotificationTemplateUpdatedBy")
+  working_paper_templates_created Working_Paper_Template[] @relation("WorkingPaperTemplateCreatedBy")
+  working_paper_templates_updated Working_Paper_Template[] @relation("WorkingPaperTemplateUpdatedBy")
+  report_templates_created        Report_Template[]        @relation("ReportTemplateCreatedBy")
+  report_templates_updated        Report_Template[]        @relation("ReportTemplateUpdatedBy")
+  system_configs_updated          System_Config[]          @relation("SystemConfigUpdatedBy")
 
   @@map("users")
 }
@@ -216,17 +221,17 @@ model Email_Log {
 }
 
 model Notification_Queue {
-  id            String    @id @default(uuid())
-  type          String // email | in_app
-  payload       String    @db.NVarChar(Max) // JSON string
-  status        String    @default("pending") // pending | processing | sent | failed
-  attempts      Int       @default(0)
-  max_attempts  Int       @default(3)
-  last_error    String?   @db.NVarChar(Max)
-  scheduled_at  DateTime  @default(now())
-  processed_at  DateTime?
-  created_at    DateTime  @default(now())
-  updated_at    DateTime  @updatedAt
+  id           String    @id @default(uuid())
+  type         String // email | in_app
+  payload      String    @db.NVarChar(Max) // JSON string
+  status       String    @default("pending") // pending | processing | sent | failed
+  attempts     Int       @default(0)
+  max_attempts Int       @default(3)
+  last_error   String?   @db.NVarChar(Max)
+  scheduled_at DateTime  @default(now())
+  processed_at DateTime?
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
 
   @@index([status, scheduled_at])
   @@map("notification_queue")
@@ -879,4 +884,76 @@ model Escalation_Policy {
   @@index([audit_type])
   @@index([is_active])
   @@map("escalation_policies")
+}
+
+// ============================================================
+// SETTINGS MODULE
+//
+// Template JSON shapes are validated in
+// src/modules/settings/dto/request/settings.request.dto.ts.
+//
+//   settings_audit_type : it | financial | compliance | systems | all
+// ============================================================
+
+model Working_Paper_Template {
+  id            String    @id @default(uuid())
+  name          String    @unique
+  description   String?
+  audit_type    String // it | financial | compliance | systems | all
+  sections      String    @db.NVarChar(Max)
+  is_active     Boolean   @default(true)
+  is_default    Boolean   @default(false)
+  created_by_id String?
+  updated_by_id String?
+  created_at    DateTime  @default(now())
+  updated_at    DateTime  @updatedAt
+  deleted_at    DateTime?
+
+  created_by User? @relation("WorkingPaperTemplateCreatedBy", fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updated_by User? @relation("WorkingPaperTemplateUpdatedBy", fields: [updated_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([audit_type])
+  @@index([is_active])
+  @@index([is_default])
+  @@map("working_paper_templates")
+}
+
+model Report_Template {
+  id                  String    @id @default(uuid())
+  name                String    @unique
+  description         String?
+  sections            String    @db.NVarChar(Max)
+  header_config       String?   @db.NVarChar(Max)
+  footer_config       String?   @db.NVarChar(Max)
+  signature_config    String?   @db.NVarChar(Max)
+  available_variables String    @db.NVarChar(Max)
+  is_active           Boolean   @default(true)
+  is_default          Boolean   @default(false)
+  created_by_id       String?
+  updated_by_id       String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  created_by User? @relation("ReportTemplateCreatedBy", fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updated_by User? @relation("ReportTemplateUpdatedBy", fields: [updated_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([is_active])
+  @@index([is_default])
+  @@map("report_templates")
+}
+
+model System_Config {
+  id            String   @id @default(uuid())
+  key           String   @unique
+  value         String?  @db.NVarChar(Max)
+  description   String?
+  is_public     Boolean  @default(false)
+  updated_by_id String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  updated_by User? @relation("SystemConfigUpdatedBy", fields: [updated_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@map("system_config")
 }
