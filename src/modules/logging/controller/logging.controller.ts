@@ -41,7 +41,7 @@ export class LoggingController {
      */
     this.router.get(
       '/summary',
-      requirePermission('log:admin'),
+      requirePermission('log:summary'),
       validate(AuditLogSummaryQuerySchema, 'query'),
       this._getLogSummary.bind(this),
     );

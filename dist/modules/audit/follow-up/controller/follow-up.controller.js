@@ -21,31 +21,31 @@ class FollowUpController {
          * @desc   Submit management response
          * @access Private - audit:write
          */
-        this.router.post('/findings/:id/followup/response', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.ManagementResponseRequestSchema), this._submitManagementResponse.bind(this));
+        this.router.post('/findings/:id/followup/response', (0, auth_middleware_1.requirePermission)('followup:respond'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.ManagementResponseRequestSchema), this._submitManagementResponse.bind(this));
         /**
          * @route  POST /audit/findings/:id/followup/evidence
          * @desc   Submit remediation evidence
          * @access Private - audit:write
          */
-        this.router.post('/findings/:id/followup/evidence', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.RemediationEvidenceRequestSchema), this._submitRemediationEvidence.bind(this));
+        this.router.post('/findings/:id/followup/evidence', (0, auth_middleware_1.requirePermission)('followup:evidence'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.RemediationEvidenceRequestSchema), this._submitRemediationEvidence.bind(this));
         /**
          * @route  POST /audit/findings/:id/followup/verify
          * @desc   Verify remediation
          * @access Private - audit:write
          */
-        this.router.post('/findings/:id/followup/verify', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.VerifyRemediationRequestSchema), this._verifyRemediation.bind(this));
+        this.router.post('/findings/:id/followup/verify', (0, auth_middleware_1.requirePermission)('followup:verify'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.VerifyRemediationRequestSchema), this._verifyRemediation.bind(this));
         /**
          * @route  GET /audit/findings/:id/followup
          * @desc   Get finding follow-up
          * @access Private - audit:read
          */
-        this.router.get('/findings/:id/followup', (0, auth_middleware_1.requirePermission)('audit:read'), this._getFollowUp.bind(this));
+        this.router.get('/findings/:id/followup', (0, auth_middleware_1.requirePermission)('followup:read'), this._getFollowUp.bind(this));
         /**
          * @route  GET /audit/engagements/:id/followups
          * @desc   List pending follow-ups
          * @access Private - audit:read
          */
-        this.router.get('/engagements/:id/followups', (0, auth_middleware_1.requirePermission)('audit:read'), this._listPendingFollowUps.bind(this));
+        this.router.get('/engagements/:id/followups', (0, auth_middleware_1.requirePermission)('followup:read'), this._listPendingFollowUps.bind(this));
     }
     async _submitManagementResponse(req, res, next) {
         try {

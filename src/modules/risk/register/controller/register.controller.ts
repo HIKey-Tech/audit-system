@@ -26,49 +26,49 @@ export class RegisterController {
      * @desc   Create risk register item
      * @access Private - audit:write
      */
-    this.router.post('/', requirePermission('audit:write'), validate(CreateRiskRequestSchema), this._createRisk.bind(this));
+    this.router.post('/', requirePermission('risk:create'), validate(CreateRiskRequestSchema), this._createRisk.bind(this));
 
     /**
      * @route  GET /risk/register
      * @desc   List risk register items
      * @access Private - audit:read
      */
-    this.router.get('/', requirePermission('audit:read'), validate(RiskRegisterQuerySchema, 'query'), this._listRisks.bind(this));
+    this.router.get('/', requirePermission('risk:read'), validate(RiskRegisterQuerySchema, 'query'), this._listRisks.bind(this));
 
     /**
      * @route  GET /risk/register/universe/:universeId
      * @desc   List risks linked to audit universe entity
      * @access Private - audit:read
      */
-    this.router.get('/universe/:universeId', requirePermission('audit:read'), this._getRisksByUniverseEntity.bind(this));
+    this.router.get('/universe/:universeId', requirePermission('risk:read'), this._getRisksByUniverseEntity.bind(this));
 
     /**
      * @route  GET /risk/register/:id
      * @desc   Get risk register item
      * @access Private - audit:read
      */
-    this.router.get('/:id', requirePermission('audit:read'), this._getRiskById.bind(this));
+    this.router.get('/:id', requirePermission('risk:read'), this._getRiskById.bind(this));
 
     /**
      * @route  PUT /risk/register/:id
      * @desc   Update risk register item
      * @access Private - audit:write
      */
-    this.router.put('/:id', requirePermission('audit:write'), validate(UpdateRiskRequestSchema), this._updateRisk.bind(this));
+    this.router.put('/:id', requirePermission('risk:update'), validate(UpdateRiskRequestSchema), this._updateRisk.bind(this));
 
     /**
      * @route  PATCH /risk/register/:id/status
      * @desc   Update risk status
      * @access Private - audit:write
      */
-    this.router.patch('/:id/status', requirePermission('audit:write'), validate(UpdateRiskStatusRequestSchema), this._updateRiskStatus.bind(this));
+    this.router.patch('/:id/status', requirePermission('risk:update'), validate(UpdateRiskStatusRequestSchema), this._updateRiskStatus.bind(this));
 
     /**
      * @route  DELETE /risk/register/:id
      * @desc   Soft-delete risk
      * @access Private - audit:delete
      */
-    this.router.delete('/:id', requirePermission('audit:delete'), this._deleteRisk.bind(this));
+    this.router.delete('/:id', requirePermission('risk:delete'), this._deleteRisk.bind(this));
   }
 
   private async _createRisk(req: Request, res: Response, next: NextFunction): Promise<void> {

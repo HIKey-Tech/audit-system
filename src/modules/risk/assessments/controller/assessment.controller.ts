@@ -24,28 +24,28 @@ export class AssessmentController {
      * @desc   Create risk assessment
      * @access Private - audit:write
      */
-    this.router.post('/register/:id/assessments', requirePermission('audit:write'), validate(CreateRiskAssessmentRequestSchema), this._createAssessment.bind(this));
+    this.router.post('/register/:id/assessments', requirePermission('risk:assess'), validate(CreateRiskAssessmentRequestSchema), this._createAssessment.bind(this));
 
     /**
      * @route  GET /risk/register/:id/assessments
      * @desc   List assessments for a risk
      * @access Private - audit:read
      */
-    this.router.get('/register/:id/assessments', requirePermission('audit:read'), validate(RiskAssessmentQuerySchema, 'query'), this._listAssessments.bind(this));
+    this.router.get('/register/:id/assessments', requirePermission('risk:read'), validate(RiskAssessmentQuerySchema, 'query'), this._listAssessments.bind(this));
 
     /**
      * @route  GET /risk/register/:id/assessments/latest
      * @desc   Get latest assessment for a risk
      * @access Private - audit:read
      */
-    this.router.get('/register/:id/assessments/latest', requirePermission('audit:read'), this._getLatestAssessment.bind(this));
+    this.router.get('/register/:id/assessments/latest', requirePermission('risk:read'), this._getLatestAssessment.bind(this));
 
     /**
      * @route  GET /risk/assessments/:id
      * @desc   Get risk assessment by ID
      * @access Private - audit:read
      */
-    this.router.get('/assessments/:id', requirePermission('audit:read'), this._getAssessmentById.bind(this));
+    this.router.get('/assessments/:id', requirePermission('risk:read'), this._getAssessmentById.bind(this));
   }
 
   private async _createAssessment(req: Request, res: Response, next: NextFunction): Promise<void> {

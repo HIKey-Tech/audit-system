@@ -26,42 +26,42 @@ export class ApprovalController {
      * @desc   Get approval inbox for current user
      * @access Private - audit:read
      */
-    this.router.get('/pending', requirePermission('audit:read'), validate(PendingApprovalQuerySchema, 'query'), this._getPendingApprovals.bind(this));
+    this.router.get('/pending', requirePermission('approval:read'), validate(PendingApprovalQuerySchema, 'query'), this._getPendingApprovals.bind(this));
 
     /**
      * @route  GET /workflow/approvals/entity/:type/:id
      * @desc   Get latest approval for an entity
      * @access Private - audit:read
      */
-    this.router.get('/entity/:type/:id', requirePermission('audit:read'), validate(ApprovalEntityParamsSchema, 'params'), this._getApprovalByEntity.bind(this));
+    this.router.get('/entity/:type/:id', requirePermission('approval:read'), validate(ApprovalEntityParamsSchema, 'params'), this._getApprovalByEntity.bind(this));
 
     /**
      * @route  GET /workflow/approvals/:id
      * @desc   Get workflow approval
      * @access Private - audit:read
      */
-    this.router.get('/:id', requirePermission('audit:read'), this._getApprovalById.bind(this));
+    this.router.get('/:id', requirePermission('approval:read'), this._getApprovalById.bind(this));
 
     /**
      * @route  POST /workflow/approvals/:id/approve
      * @desc   Approve current workflow approval step
      * @access Private - audit:write
      */
-    this.router.post('/:id/approve', requirePermission('audit:write'), validate(ApprovalActionRequestSchema), this._approve.bind(this));
+    this.router.post('/:id/approve', requirePermission('approval:approve'), validate(ApprovalActionRequestSchema), this._approve.bind(this));
 
     /**
      * @route  POST /workflow/approvals/:id/reject
      * @desc   Reject current workflow approval step
      * @access Private - audit:write
      */
-    this.router.post('/:id/reject', requirePermission('audit:write'), validate(RejectApprovalRequestSchema), this._reject.bind(this));
+    this.router.post('/:id/reject', requirePermission('approval:reject'), validate(RejectApprovalRequestSchema), this._reject.bind(this));
 
     /**
      * @route  POST /workflow/approvals/:id/cancel
      * @desc   Cancel pending workflow approval
      * @access Private - audit:admin
      */
-    this.router.post('/:id/cancel', requirePermission('audit:admin'), this._cancel.bind(this));
+    this.router.post('/:id/cancel', requirePermission('approval:cancel'), this._cancel.bind(this));
   }
 
   private async _getPendingApprovals(req: Request, res: Response, next: NextFunction): Promise<void> {

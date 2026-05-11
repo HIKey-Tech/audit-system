@@ -21,31 +21,31 @@ class UniverseController {
          * @desc   Create audit universe entity
          * @access Private - audit:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(universe_request_dto_1.CreateUniverseRequestSchema), this._createEntity.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('universe:create'), (0, validate_middleware_1.validate)(universe_request_dto_1.CreateUniverseRequestSchema), this._createEntity.bind(this));
         /**
          * @route  GET /audit/universe
          * @desc   List audit universe entities
          * @access Private - audit:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(universe_request_dto_1.UniverseQuerySchema, 'query'), this._listEntities.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('universe:read'), (0, validate_middleware_1.validate)(universe_request_dto_1.UniverseQuerySchema, 'query'), this._listEntities.bind(this));
         /**
          * @route  GET /audit/universe/:id
          * @desc   Get audit universe entity
          * @access Private - audit:read
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getEntityById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('universe:read'), this._getEntityById.bind(this));
         /**
          * @route  PUT /audit/universe/:id
          * @desc   Update audit universe entity
          * @access Private - audit:write
          */
-        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(universe_request_dto_1.UpdateUniverseRequestSchema), this._updateEntity.bind(this));
+        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('universe:update'), (0, validate_middleware_1.validate)(universe_request_dto_1.UpdateUniverseRequestSchema), this._updateEntity.bind(this));
         /**
          * @route  DELETE /audit/universe/:id
          * @desc   Deactivate audit universe entity
          * @access Private - audit:delete
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('audit:delete'), this._deactivateEntity.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('universe:delete'), this._deactivateEntity.bind(this));
     }
     async _createEntity(req, res, next) {
         try {

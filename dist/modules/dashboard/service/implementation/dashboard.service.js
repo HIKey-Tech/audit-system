@@ -273,9 +273,25 @@ class DashboardService {
     // Recent activity
     // =============================================================
     async getRecentActivity(actor, limit) {
+        const HTTP_PREFIXES = ['POST:', 'GET:', 'PUT:', 'PATCH:', 'DELETE:'];
         const where = {
             module: { in: ACTIVITY_MODULES },
             ...((0, dashboard_utility_1.isRestrictedAuditor)(actor.roles) ? { user_id: actor.id } : {}),
+            // Exclude raw HTTP request logs — only keep structured service audit logs.
+            // A structured log either has a proper entityType or uses dot.notation for action.
+            AND: [
+                // Reject any action that starts with an HTTP method prefix
+                ...HTTP_PREFIXES.map((prefix) => ({
+                    action: { not: { startsWith: prefix } },
+                })),
+                // Accept only logs that have an entityType OR a dot-notation action
+                {
+                    OR: [
+                        { entity_type: { not: null } },
+                        { action: { contains: '.' } },
+                    ],
+                },
+            ],
         };
         const logs = await prisma_client_1.prisma.audit_Log.findMany({
             where,

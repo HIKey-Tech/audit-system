@@ -11,6 +11,9 @@ export const generateAccessToken = (payload: {
   sub: string;
   email: string;
   displayName: string;
+  roles: string[];
+  permissions: string[];
+  isSuperAdmin: boolean;
 }): string => {
   return jwt.sign(payload, config.jwt.secret, {
     expiresIn: config.jwt.expiresIn,

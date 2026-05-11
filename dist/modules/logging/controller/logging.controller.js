@@ -28,7 +28,7 @@ class LoggingController {
          * @desc   Get audit log aggregate counts grouped by module and status
          * @access Private - log:admin
          */
-        this.router.get('/summary', (0, auth_middleware_1.requirePermission)('log:admin'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogSummaryQuerySchema, 'query'), this._getLogSummary.bind(this));
+        this.router.get('/summary', (0, auth_middleware_1.requirePermission)('log:summary'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogSummaryQuerySchema, 'query'), this._getLogSummary.bind(this));
         /**
          * @route  GET /logs
          * @desc   List audit logs (paginated, filterable, sortable)

@@ -25,28 +25,28 @@ export class EscalationController {
      * @desc   Get escalation history for an entity
      * @access Private - audit:read
      */
-    this.router.get('/escalations/entity/:type/:id', requirePermission('audit:read'), validate(EscalationEntityParamsSchema, 'params'), this._getEscalationHistory.bind(this));
+    this.router.get('/escalations/entity/:type/:id', requirePermission('escalation:read'), validate(EscalationEntityParamsSchema, 'params'), this._getEscalationHistory.bind(this));
 
     /**
      * @route  POST /workflow/escalations/:id/acknowledge
      * @desc   Acknowledge escalation
      * @access Private - audit:write
      */
-    this.router.post('/escalations/:id/acknowledge', requirePermission('audit:write'), this._acknowledgeEscalation.bind(this));
+    this.router.post('/escalations/:id/acknowledge', requirePermission('escalation:acknowledge'), this._acknowledgeEscalation.bind(this));
 
     /**
      * @route  GET /workflow/escalation-policy
      * @desc   Get escalation policy
      * @access Private - audit:read
      */
-    this.router.get('/escalation-policy', requirePermission('audit:read'), validate(EscalationPolicyQuerySchema, 'query'), this._getEscalationPolicy.bind(this));
+    this.router.get('/escalation-policy', requirePermission('escalation_policy:read'), validate(EscalationPolicyQuerySchema, 'query'), this._getEscalationPolicy.bind(this));
 
     /**
      * @route  POST /workflow/escalation-policy
      * @desc   Create or update escalation policy
      * @access Private - audit:admin
      */
-    this.router.post('/escalation-policy', requirePermission('audit:admin'), validate(UpsertEscalationPolicyRequestSchema), this._createOrUpdateEscalationPolicy.bind(this));
+    this.router.post('/escalation-policy', requirePermission('escalation_policy:update'), validate(UpsertEscalationPolicyRequestSchema), this._createOrUpdateEscalationPolicy.bind(this));
   }
 
   private async _getEscalationHistory(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -2,6 +2,7 @@
 
 export interface PermissionResponseDto {
   id: string;
+  slug: string;
   name: string;
   module: string;
   action: string;
@@ -9,6 +10,7 @@ export interface PermissionResponseDto {
 
 export interface PermissionListResponseDto {
   id: string;
+  slug: string;
   name: string;
   module: string;
   action: string;
@@ -30,6 +32,11 @@ export interface RoleListResponseDto {
   permissions: PermissionListResponseDto[];
 }
 
+export interface PermissionGroupResponseDto {
+  module: string;
+  permissions: PermissionListResponseDto[];
+}
+
 export interface UserResponseDto {
   id: string;
   email: string;
@@ -42,6 +49,7 @@ export interface UserResponseDto {
   department: string | null;
   jobTitle: string | null;
   isActive: boolean;
+  isSuperAdmin: boolean;
   lastLoginAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -64,12 +72,14 @@ export interface SsoRedirectResponseDto {
 
 export const mapPermissionToResponse = (permission: {
   id: string;
+  slug: string;
   name: string;
   module: string;
   action: string;
   description: string | null;
 }): PermissionListResponseDto => ({
   id: permission.id,
+  slug: permission.slug,
   name: permission.name,
   module: permission.module,
   action: permission.action,
@@ -84,6 +94,7 @@ export const mapRoleToResponse = (role: {
   role_permissions: Array<{
     permission: {
       id: string;
+      slug: string;
       name: string;
       module: string;
       action: string;
@@ -111,6 +122,7 @@ export const mapUserToResponse = (user: {
   department: string | null;
   job_title: string | null;
   is_active: boolean;
+  is_super_admin: boolean;
   last_login_at: Date | null;
   created_at: Date;
   updated_at: Date;
@@ -120,7 +132,7 @@ export const mapUserToResponse = (user: {
       name: string;
       description: string | null;
       role_permissions: Array<{
-        permission: { id: string; name: string; module: string; action: string };
+        permission: { id: string; slug: string; name: string; module: string; action: string };
       }>;
     };
   }>;
@@ -131,6 +143,7 @@ export const mapUserToResponse = (user: {
     description: ur.role.description,
     permissions: ur.role.role_permissions.map((rp) => ({
       id: rp.permission.id,
+      slug: rp.permission.slug,
       name: rp.permission.name,
       module: rp.permission.module,
       action: rp.permission.action,
@@ -138,7 +151,7 @@ export const mapUserToResponse = (user: {
   }));
 
   const permissions = [
-    ...new Set(roles.flatMap((r) => r.permissions.map((p) => p.name))),
+    ...new Set(roles.flatMap((r) => r.permissions.map((p) => p.slug))),
   ];
 
   return {
@@ -153,6 +166,7 @@ export const mapUserToResponse = (user: {
     department: user.department,
     jobTitle: user.job_title,
     isActive: user.is_active,
+    isSuperAdmin: user.is_super_admin,
     lastLoginAt: user.last_login_at?.toISOString() ?? null,
     createdAt: user.created_at.toISOString(),
     updatedAt: user.updated_at.toISOString(),

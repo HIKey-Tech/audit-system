@@ -1,5 +1,5 @@
-import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto } from '../../dto/request/user.request.dto';
-import { UserResponseDto, RoleListResponseDto, PermissionListResponseDto } from '../../dto/response/user.response.dto';
+import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
+import { UserResponseDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 export interface IUserService {
     createUser(dto: CreateUserRequestDto, actorId: string): Promise<UserResponseDto>;
@@ -14,6 +14,12 @@ export interface IUserService {
         meta: PaginationMeta;
     }>;
     listPermissions(): Promise<PermissionListResponseDto[]>;
+    getRoleById(id: string): Promise<RoleListResponseDto>;
+    createRole(dto: CreateRoleRequestDto, actorId: string): Promise<RoleListResponseDto>;
+    updateRole(id: string, dto: UpdateRoleRequestDto, actorId: string): Promise<RoleListResponseDto>;
+    deleteRole(id: string, actorId: string): Promise<void>;
+    replaceRolePermissions(id: string, dto: ReplaceRolePermissionsRequestDto, actorId: string): Promise<RoleListResponseDto>;
+    listPermissionsGroupedByModule(): Promise<PermissionGroupResponseDto[]>;
     updateUser(id: string, dto: UpdateUserRequestDto, actorId: string): Promise<UserResponseDto>;
     deleteUser(id: string, actorId: string): Promise<void>;
     assignRoles(userId: string, dto: AssignRoleRequestDto, actorId: string): Promise<UserResponseDto>;

@@ -21,37 +21,37 @@ class EngagementController {
          * @desc   Create engagement from plan item
          * @access Private - audit:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(engagement_request_dto_1.CreateEngagementFromPlanRequestSchema), this._createFromPlanItem.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('engagement:create'), (0, validate_middleware_1.validate)(engagement_request_dto_1.CreateEngagementFromPlanRequestSchema), this._createFromPlanItem.bind(this));
         /**
          * @route  POST /audit/engagements/adhoc
          * @desc   Create ad-hoc engagement
          * @access Private - audit:write
          */
-        this.router.post('/adhoc', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(engagement_request_dto_1.CreateAdhocEngagementRequestSchema), this._createAdhoc.bind(this));
+        this.router.post('/adhoc', (0, auth_middleware_1.requirePermission)('engagement:create'), (0, validate_middleware_1.validate)(engagement_request_dto_1.CreateAdhocEngagementRequestSchema), this._createAdhoc.bind(this));
         /**
          * @route  GET /audit/engagements
          * @desc   List engagements
          * @access Private - audit:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(engagement_request_dto_1.EngagementQuerySchema, 'query'), this._listEngagements.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('engagement:read'), (0, validate_middleware_1.validate)(engagement_request_dto_1.EngagementQuerySchema, 'query'), this._listEngagements.bind(this));
         /**
          * @route  GET /audit/engagements/:id
          * @desc   Get engagement
          * @access Private - audit:read
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getEngagementById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('engagement:read'), this._getEngagementById.bind(this));
         /**
          * @route  PUT /audit/engagements/:id
          * @desc   Update engagement
          * @access Private - audit:write
          */
-        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(engagement_request_dto_1.UpdateEngagementRequestSchema), this._updateEngagement.bind(this));
+        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('engagement:update'), (0, validate_middleware_1.validate)(engagement_request_dto_1.UpdateEngagementRequestSchema), this._updateEngagement.bind(this));
         /**
          * @route  PATCH /audit/engagements/:id/status
          * @desc   Update engagement status
          * @access Private - audit:write
          */
-        this.router.patch('/:id/status', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(engagement_request_dto_1.UpdateEngagementStatusRequestSchema), this._updateStatus.bind(this));
+        this.router.patch('/:id/status', (0, auth_middleware_1.requirePermission)('engagement:update'), (0, validate_middleware_1.validate)(engagement_request_dto_1.UpdateEngagementStatusRequestSchema), this._updateStatus.bind(this));
     }
     async _createFromPlanItem(req, res, next) {
         try {

@@ -21,25 +21,25 @@ class MonitoringController {
          * @desc   List high-risk register items
          * @access Private - audit:read
          */
-        this.router.get('/monitoring/high-risk', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(monitoring_request_dto_1.HighRiskQuerySchema, 'query'), this._getHighRiskItems.bind(this));
+        this.router.get('/monitoring/high-risk', (0, auth_middleware_1.requirePermission)('risk_monitoring:read'), (0, validate_middleware_1.validate)(monitoring_request_dto_1.HighRiskQuerySchema, 'query'), this._getHighRiskItems.bind(this));
         /**
          * @route  GET /risk/monitoring/attention-required
          * @desc   List risks requiring assessment attention
          * @access Private - audit:read
          */
-        this.router.get('/monitoring/attention-required', (0, auth_middleware_1.requirePermission)('audit:read'), this._getRisksRequiringAttention.bind(this));
+        this.router.get('/monitoring/attention-required', (0, auth_middleware_1.requirePermission)('risk_monitoring:read'), this._getRisksRequiringAttention.bind(this));
         /**
          * @route  GET /risk/monitoring/summary
          * @desc   Get organization risk summary
          * @access Private - audit:read
          */
-        this.router.get('/monitoring/summary', (0, auth_middleware_1.requirePermission)('audit:read'), this._getOrganizationRiskSummary.bind(this));
+        this.router.get('/monitoring/summary', (0, auth_middleware_1.requirePermission)('risk_monitoring:read'), this._getOrganizationRiskSummary.bind(this));
         /**
          * @route  GET /risk/register/:id/trend
          * @desc   Get risk score trend
          * @access Private - audit:read
          */
-        this.router.get('/register/:id/trend', (0, auth_middleware_1.requirePermission)('audit:read'), this._getRiskScoreTrend.bind(this));
+        this.router.get('/register/:id/trend', (0, auth_middleware_1.requirePermission)('risk:read'), this._getRiskScoreTrend.bind(this));
     }
     async _getHighRiskItems(req, res, next) {
         try {

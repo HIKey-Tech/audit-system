@@ -15,11 +15,15 @@ import {
   ChangePasswordRequestDto,
   UserQueryDto,
   RoleQueryDto,
+  CreateRoleRequestDto,
+  UpdateRoleRequestDto,
+  ReplaceRolePermissionsRequestDto,
 } from '../../dto/request/user.request.dto';
 import {
   UserResponseDto,
   RoleListResponseDto,
   PermissionListResponseDto,
+  PermissionGroupResponseDto,
   mapUserToResponse,
   mapRoleToResponse,
   mapPermissionToResponse,
@@ -41,6 +45,14 @@ export class UserService implements IUserService {
       throw AppError.conflict(`User with email '${dto.email}' already exists`);
     }
 
+    const assignedRoles = dto.roleIds?.length
+      ? await prisma.role.findMany({ where: { id: { in: dto.roleIds } } })
+      : [];
+
+    if (dto.roleIds?.length && assignedRoles.length !== dto.roleIds.length) {
+      throw AppError.badRequest('One or more role IDs are invalid');
+    }
+
     const password_hash = dto.password
       ? await hashPassword(dto.password)
       : null;
@@ -55,6 +67,7 @@ export class UserService implements IUserService {
         department: dto.department,
         job_title: dto.jobTitle,
         password_hash,
+        is_super_admin: assignedRoles.some((role) => role.name === 'super_admin'),
         ...(dto.roleIds?.length
           ? {
               user_roles: {
@@ -143,7 +156,7 @@ export class UserService implements IUserService {
         include: {
           role_permissions: {
             include: { permission: true },
-            orderBy: { permission: { name: 'asc' } },
+            orderBy: { permission: { slug: 'asc' } },
           },
         },
         orderBy: { [query.sortBy]: query.sortOrder },
@@ -163,11 +176,167 @@ export class UserService implements IUserService {
       orderBy: [
         { module: 'asc' },
         { action: 'asc' },
-        { name: 'asc' },
+        { slug: 'asc' },
       ],
     });
 
     return permissions.map(mapPermissionToResponse);
+  }
+
+  async getRoleById(id: string): Promise<RoleListResponseDto> {
+    const role = await prisma.role.findUnique({
+      where: { id },
+      include: {
+        role_permissions: {
+          include: { permission: true },
+          orderBy: { permission: { slug: 'asc' } },
+        },
+      },
+    });
+
+    if (!role) throw AppError.notFound('Role');
+    return mapRoleToResponse(role);
+  }
+
+  async createRole(
+    dto: CreateRoleRequestDto,
+    actorId: string,
+  ): Promise<RoleListResponseDto> {
+    const existing = await prisma.role.findUnique({ where: { name: dto.name } });
+    if (existing) {
+      throw AppError.conflict(`Role with name '${dto.name}' already exists`);
+    }
+
+    await this._assertPermissionsExist(dto.permissionIds ?? []);
+
+    const role = await prisma.role.create({
+      data: {
+        name: dto.name,
+        description: dto.description,
+        is_system: false,
+        ...(dto.permissionIds?.length
+          ? {
+              role_permissions: {
+                create: dto.permissionIds.map((permissionId) => ({
+                  permission_id: permissionId,
+                })),
+              },
+            }
+          : {}),
+      },
+      include: {
+        role_permissions: {
+          include: { permission: true },
+          orderBy: { permission: { slug: 'asc' } },
+        },
+      },
+    });
+
+    logger.info('Role created', { roleId: role.id, actorId });
+    return mapRoleToResponse(role);
+  }
+
+  async updateRole(
+    id: string,
+    dto: UpdateRoleRequestDto,
+    actorId: string,
+  ): Promise<RoleListResponseDto> {
+    const existing = await prisma.role.findUnique({ where: { id } });
+    if (!existing) throw AppError.notFound('Role');
+
+    if (dto.name && dto.name !== existing.name) {
+      const nameOwner = await prisma.role.findUnique({ where: { name: dto.name } });
+      if (nameOwner) {
+        throw AppError.conflict(`Role with name '${dto.name}' already exists`);
+      }
+    }
+
+    const role = await prisma.role.update({
+      where: { id },
+      data: {
+        ...(dto.name !== undefined && { name: dto.name }),
+        ...(dto.description !== undefined && { description: dto.description }),
+      },
+      include: {
+        role_permissions: {
+          include: { permission: true },
+          orderBy: { permission: { slug: 'asc' } },
+        },
+      },
+    });
+
+    logger.info('Role updated', { roleId: id, actorId });
+    return mapRoleToResponse(role);
+  }
+
+  async deleteRole(id: string, actorId: string): Promise<void> {
+    const role = await prisma.role.findUnique({
+      where: { id },
+      select: { id: true, is_system: true },
+    });
+    if (!role) throw AppError.notFound('Role');
+
+    if (role.is_system) {
+      throw AppError.badRequest('System roles cannot be deleted');
+    }
+
+    const assignedUsers = await prisma.user_Role.count({ where: { role_id: id } });
+    if (assignedUsers > 0) {
+      throw AppError.conflict('Role cannot be deleted while assigned to users');
+    }
+
+    await prisma.role.delete({ where: { id } });
+    logger.info('Role deleted', { roleId: id, actorId });
+  }
+
+  async replaceRolePermissions(
+    id: string,
+    dto: ReplaceRolePermissionsRequestDto,
+    actorId: string,
+  ): Promise<RoleListResponseDto> {
+    const role = await prisma.role.findUnique({ where: { id }, select: { id: true } });
+    if (!role) throw AppError.notFound('Role');
+
+    await this._assertPermissionsExist(dto.permissionIds);
+
+    await prisma.$transaction([
+      prisma.role_Permission.deleteMany({ where: { role_id: id } }),
+      prisma.role_Permission.createMany({
+        data: dto.permissionIds.map((permissionId) => ({
+          role_id: id,
+          permission_id: permissionId,
+        })),
+      }),
+    ]);
+
+    logger.info('Role permissions replaced', {
+      roleId: id,
+      permissionIds: dto.permissionIds,
+      actorId,
+    });
+    return this.getRoleById(id);
+  }
+
+  async listPermissionsGroupedByModule(): Promise<PermissionGroupResponseDto[]> {
+    const permissions = await prisma.permission.findMany({
+      orderBy: [
+        { module: 'asc' },
+        { action: 'asc' },
+        { slug: 'asc' },
+      ],
+    });
+
+    const grouped = new Map<string, PermissionListResponseDto[]>();
+    for (const permission of permissions) {
+      const current = grouped.get(permission.module) ?? [];
+      current.push(mapPermissionToResponse(permission));
+      grouped.set(permission.module, current);
+    }
+
+    return [...grouped.entries()].map(([module, modulePermissions]) => ({
+      module,
+      permissions: modulePermissions,
+    }));
   }
 
   async updateUser(
@@ -242,6 +411,7 @@ export class UserService implements IUserService {
     );
 
     logger.info('Roles assigned', { userId, roleIds: dto.roleIds, actorId });
+    await this._syncUserSuperAdminFlag(userId);
     return this.getUserById(userId);
   }
 
@@ -255,6 +425,7 @@ export class UserService implements IUserService {
     });
 
     logger.info('Role removed from user', { userId, roleId, actorId });
+    await this._syncUserSuperAdminFlag(userId);
     return this.getUserById(userId);
   }
 
@@ -361,5 +532,34 @@ export class UserService implements IUserService {
       select: { id: true },
     });
     if (!user) throw AppError.notFound('User');
+  }
+
+  private async _assertPermissionsExist(permissionIds: string[]): Promise<void> {
+    if (permissionIds.length === 0) return;
+
+    const permissions = await prisma.permission.findMany({
+      where: { id: { in: permissionIds } },
+      select: { id: true },
+    });
+
+    if (permissions.length !== permissionIds.length) {
+      throw AppError.badRequest('One or more permission IDs are invalid');
+    }
+  }
+
+  private async _syncUserSuperAdminFlag(userId: string): Promise<void> {
+    const superAdminRole = await prisma.user_Role.findFirst({
+      where: {
+        user_id: userId,
+        role: { name: 'super_admin' },
+        OR: [{ expires_at: null }, { expires_at: { gt: new Date() } }],
+      },
+      select: { id: true },
+    });
+
+    await prisma.user.update({
+      where: { id: userId },
+      data: { is_super_admin: Boolean(superAdminRole) },
+    });
   }
 }

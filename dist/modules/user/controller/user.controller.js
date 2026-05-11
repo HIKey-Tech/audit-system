@@ -41,13 +41,13 @@ class UserController {
          * @desc   List all users (paginated)
          * @access Private — user:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('user:read'), (0, validate_middleware_1.validate)(user_request_dto_1.UserQuerySchema, 'query'), this._listUsers.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('role:read'), (0, validate_middleware_1.validate)(user_request_dto_1.UserQuerySchema, 'query'), this._listUsers.bind(this));
         /**
          * @route  GET /users/roles
          * @desc   List all roles with permissions (paginated)
          * @access Private — user:read
          */
-        this.router.get('/roles', (0, auth_middleware_1.requirePermission)('user:read'), (0, validate_middleware_1.validate)(user_request_dto_1.RoleQuerySchema, 'query'), this._listRoles.bind(this));
+        this.router.get('/roles', (0, auth_middleware_1.requirePermission)('permission:read'), (0, validate_middleware_1.validate)(user_request_dto_1.RoleQuerySchema, 'query'), this._listRoles.bind(this));
         /**
          * @route  GET /users/permissions
          * @desc   List all permissions
@@ -59,7 +59,7 @@ class UserController {
          * @desc   Create a user
          * @access Private — user:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('user:write'), (0, validate_middleware_1.validate)(user_request_dto_1.CreateUserRequestSchema), this._createUser.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('user:create'), (0, validate_middleware_1.validate)(user_request_dto_1.CreateUserRequestSchema), this._createUser.bind(this));
         /**
          * @route  GET /users/:id
          * @desc   Get user by ID
@@ -71,7 +71,7 @@ class UserController {
          * @desc   Update user by ID
          * @access Private — user:write
          */
-        this.router.patch('/:id', (0, auth_middleware_1.requirePermission)('user:write'), (0, validate_middleware_1.validate)(user_request_dto_1.UpdateUserRequestSchema), this._updateUser.bind(this));
+        this.router.patch('/:id', (0, auth_middleware_1.requirePermission)('user:update'), (0, validate_middleware_1.validate)(user_request_dto_1.UpdateUserRequestSchema), this._updateUser.bind(this));
         /**
          * @route  DELETE /users/:id
          * @desc   Soft-delete user
@@ -83,13 +83,13 @@ class UserController {
          * @desc   Assign roles to user
          * @access Private — user:admin
          */
-        this.router.put('/:id/roles', (0, auth_middleware_1.requirePermission)('user:admin'), (0, validate_middleware_1.validate)(user_request_dto_1.AssignRoleRequestSchema), this._assignRoles.bind(this));
+        this.router.put('/:id/roles', (0, auth_middleware_1.requirePermission)('role:assign'), (0, validate_middleware_1.validate)(user_request_dto_1.AssignRoleRequestSchema), this._assignRoles.bind(this));
         /**
          * @route  DELETE /users/:id/roles/:roleId
          * @desc   Remove role from user
          * @access Private — user:admin
          */
-        this.router.delete('/:id/roles/:roleId', (0, auth_middleware_1.requirePermission)('user:admin'), this._removeRole.bind(this));
+        this.router.delete('/:id/roles/:roleId', (0, auth_middleware_1.requirePermission)('role:assign'), this._removeRole.bind(this));
     }
     async _getMe(req, res, next) {
         try {

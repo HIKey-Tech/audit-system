@@ -27,31 +27,31 @@ class EvidenceController {
          * @desc   Upload audit evidence
          * @access Private - audit:write
          */
-        this.router.post('/engagements/:id/evidence', (0, auth_middleware_1.requirePermission)('audit:write'), upload.single('file'), (0, validate_middleware_1.validate)(evidence_request_dto_1.UploadEvidenceMetadataSchema), this._uploadEvidence.bind(this));
+        this.router.post('/engagements/:id/evidence', (0, auth_middleware_1.requirePermission)('evidence:upload'), upload.single('file'), (0, validate_middleware_1.validate)(evidence_request_dto_1.UploadEvidenceMetadataSchema), this._uploadEvidence.bind(this));
         /**
          * @route  GET /audit/engagements/:id/evidence
          * @desc   List audit evidence
          * @access Private - audit:read
          */
-        this.router.get('/engagements/:id/evidence', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(evidence_request_dto_1.EvidenceQuerySchema, 'query'), this._listEvidence.bind(this));
+        this.router.get('/engagements/:id/evidence', (0, auth_middleware_1.requirePermission)('evidence:read'), (0, validate_middleware_1.validate)(evidence_request_dto_1.EvidenceQuerySchema, 'query'), this._listEvidence.bind(this));
         /**
          * @route  POST /audit/evidence/:id/link/working-paper/:wpId
          * @desc   Link evidence to working paper
          * @access Private - audit:write
          */
-        this.router.post('/evidence/:id/link/working-paper/:wpId', (0, auth_middleware_1.requirePermission)('audit:write'), this._linkToWorkingPaper.bind(this));
+        this.router.post('/evidence/:id/link/working-paper/:wpId', (0, auth_middleware_1.requirePermission)('evidence:upload'), this._linkToWorkingPaper.bind(this));
         /**
          * @route  POST /audit/evidence/:id/link/finding/:findingId
          * @desc   Link evidence to finding
          * @access Private - audit:write
          */
-        this.router.post('/evidence/:id/link/finding/:findingId', (0, auth_middleware_1.requirePermission)('audit:write'), this._linkToFinding.bind(this));
+        this.router.post('/evidence/:id/link/finding/:findingId', (0, auth_middleware_1.requirePermission)('evidence:upload'), this._linkToFinding.bind(this));
         /**
          * @route  POST /audit/evidence/:id/dispute
          * @desc   Dispute evidence
          * @access Private - audit:admin
          */
-        this.router.post('/evidence/:id/dispute', (0, auth_middleware_1.requirePermission)('audit:admin'), (0, validate_middleware_1.validate)(evidence_request_dto_1.DisputeEvidenceRequestSchema), this._disputeEvidence.bind(this));
+        this.router.post('/evidence/:id/dispute', (0, auth_middleware_1.requirePermission)('evidence:dispute'), (0, validate_middleware_1.validate)(evidence_request_dto_1.DisputeEvidenceRequestSchema), this._disputeEvidence.bind(this));
     }
     async _uploadEvidence(req, res, next) {
         try {

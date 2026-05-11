@@ -21,25 +21,25 @@ class ChecklistController {
          * @desc   Get engagement checklists
          * @access Private - audit:read
          */
-        this.router.get('/engagements/:id/checklists', (0, auth_middleware_1.requirePermission)('audit:read'), this._getChecklists.bind(this));
+        this.router.get('/engagements/:id/checklists', (0, auth_middleware_1.requirePermission)('checklist:read'), this._getChecklists.bind(this));
         /**
          * @route  GET /audit/engagements/:id/checklists/progress
          * @desc   Get checklist progress
          * @access Private - audit:read
          */
-        this.router.get('/engagements/:id/checklists/progress', (0, auth_middleware_1.requirePermission)('audit:read'), this._getChecklistProgress.bind(this));
+        this.router.get('/engagements/:id/checklists/progress', (0, auth_middleware_1.requirePermission)('checklist:read'), this._getChecklistProgress.bind(this));
         /**
          * @route  PATCH /audit/checklists/:id
          * @desc   Update checklist item
          * @access Private - audit:write
          */
-        this.router.patch('/checklists/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(checklist_request_dto_1.UpdateChecklistItemRequestSchema), this._updateChecklistItem.bind(this));
+        this.router.patch('/checklists/:id', (0, auth_middleware_1.requirePermission)('checklist:update'), (0, validate_middleware_1.validate)(checklist_request_dto_1.UpdateChecklistItemRequestSchema), this._updateChecklistItem.bind(this));
         /**
          * @route  POST /audit/checklists/:id/evidence/:evidenceId
          * @desc   Link evidence to checklist item
          * @access Private - audit:write
          */
-        this.router.post('/checklists/:id/evidence/:evidenceId', (0, auth_middleware_1.requirePermission)('audit:write'), this._linkEvidenceToChecklistItem.bind(this));
+        this.router.post('/checklists/:id/evidence/:evidenceId', (0, auth_middleware_1.requirePermission)('checklist:update'), this._linkEvidenceToChecklistItem.bind(this));
     }
     async _getChecklists(req, res, next) {
         try {

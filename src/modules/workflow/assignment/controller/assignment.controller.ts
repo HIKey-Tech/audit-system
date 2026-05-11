@@ -24,35 +24,35 @@ export class AssignmentController {
      * @desc   Assign staff to an engagement
      * @access Private - audit:write
      */
-    this.router.post('/', requirePermission('audit:write'), validate(AssignStaffRequestSchema), this._assignStaff.bind(this));
+    this.router.post('/', requirePermission('assignment:create'), validate(AssignStaffRequestSchema), this._assignStaff.bind(this));
 
     /**
      * @route  GET /workflow/assignments/engagement/:id
      * @desc   Get engagement assignments
      * @access Private - audit:read
      */
-    this.router.get('/engagement/:id', requirePermission('audit:read'), this._getAssignments.bind(this));
+    this.router.get('/engagement/:id', requirePermission('assignment:read'), this._getAssignments.bind(this));
 
     /**
      * @route  GET /workflow/assignments/mine
      * @desc   Get current user's assignments
      * @access Private - audit:read
      */
-    this.router.get('/mine', requirePermission('audit:read'), validate(MyAssignmentsQuerySchema, 'query'), this._getMyAssignments.bind(this));
+    this.router.get('/mine', requirePermission('assignment:read'), validate(MyAssignmentsQuerySchema, 'query'), this._getMyAssignments.bind(this));
 
     /**
      * @route  GET /workflow/assignments/workload/:userId
      * @desc   Get user workload
      * @access Private - audit:read
      */
-    this.router.get('/workload/:userId', requirePermission('audit:read'), this._getUserWorkload.bind(this));
+    this.router.get('/workload/:userId', requirePermission('assignment:read'), this._getUserWorkload.bind(this));
 
     /**
      * @route  DELETE /workflow/assignments/:id
      * @desc   Remove assignment
      * @access Private - audit:write
      */
-    this.router.delete('/:id', requirePermission('audit:write'), this._removeAssignment.bind(this));
+    this.router.delete('/:id', requirePermission('assignment:delete'), this._removeAssignment.bind(this));
   }
 
   private async _assignStaff(req: Request, res: Response, next: NextFunction): Promise<void> {

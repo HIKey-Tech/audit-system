@@ -5,6 +5,7 @@ export interface AuthenticatedUser {
     displayName: string;
     roles: string[];
     permissions: string[];
+    isSuperAdmin: boolean;
 }
 declare global {
     namespace Express {
@@ -17,6 +18,9 @@ export interface JwtPayload {
     sub: string;
     email: string;
     displayName: string;
+    roles: string[];
+    permissions: string[];
+    isSuperAdmin: boolean;
     iat: number;
     exp: number;
 }

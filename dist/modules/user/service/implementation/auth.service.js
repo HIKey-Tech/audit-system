@@ -111,20 +111,9 @@ class AuthService {
             // issuance commit atomically.
             const userForToken = await tx.user.findUniqueOrThrow({
                 where: { id: storedToken.user_id },
-                select: {
-                    id: true,
-                    email: true,
-                    display_name: true,
-                    first_name: true,
-                    last_name: true,
-                },
+                include: prisma_types_1.userWithRolesInclude,
             });
-            const accessToken = (0, token_utility_1.generateAccessToken)({
-                sub: userForToken.id,
-                email: userForToken.email,
-                displayName: userForToken.display_name ??
-                    `${userForToken.first_name} ${userForToken.last_name}`,
-            });
+            const accessToken = this._generateUserAccessToken(userForToken);
             const { raw, hash, expiresAt } = (0, token_utility_1.generateRefreshToken)();
             await tx.refresh_Token.create({
                 data: {
@@ -154,13 +143,9 @@ class AuthService {
     async _issueTokens(userId, ipAddress, userAgent) {
         const user = await prisma_client_1.prisma.user.findUniqueOrThrow({
             where: { id: userId },
-            select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+            include: prisma_types_1.userWithRolesInclude,
         });
-        const accessToken = (0, token_utility_1.generateAccessToken)({
-            sub: user.id,
-            email: user.email,
-            displayName: user.display_name ?? `${user.first_name} ${user.last_name}`,
-        });
+        const accessToken = this._generateUserAccessToken(user);
         const { raw, hash, expiresAt } = (0, token_utility_1.generateRefreshToken)();
         await prisma_client_1.prisma.refresh_Token.create({
             data: {
@@ -172,6 +157,22 @@ class AuthService {
             },
         });
         return (0, token_utility_1.buildTokenPair)(accessToken, raw);
+    }
+    _generateUserAccessToken(user) {
+        const now = new Date();
+        const activeUserRoles = user.user_roles.filter((ur) => ur.expires_at === null || ur.expires_at > now);
+        const roles = activeUserRoles.map((ur) => ur.role.name);
+        const permissions = [
+            ...new Set(activeUserRoles.flatMap((ur) => ur.role.role_permissions.map((rp) => rp.permission.slug))),
+        ];
+        return (0, token_utility_1.generateAccessToken)({
+            sub: user.id,
+            email: user.email,
+            displayName: user.display_name ?? `${user.first_name} ${user.last_name}`,
+            roles,
+            permissions,
+            isSuperAdmin: user.is_super_admin,
+        });
     }
 }
 exports.AuthService = AuthService;

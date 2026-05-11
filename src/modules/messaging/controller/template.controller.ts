@@ -29,7 +29,7 @@ export class TemplateController {
      */
     this.router.get(
       '/',
-      requirePermission('notification:read'),
+      requirePermission('notification_template:read'),
       validate(TemplateQuerySchema, 'query'),
       this._listTemplates.bind(this),
     );
@@ -41,7 +41,7 @@ export class TemplateController {
      */
     this.router.post(
       '/',
-      requirePermission('audit:admin'),
+      requirePermission('notification_template:write'),
       validate(CreateTemplateRequestSchema),
       this._createTemplate.bind(this),
     );
@@ -53,7 +53,7 @@ export class TemplateController {
      */
     this.router.get(
       '/:id',
-      requirePermission('notification:read'),
+      requirePermission('notification_template:read'),
       this._getTemplateById.bind(this),
     );
 
@@ -64,7 +64,7 @@ export class TemplateController {
      */
     this.router.patch(
       '/:id',
-      requirePermission('audit:admin'),
+      requirePermission('notification_template:write'),
       validate(UpdateTemplateRequestSchema),
       this._updateTemplate.bind(this),
     );
@@ -76,7 +76,7 @@ export class TemplateController {
      */
     this.router.delete(
       '/:id',
-      requirePermission('audit:admin'),
+      requirePermission('notification_template:delete'),
       this._deactivateTemplate.bind(this),
     );
   }

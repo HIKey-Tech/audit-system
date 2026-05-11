@@ -26,7 +26,7 @@ export class FindingController {
      * @desc   Create finding
      * @access Private - finding:write
      */
-    this.router.post('/engagements/:id/findings', requirePermission('finding:write'), validate(CreateFindingRequestSchema), this._createFinding.bind(this));
+    this.router.post('/engagements/:id/findings', requirePermission('finding:create'), validate(CreateFindingRequestSchema), this._createFinding.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/findings
@@ -47,21 +47,21 @@ export class FindingController {
      * @desc   Update finding
      * @access Private - finding:write
      */
-    this.router.put('/findings/:id', requirePermission('finding:write'), validate(UpdateFindingRequestSchema), this._updateFinding.bind(this));
+    this.router.put('/findings/:id', requirePermission('finding:update'), validate(UpdateFindingRequestSchema), this._updateFinding.bind(this));
 
     /**
      * @route  PATCH /audit/findings/:id/status
      * @desc   Update finding status
      * @access Private - finding:write
      */
-    this.router.patch('/findings/:id/status', requirePermission('finding:write'), validate(UpdateFindingStatusRequestSchema), this._updateFindingStatus.bind(this));
+    this.router.patch('/findings/:id/status', requirePermission('finding:update'), validate(UpdateFindingStatusRequestSchema), this._updateFindingStatus.bind(this));
 
     /**
      * @route  POST /audit/findings/:id/close
      * @desc   Close finding
      * @access Private - finding:write
      */
-    this.router.post('/findings/:id/close', requirePermission('finding:write'), this._closeFinding.bind(this));
+    this.router.post('/findings/:id/close', requirePermission('finding:close'), this._closeFinding.bind(this));
   }
 
   private async _createFinding(req: Request, res: Response, next: NextFunction): Promise<void> {

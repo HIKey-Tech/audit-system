@@ -21,49 +21,49 @@ class WorkingPaperController {
          * @desc   Create working paper
          * @access Private - audit:write
          */
-        this.router.post('/engagements/:id/working-papers', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.CreateWorkingPaperRequestSchema), this._createWorkingPaper.bind(this));
+        this.router.post('/engagements/:id/working-papers', (0, auth_middleware_1.requirePermission)('working_paper:create'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.CreateWorkingPaperRequestSchema), this._createWorkingPaper.bind(this));
         /**
          * @route  GET /audit/engagements/:id/working-papers
          * @desc   List working papers
          * @access Private - audit:read
          */
-        this.router.get('/engagements/:id/working-papers', (0, auth_middleware_1.requirePermission)('audit:read'), this._listWorkingPapers.bind(this));
+        this.router.get('/engagements/:id/working-papers', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._listWorkingPapers.bind(this));
         /**
          * @route  GET /audit/working-papers/:id
          * @desc   Get working paper
          * @access Private - audit:read
          */
-        this.router.get('/working-papers/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getWorkingPaperById.bind(this));
+        this.router.get('/working-papers/:id', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._getWorkingPaperById.bind(this));
         /**
          * @route  PUT /audit/working-papers/:id
          * @desc   Update working paper
          * @access Private - audit:write
          */
-        this.router.put('/working-papers/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.UpdateWorkingPaperRequestSchema), this._updateWorkingPaper.bind(this));
+        this.router.put('/working-papers/:id', (0, auth_middleware_1.requirePermission)('working_paper:update'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.UpdateWorkingPaperRequestSchema), this._updateWorkingPaper.bind(this));
         /**
          * @route  POST /audit/working-papers/:id/submit
          * @desc   Submit working paper
          * @access Private - audit:write
          */
-        this.router.post('/working-papers/:id/submit', (0, auth_middleware_1.requirePermission)('audit:write'), this._submitWorkingPaper.bind(this));
+        this.router.post('/working-papers/:id/submit', (0, auth_middleware_1.requirePermission)('working_paper:submit'), this._submitWorkingPaper.bind(this));
         /**
          * @route  POST /audit/working-papers/:id/approve
          * @desc   Approve working paper
          * @access Private - audit:write
          */
-        this.router.post('/working-papers/:id/approve', (0, auth_middleware_1.requirePermission)('audit:write'), this._approveWorkingPaper.bind(this));
+        this.router.post('/working-papers/:id/approve', (0, auth_middleware_1.requirePermission)('working_paper:approve'), this._approveWorkingPaper.bind(this));
         /**
          * @route  POST /audit/working-papers/:id/reject
          * @desc   Reject working paper
          * @access Private - audit:write
          */
-        this.router.post('/working-papers/:id/reject', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.RejectWorkingPaperRequestSchema), this._rejectWorkingPaper.bind(this));
+        this.router.post('/working-papers/:id/reject', (0, auth_middleware_1.requirePermission)('working_paper:reject'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.RejectWorkingPaperRequestSchema), this._rejectWorkingPaper.bind(this));
         /**
          * @route  GET /audit/working-papers/:id/export
          * @desc   Export working paper
          * @access Private - audit:read
          */
-        this.router.get('/working-papers/:id/export', (0, auth_middleware_1.requirePermission)('audit:read'), this._exportWorkingPaper.bind(this));
+        this.router.get('/working-papers/:id/export', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._exportWorkingPaper.bind(this));
     }
     async _createWorkingPaper(req, res, next) {
         try {

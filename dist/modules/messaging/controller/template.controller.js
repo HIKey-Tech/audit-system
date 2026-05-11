@@ -23,31 +23,31 @@ class TemplateController {
          * @desc   List notification templates (paginated, filterable by channel/eventKey/isActive)
          * @access Private — notification:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('notification:read'), (0, validate_middleware_1.validate)(template_request_dto_1.TemplateQuerySchema, 'query'), this._listTemplates.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('notification_template:read'), (0, validate_middleware_1.validate)(template_request_dto_1.TemplateQuerySchema, 'query'), this._listTemplates.bind(this));
         /**
          * @route  POST /notifications/templates
          * @desc   Create a notification template
          * @access Private — audit:admin
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:admin'), (0, validate_middleware_1.validate)(template_request_dto_1.CreateTemplateRequestSchema), this._createTemplate.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('notification_template:write'), (0, validate_middleware_1.validate)(template_request_dto_1.CreateTemplateRequestSchema), this._createTemplate.bind(this));
         /**
          * @route  GET /notifications/templates/:id
          * @desc   Get a notification template by ID
          * @access Private — notification:read
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('notification:read'), this._getTemplateById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('notification_template:read'), this._getTemplateById.bind(this));
         /**
          * @route  PATCH /notifications/templates/:id
          * @desc   Update a notification template
          * @access Private — audit:admin
          */
-        this.router.patch('/:id', (0, auth_middleware_1.requirePermission)('audit:admin'), (0, validate_middleware_1.validate)(template_request_dto_1.UpdateTemplateRequestSchema), this._updateTemplate.bind(this));
+        this.router.patch('/:id', (0, auth_middleware_1.requirePermission)('notification_template:write'), (0, validate_middleware_1.validate)(template_request_dto_1.UpdateTemplateRequestSchema), this._updateTemplate.bind(this));
         /**
          * @route  DELETE /notifications/templates/:id
          * @desc   Deactivate (soft-delete) a notification template
          * @access Private — audit:admin
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('audit:admin'), this._deactivateTemplate.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('notification_template:delete'), this._deactivateTemplate.bind(this));
     }
     async _listTemplates(req, res, next) {
         try {

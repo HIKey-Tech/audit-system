@@ -40,7 +40,7 @@ export class NotificationController {
      */
     this.router.post(
       '/read-all',
-      requirePermission('notification:read'),
+      requirePermission('notification:update'),
       this._markAllRead.bind(this),
     );
 
@@ -51,7 +51,7 @@ export class NotificationController {
      */
     this.router.get(
       '/queue/stats',
-      requirePermission('notification:read'),
+      requirePermission('notification_queue:read'),
       this._getQueueStats.bind(this),
     );
 
@@ -74,7 +74,7 @@ export class NotificationController {
      */
     this.router.post(
       '/:id/read',
-      requirePermission('notification:read'),
+      requirePermission('notification:update'),
       this._markRead.bind(this),
     );
   }

@@ -4,6 +4,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapUserToResponse = exports.mapRoleToResponse = exports.mapPermissionToResponse = void 0;
 const mapPermissionToResponse = (permission) => ({
     id: permission.id,
+    slug: permission.slug,
     name: permission.name,
     module: permission.module,
     action: permission.action,
@@ -26,13 +27,14 @@ const mapUserToResponse = (user) => {
         description: ur.role.description,
         permissions: ur.role.role_permissions.map((rp) => ({
             id: rp.permission.id,
+            slug: rp.permission.slug,
             name: rp.permission.name,
             module: rp.permission.module,
             action: rp.permission.action,
         })),
     }));
     const permissions = [
-        ...new Set(roles.flatMap((r) => r.permissions.map((p) => p.name))),
+        ...new Set(roles.flatMap((r) => r.permissions.map((p) => p.slug))),
     ];
     return {
         id: user.id,
@@ -46,6 +48,7 @@ const mapUserToResponse = (user) => {
         department: user.department,
         jobTitle: user.job_title,
         isActive: user.is_active,
+        isSuperAdmin: user.is_super_admin,
         lastLoginAt: user.last_login_at?.toISOString() ?? null,
         createdAt: user.created_at.toISOString(),
         updatedAt: user.updated_at.toISOString(),

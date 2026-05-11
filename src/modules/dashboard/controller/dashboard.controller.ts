@@ -27,7 +27,7 @@ export class DashboardController {
      */
     this.router.get(
       '/summary',
-      requirePermission('audit:read'),
+      requirePermission('dashboard:read'),
       this._getAuditSummary.bind(this),
     );
 
@@ -38,7 +38,7 @@ export class DashboardController {
      */
     this.router.get(
       '/findings',
-      requirePermission('finding:read'),
+      requirePermission('dashboard:read'),
       this._getFindingsSummary.bind(this),
     );
 
@@ -49,7 +49,7 @@ export class DashboardController {
      */
     this.router.get(
       '/risks',
-      requirePermission('audit:read'),
+      requirePermission('dashboard:read'),
       this._getRiskOverview.bind(this),
     );
 
@@ -60,7 +60,7 @@ export class DashboardController {
      */
     this.router.get(
       '/activity',
-      requirePermission('audit:read'),
+      requirePermission('dashboard:read'),
       validate(ActivityQuerySchema, 'query'),
       this._getRecentActivity.bind(this),
     );
@@ -72,7 +72,7 @@ export class DashboardController {
      */
     this.router.get(
       '/escalations',
-      requirePermission('audit:read'),
+      requirePermission('dashboard:read'),
       this._getEscalationOverview.bind(this),
     );
 
@@ -83,7 +83,7 @@ export class DashboardController {
      */
     this.router.get(
       '/my-work',
-      requirePermission('audit:read'),
+      requirePermission('dashboard:read'),
       this._getMyWork.bind(this),
     );
 
@@ -94,7 +94,7 @@ export class DashboardController {
      */
     this.router.get(
       '/approval-inbox',
-      requirePermission('audit:read'),
+      requirePermission('dashboard:read'),
       this._getApprovalInboxSummary.bind(this),
     );
   }

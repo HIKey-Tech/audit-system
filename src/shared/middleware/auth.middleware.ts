@@ -3,8 +3,6 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/app.config';
 import { AppError } from '../errors/app.error';
-import { prisma } from '../prisma/prisma.client';
-import { userWithRolesInclude, UserWithRoles } from '../prisma/prisma.types';
 
 export interface AuthenticatedUser {
   id: string;
@@ -12,6 +10,7 @@ export interface AuthenticatedUser {
   displayName: string;
   roles: string[];
   permissions: string[];
+  isSuperAdmin: boolean;
 }
 
 declare global {
@@ -26,6 +25,9 @@ export interface JwtPayload {
   sub: string;
   email: string;
   displayName: string;
+  roles: string[];
+  permissions: string[];
+  isSuperAdmin: boolean;
   iat: number;
   exp: number;
 }
@@ -54,41 +56,13 @@ export const authenticate = async (
       throw AppError.unauthorized('Invalid token');
     }
 
-    const user = await prisma.user.findFirst({
-      where: { id: payload.sub, is_active: true, deleted_at: null },
-      include: userWithRolesInclude,
-    }) as UserWithRoles | null;
-
-    if (!user) {
-      throw AppError.unauthorized('User not found or inactive');
-    }
-
-    type UserRoleWithPermissions = UserWithRoles['user_roles'][number];
-    type RolePermission = UserRoleWithPermissions['role']['role_permissions'][number];
-
-    const now = new Date();
-    const activeUserRoles: UserRoleWithPermissions[] = user.user_roles.filter(
-      (ur: UserRoleWithPermissions) => ur.expires_at === null || ur.expires_at > now,
-    );
-
-    const roles: string[] = activeUserRoles.map(
-      (ur: UserRoleWithPermissions) => ur.role.name,
-    );
-
-    const permissions: string[] = [
-      ...new Set<string>(
-        activeUserRoles.flatMap((ur: UserRoleWithPermissions) =>
-          ur.role.role_permissions.map((rp: RolePermission) => rp.permission.name),
-        ),
-      ),
-    ];
-
     req.user = {
-      id: user.id,
-      email: user.email,
-      displayName: user.display_name ?? `${user.first_name} ${user.last_name}`,
-      roles,
-      permissions,
+      id: payload.sub,
+      email: payload.email,
+      displayName: payload.displayName,
+      roles: payload.roles ?? [],
+      permissions: payload.permissions ?? [],
+      isSuperAdmin: payload.isSuperAdmin ?? false,
     };
 
     next();
@@ -101,6 +75,10 @@ export const requirePermission = (...requiredPermissions: string[]) =>
   (req: Request, _res: Response, next: NextFunction): void => {
     if (!req.user) {
       return next(AppError.unauthorized());
+    }
+
+    if (req.user.isSuperAdmin) {
+      return next();
     }
 
     const hasAll = requiredPermissions.every((perm) =>

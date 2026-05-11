@@ -21,28 +21,28 @@ export class MonitoringController {
      * @desc   List high-risk register items
      * @access Private - audit:read
      */
-    this.router.get('/monitoring/high-risk', requirePermission('audit:read'), validate(HighRiskQuerySchema, 'query'), this._getHighRiskItems.bind(this));
+    this.router.get('/monitoring/high-risk', requirePermission('risk_monitoring:read'), validate(HighRiskQuerySchema, 'query'), this._getHighRiskItems.bind(this));
 
     /**
      * @route  GET /risk/monitoring/attention-required
      * @desc   List risks requiring assessment attention
      * @access Private - audit:read
      */
-    this.router.get('/monitoring/attention-required', requirePermission('audit:read'), this._getRisksRequiringAttention.bind(this));
+    this.router.get('/monitoring/attention-required', requirePermission('risk_monitoring:read'), this._getRisksRequiringAttention.bind(this));
 
     /**
      * @route  GET /risk/monitoring/summary
      * @desc   Get organization risk summary
      * @access Private - audit:read
      */
-    this.router.get('/monitoring/summary', requirePermission('audit:read'), this._getOrganizationRiskSummary.bind(this));
+    this.router.get('/monitoring/summary', requirePermission('risk_monitoring:read'), this._getOrganizationRiskSummary.bind(this));
 
     /**
      * @route  GET /risk/register/:id/trend
      * @desc   Get risk score trend
      * @access Private - audit:read
      */
-    this.router.get('/register/:id/trend', requirePermission('audit:read'), this._getRiskScoreTrend.bind(this));
+    this.router.get('/register/:id/trend', requirePermission('risk:read'), this._getRiskScoreTrend.bind(this));
   }
 
   private async _getHighRiskItems(req: Request, res: Response, next: NextFunction): Promise<void> {

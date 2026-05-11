@@ -21,31 +21,31 @@ class AssignmentController {
          * @desc   Assign staff to an engagement
          * @access Private - audit:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(assignment_request_dto_1.AssignStaffRequestSchema), this._assignStaff.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('assignment:create'), (0, validate_middleware_1.validate)(assignment_request_dto_1.AssignStaffRequestSchema), this._assignStaff.bind(this));
         /**
          * @route  GET /workflow/assignments/engagement/:id
          * @desc   Get engagement assignments
          * @access Private - audit:read
          */
-        this.router.get('/engagement/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getAssignments.bind(this));
+        this.router.get('/engagement/:id', (0, auth_middleware_1.requirePermission)('assignment:read'), this._getAssignments.bind(this));
         /**
          * @route  GET /workflow/assignments/mine
          * @desc   Get current user's assignments
          * @access Private - audit:read
          */
-        this.router.get('/mine', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(assignment_request_dto_1.MyAssignmentsQuerySchema, 'query'), this._getMyAssignments.bind(this));
+        this.router.get('/mine', (0, auth_middleware_1.requirePermission)('assignment:read'), (0, validate_middleware_1.validate)(assignment_request_dto_1.MyAssignmentsQuerySchema, 'query'), this._getMyAssignments.bind(this));
         /**
          * @route  GET /workflow/assignments/workload/:userId
          * @desc   Get user workload
          * @access Private - audit:read
          */
-        this.router.get('/workload/:userId', (0, auth_middleware_1.requirePermission)('audit:read'), this._getUserWorkload.bind(this));
+        this.router.get('/workload/:userId', (0, auth_middleware_1.requirePermission)('assignment:read'), this._getUserWorkload.bind(this));
         /**
          * @route  DELETE /workflow/assignments/:id
          * @desc   Remove assignment
          * @access Private - audit:write
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('audit:write'), this._removeAssignment.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('assignment:delete'), this._removeAssignment.bind(this));
     }
     async _assignStaff(req, res, next) {
         try {

@@ -42,7 +42,7 @@ export class DocumentController {
      */
     this.router.post(
       '/templates',
-      requirePermission('document:write'),
+      requirePermission('document_template:write'),
       validate(CreateTemplateRequestSchema),
       this._createTemplate.bind(this),
     );
@@ -54,7 +54,7 @@ export class DocumentController {
      */
     this.router.get(
       '/templates',
-      requirePermission('document:read'),
+      requirePermission('document_template:read'),
       validate(TemplateQuerySchema, 'query'),
       this._listTemplates.bind(this),
     );
@@ -66,7 +66,7 @@ export class DocumentController {
      */
     this.router.get(
       '/templates/:id',
-      requirePermission('document:read'),
+      requirePermission('document_template:read'),
       this._getTemplateById.bind(this),
     );
 
@@ -77,7 +77,7 @@ export class DocumentController {
      */
     this.router.patch(
       '/templates/:id',
-      requirePermission('document:write'),
+      requirePermission('document_template:write'),
       validate(UpdateTemplateRequestSchema),
       this._updateTemplate.bind(this),
     );
@@ -89,7 +89,7 @@ export class DocumentController {
      */
     this.router.delete(
       '/templates/:id',
-      requirePermission('document:delete'),
+      requirePermission('document_template:delete'),
       this._deleteTemplate.bind(this),
     );
 

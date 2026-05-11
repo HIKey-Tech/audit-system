@@ -64,9 +64,27 @@ export const RoleQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('asc'),
 });
 
+export const CreateRoleRequestSchema = z.object({
+  name: z.string().min(1).max(100),
+  description: z.string().max(500).optional(),
+  permissionIds: z.array(z.string().uuid()).optional(),
+});
+
+export const UpdateRoleRequestSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  description: z.string().max(500).nullable().optional(),
+});
+
+export const ReplaceRolePermissionsRequestSchema = z.object({
+  permissionIds: z.array(z.string().uuid()),
+});
+
 export type CreateUserRequestDto = z.infer<typeof CreateUserRequestSchema>;
 export type UpdateUserRequestDto = z.infer<typeof UpdateUserRequestSchema>;
 export type AssignRoleRequestDto = z.infer<typeof AssignRoleRequestSchema>;
 export type ChangePasswordRequestDto = z.infer<typeof ChangePasswordRequestSchema>;
 export type UserQueryDto = z.infer<typeof UserQuerySchema>;
 export type RoleQueryDto = z.infer<typeof RoleQuerySchema>;
+export type CreateRoleRequestDto = z.infer<typeof CreateRoleRequestSchema>;
+export type UpdateRoleRequestDto = z.infer<typeof UpdateRoleRequestSchema>;
+export type ReplaceRolePermissionsRequestDto = z.infer<typeof ReplaceRolePermissionsRequestSchema>;

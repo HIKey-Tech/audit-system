@@ -21,25 +21,25 @@ class CategoryController {
          * @desc   Create risk category
          * @access Private - audit:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(category_request_dto_1.CreateRiskCategoryRequestSchema), this._createCategory.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('risk_category:write'), (0, validate_middleware_1.validate)(category_request_dto_1.CreateRiskCategoryRequestSchema), this._createCategory.bind(this));
         /**
          * @route  GET /risk/categories
          * @desc   List risk categories
          * @access Private - audit:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(category_request_dto_1.RiskCategoryQuerySchema, 'query'), this._listCategories.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('risk_category:read'), (0, validate_middleware_1.validate)(category_request_dto_1.RiskCategoryQuerySchema, 'query'), this._listCategories.bind(this));
         /**
          * @route  PUT /risk/categories/:id
          * @desc   Update risk category
          * @access Private - audit:write
          */
-        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(category_request_dto_1.UpdateRiskCategoryRequestSchema), this._updateCategory.bind(this));
+        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('risk_category:write'), (0, validate_middleware_1.validate)(category_request_dto_1.UpdateRiskCategoryRequestSchema), this._updateCategory.bind(this));
         /**
          * @route  DELETE /risk/categories/:id
          * @desc   Deactivate risk category
          * @access Private - audit:write
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('audit:write'), this._deactivateCategory.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('risk_category:delete'), this._deactivateCategory.bind(this));
     }
     async _createCategory(req, res, next) {
         try {

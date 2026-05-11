@@ -25,28 +25,28 @@ export class CategoryController {
      * @desc   Create risk category
      * @access Private - audit:write
      */
-    this.router.post('/', requirePermission('audit:write'), validate(CreateRiskCategoryRequestSchema), this._createCategory.bind(this));
+    this.router.post('/', requirePermission('risk_category:write'), validate(CreateRiskCategoryRequestSchema), this._createCategory.bind(this));
 
     /**
      * @route  GET /risk/categories
      * @desc   List risk categories
      * @access Private - audit:read
      */
-    this.router.get('/', requirePermission('audit:read'), validate(RiskCategoryQuerySchema, 'query'), this._listCategories.bind(this));
+    this.router.get('/', requirePermission('risk_category:read'), validate(RiskCategoryQuerySchema, 'query'), this._listCategories.bind(this));
 
     /**
      * @route  PUT /risk/categories/:id
      * @desc   Update risk category
      * @access Private - audit:write
      */
-    this.router.put('/:id', requirePermission('audit:write'), validate(UpdateRiskCategoryRequestSchema), this._updateCategory.bind(this));
+    this.router.put('/:id', requirePermission('risk_category:write'), validate(UpdateRiskCategoryRequestSchema), this._updateCategory.bind(this));
 
     /**
      * @route  DELETE /risk/categories/:id
      * @desc   Deactivate risk category
      * @access Private - audit:write
      */
-    this.router.delete('/:id', requirePermission('audit:write'), this._deactivateCategory.bind(this));
+    this.router.delete('/:id', requirePermission('risk_category:delete'), this._deactivateCategory.bind(this));
   }
 
   private async _createCategory(req: Request, res: Response, next: NextFunction): Promise<void> {

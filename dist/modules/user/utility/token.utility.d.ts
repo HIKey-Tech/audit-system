@@ -4,6 +4,9 @@ export declare const generateAccessToken: (payload: {
     sub: string;
     email: string;
     displayName: string;
+    roles: string[];
+    permissions: string[];
+    isSuperAdmin: boolean;
 }) => string;
 export declare const generateRefreshToken: () => {
     raw: string;

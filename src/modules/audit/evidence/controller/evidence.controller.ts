@@ -29,35 +29,35 @@ export class EvidenceController {
      * @desc   Upload audit evidence
      * @access Private - audit:write
      */
-    this.router.post('/engagements/:id/evidence', requirePermission('audit:write'), upload.single('file'), validate(UploadEvidenceMetadataSchema), this._uploadEvidence.bind(this));
+    this.router.post('/engagements/:id/evidence', requirePermission('evidence:upload'), upload.single('file'), validate(UploadEvidenceMetadataSchema), this._uploadEvidence.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/evidence
      * @desc   List audit evidence
      * @access Private - audit:read
      */
-    this.router.get('/engagements/:id/evidence', requirePermission('audit:read'), validate(EvidenceQuerySchema, 'query'), this._listEvidence.bind(this));
+    this.router.get('/engagements/:id/evidence', requirePermission('evidence:read'), validate(EvidenceQuerySchema, 'query'), this._listEvidence.bind(this));
 
     /**
      * @route  POST /audit/evidence/:id/link/working-paper/:wpId
      * @desc   Link evidence to working paper
      * @access Private - audit:write
      */
-    this.router.post('/evidence/:id/link/working-paper/:wpId', requirePermission('audit:write'), this._linkToWorkingPaper.bind(this));
+    this.router.post('/evidence/:id/link/working-paper/:wpId', requirePermission('evidence:upload'), this._linkToWorkingPaper.bind(this));
 
     /**
      * @route  POST /audit/evidence/:id/link/finding/:findingId
      * @desc   Link evidence to finding
      * @access Private - audit:write
      */
-    this.router.post('/evidence/:id/link/finding/:findingId', requirePermission('audit:write'), this._linkToFinding.bind(this));
+    this.router.post('/evidence/:id/link/finding/:findingId', requirePermission('evidence:upload'), this._linkToFinding.bind(this));
 
     /**
      * @route  POST /audit/evidence/:id/dispute
      * @desc   Dispute evidence
      * @access Private - audit:admin
      */
-    this.router.post('/evidence/:id/dispute', requirePermission('audit:admin'), validate(DisputeEvidenceRequestSchema), this._disputeEvidence.bind(this));
+    this.router.post('/evidence/:id/dispute', requirePermission('evidence:dispute'), validate(DisputeEvidenceRequestSchema), this._disputeEvidence.bind(this));
   }
 
   private async _uploadEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {

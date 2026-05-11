@@ -1,11 +1,13 @@
 export interface PermissionResponseDto {
     id: string;
+    slug: string;
     name: string;
     module: string;
     action: string;
 }
 export interface PermissionListResponseDto {
     id: string;
+    slug: string;
     name: string;
     module: string;
     action: string;
@@ -24,6 +26,10 @@ export interface RoleListResponseDto {
     isSystem: boolean;
     permissions: PermissionListResponseDto[];
 }
+export interface PermissionGroupResponseDto {
+    module: string;
+    permissions: PermissionListResponseDto[];
+}
 export interface UserResponseDto {
     id: string;
     email: string;
@@ -36,6 +42,7 @@ export interface UserResponseDto {
     department: string | null;
     jobTitle: string | null;
     isActive: boolean;
+    isSuperAdmin: boolean;
     lastLoginAt: string | null;
     createdAt: string;
     updatedAt: string;
@@ -55,6 +62,7 @@ export interface SsoRedirectResponseDto {
 }
 export declare const mapPermissionToResponse: (permission: {
     id: string;
+    slug: string;
     name: string;
     module: string;
     action: string;
@@ -68,6 +76,7 @@ export declare const mapRoleToResponse: (role: {
     role_permissions: Array<{
         permission: {
             id: string;
+            slug: string;
             name: string;
             module: string;
             action: string;
@@ -87,6 +96,7 @@ export declare const mapUserToResponse: (user: {
     department: string | null;
     job_title: string | null;
     is_active: boolean;
+    is_super_admin: boolean;
     last_login_at: Date | null;
     created_at: Date;
     updated_at: Date;
@@ -98,6 +108,7 @@ export declare const mapUserToResponse: (user: {
             role_permissions: Array<{
                 permission: {
                     id: string;
+                    slug: string;
                     name: string;
                     module: string;
                     action: string;

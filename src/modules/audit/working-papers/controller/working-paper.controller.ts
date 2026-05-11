@@ -25,56 +25,56 @@ export class WorkingPaperController {
      * @desc   Create working paper
      * @access Private - audit:write
      */
-    this.router.post('/engagements/:id/working-papers', requirePermission('audit:write'), validate(CreateWorkingPaperRequestSchema), this._createWorkingPaper.bind(this));
+    this.router.post('/engagements/:id/working-papers', requirePermission('working_paper:create'), validate(CreateWorkingPaperRequestSchema), this._createWorkingPaper.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/working-papers
      * @desc   List working papers
      * @access Private - audit:read
      */
-    this.router.get('/engagements/:id/working-papers', requirePermission('audit:read'), this._listWorkingPapers.bind(this));
+    this.router.get('/engagements/:id/working-papers', requirePermission('working_paper:read'), this._listWorkingPapers.bind(this));
 
     /**
      * @route  GET /audit/working-papers/:id
      * @desc   Get working paper
      * @access Private - audit:read
      */
-    this.router.get('/working-papers/:id', requirePermission('audit:read'), this._getWorkingPaperById.bind(this));
+    this.router.get('/working-papers/:id', requirePermission('working_paper:read'), this._getWorkingPaperById.bind(this));
 
     /**
      * @route  PUT /audit/working-papers/:id
      * @desc   Update working paper
      * @access Private - audit:write
      */
-    this.router.put('/working-papers/:id', requirePermission('audit:write'), validate(UpdateWorkingPaperRequestSchema), this._updateWorkingPaper.bind(this));
+    this.router.put('/working-papers/:id', requirePermission('working_paper:update'), validate(UpdateWorkingPaperRequestSchema), this._updateWorkingPaper.bind(this));
 
     /**
      * @route  POST /audit/working-papers/:id/submit
      * @desc   Submit working paper
      * @access Private - audit:write
      */
-    this.router.post('/working-papers/:id/submit', requirePermission('audit:write'), this._submitWorkingPaper.bind(this));
+    this.router.post('/working-papers/:id/submit', requirePermission('working_paper:submit'), this._submitWorkingPaper.bind(this));
 
     /**
      * @route  POST /audit/working-papers/:id/approve
      * @desc   Approve working paper
      * @access Private - audit:write
      */
-    this.router.post('/working-papers/:id/approve', requirePermission('audit:write'), this._approveWorkingPaper.bind(this));
+    this.router.post('/working-papers/:id/approve', requirePermission('working_paper:approve'), this._approveWorkingPaper.bind(this));
 
     /**
      * @route  POST /audit/working-papers/:id/reject
      * @desc   Reject working paper
      * @access Private - audit:write
      */
-    this.router.post('/working-papers/:id/reject', requirePermission('audit:write'), validate(RejectWorkingPaperRequestSchema), this._rejectWorkingPaper.bind(this));
+    this.router.post('/working-papers/:id/reject', requirePermission('working_paper:reject'), validate(RejectWorkingPaperRequestSchema), this._rejectWorkingPaper.bind(this));
 
     /**
      * @route  GET /audit/working-papers/:id/export
      * @desc   Export working paper
      * @access Private - audit:read
      */
-    this.router.get('/working-papers/:id/export', requirePermission('audit:read'), this._exportWorkingPaper.bind(this));
+    this.router.get('/working-papers/:id/export', requirePermission('working_paper:read'), this._exportWorkingPaper.bind(this));
   }
 
   private async _createWorkingPaper(req: Request, res: Response, next: NextFunction): Promise<void> {

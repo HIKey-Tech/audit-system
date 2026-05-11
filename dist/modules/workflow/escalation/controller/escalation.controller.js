@@ -21,25 +21,25 @@ class EscalationController {
          * @desc   Get escalation history for an entity
          * @access Private - audit:read
          */
-        this.router.get('/escalations/entity/:type/:id', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(escalation_request_dto_1.EscalationEntityParamsSchema, 'params'), this._getEscalationHistory.bind(this));
+        this.router.get('/escalations/entity/:type/:id', (0, auth_middleware_1.requirePermission)('escalation:read'), (0, validate_middleware_1.validate)(escalation_request_dto_1.EscalationEntityParamsSchema, 'params'), this._getEscalationHistory.bind(this));
         /**
          * @route  POST /workflow/escalations/:id/acknowledge
          * @desc   Acknowledge escalation
          * @access Private - audit:write
          */
-        this.router.post('/escalations/:id/acknowledge', (0, auth_middleware_1.requirePermission)('audit:write'), this._acknowledgeEscalation.bind(this));
+        this.router.post('/escalations/:id/acknowledge', (0, auth_middleware_1.requirePermission)('escalation:acknowledge'), this._acknowledgeEscalation.bind(this));
         /**
          * @route  GET /workflow/escalation-policy
          * @desc   Get escalation policy
          * @access Private - audit:read
          */
-        this.router.get('/escalation-policy', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(escalation_request_dto_1.EscalationPolicyQuerySchema, 'query'), this._getEscalationPolicy.bind(this));
+        this.router.get('/escalation-policy', (0, auth_middleware_1.requirePermission)('escalation_policy:read'), (0, validate_middleware_1.validate)(escalation_request_dto_1.EscalationPolicyQuerySchema, 'query'), this._getEscalationPolicy.bind(this));
         /**
          * @route  POST /workflow/escalation-policy
          * @desc   Create or update escalation policy
          * @access Private - audit:admin
          */
-        this.router.post('/escalation-policy', (0, auth_middleware_1.requirePermission)('audit:admin'), (0, validate_middleware_1.validate)(escalation_request_dto_1.UpsertEscalationPolicyRequestSchema), this._createOrUpdateEscalationPolicy.bind(this));
+        this.router.post('/escalation-policy', (0, auth_middleware_1.requirePermission)('escalation_policy:update'), (0, validate_middleware_1.validate)(escalation_request_dto_1.UpsertEscalationPolicyRequestSchema), this._createOrUpdateEscalationPolicy.bind(this));
     }
     async _getEscalationHistory(req, res, next) {
         try {

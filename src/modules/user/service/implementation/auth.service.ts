@@ -168,22 +168,10 @@ export class AuthService implements IAuthService {
       // issuance commit atomically.
       const userForToken = await tx.user.findUniqueOrThrow({
         where: { id: storedToken.user_id },
-        select: {
-          id: true,
-          email: true,
-          display_name: true,
-          first_name: true,
-          last_name: true,
-        },
+        include: userWithRolesInclude,
       });
 
-      const accessToken = generateAccessToken({
-        sub: userForToken.id,
-        email: userForToken.email,
-        displayName:
-          userForToken.display_name ??
-          `${userForToken.first_name} ${userForToken.last_name}`,
-      });
+      const accessToken = this._generateUserAccessToken(userForToken as UserWithRoles);
 
       const { raw, hash, expiresAt } = generateRefreshToken();
 
@@ -223,14 +211,10 @@ export class AuthService implements IAuthService {
   ): Promise<TokenPair> {
     const user = await prisma.user.findUniqueOrThrow({
       where: { id: userId },
-      select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+      include: userWithRolesInclude,
     });
 
-    const accessToken = generateAccessToken({
-      sub: user.id,
-      email: user.email,
-      displayName: user.display_name ?? `${user.first_name} ${user.last_name}`,
-    });
+    const accessToken = this._generateUserAccessToken(user as UserWithRoles);
 
     const { raw, hash, expiresAt } = generateRefreshToken();
 
@@ -245,5 +229,33 @@ export class AuthService implements IAuthService {
     });
 
     return buildTokenPair(accessToken, raw);
+  }
+
+  private _generateUserAccessToken(user: UserWithRoles): string {
+    type UserRoleWithPermissions = UserWithRoles['user_roles'][number];
+    type RolePermission = UserRoleWithPermissions['role']['role_permissions'][number];
+
+    const now = new Date();
+    const activeUserRoles = user.user_roles.filter(
+      (ur: UserRoleWithPermissions) => ur.expires_at === null || ur.expires_at > now,
+    );
+
+    const roles = activeUserRoles.map((ur: UserRoleWithPermissions) => ur.role.name);
+    const permissions = [
+      ...new Set(
+        activeUserRoles.flatMap((ur: UserRoleWithPermissions) =>
+          ur.role.role_permissions.map((rp: RolePermission) => rp.permission.slug),
+        ),
+      ),
+    ];
+
+    return generateAccessToken({
+      sub: user.id,
+      email: user.email,
+      displayName: user.display_name ?? `${user.first_name} ${user.last_name}`,
+      roles,
+      permissions,
+      isSuperAdmin: user.is_super_admin,
+    });
   }
 }

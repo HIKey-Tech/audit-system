@@ -21,28 +21,28 @@ export class ChecklistController {
      * @desc   Get engagement checklists
      * @access Private - audit:read
      */
-    this.router.get('/engagements/:id/checklists', requirePermission('audit:read'), this._getChecklists.bind(this));
+    this.router.get('/engagements/:id/checklists', requirePermission('checklist:read'), this._getChecklists.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/checklists/progress
      * @desc   Get checklist progress
      * @access Private - audit:read
      */
-    this.router.get('/engagements/:id/checklists/progress', requirePermission('audit:read'), this._getChecklistProgress.bind(this));
+    this.router.get('/engagements/:id/checklists/progress', requirePermission('checklist:read'), this._getChecklistProgress.bind(this));
 
     /**
      * @route  PATCH /audit/checklists/:id
      * @desc   Update checklist item
      * @access Private - audit:write
      */
-    this.router.patch('/checklists/:id', requirePermission('audit:write'), validate(UpdateChecklistItemRequestSchema), this._updateChecklistItem.bind(this));
+    this.router.patch('/checklists/:id', requirePermission('checklist:update'), validate(UpdateChecklistItemRequestSchema), this._updateChecklistItem.bind(this));
 
     /**
      * @route  POST /audit/checklists/:id/evidence/:evidenceId
      * @desc   Link evidence to checklist item
      * @access Private - audit:write
      */
-    this.router.post('/checklists/:id/evidence/:evidenceId', requirePermission('audit:write'), this._linkEvidenceToChecklistItem.bind(this));
+    this.router.post('/checklists/:id/evidence/:evidenceId', requirePermission('checklist:update'), this._linkEvidenceToChecklistItem.bind(this));
   }
 
   private async _getChecklists(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -14,5 +14,6 @@ export declare class AuthService implements IAuthService {
     logout(refreshToken: string): Promise<void>;
     logoutAll(userId: string): Promise<void>;
     private _issueTokens;
+    private _generateUserAccessToken;
 }
 //# sourceMappingURL=auth.service.d.ts.map

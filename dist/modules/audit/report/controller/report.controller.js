@@ -21,49 +21,49 @@ class ReportController {
          * @desc   Generate audit report
          * @access Private - audit:write
          */
-        this.router.post('/engagements/:id/report/generate', (0, auth_middleware_1.requirePermission)('audit:write'), this._generateReport.bind(this));
+        this.router.post('/engagements/:id/report/generate', (0, auth_middleware_1.requirePermission)('report:create'), this._generateReport.bind(this));
         /**
          * @route  GET /audit/engagements/:id/report
          * @desc   Get audit report for engagement
          * @access Private - audit:read
          */
-        this.router.get('/engagements/:id/report', (0, auth_middleware_1.requirePermission)('audit:read'), this._getReport.bind(this));
+        this.router.get('/engagements/:id/report', (0, auth_middleware_1.requirePermission)('report:read'), this._getReport.bind(this));
         /**
          * @route  PUT /audit/reports/:id
          * @desc   Update audit report
          * @access Private - audit:write
          */
-        this.router.put('/reports/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(report_request_dto_1.UpdateReportRequestSchema), this._updateReport.bind(this));
+        this.router.put('/reports/:id', (0, auth_middleware_1.requirePermission)('report:update'), (0, validate_middleware_1.validate)(report_request_dto_1.UpdateReportRequestSchema), this._updateReport.bind(this));
         /**
          * @route  POST /audit/reports/:id/submit
          * @desc   Submit audit report
          * @access Private - audit:write
          */
-        this.router.post('/reports/:id/submit', (0, auth_middleware_1.requirePermission)('audit:write'), this._submitReportForApproval.bind(this));
+        this.router.post('/reports/:id/submit', (0, auth_middleware_1.requirePermission)('report:submit'), this._submitReportForApproval.bind(this));
         /**
          * @route  POST /audit/reports/:id/approve
          * @desc   Approve audit report
          * @access Private - audit:admin
          */
-        this.router.post('/reports/:id/approve', (0, auth_middleware_1.requirePermission)('audit:admin'), this._approveReport.bind(this));
+        this.router.post('/reports/:id/approve', (0, auth_middleware_1.requirePermission)('report:approve'), this._approveReport.bind(this));
         /**
          * @route  POST /audit/reports/:id/reject
          * @desc   Reject audit report
          * @access Private - audit:admin
          */
-        this.router.post('/reports/:id/reject', (0, auth_middleware_1.requirePermission)('audit:admin'), (0, validate_middleware_1.validate)(report_request_dto_1.RejectReportRequestSchema), this._rejectReport.bind(this));
+        this.router.post('/reports/:id/reject', (0, auth_middleware_1.requirePermission)('report:reject'), (0, validate_middleware_1.validate)(report_request_dto_1.RejectReportRequestSchema), this._rejectReport.bind(this));
         /**
          * @route  POST /audit/reports/:id/issue
          * @desc   Issue audit report
          * @access Private - audit:admin
          */
-        this.router.post('/reports/:id/issue', (0, auth_middleware_1.requirePermission)('audit:admin'), this._issueReport.bind(this));
+        this.router.post('/reports/:id/issue', (0, auth_middleware_1.requirePermission)('report:issue'), this._issueReport.bind(this));
         /**
          * @route  GET /audit/reports/:id/export
          * @desc   Export audit report
          * @access Private - audit:read
          */
-        this.router.get('/reports/:id/export', (0, auth_middleware_1.requirePermission)('audit:read'), this._exportReport.bind(this));
+        this.router.get('/reports/:id/export', (0, auth_middleware_1.requirePermission)('report:export'), this._exportReport.bind(this));
     }
     async _generateReport(req, res, next) {
         try {

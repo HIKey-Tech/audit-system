@@ -34,31 +34,31 @@ class DocumentController {
          * @desc   Create a document template
          * @access Private — document:write
          */
-        this.router.post('/templates', (0, auth_middleware_1.requirePermission)('document:write'), (0, validate_middleware_1.validate)(document_request_dto_1.CreateTemplateRequestSchema), this._createTemplate.bind(this));
+        this.router.post('/templates', (0, auth_middleware_1.requirePermission)('document_template:write'), (0, validate_middleware_1.validate)(document_request_dto_1.CreateTemplateRequestSchema), this._createTemplate.bind(this));
         /**
          * @route  GET /documents/templates
          * @desc   List templates (paginated, filterable)
          * @access Private — document:read
          */
-        this.router.get('/templates', (0, auth_middleware_1.requirePermission)('document:read'), (0, validate_middleware_1.validate)(document_request_dto_1.TemplateQuerySchema, 'query'), this._listTemplates.bind(this));
+        this.router.get('/templates', (0, auth_middleware_1.requirePermission)('document_template:read'), (0, validate_middleware_1.validate)(document_request_dto_1.TemplateQuerySchema, 'query'), this._listTemplates.bind(this));
         /**
          * @route  GET /documents/templates/:id
          * @desc   Get a template by ID
          * @access Private — document:read
          */
-        this.router.get('/templates/:id', (0, auth_middleware_1.requirePermission)('document:read'), this._getTemplateById.bind(this));
+        this.router.get('/templates/:id', (0, auth_middleware_1.requirePermission)('document_template:read'), this._getTemplateById.bind(this));
         /**
          * @route  PATCH /documents/templates/:id
          * @desc   Update a template
          * @access Private — document:write
          */
-        this.router.patch('/templates/:id', (0, auth_middleware_1.requirePermission)('document:write'), (0, validate_middleware_1.validate)(document_request_dto_1.UpdateTemplateRequestSchema), this._updateTemplate.bind(this));
+        this.router.patch('/templates/:id', (0, auth_middleware_1.requirePermission)('document_template:write'), (0, validate_middleware_1.validate)(document_request_dto_1.UpdateTemplateRequestSchema), this._updateTemplate.bind(this));
         /**
          * @route  DELETE /documents/templates/:id
          * @desc   Soft-delete a template
          * @access Private — document:delete
          */
-        this.router.delete('/templates/:id', (0, auth_middleware_1.requirePermission)('document:delete'), this._deleteTemplate.bind(this));
+        this.router.delete('/templates/:id', (0, auth_middleware_1.requirePermission)('document_template:delete'), this._deleteTemplate.bind(this));
         // ────────── Document listing by entity ──────────
         /**
          * @route  GET /documents/by-entity/:entityType/:entityId

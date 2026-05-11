@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RoleQuerySchema = exports.UserQuerySchema = exports.ChangePasswordRequestSchema = exports.AssignRoleRequestSchema = exports.UpdateUserRequestSchema = exports.CreateUserRequestSchema = void 0;
+exports.ReplaceRolePermissionsRequestSchema = exports.UpdateRoleRequestSchema = exports.CreateRoleRequestSchema = exports.RoleQuerySchema = exports.UserQuerySchema = exports.ChangePasswordRequestSchema = exports.AssignRoleRequestSchema = exports.UpdateUserRequestSchema = exports.CreateUserRequestSchema = void 0;
 // src/modules/user/dto/request/user.request.dto.ts
 const zod_1 = require("zod");
 exports.CreateUserRequestSchema = zod_1.z.object({
@@ -53,5 +53,17 @@ exports.RoleQuerySchema = zod_1.z.object({
     pageSize: zod_1.z.coerce.number().int().positive().max(100).default(20),
     sortBy: zod_1.z.enum(['name', 'created_at']).default('name'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('asc'),
+});
+exports.CreateRoleRequestSchema = zod_1.z.object({
+    name: zod_1.z.string().min(1).max(100),
+    description: zod_1.z.string().max(500).optional(),
+    permissionIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
+});
+exports.UpdateRoleRequestSchema = zod_1.z.object({
+    name: zod_1.z.string().min(1).max(100).optional(),
+    description: zod_1.z.string().max(500).nullable().optional(),
+});
+exports.ReplaceRolePermissionsRequestSchema = zod_1.z.object({
+    permissionIds: zod_1.z.array(zod_1.z.string().uuid()),
 });
 //# sourceMappingURL=user.request.dto.js.map

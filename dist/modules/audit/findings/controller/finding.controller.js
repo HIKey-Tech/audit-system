@@ -21,7 +21,7 @@ class FindingController {
          * @desc   Create finding
          * @access Private - finding:write
          */
-        this.router.post('/engagements/:id/findings', (0, auth_middleware_1.requirePermission)('finding:write'), (0, validate_middleware_1.validate)(finding_request_dto_1.CreateFindingRequestSchema), this._createFinding.bind(this));
+        this.router.post('/engagements/:id/findings', (0, auth_middleware_1.requirePermission)('finding:create'), (0, validate_middleware_1.validate)(finding_request_dto_1.CreateFindingRequestSchema), this._createFinding.bind(this));
         /**
          * @route  GET /audit/engagements/:id/findings
          * @desc   List findings
@@ -39,19 +39,19 @@ class FindingController {
          * @desc   Update finding
          * @access Private - finding:write
          */
-        this.router.put('/findings/:id', (0, auth_middleware_1.requirePermission)('finding:write'), (0, validate_middleware_1.validate)(finding_request_dto_1.UpdateFindingRequestSchema), this._updateFinding.bind(this));
+        this.router.put('/findings/:id', (0, auth_middleware_1.requirePermission)('finding:update'), (0, validate_middleware_1.validate)(finding_request_dto_1.UpdateFindingRequestSchema), this._updateFinding.bind(this));
         /**
          * @route  PATCH /audit/findings/:id/status
          * @desc   Update finding status
          * @access Private - finding:write
          */
-        this.router.patch('/findings/:id/status', (0, auth_middleware_1.requirePermission)('finding:write'), (0, validate_middleware_1.validate)(finding_request_dto_1.UpdateFindingStatusRequestSchema), this._updateFindingStatus.bind(this));
+        this.router.patch('/findings/:id/status', (0, auth_middleware_1.requirePermission)('finding:update'), (0, validate_middleware_1.validate)(finding_request_dto_1.UpdateFindingStatusRequestSchema), this._updateFindingStatus.bind(this));
         /**
          * @route  POST /audit/findings/:id/close
          * @desc   Close finding
          * @access Private - finding:write
          */
-        this.router.post('/findings/:id/close', (0, auth_middleware_1.requirePermission)('finding:write'), this._closeFinding.bind(this));
+        this.router.post('/findings/:id/close', (0, auth_middleware_1.requirePermission)('finding:close'), this._closeFinding.bind(this));
     }
     async _createFinding(req, res, next) {
         try {

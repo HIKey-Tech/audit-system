@@ -21,25 +21,25 @@ class AssessmentController {
          * @desc   Create risk assessment
          * @access Private - audit:write
          */
-        this.router.post('/register/:id/assessments', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(assessment_request_dto_1.CreateRiskAssessmentRequestSchema), this._createAssessment.bind(this));
+        this.router.post('/register/:id/assessments', (0, auth_middleware_1.requirePermission)('risk:assess'), (0, validate_middleware_1.validate)(assessment_request_dto_1.CreateRiskAssessmentRequestSchema), this._createAssessment.bind(this));
         /**
          * @route  GET /risk/register/:id/assessments
          * @desc   List assessments for a risk
          * @access Private - audit:read
          */
-        this.router.get('/register/:id/assessments', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(assessment_request_dto_1.RiskAssessmentQuerySchema, 'query'), this._listAssessments.bind(this));
+        this.router.get('/register/:id/assessments', (0, auth_middleware_1.requirePermission)('risk:read'), (0, validate_middleware_1.validate)(assessment_request_dto_1.RiskAssessmentQuerySchema, 'query'), this._listAssessments.bind(this));
         /**
          * @route  GET /risk/register/:id/assessments/latest
          * @desc   Get latest assessment for a risk
          * @access Private - audit:read
          */
-        this.router.get('/register/:id/assessments/latest', (0, auth_middleware_1.requirePermission)('audit:read'), this._getLatestAssessment.bind(this));
+        this.router.get('/register/:id/assessments/latest', (0, auth_middleware_1.requirePermission)('risk:read'), this._getLatestAssessment.bind(this));
         /**
          * @route  GET /risk/assessments/:id
          * @desc   Get risk assessment by ID
          * @access Private - audit:read
          */
-        this.router.get('/assessments/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getAssessmentById.bind(this));
+        this.router.get('/assessments/:id', (0, auth_middleware_1.requirePermission)('risk:read'), this._getAssessmentById.bind(this));
     }
     async _createAssessment(req, res, next) {
         try {

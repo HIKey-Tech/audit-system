@@ -27,42 +27,42 @@ export class EngagementController {
      * @desc   Create engagement from plan item
      * @access Private - audit:write
      */
-    this.router.post('/', requirePermission('audit:write'), validate(CreateEngagementFromPlanRequestSchema), this._createFromPlanItem.bind(this));
+    this.router.post('/', requirePermission('engagement:create'), validate(CreateEngagementFromPlanRequestSchema), this._createFromPlanItem.bind(this));
 
     /**
      * @route  POST /audit/engagements/adhoc
      * @desc   Create ad-hoc engagement
      * @access Private - audit:write
      */
-    this.router.post('/adhoc', requirePermission('audit:write'), validate(CreateAdhocEngagementRequestSchema), this._createAdhoc.bind(this));
+    this.router.post('/adhoc', requirePermission('engagement:create'), validate(CreateAdhocEngagementRequestSchema), this._createAdhoc.bind(this));
 
     /**
      * @route  GET /audit/engagements
      * @desc   List engagements
      * @access Private - audit:read
      */
-    this.router.get('/', requirePermission('audit:read'), validate(EngagementQuerySchema, 'query'), this._listEngagements.bind(this));
+    this.router.get('/', requirePermission('engagement:read'), validate(EngagementQuerySchema, 'query'), this._listEngagements.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id
      * @desc   Get engagement
      * @access Private - audit:read
      */
-    this.router.get('/:id', requirePermission('audit:read'), this._getEngagementById.bind(this));
+    this.router.get('/:id', requirePermission('engagement:read'), this._getEngagementById.bind(this));
 
     /**
      * @route  PUT /audit/engagements/:id
      * @desc   Update engagement
      * @access Private - audit:write
      */
-    this.router.put('/:id', requirePermission('audit:write'), validate(UpdateEngagementRequestSchema), this._updateEngagement.bind(this));
+    this.router.put('/:id', requirePermission('engagement:update'), validate(UpdateEngagementRequestSchema), this._updateEngagement.bind(this));
 
     /**
      * @route  PATCH /audit/engagements/:id/status
      * @desc   Update engagement status
      * @access Private - audit:write
      */
-    this.router.patch('/:id/status', requirePermission('audit:write'), validate(UpdateEngagementStatusRequestSchema), this._updateStatus.bind(this));
+    this.router.patch('/:id/status', requirePermission('engagement:update'), validate(UpdateEngagementStatusRequestSchema), this._updateStatus.bind(this));
   }
 
   private async _createFromPlanItem(req: Request, res: Response, next: NextFunction): Promise<void> {

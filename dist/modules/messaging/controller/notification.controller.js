@@ -31,13 +31,13 @@ class NotificationController {
          * @desc   Mark all notifications as read for the current user
          * @access Private — notification:read
          */
-        this.router.post('/read-all', (0, auth_middleware_1.requirePermission)('notification:read'), this._markAllRead.bind(this));
+        this.router.post('/read-all', (0, auth_middleware_1.requirePermission)('notification:update'), this._markAllRead.bind(this));
         /**
          * @route  GET /notifications/queue/stats
          * @desc   Get notification queue counts by status
          * @access Private â€” notification:read
          */
-        this.router.get('/queue/stats', (0, auth_middleware_1.requirePermission)('notification:read'), this._getQueueStats.bind(this));
+        this.router.get('/queue/stats', (0, auth_middleware_1.requirePermission)('notification_queue:read'), this._getQueueStats.bind(this));
         /**
          * @route  GET /notifications
          * @desc   List notifications for the current user (paginated, filterable by isRead)
@@ -49,7 +49,7 @@ class NotificationController {
          * @desc   Mark a single notification as read
          * @access Private — notification:read
          */
-        this.router.post('/:id/read', (0, auth_middleware_1.requirePermission)('notification:read'), this._markRead.bind(this));
+        this.router.post('/:id/read', (0, auth_middleware_1.requirePermission)('notification:update'), this._markRead.bind(this));
     }
     async _listNotifications(req, res, next) {
         try {

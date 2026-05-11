@@ -21,49 +21,49 @@ class PlanningController {
          * @desc   Create annual audit plan
          * @access Private - audit:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(planning_request_dto_1.CreatePlanRequestSchema), this._createPlan.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('plan:create'), (0, validate_middleware_1.validate)(planning_request_dto_1.CreatePlanRequestSchema), this._createPlan.bind(this));
         /**
          * @route  GET /audit/plans
          * @desc   List audit plans
          * @access Private - audit:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(planning_request_dto_1.PlanQuerySchema, 'query'), this._listPlans.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('plan:read'), (0, validate_middleware_1.validate)(planning_request_dto_1.PlanQuerySchema, 'query'), this._listPlans.bind(this));
         /**
          * @route  GET /audit/plans/:id
          * @desc   Get audit plan
          * @access Private - audit:read
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getPlanById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('plan:read'), this._getPlanById.bind(this));
         /**
          * @route  POST /audit/plans/:id/items
          * @desc   Add audit plan item
          * @access Private - audit:write
          */
-        this.router.post('/:id/items', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(planning_request_dto_1.AddPlanItemRequestSchema), this._addPlanItem.bind(this));
+        this.router.post('/:id/items', (0, auth_middleware_1.requirePermission)('plan:add_item'), (0, validate_middleware_1.validate)(planning_request_dto_1.AddPlanItemRequestSchema), this._addPlanItem.bind(this));
         /**
          * @route  DELETE /audit/plans/:id/items/:itemId
          * @desc   Remove audit plan item
          * @access Private - audit:write
          */
-        this.router.delete('/:id/items/:itemId', (0, auth_middleware_1.requirePermission)('audit:write'), this._removePlanItem.bind(this));
+        this.router.delete('/:id/items/:itemId', (0, auth_middleware_1.requirePermission)('plan:add_item'), this._removePlanItem.bind(this));
         /**
          * @route  POST /audit/plans/:id/submit
          * @desc   Submit plan for approval
          * @access Private - audit:write
          */
-        this.router.post('/:id/submit', (0, auth_middleware_1.requirePermission)('audit:write'), this._submitPlanForApproval.bind(this));
+        this.router.post('/:id/submit', (0, auth_middleware_1.requirePermission)('plan:submit'), this._submitPlanForApproval.bind(this));
         /**
          * @route  POST /audit/plans/:id/approve
          * @desc   Approve audit plan
          * @access Private - audit:admin
          */
-        this.router.post('/:id/approve', (0, auth_middleware_1.requirePermission)('audit:admin'), this._approvePlan.bind(this));
+        this.router.post('/:id/approve', (0, auth_middleware_1.requirePermission)('plan:approve'), this._approvePlan.bind(this));
         /**
          * @route  POST /audit/plans/:id/reject
          * @desc   Reject audit plan
          * @access Private - audit:admin
          */
-        this.router.post('/:id/reject', (0, auth_middleware_1.requirePermission)('audit:admin'), (0, validate_middleware_1.validate)(planning_request_dto_1.RejectPlanRequestSchema), this._rejectPlan.bind(this));
+        this.router.post('/:id/reject', (0, auth_middleware_1.requirePermission)('plan:reject'), (0, validate_middleware_1.validate)(planning_request_dto_1.RejectPlanRequestSchema), this._rejectPlan.bind(this));
     }
     async _createPlan(req, res, next) {
         try {

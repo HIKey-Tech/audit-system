@@ -4,6 +4,8 @@ import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { WORKING_PAPER_TEMPLATE_XML } from './templates/working-paper.template';
 import { AUDIT_REPORT_TEMPLATE_XML } from './templates/audit-report.template';
+import { logger } from '../src/shared/utils/logger.util';
+import { AppError } from '../src/shared/errors/app.error';
 
 const prisma = new PrismaClient();
 
@@ -285,144 +287,301 @@ const NOTIFICATION_TEMPLATES: Array<{
 ];
 
 // ─────────────────────────────────────────────────────────────
-// Permissions  (module:action)
-// ─────────────────────────────────────────────────────────────
-const PERMISSIONS = [
-  // user module
-  { name: 'user:read', module: 'user', action: 'read', description: 'View users' },
-  { name: 'user:write', module: 'user', action: 'write', description: 'Create / update users' },
-  { name: 'user:delete', module: 'user', action: 'delete', description: 'Delete users' },
-  { name: 'user:admin', module: 'user', action: 'admin', description: 'Manage roles & permissions' },
+// Permissions
+// ------------------------------------------------------------
+type PermissionSeed = {
+  slug: string;
+  name: string;
+  description: string;
+  module: string;
+  action: string;
+};
 
-  // audit module
-  { name: 'audit:read', module: 'audit', action: 'read', description: 'View audit plans & engagements' },
-  { name: 'audit:write', module: 'audit', action: 'write', description: 'Create / update audit content' },
-  { name: 'audit:delete', module: 'audit', action: 'delete', description: 'Delete audit content' },
-  { name: 'audit:admin', module: 'audit', action: 'admin', description: 'Full audit administration' },
+const toDisplayName = (slug: string): string =>
+  slug
+    .split(':')
+    .map((part) =>
+      part
+        .split('_')
+        .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+        .join(' '),
+    )
+    .join(' ');
 
-  // finding module (part of audit)
-  { name: 'finding:read', module: 'audit', action: 'read', description: 'View findings' },
-  { name: 'finding:write', module: 'audit', action: 'write', description: 'Create / update findings' },
+const permission = (
+  slug: string,
+  description: string,
+  module: string,
+): PermissionSeed => ({
+  slug,
+  name: toDisplayName(slug),
+  description,
+  module,
+  action: slug.split(':')[1] ?? slug,
+});
 
-  // document module
-  { name: 'document:read', module: 'document', action: 'read', description: 'Download documents' },
-  { name: 'document:write', module: 'document', action: 'write', description: 'Upload documents' },
-  { name: 'document:delete', module: 'document', action: 'delete', description: 'Delete documents' },
+const PERMISSIONS: PermissionSeed[] = [
+  permission('auth:logout', 'Logout current session', 'user'),
+  permission('auth:logout_all', 'Logout all sessions', 'user'),
 
-  // messaging module
-  { name: 'notification:read', module: 'messaging', action: 'read', description: 'View notifications' },
+  permission('user:read', 'View users', 'user'),
+  permission('user:create', 'Create users', 'user'),
+  permission('user:update', 'Update users', 'user'),
+  permission('user:delete', 'Delete users', 'user'),
+  permission('user:admin', 'Manage user roles and permissions', 'user'),
+  permission('role:read', 'View roles', 'user'),
+  permission('role:create', 'Create roles', 'user'),
+  permission('role:update', 'Update roles', 'user'),
+  permission('role:delete', 'Delete roles', 'user'),
+  permission('role:assign', 'Assign roles to users', 'user'),
+  permission('permission:read', 'View permissions', 'user'),
 
-  // logging module
-  { name: 'log:read', module: 'logging', action: 'read', description: 'View audit logs' },
-  { name: 'log:admin', module: 'logging', action: 'admin', description: 'Manage log settings' },
+  permission('document:read', 'View documents', 'document'),
+  permission('document:write', 'Upload and create documents', 'document'),
+  permission('document:delete', 'Delete documents', 'document'),
+  permission('document_template:read', 'View document templates', 'document'),
+  permission('document_template:write', 'Create and update document templates', 'document'),
+  permission('document_template:delete', 'Delete document templates', 'document'),
 
-  // background module
-  { name: 'job:read', module: 'background', action: 'read', description: 'View scheduled jobs' },
-  { name: 'job:admin', module: 'background', action: 'admin', description: 'Manage scheduled jobs' },
+  permission('log:read', 'View audit logs', 'logging'),
+  permission('log:summary', 'View audit log summary and aggregate stats', 'logging'),
 
-  // predictive module
-  { name: 'predictive:read', module: 'predictive', action: 'read', description: 'View ML insights' },
-  { name: 'predictive:admin', module: 'predictive', action: 'admin', description: 'Manage ML models' },
+  permission('notification:read', 'View notifications', 'messaging'),
+  permission('notification:update', 'Mark notifications as read', 'messaging'),
+  permission('notification_template:read', 'View notification templates', 'messaging'),
+  permission('notification_template:write', 'Create and update notification templates', 'messaging'),
+  permission('notification_template:delete', 'Delete notification templates', 'messaging'),
+  permission('notification_queue:read', 'View notification queue stats', 'messaging'),
+
+  permission('job:read', 'View background jobs', 'background'),
+  permission('job:admin', 'Enable and disable background jobs', 'background'),
+
+  permission('approval:read', 'View approvals', 'workflow'),
+  permission('approval:approve', 'Approve approval steps', 'workflow'),
+  permission('approval:reject', 'Reject approval steps', 'workflow'),
+  permission('approval:cancel', 'Cancel approvals', 'workflow'),
+  permission('assignment:read', 'View assignments', 'workflow'),
+  permission('assignment:create', 'Create assignments', 'workflow'),
+  permission('assignment:delete', 'Remove assignments', 'workflow'),
+  permission('escalation:read', 'View escalations', 'workflow'),
+  permission('escalation:acknowledge', 'Acknowledge escalations', 'workflow'),
+  permission('escalation_policy:read', 'View escalation policies', 'workflow'),
+  permission('escalation_policy:update', 'Update escalation policies', 'workflow'),
+
+  permission('universe:read', 'View audit universe entities', 'audit'),
+  permission('universe:create', 'Create audit universe entities', 'audit'),
+  permission('universe:update', 'Update audit universe entities', 'audit'),
+  permission('universe:delete', 'Delete audit universe entities', 'audit'),
+  permission('plan:read', 'View audit plans', 'audit'),
+  permission('plan:create', 'Create audit plans', 'audit'),
+  permission('plan:update', 'Update audit plans', 'audit'),
+  permission('plan:add_item', 'Add items to audit plans', 'audit'),
+  permission('plan:submit', 'Submit audit plans for approval', 'audit'),
+  permission('plan:approve', 'Approve audit plans', 'audit'),
+  permission('plan:reject', 'Reject audit plans', 'audit'),
+  permission('engagement:read', 'View audit engagements', 'audit'),
+  permission('engagement:create', 'Create audit engagements', 'audit'),
+  permission('engagement:update', 'Update audit engagements', 'audit'),
+  permission('engagement:delete', 'Delete audit engagements', 'audit'),
+  permission('checklist:read', 'View audit checklists', 'audit'),
+  permission('checklist:update', 'Update checklist items', 'audit'),
+  permission('working_paper:read', 'View working papers', 'audit'),
+  permission('working_paper:create', 'Create working papers', 'audit'),
+  permission('working_paper:update', 'Update working papers', 'audit'),
+  permission('working_paper:submit', 'Submit working papers for review', 'audit'),
+  permission('working_paper:approve', 'Approve working papers', 'audit'),
+  permission('working_paper:reject', 'Reject working papers', 'audit'),
+  permission('evidence:read', 'View evidence', 'audit'),
+  permission('evidence:upload', 'Upload evidence', 'audit'),
+  permission('evidence:dispute', 'Dispute evidence', 'audit'),
+  permission('finding:read', 'View findings', 'audit'),
+  permission('finding:create', 'Create findings', 'audit'),
+  permission('finding:update', 'Update findings', 'audit'),
+  permission('finding:close', 'Close findings', 'audit'),
+  permission('followup:read', 'View follow-ups', 'audit'),
+  permission('followup:respond', 'Submit management responses', 'audit'),
+  permission('followup:evidence', 'Submit remediation evidence', 'audit'),
+  permission('followup:verify', 'Verify remediation', 'audit'),
+  permission('report:read', 'View audit reports', 'audit'),
+  permission('report:create', 'Generate audit reports', 'audit'),
+  permission('report:update', 'Update audit reports', 'audit'),
+  permission('report:submit', 'Submit reports for approval', 'audit'),
+  permission('report:approve', 'Approve audit reports', 'audit'),
+  permission('report:reject', 'Reject audit reports', 'audit'),
+  permission('report:issue', 'Issue audit reports', 'audit'),
+  permission('report:export', 'Export audit reports', 'audit'),
+
+  permission('risk_category:read', 'View risk categories', 'risk'),
+  permission('risk_category:write', 'Create and update risk categories', 'risk'),
+  permission('risk_category:delete', 'Delete risk categories', 'risk'),
+  permission('risk:read', 'View risks', 'risk'),
+  permission('risk:create', 'Create risks', 'risk'),
+  permission('risk:update', 'Update risks', 'risk'),
+  permission('risk:delete', 'Delete risks', 'risk'),
+  permission('risk:assess', 'Assess risks', 'risk'),
+  permission('risk_monitoring:read', 'View risk monitoring data', 'risk'),
+
+  permission('dashboard:read', 'View dashboard data', 'dashboard'),
+
+  permission('settings:read', 'View settings', 'settings'),
+  permission('settings:manage', 'Manage system settings', 'settings'),
 ];
 
-// ─────────────────────────────────────────────────────────────
+// ------------------------------------------------------------
 // Roles + their permission sets
-// ─────────────────────────────────────────────────────────────
+// ------------------------------------------------------------
 const ROLES: Array<{
   name: string;
   description: string;
   isSystem: boolean;
   permissions: string[];
 }> = [
-    {
-      name: 'super_admin',
-      description: 'Full system access',
-      isSystem: true,
-      permissions: PERMISSIONS.map((p) => p.name),
-    },
-    {
-      name: 'audit_admin',
-      description: 'Full audit management, no system settings',
-      isSystem: true,
-      permissions: [
-        'user:read', 'user:write',
-        'audit:read', 'audit:write', 'audit:delete', 'audit:admin',
-        'finding:read', 'finding:write',
-        'document:read', 'document:write', 'document:delete',
-        'notification:read',
-        'log:read',
-        'job:read',
-        'predictive:read',
-      ],
-    },
-    {
-      name: 'audit_lead',
-      description: 'Lead auditor — manages engagements and team',
-      isSystem: true,
-      permissions: [
-        'user:read',
-        'audit:read', 'audit:write',
-        'finding:read', 'finding:write',
-        'document:read', 'document:write',
-        'notification:read',
-        'log:read',
-        'predictive:read',
-      ],
-    },
-    {
-      name: 'auditor',
-      description: 'Standard auditor — works on assigned engagements',
-      isSystem: true,
-      permissions: [
-        'audit:read', 'audit:write',
-        'finding:read', 'finding:write',
-        'document:read', 'document:write',
-        'notification:read',
-      ],
-    },
-    {
-      name: 'director',
-      description: 'Director - read-only audit oversight and report escalation approval',
-      isSystem: true,
-      permissions: [
-        'audit:read', 'audit:write',
-        'finding:read',
-        'document:read',
-      ],
-    },
-    {
-      name: 'cae',
-      description: 'Chief Audit Executive - full audit oversight',
-      isSystem: true,
-      permissions: [
-        'audit:read', 'audit:write', 'audit:admin',
-        'finding:read', 'finding:write',
-        'document:read', 'document:write',
-      ],
-    },
-    {
-      name: 'auditee',
-      description: 'Auditee — views relevant findings and responds',
-      isSystem: true,
-      permissions: [
-        'audit:read', 'audit:write',
-        'finding:read',
-        'document:read',
-        'notification:read',
-      ],
-    },
-    {
-      name: 'viewer',
-      description: 'Read-only access — default role on SSO provisioning',
-      isSystem: true,
-      permissions: [
-        'audit:read',
-        'finding:read',
-        'document:read',
-        'notification:read',
-      ],
-    },
-  ];
+  {
+    name: 'super_admin',
+    description: 'Full system access',
+    isSystem: true,
+    permissions: PERMISSIONS.map((p) => p.slug),
+  },
+  {
+    name: 'audit_manager',
+    description: 'Audit manager with audit programme, workflow, risk, document, and read-only settings access',
+    isSystem: false,
+    permissions: [
+      'universe:read', 'universe:create', 'universe:update',
+      'plan:read', 'plan:create', 'plan:update', 'plan:add_item', 'plan:submit', 'plan:approve', 'plan:reject',
+      'engagement:read', 'engagement:create', 'engagement:update',
+      'checklist:read', 'checklist:update',
+      'working_paper:read', 'working_paper:create', 'working_paper:update', 'working_paper:submit', 'working_paper:approve', 'working_paper:reject',
+      'evidence:read', 'evidence:upload', 'evidence:dispute',
+      'finding:read', 'finding:create', 'finding:update', 'finding:close',
+      'followup:read', 'followup:verify',
+      'report:read', 'report:create', 'report:update', 'report:submit', 'report:approve', 'report:reject', 'report:issue', 'report:export',
+      'risk:read', 'risk:create', 'risk:update', 'risk:assess',
+      'risk_category:read', 'risk_category:write',
+      'risk_monitoring:read',
+      'approval:read', 'approval:approve', 'approval:reject', 'approval:cancel',
+      'assignment:read', 'assignment:create', 'assignment:delete',
+      'escalation:read', 'escalation:acknowledge',
+      'escalation_policy:read', 'escalation_policy:update',
+      'user:read', 'role:read',
+      'document:read', 'document:write',
+      'document_template:read',
+      'dashboard:read',
+      'notification:read', 'notification:update',
+      'notification_template:read',
+      'log:read',
+      'job:read',
+      'settings:read',
+    ],
+  },
+  {
+    name: 'audit_lead',
+    description: 'Lead auditor who manages assigned engagement execution',
+    isSystem: false,
+    permissions: [
+      'universe:read',
+      'plan:read',
+      'engagement:read', 'engagement:update',
+      'checklist:read', 'checklist:update',
+      'working_paper:read', 'working_paper:create', 'working_paper:update', 'working_paper:submit', 'working_paper:approve', 'working_paper:reject',
+      'evidence:read', 'evidence:upload',
+      'finding:read', 'finding:create', 'finding:update', 'finding:close',
+      'followup:read', 'followup:verify',
+      'report:read', 'report:export',
+      'risk:read',
+      'risk_monitoring:read',
+      'approval:read',
+      'assignment:read',
+      'escalation:read',
+      'document:read', 'document:write',
+      'dashboard:read',
+      'notification:read', 'notification:update',
+      'log:read',
+    ],
+  },
+  {
+    name: 'auditor',
+    description: 'Standard auditor who works on assigned engagements',
+    isSystem: false,
+    permissions: [
+      'universe:read',
+      'plan:read',
+      'engagement:read',
+      'checklist:read', 'checklist:update',
+      'working_paper:read', 'working_paper:create', 'working_paper:update',
+      'evidence:read', 'evidence:upload',
+      'finding:read',
+      'followup:read',
+      'report:read',
+      'document:read', 'document:write',
+      'dashboard:read',
+      'notification:read', 'notification:update',
+    ],
+  },
+  {
+    name: 'auditee',
+    description: 'Auditee who views findings and submits follow-up responses',
+    isSystem: false,
+    permissions: [
+      'engagement:read',
+      'finding:read',
+      'followup:read', 'followup:respond', 'followup:evidence',
+      'notification:read', 'notification:update',
+      'dashboard:read',
+    ],
+  },
+  {
+    name: 'director',
+    description: 'Director with oversight and approval permissions',
+    isSystem: false,
+    permissions: [
+      'engagement:read',
+      'finding:read',
+      'report:read',
+      'approval:read', 'approval:approve', 'approval:reject',
+      'risk:read',
+      'risk_monitoring:read',
+      'universe:read',
+      'plan:read',
+      'dashboard:read',
+      'notification:read', 'notification:update',
+      'log:read',
+    ],
+  },
+  {
+    name: 'cae',
+    description: 'Chief Audit Executive with executive oversight and issue authority',
+    isSystem: false,
+    permissions: [
+      'engagement:read',
+      'finding:read',
+      'report:read', 'report:issue',
+      'approval:read', 'approval:approve', 'approval:reject',
+      'risk:read', 'risk_monitoring:read',
+      'universe:read',
+      'plan:read', 'plan:approve', 'plan:reject',
+      'dashboard:read',
+      'notification:read', 'notification:update',
+      'log:read', 'log:summary',
+    ],
+  },
+  {
+    name: 'viewer',
+    description: 'Read-only access for oversight and default SSO provisioning',
+    isSystem: false,
+    permissions: [
+      'engagement:read',
+      'finding:read',
+      'report:read',
+      'risk:read',
+      'risk_monitoring:read',
+      'universe:read',
+      'plan:read',
+      'dashboard:read',
+      'notification:read',
+    ],
+  },
+];
 
 type SeedUser = {
   email: string;
@@ -444,7 +603,7 @@ const SEEDED_USERS: SeedUser[] = [
     lastName: 'Adesanya',
     department: 'Internal Audit',
     jobTitle: 'Chief Audit Executive',
-    roles: ['super_admin', 'audit_admin'],
+    roles: ['super_admin'],
     isSystemUser: true,
   },
   {
@@ -454,7 +613,7 @@ const SEEDED_USERS: SeedUser[] = [
     lastName: 'Okonkwo',
     department: 'Internal Audit',
     jobTitle: 'Audit Manager',
-    roles: ['audit_admin'],
+    roles: ['audit_manager'],
   },
   {
     email: 'tunde@gbb.gov.ng',
@@ -511,19 +670,33 @@ const SEEDED_USERS: SeedUser[] = [
 // Seed
 // ─────────────────────────────────────────────────────────────
 async function main(): Promise<void> {
-  console.log('🌱  Seeding database...');
+  logger.info('Seeding database');
 
-  // 1. Upsert permissions
+  // 1. Upsert permissions and remove obsolete catalogue entries.
+  const permissionSlugs = PERMISSIONS.map((perm) => perm.slug);
+
+  await prisma.role_Permission.deleteMany({
+    where: { permission: { slug: { notIn: permissionSlugs } } },
+  });
+  await prisma.permission.deleteMany({
+    where: { slug: { notIn: permissionSlugs } },
+  });
+
   for (const perm of PERMISSIONS) {
     await prisma.permission.upsert({
-      where: { name: perm.name },
+      where: { slug: perm.slug },
       create: perm,
-      update: { description: perm.description },
+      update: {
+        name: perm.name,
+        module: perm.module,
+        action: perm.action,
+        description: perm.description,
+      },
     });
   }
-  console.log(`   ✓ ${PERMISSIONS.length} permissions seeded`);
+  logger.info('Permissions seeded', { count: PERMISSIONS.length });
 
-  // 2. Upsert roles + role_permissions
+  // 2. Upsert roles + role_permissions.
   for (const roleData of ROLES) {
     const role = await prisma.role.upsert({
       where: { name: roleData.name },
@@ -532,28 +705,39 @@ async function main(): Promise<void> {
         description: roleData.description,
         is_system: roleData.isSystem,
       },
-      update: { description: roleData.description },
+      update: {
+        description: roleData.description,
+        is_system: roleData.isSystem,
+      },
     });
 
-    // Clear existing assignments then re-apply (idempotent)
     await prisma.role_Permission.deleteMany({ where: { role_id: role.id } });
 
     const permissions = await prisma.permission.findMany({
-      where: { name: { in: roleData.permissions } },
-      select: { id: true },
+      where: { slug: { in: roleData.permissions } },
+      select: { id: true, slug: true },
     });
+
+    if (permissions.length !== roleData.permissions.length) {
+      const foundSlugs = new Set(permissions.map((perm) => perm.slug));
+      const missingSlugs = roleData.permissions.filter((slug) => !foundSlugs.has(slug));
+      throw AppError.internal(
+        'Seed role ' + roleData.name + ' references missing permissions: ' + missingSlugs.join(', '),
+      );
+    }
 
     await prisma.role_Permission.createMany({
-      data: permissions.map((p: { id: string }) => ({ role_id: role.id, permission_id: p.id })),
+      data: permissions.map((perm) => ({ role_id: role.id, permission_id: perm.id })),
     });
   }
-  console.log(`   ✓ ${ROLES.length} roles seeded`);
+  logger.info('Roles seeded', { count: ROLES.length });
 
-  // 3. Upsert seed users + role assignments
+  // 3. Upsert seed users + role assignments.
   let adminUserId = '';
   for (const seedUser of SEEDED_USERS) {
-    const displayName = `${seedUser.firstName} ${seedUser.lastName}`;
+    const displayName = seedUser.firstName + ' ' + seedUser.lastName;
     const passwordHash = await bcrypt.hash(seedUser.password, 12);
+    const seedUserIsSuperAdmin = seedUser.roles.includes('super_admin');
 
     if (seedUser.legacyEmail) {
       const existingTarget = await prisma.user.findUnique({
@@ -583,6 +767,7 @@ async function main(): Promise<void> {
         job_title: seedUser.jobTitle,
         email_verified: true,
         is_system_user: seedUser.isSystemUser ?? false,
+        is_super_admin: seedUserIsSuperAdmin,
         is_active: true,
       },
       update: {
@@ -594,6 +779,7 @@ async function main(): Promise<void> {
         job_title: seedUser.jobTitle,
         email_verified: true,
         is_system_user: seedUser.isSystemUser ?? false,
+        is_super_admin: seedUserIsSuperAdmin,
         is_active: true,
         deleted_at: null,
       },
@@ -605,16 +791,19 @@ async function main(): Promise<void> {
 
     await prisma.user_Role.deleteMany({ where: { user_id: user.id } });
     await prisma.user_Role.createMany({
-      data: roles.map((role: { id: string }) => ({ user_id: user.id, role_id: role.id })),
+      data: roles.map((role) => ({ user_id: user.id, role_id: role.id })),
     });
 
     if (seedUser.email === 'admin@example.com') {
       adminUserId = user.id;
     }
-    console.log(`   - User seeded: ${seedUser.email} (${roles.map((role) => role.name).join(', ')})`);
+    logger.info('User seeded', {
+      email: seedUser.email,
+      roles: roles.map((role) => role.name),
+    });
   }
 
-  // 4. Upsert default DOCX export templates
+  // 4. Upsert default DOCX export templates.
   for (const tpl of DOCUMENT_TEMPLATES) {
     const existing = await prisma.document_Template.findUnique({
       where: { name: tpl.name },
@@ -644,9 +833,9 @@ async function main(): Promise<void> {
       });
     }
   }
-  console.log(`   ✓ ${DOCUMENT_TEMPLATES.length} document templates seeded`);
+  logger.info('Document templates seeded', { count: DOCUMENT_TEMPLATES.length });
 
-  // 5. Upsert default notification templates (event_key + channel is unique)
+  // 5. Upsert default notification templates (event_key + channel is unique).
   for (const tpl of NOTIFICATION_TEMPLATES) {
     await prisma.notification_Template.upsert({
       where: {
@@ -673,14 +862,14 @@ async function main(): Promise<void> {
       },
     });
   }
-  console.log(`   ✓ ${NOTIFICATION_TEMPLATES.length} notification templates seeded`);
+  logger.info('Notification templates seeded', { count: NOTIFICATION_TEMPLATES.length });
 
-  console.log('✅  Seed complete');
+  logger.info('Seed complete');
 }
 
 main()
-  .catch((err) => {
-    console.error('Seed failed:', err);
+  .catch((err: unknown) => {
+    logger.error('Seed failed', { err });
     process.exit(1);
   })
   .finally(() => prisma.$disconnect());

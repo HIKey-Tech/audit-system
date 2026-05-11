@@ -26,6 +26,7 @@ model User {
   job_title      String?
   is_active      Boolean   @default(true)
   is_system_user Boolean   @default(false)
+  is_super_admin Boolean   @default(false)
   last_login_at  DateTime?
   password_hash  String? // null for SSO-only users
   created_at     DateTime  @default(now())
@@ -92,10 +93,11 @@ model Role {
 
 model Permission {
   id          String   @id @default(uuid())
-  name        String   @unique // e.g. "audit:read", "audit:write"
-  module      String // e.g. "audit", "user", "document"
-  action      String // e.g. "read", "write", "delete", "admin"
-  description String?
+  slug        String   @unique // e.g. "engagement:create", "finding:read"
+  name        String // human-readable display name
+  module      String // audit | risk | workflow | user | document | dashboard | messaging | logging | background | settings
+  action      String // derived from slug, retained for query/sort compatibility
+  description String // explains what this permission allows
   created_at  DateTime @default(now())
 
   role_permissions Role_Permission[]

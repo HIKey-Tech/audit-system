@@ -7,8 +7,6 @@ exports.requireRole = exports.requirePermission = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const app_config_1 = require("../config/app.config");
 const app_error_1 = require("../errors/app.error");
-const prisma_client_1 = require("../prisma/prisma.client");
-const prisma_types_1 = require("../prisma/prisma.types");
 const authenticate = async (req, _res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -26,25 +24,13 @@ const authenticate = async (req, _res, next) => {
             }
             throw app_error_1.AppError.unauthorized('Invalid token');
         }
-        const user = await prisma_client_1.prisma.user.findFirst({
-            where: { id: payload.sub, is_active: true, deleted_at: null },
-            include: prisma_types_1.userWithRolesInclude,
-        });
-        if (!user) {
-            throw app_error_1.AppError.unauthorized('User not found or inactive');
-        }
-        const now = new Date();
-        const activeUserRoles = user.user_roles.filter((ur) => ur.expires_at === null || ur.expires_at > now);
-        const roles = activeUserRoles.map((ur) => ur.role.name);
-        const permissions = [
-            ...new Set(activeUserRoles.flatMap((ur) => ur.role.role_permissions.map((rp) => rp.permission.name))),
-        ];
         req.user = {
-            id: user.id,
-            email: user.email,
-            displayName: user.display_name ?? `${user.first_name} ${user.last_name}`,
-            roles,
-            permissions,
+            id: payload.sub,
+            email: payload.email,
+            displayName: payload.displayName,
+            roles: payload.roles ?? [],
+            permissions: payload.permissions ?? [],
+            isSuperAdmin: payload.isSuperAdmin ?? false,
         };
         next();
     }
@@ -56,6 +42,9 @@ exports.authenticate = authenticate;
 const requirePermission = (...requiredPermissions) => (req, _res, next) => {
     if (!req.user) {
         return next(app_error_1.AppError.unauthorized());
+    }
+    if (req.user.isSuperAdmin) {
+        return next();
     }
     const hasAll = requiredPermissions.every((perm) => req.user.permissions.includes(perm));
     if (!hasAll) {

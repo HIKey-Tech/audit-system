@@ -41,17 +41,17 @@ export declare const UpdateUserRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     phone?: string | undefined;
     department?: string | undefined;
+    displayName?: string | undefined;
     firstName?: string | undefined;
     lastName?: string | undefined;
-    displayName?: string | undefined;
     jobTitle?: string | undefined;
     isActive?: boolean | undefined;
 }, {
     phone?: string | undefined;
     department?: string | undefined;
+    displayName?: string | undefined;
     firstName?: string | undefined;
     lastName?: string | undefined;
-    displayName?: string | undefined;
     jobTitle?: string | undefined;
     isActive?: boolean | undefined;
 }>;
@@ -119,10 +119,43 @@ export declare const RoleQuerySchema: z.ZodObject<{
     sortBy?: "name" | "created_at" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
 }>;
+export declare const CreateRoleRequestSchema: z.ZodObject<{
+    name: z.ZodString;
+    description: z.ZodOptional<z.ZodString>;
+    permissionIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+}, "strip", z.ZodTypeAny, {
+    name: string;
+    description?: string | undefined;
+    permissionIds?: string[] | undefined;
+}, {
+    name: string;
+    description?: string | undefined;
+    permissionIds?: string[] | undefined;
+}>;
+export declare const UpdateRoleRequestSchema: z.ZodObject<{
+    name: z.ZodOptional<z.ZodString>;
+    description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+}, "strip", z.ZodTypeAny, {
+    name?: string | undefined;
+    description?: string | null | undefined;
+}, {
+    name?: string | undefined;
+    description?: string | null | undefined;
+}>;
+export declare const ReplaceRolePermissionsRequestSchema: z.ZodObject<{
+    permissionIds: z.ZodArray<z.ZodString, "many">;
+}, "strip", z.ZodTypeAny, {
+    permissionIds: string[];
+}, {
+    permissionIds: string[];
+}>;
 export type CreateUserRequestDto = z.infer<typeof CreateUserRequestSchema>;
 export type UpdateUserRequestDto = z.infer<typeof UpdateUserRequestSchema>;
 export type AssignRoleRequestDto = z.infer<typeof AssignRoleRequestSchema>;
 export type ChangePasswordRequestDto = z.infer<typeof ChangePasswordRequestSchema>;
 export type UserQueryDto = z.infer<typeof UserQuerySchema>;
 export type RoleQueryDto = z.infer<typeof RoleQuerySchema>;
+export type CreateRoleRequestDto = z.infer<typeof CreateRoleRequestSchema>;
+export type UpdateRoleRequestDto = z.infer<typeof UpdateRoleRequestSchema>;
+export type ReplaceRolePermissionsRequestDto = z.infer<typeof ReplaceRolePermissionsRequestSchema>;
 //# sourceMappingURL=user.request.dto.d.ts.map

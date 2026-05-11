@@ -21,43 +21,43 @@ class RegisterController {
          * @desc   Create risk register item
          * @access Private - audit:write
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(register_request_dto_1.CreateRiskRequestSchema), this._createRisk.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('risk:create'), (0, validate_middleware_1.validate)(register_request_dto_1.CreateRiskRequestSchema), this._createRisk.bind(this));
         /**
          * @route  GET /risk/register
          * @desc   List risk register items
          * @access Private - audit:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('audit:read'), (0, validate_middleware_1.validate)(register_request_dto_1.RiskRegisterQuerySchema, 'query'), this._listRisks.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('risk:read'), (0, validate_middleware_1.validate)(register_request_dto_1.RiskRegisterQuerySchema, 'query'), this._listRisks.bind(this));
         /**
          * @route  GET /risk/register/universe/:universeId
          * @desc   List risks linked to audit universe entity
          * @access Private - audit:read
          */
-        this.router.get('/universe/:universeId', (0, auth_middleware_1.requirePermission)('audit:read'), this._getRisksByUniverseEntity.bind(this));
+        this.router.get('/universe/:universeId', (0, auth_middleware_1.requirePermission)('risk:read'), this._getRisksByUniverseEntity.bind(this));
         /**
          * @route  GET /risk/register/:id
          * @desc   Get risk register item
          * @access Private - audit:read
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('audit:read'), this._getRiskById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('risk:read'), this._getRiskById.bind(this));
         /**
          * @route  PUT /risk/register/:id
          * @desc   Update risk register item
          * @access Private - audit:write
          */
-        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(register_request_dto_1.UpdateRiskRequestSchema), this._updateRisk.bind(this));
+        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('risk:update'), (0, validate_middleware_1.validate)(register_request_dto_1.UpdateRiskRequestSchema), this._updateRisk.bind(this));
         /**
          * @route  PATCH /risk/register/:id/status
          * @desc   Update risk status
          * @access Private - audit:write
          */
-        this.router.patch('/:id/status', (0, auth_middleware_1.requirePermission)('audit:write'), (0, validate_middleware_1.validate)(register_request_dto_1.UpdateRiskStatusRequestSchema), this._updateRiskStatus.bind(this));
+        this.router.patch('/:id/status', (0, auth_middleware_1.requirePermission)('risk:update'), (0, validate_middleware_1.validate)(register_request_dto_1.UpdateRiskStatusRequestSchema), this._updateRiskStatus.bind(this));
         /**
          * @route  DELETE /risk/register/:id
          * @desc   Soft-delete risk
          * @access Private - audit:delete
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('audit:delete'), this._deleteRisk.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('risk:delete'), this._deleteRisk.bind(this));
     }
     async _createRisk(req, res, next) {
         try {

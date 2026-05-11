@@ -61,7 +61,7 @@ export class UserController {
      */
     this.router.get(
       '/',
-      requirePermission('user:read'),
+      requirePermission('role:read'),
       validate(UserQuerySchema, 'query'),
       this._listUsers.bind(this),
     );
@@ -73,7 +73,7 @@ export class UserController {
      */
     this.router.get(
       '/roles',
-      requirePermission('user:read'),
+      requirePermission('permission:read'),
       validate(RoleQuerySchema, 'query'),
       this._listRoles.bind(this),
     );
@@ -96,7 +96,7 @@ export class UserController {
      */
     this.router.post(
       '/',
-      requirePermission('user:write'),
+      requirePermission('user:create'),
       validate(CreateUserRequestSchema),
       this._createUser.bind(this),
     );
@@ -119,7 +119,7 @@ export class UserController {
      */
     this.router.patch(
       '/:id',
-      requirePermission('user:write'),
+      requirePermission('user:update'),
       validate(UpdateUserRequestSchema),
       this._updateUser.bind(this),
     );
@@ -142,7 +142,7 @@ export class UserController {
      */
     this.router.put(
       '/:id/roles',
-      requirePermission('user:admin'),
+      requirePermission('role:assign'),
       validate(AssignRoleRequestSchema),
       this._assignRoles.bind(this),
     );
@@ -154,7 +154,7 @@ export class UserController {
      */
     this.router.delete(
       '/:id/roles/:roleId',
-      requirePermission('user:admin'),
+      requirePermission('role:assign'),
       this._removeRole.bind(this),
     );
   }
