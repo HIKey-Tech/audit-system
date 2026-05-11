@@ -1,3 +1,4 @@
+import { format } from 'date-fns';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError, ErrorCode } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
@@ -14,6 +15,7 @@ import { IFollowUpService } from '../../../follow-up/service/interface/follow-up
 import { UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto, mapReportToResponse } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
+import { IReportGenerationService } from '../interface/report-generation.service.interface';
 
 const reportInclude = {
   engagement: {
@@ -30,6 +32,7 @@ export class ReportService implements IReportService {
   constructor(
     private readonly followUpService: IFollowUpService,
     private readonly documentService: IDocumentService,
+    private readonly reportGenerationService: IReportGenerationService,
     private readonly approvalService: IApprovalService = workflowApprovalService,
   ) {}
 
@@ -241,6 +244,40 @@ export class ReportService implements IReportService {
 
     logger.info('Audit report issued', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.issue', module: 'audit', entityType: 'audit_report', entityId: id });
+
+    // Fire-and-forget auto-generation of both formats after issue
+    void this.reportGenerationService.generatePdf(id).then(async (buffer) => {
+      const fileName = `GBB-IAR-${updated.engagement.reference_number}-${format(new Date(), 'yyyy-MM-dd')}.pdf`;
+      const uploaded = await this.documentService.upload({
+        uploadedById: actor.id,
+        originalName: fileName,
+        mimeType: 'application/pdf',
+        fileSize: buffer.length,
+        buffer,
+        module: 'audit',
+        entityType: 'audit_report',
+        entityId: id,
+      });
+      await prisma.audit_Report.update({
+        where: { id },
+        data: { document_id: uploaded.id },
+      });
+    }).catch((err) => logger.warn('PDF generation failed after issue', { err, reportId: id }));
+
+    void this.reportGenerationService.generateDocx(id).then(async (buffer) => {
+      const fileName = `GBB-IAR-${updated.engagement.reference_number}-${format(new Date(), 'yyyy-MM-dd')}.docx`;
+      await this.documentService.upload({
+        uploadedById: actor.id,
+        originalName: fileName,
+        mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        fileSize: buffer.length,
+        buffer,
+        module: 'audit',
+        entityType: 'audit_report',
+        entityId: id,
+      });
+    }).catch((err) => logger.warn('DOCX generation failed after issue', { err, reportId: id }));
+
     return mapReportToResponse(updated);
   }
 
@@ -253,45 +290,12 @@ export class ReportService implements IReportService {
     return mapReportToResponse(report);
   }
 
-  async exportReport(id: string): Promise<ExportedAuditFile> {
-    const report = await prisma.audit_Report.findFirst({
-      where: { id, deleted_at: null },
-      include: reportInclude,
-    });
-    if (!report) throw AppError.notFound('Audit report');
-
-    const findings = report.engagement.findings.map((f, idx) => ({
-      index: String(idx + 1),
-      title: f.title,
-      severity: f.severity,
-      category: f.category,
-      status: f.status,
-      dueDate: f.due_date.toISOString().slice(0, 10),
-      description: f.description,
-      rootCause: f.root_cause,
-      riskImplication: f.risk_implication,
-      recommendation: f.recommendation,
-    }));
-
-    const buffer = await this.documentService.renderDocxTemplate('audit_report', {
-      title: report.title,
-      engagementReference: report.engagement.reference_number,
-      engagementTitle: report.engagement.title,
-      date: new Date().toISOString().slice(0, 10),
-      status: report.status,
-      version: String(report.version_number),
-      issuedAt: report.issued_at ? report.issued_at.toISOString().slice(0, 10) : 'Not yet issued',
-      executiveSummary: report.executive_summary,
-      scope: report.scope,
-      methodology: report.methodology,
-      findings,
-      findingCount: String(findings.length),
-    });
-
+  async exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile> {
+    const file = await this.reportGenerationService.exportReport(id, format);
     return {
-      fileName: `${report.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-audit-report.docx`,
-      mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      buffer,
+      fileName: file.filename,
+      mimeType: file.mimeType,
+      buffer: file.buffer,
     };
   }
 

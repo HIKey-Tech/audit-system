@@ -4,6 +4,9 @@ exports.ChecklistService = exports.FollowUpService = exports.ReportService = exp
 const express_1 = require("express");
 const document_1 = require("../document");
 const register_service_1 = require("../risk/register/service/implementation/register.service");
+const report_template_service_1 = require("../settings/service/implementation/report-template.service");
+const system_config_service_1 = require("../settings/service/implementation/system-config.service");
+const approval_service_1 = require("../workflow/approval/service/implementation/approval.service");
 const universe_service_1 = require("./universe/service/implementation/universe.service");
 const planning_service_1 = require("./planning/service/implementation/planning.service");
 const checklist_service_1 = require("./checklists/service/implementation/checklist.service");
@@ -13,6 +16,7 @@ const evidence_service_1 = require("./evidence/service/implementation/evidence.s
 const finding_service_1 = require("./findings/service/implementation/finding.service");
 const follow_up_service_1 = require("./follow-up/service/implementation/follow-up.service");
 const report_service_1 = require("./report/service/implementation/report.service");
+const report_generation_service_1 = require("./report/service/implementation/report-generation.service");
 const universe_controller_1 = require("./universe/controller/universe.controller");
 const planning_controller_1 = require("./planning/controller/planning.controller");
 const engagement_controller_1 = require("./engagement/controller/engagement.controller");
@@ -34,7 +38,8 @@ const createAuditModule = () => {
     const evidenceService = new evidence_service_1.EvidenceService(documentService);
     const findingService = new finding_service_1.FindingService();
     const followUpService = new follow_up_service_1.FollowUpService();
-    const reportService = new report_service_1.ReportService(followUpService, documentService);
+    const reportGenerationService = new report_generation_service_1.ReportGenerationService(report_template_service_1.reportTemplateService, system_config_service_1.systemConfigService, approval_service_1.workflowApprovalService);
+    const reportService = new report_service_1.ReportService(followUpService, documentService, reportGenerationService);
     const universeController = new universe_controller_1.UniverseController(universeService);
     const planningController = new planning_controller_1.PlanningController(planningService);
     const engagementController = new engagement_controller_1.EngagementController(engagementService);

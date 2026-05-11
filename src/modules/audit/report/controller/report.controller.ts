@@ -3,6 +3,7 @@ import { authenticate, requirePermission } from '../../../../shared/middleware/a
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
+  ExportReportQuerySchema,
   RejectReportRequestSchema,
   UpdateReportRequestSchema,
 } from '../dto/request/report.request.dto';
@@ -73,7 +74,7 @@ export class ReportController {
      * @desc   Export audit report
      * @access Private - audit:read
      */
-    this.router.get('/reports/:id/export', requirePermission('report:export'), this._exportReport.bind(this));
+    this.router.get('/reports/:id/export', requirePermission('report:export'), validate(ExportReportQuerySchema, 'query'), this._exportReport.bind(this));
   }
 
   private async _generateReport(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -141,7 +142,8 @@ export class ReportController {
 
   private async _exportReport(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const file = await this.reportService.exportReport(req.params.id);
+      const format = (req.query.format as 'docx' | 'pdf' | undefined) ?? 'pdf';
+      const file = await this.reportService.exportReport(req.params.id, format);
       res.setHeader('Content-Type', file.mimeType);
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.fileName)}"`);
       res.status(200).send(file.buffer);

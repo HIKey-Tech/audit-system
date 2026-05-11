@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RejectReportRequestSchema = exports.UpdateReportRequestSchema = void 0;
+exports.ExportReportQuerySchema = exports.RejectReportRequestSchema = exports.UpdateReportRequestSchema = void 0;
 const zod_1 = require("zod");
 exports.UpdateReportRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
@@ -10,5 +10,8 @@ exports.UpdateReportRequestSchema = zod_1.z.object({
 });
 exports.RejectReportRequestSchema = zod_1.z.object({
     reason: zod_1.z.string().min(1).max(5000),
+});
+exports.ExportReportQuerySchema = zod_1.z.object({
+    format: zod_1.z.enum(['docx', 'pdf']).optional(),
 });
 //# sourceMappingURL=report.request.dto.js.map

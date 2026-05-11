@@ -1,6 +1,9 @@
 import { Router } from 'express';
 import { DocumentService } from '../document';
 import { RiskRegisterService } from '../risk/register/service/implementation/register.service';
+import { reportTemplateService } from '../settings/service/implementation/report-template.service';
+import { systemConfigService } from '../settings/service/implementation/system-config.service';
+import { workflowApprovalService } from '../workflow/approval/service/implementation/approval.service';
 import { UniverseService } from './universe/service/implementation/universe.service';
 import { PlanningService } from './planning/service/implementation/planning.service';
 import { ChecklistService } from './checklists/service/implementation/checklist.service';
@@ -10,6 +13,7 @@ import { EvidenceService } from './evidence/service/implementation/evidence.serv
 import { FindingService } from './findings/service/implementation/finding.service';
 import { FollowUpService } from './follow-up/service/implementation/follow-up.service';
 import { ReportService } from './report/service/implementation/report.service';
+import { ReportGenerationService } from './report/service/implementation/report-generation.service';
 import { UniverseController } from './universe/controller/universe.controller';
 import { PlanningController } from './planning/controller/planning.controller';
 import { EngagementController } from './engagement/controller/engagement.controller';
@@ -33,7 +37,12 @@ export const createAuditModule = (): Router => {
   const evidenceService = new EvidenceService(documentService);
   const findingService = new FindingService();
   const followUpService = new FollowUpService();
-  const reportService = new ReportService(followUpService, documentService);
+  const reportGenerationService = new ReportGenerationService(
+    reportTemplateService,
+    systemConfigService,
+    workflowApprovalService,
+  );
+  const reportService = new ReportService(followUpService, documentService, reportGenerationService);
 
   const universeController = new UniverseController(universeService);
   const planningController = new PlanningController(planningService);

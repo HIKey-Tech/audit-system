@@ -9,6 +9,6 @@ export interface IReportService {
     rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto>;
     issueReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
     getReport(engagementId: string): Promise<ReportResponseDto>;
-    exportReport(id: string): Promise<ExportedAuditFile>;
+    exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile>;
 }
 //# sourceMappingURL=report.service.interface.d.ts.map

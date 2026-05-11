@@ -63,7 +63,7 @@ class ReportController {
          * @desc   Export audit report
          * @access Private - audit:read
          */
-        this.router.get('/reports/:id/export', (0, auth_middleware_1.requirePermission)('report:export'), this._exportReport.bind(this));
+        this.router.get('/reports/:id/export', (0, auth_middleware_1.requirePermission)('report:export'), (0, validate_middleware_1.validate)(report_request_dto_1.ExportReportQuerySchema, 'query'), this._exportReport.bind(this));
     }
     async _generateReport(req, res, next) {
         try {
@@ -130,7 +130,8 @@ class ReportController {
     }
     async _exportReport(req, res, next) {
         try {
-            const file = await this.reportService.exportReport(req.params.id);
+            const format = req.query.format ?? 'pdf';
+            const file = await this.reportService.exportReport(req.params.id, format);
             res.setHeader('Content-Type', file.mimeType);
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.fileName)}"`);
             res.status(200).send(file.buffer);

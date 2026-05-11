@@ -22,6 +22,14 @@ export declare const RejectReportRequestSchema: z.ZodObject<{
 }, {
     reason: string;
 }>;
+export declare const ExportReportQuerySchema: z.ZodObject<{
+    format: z.ZodOptional<z.ZodEnum<["docx", "pdf"]>>;
+}, "strip", z.ZodTypeAny, {
+    format?: "docx" | "pdf" | undefined;
+}, {
+    format?: "docx" | "pdf" | undefined;
+}>;
 export type UpdateReportRequestDto = z.infer<typeof UpdateReportRequestSchema>;
 export type RejectReportRequestDto = z.infer<typeof RejectReportRequestSchema>;
+export type ExportReportQueryDto = z.infer<typeof ExportReportQuerySchema>;
 //# sourceMappingURL=report.request.dto.d.ts.map

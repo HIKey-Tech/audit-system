@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ReportService = void 0;
+const date_fns_1 = require("date-fns");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
@@ -24,10 +25,12 @@ const reportInclude = {
 class ReportService {
     followUpService;
     documentService;
+    reportGenerationService;
     approvalService;
-    constructor(followUpService, documentService, approvalService = approval_service_1.workflowApprovalService) {
+    constructor(followUpService, documentService, reportGenerationService, approvalService = approval_service_1.workflowApprovalService) {
         this.followUpService = followUpService;
         this.documentService = documentService;
+        this.reportGenerationService = reportGenerationService;
         this.approvalService = approvalService;
     }
     async generateReport(engagementId, dto, actor) {
@@ -218,6 +221,37 @@ class ReportService {
         }
         logger_util_1.logger.info('Audit report issued', { reportId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.issue', module: 'audit', entityType: 'audit_report', entityId: id });
+        // Fire-and-forget auto-generation of both formats after issue
+        void this.reportGenerationService.generatePdf(id).then(async (buffer) => {
+            const fileName = `GBB-IAR-${updated.engagement.reference_number}-${(0, date_fns_1.format)(new Date(), 'yyyy-MM-dd')}.pdf`;
+            const uploaded = await this.documentService.upload({
+                uploadedById: actor.id,
+                originalName: fileName,
+                mimeType: 'application/pdf',
+                fileSize: buffer.length,
+                buffer,
+                module: 'audit',
+                entityType: 'audit_report',
+                entityId: id,
+            });
+            await prisma_client_1.prisma.audit_Report.update({
+                where: { id },
+                data: { document_id: uploaded.id },
+            });
+        }).catch((err) => logger_util_1.logger.warn('PDF generation failed after issue', { err, reportId: id }));
+        void this.reportGenerationService.generateDocx(id).then(async (buffer) => {
+            const fileName = `GBB-IAR-${updated.engagement.reference_number}-${(0, date_fns_1.format)(new Date(), 'yyyy-MM-dd')}.docx`;
+            await this.documentService.upload({
+                uploadedById: actor.id,
+                originalName: fileName,
+                mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+                fileSize: buffer.length,
+                buffer,
+                module: 'audit',
+                entityType: 'audit_report',
+                entityId: id,
+            });
+        }).catch((err) => logger_util_1.logger.warn('DOCX generation failed after issue', { err, reportId: id }));
         return (0, report_response_dto_1.mapReportToResponse)(updated);
     }
     async getReport(engagementId) {
@@ -229,43 +263,12 @@ class ReportService {
             throw app_error_1.AppError.notFound('Audit report');
         return (0, report_response_dto_1.mapReportToResponse)(report);
     }
-    async exportReport(id) {
-        const report = await prisma_client_1.prisma.audit_Report.findFirst({
-            where: { id, deleted_at: null },
-            include: reportInclude,
-        });
-        if (!report)
-            throw app_error_1.AppError.notFound('Audit report');
-        const findings = report.engagement.findings.map((f, idx) => ({
-            index: String(idx + 1),
-            title: f.title,
-            severity: f.severity,
-            category: f.category,
-            status: f.status,
-            dueDate: f.due_date.toISOString().slice(0, 10),
-            description: f.description,
-            rootCause: f.root_cause,
-            riskImplication: f.risk_implication,
-            recommendation: f.recommendation,
-        }));
-        const buffer = await this.documentService.renderDocxTemplate('audit_report', {
-            title: report.title,
-            engagementReference: report.engagement.reference_number,
-            engagementTitle: report.engagement.title,
-            date: new Date().toISOString().slice(0, 10),
-            status: report.status,
-            version: String(report.version_number),
-            issuedAt: report.issued_at ? report.issued_at.toISOString().slice(0, 10) : 'Not yet issued',
-            executiveSummary: report.executive_summary,
-            scope: report.scope,
-            methodology: report.methodology,
-            findings,
-            findingCount: String(findings.length),
-        });
+    async exportReport(id, format) {
+        const file = await this.reportGenerationService.exportReport(id, format);
         return {
-            fileName: `${report.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-audit-report.docx`,
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-            buffer,
+            fileName: file.filename,
+            mimeType: file.mimeType,
+            buffer: file.buffer,
         };
     }
     async _getReport(id) {
