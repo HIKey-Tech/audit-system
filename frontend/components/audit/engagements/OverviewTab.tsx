@@ -10,7 +10,8 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Avatar } from '@/components/ui/Avatar';
-import { engagementsApi, auditAssignmentsApi } from '@/lib/api/audit';
+import { engagementsApi } from '@/lib/api/audit';
+import { workflowApi } from '@/lib/api/workflow';
 import { formatDate, initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { useSession, hasPermission } from '@/components/providers/AuthProvider';
@@ -31,7 +32,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
 
   const assignments = useQuery({
     queryKey: ['engagements', engagement.id, 'assignments'],
-    queryFn: () => auditAssignmentsApi.listByEngagement(engagement.id),
+    queryFn: () => workflowApi.listByEngagement(engagement.id),
   });
 
   const next = NEXT_STATUS[engagement.status];

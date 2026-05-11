@@ -125,7 +125,7 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
   const create = useMutation({
     mutationFn: async (v: FormValues) => {
       if (v.mode === 'plan' && v.planId && v.planItemId) {
-        return plansApi.createEngagement(v.planId, v.planItemId, {
+        return plansApi.createEngagement(v.planItemId, {
           title: v.title,
           description: v.description || undefined,
           leadAuditorId: v.leadAuditorId,

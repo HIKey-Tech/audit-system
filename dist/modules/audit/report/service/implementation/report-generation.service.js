@@ -33,6 +33,19 @@ const AUDIT_TYPE_LABEL = {
     compliance: 'Compliance Audit',
     systems: 'Systems Audit',
 };
+const FINDING_CATEGORY_LABEL = {
+    it: 'IT',
+    financial: 'Financial',
+    compliance: 'Compliance',
+    operational: 'Operational',
+};
+const FINDING_STATUS_LABEL = {
+    open: 'Open',
+    management_response_received: 'Management Response Received',
+    in_remediation: 'In Remediation',
+    verified: 'Verified',
+    closed: 'Closed',
+};
 // ────────────────────────────────────────────────────────────
 // Service
 // ────────────────────────────────────────────────────────────
@@ -393,12 +406,12 @@ class ReportGenerationService {
                     verticalAlign: docx_1.VerticalAlign.CENTER,
                 }),
                 new docx_1.TableCell({
-                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: f.category })] })],
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_CATEGORY_LABEL[f.category] ?? f.category })] })],
                     verticalAlign: docx_1.VerticalAlign.CENTER,
                 }),
                 this._severityDocxCell(f.severity),
                 new docx_1.TableCell({
-                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: f.status })] })],
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_STATUS_LABEL[f.status] ?? f.status })] })],
                     verticalAlign: docx_1.VerticalAlign.CENTER,
                 }),
                 new docx_1.TableCell({
@@ -595,7 +608,7 @@ class ReportGenerationService {
                             shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
                         }),
                         new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: finding.category })] })],
+                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_CATEGORY_LABEL[finding.category] ?? finding.category })] })],
                         }),
                     ],
                 }),
@@ -607,7 +620,7 @@ class ReportGenerationService {
                             shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
                         }),
                         new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: finding.status })] })],
+                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_STATUS_LABEL[finding.status] ?? finding.status })] })],
                         }),
                     ],
                 }),
@@ -790,9 +803,9 @@ class ReportGenerationService {
       <tr>
         <td>${idx + 1}</td>
         <td>${this._escapeHtml(f.title)}</td>
-        <td>${this._escapeHtml(f.category)}</td>
+        <td>${this._escapeHtml(FINDING_CATEGORY_LABEL[f.category] ?? f.category)}</td>
         <td>${severityBadge(f.severity)}</td>
-        <td>${this._escapeHtml(f.status)}</td>
+        <td>${this._escapeHtml(FINDING_STATUS_LABEL[f.status] ?? f.status)}</td>
         <td>${(0, date_fns_1.format)(f.dueDate, 'dd MMM yyyy')}</td>
       </tr>
     `)
@@ -836,8 +849,8 @@ class ReportGenerationService {
             <div class="finding-heading">Finding ${idx + 1}: ${this._escapeHtml(f.title)}</div>
             <table class="details-table">
               <tr><td class="label">Severity</td><td>${severityBadge(f.severity)}</td></tr>
-              <tr><td class="label">Category</td><td>${this._escapeHtml(f.category)}</td></tr>
-              <tr><td class="label">Status</td><td>${this._escapeHtml(f.status)}</td></tr>
+              <tr><td class="label">Category</td><td>${this._escapeHtml(FINDING_CATEGORY_LABEL[f.category] ?? f.category)}</td></tr>
+              <tr><td class="label">Status</td><td>${this._escapeHtml(FINDING_STATUS_LABEL[f.status] ?? f.status)}</td></tr>
               <tr><td class="label">Due Date</td><td>${(0, date_fns_1.format)(f.dueDate, 'dd MMM yyyy')}</td></tr>
               <tr><td class="label">Auditee</td><td>${auditeeName}</td></tr>
             </table>

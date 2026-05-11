@@ -12,7 +12,6 @@ import type {
   AuditChecklistItem,
   AuditReport,
   AuditFollowUp,
-  AuditAssignment,
 } from '../types/domain';
 
 // ============================================================
@@ -92,8 +91,9 @@ export const plansApi = {
     api.post<AuditPlan>(`/audit/plans/${id}/approve`, { comment }),
   reject: (id: string, reason: string) =>
     api.post<AuditPlan>(`/audit/plans/${id}/reject`, { reason }),
-  createEngagement: (planId: string, itemId: string, dto: CreateEngagementDto) =>
-    api.post<AuditEngagement>(`/audit/plans/${planId}/items/${itemId}/engagement`, dto),
+  /** Fix 12: POST /audit/engagements with planItemId in body */
+  createEngagement: (planItemId: string, dto: CreateEngagementDto) =>
+    api.post<AuditEngagement>('/audit/engagements', { ...dto, planItemId }),
 };
 
 // ============================================================
@@ -157,8 +157,9 @@ export const workingPapersApi = {
       `/audit/engagements/${engagementId}/working-papers`,
       dto,
     ),
+  /** Fix 1: PATCH → PUT */
   update: (id: string, dto: { title?: string; content?: string }) =>
-    api.patch<AuditWorkingPaper>(`/audit/working-papers/${id}`, dto),
+    api.put<AuditWorkingPaper>(`/audit/working-papers/${id}`, dto),
   submit: (id: string) =>
     api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/submit`),
   approve: (id: string, comment?: string) =>
@@ -199,7 +200,6 @@ export interface FindingsListQuery {
   severity?: string;
   status?: string;
   category?: string;
-  engagementId?: string;
   search?: string;
 }
 
@@ -216,18 +216,26 @@ export interface CreateFindingDto {
 }
 
 export const findingsApi = {
-  list: (q?: FindingsListQuery) =>
-    api.getPaginated<AuditFinding>('/audit/findings', q as Record<string, string | number | boolean | undefined>),
+  /** Fix 2: no GET /audit/findings — use GET /audit/engagements/:id/findings */
+  list: (engagementId: string, q?: FindingsListQuery) =>
+    api.get<AuditFinding[]>(
+      `/audit/engagements/${engagementId}/findings`,
+      q as Record<string, string | number | boolean | undefined>,
+    ),
   get: (id: string) => api.get<AuditFinding>(`/audit/findings/${id}`),
   listByEngagement: (engagementId: string) =>
     api.get<AuditFinding[]>(`/audit/engagements/${engagementId}/findings`),
   create: (engagementId: string, dto: CreateFindingDto) =>
     api.post<AuditFinding>(`/audit/engagements/${engagementId}/findings`, dto),
+  /** Fix 3: PATCH → PUT */
   update: (id: string, dto: Partial<CreateFindingDto>) =>
-    api.patch<AuditFinding>(`/audit/findings/${id}`, dto),
+    api.put<AuditFinding>(`/audit/findings/${id}`, dto),
   updateStatus: (id: string, status: string) =>
     api.patch<AuditFinding>(`/audit/findings/${id}/status`, { status }),
-  remove: (id: string) => api.delete(`/audit/findings/${id}`),
+  /** Fix 4: no DELETE /audit/findings — stub that throws */
+  remove: (_id: string): Promise<void> => {
+    throw new Error('Not supported: findings cannot be deleted via API');
+  },
 };
 
 // ============================================================
@@ -257,15 +265,22 @@ export interface CreateReportDto {
 }
 
 export const reportsApi = {
-  list: (q?: ReportsListQuery) =>
-    api.getPaginated<AuditReport>('/audit/reports', q as Record<string, string | number | boolean | undefined>),
-  get: (id: string) => api.get<AuditReport>(`/audit/reports/${id}`),
+  /** Fix 5: no GET /audit/reports — stub that throws */
+  list: (_q?: ReportsListQuery): Promise<{ items: AuditReport[]; meta: { page: number; pageSize: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean } }> => {
+    throw new Error('Not supported: no GET /audit/reports route. Use getByEngagement instead.');
+  },
+  /** Fix 6: no GET /audit/reports/:id — stub that throws */
+  get: (_id: string): Promise<AuditReport> => {
+    throw new Error('Not supported: no GET /audit/reports/:id route. Use getByEngagement instead.');
+  },
   getByEngagement: (engagementId: string) =>
     api.get<AuditReport>(`/audit/engagements/${engagementId}/report`),
+  /** Fix 7: POST /audit/engagements/:id/report → POST /audit/engagements/:id/report/generate */
   generate: (engagementId: string, dto: CreateReportDto) =>
-    api.post<AuditReport>(`/audit/engagements/${engagementId}/report`, dto),
+    api.post<AuditReport>(`/audit/engagements/${engagementId}/report/generate`, dto),
+  /** Fix 8: PATCH → PUT */
   update: (id: string, dto: Partial<CreateReportDto>) =>
-    api.patch<AuditReport>(`/audit/reports/${id}`, dto),
+    api.put<AuditReport>(`/audit/reports/${id}`, dto),
   submit: (id: string) => api.post<AuditReport>(`/audit/reports/${id}/submit`),
   approve: (id: string, comment?: string) =>
     api.post<AuditReport>(`/audit/reports/${id}/approve`, { comment }),
@@ -280,27 +295,25 @@ export const reportsApi = {
 // Follow-up
 // ============================================================
 export const followUpApi = {
+  /** Fix 9: follow-up → followup */
   getByFinding: (findingId: string) =>
-    api.get<AuditFollowUp>(`/audit/findings/${findingId}/follow-up`),
+    api.get<AuditFollowUp>(`/audit/findings/${findingId}/followup`),
+  /** Fix 10: follow-up → followup */
   submitResponse: (
     findingId: string,
     dto: { managementResponse: string; remediationEvidenceId?: string },
   ) =>
     api.post<AuditFollowUp>(
-      `/audit/findings/${findingId}/follow-up/response`,
+      `/audit/findings/${findingId}/followup/response`,
       dto,
     ),
+  /** Fix 11: follow-up → followup */
   verify: (
     findingId: string,
     dto: { verificationStatus: 'verified' | 'rejected'; verificationNotes?: string },
   ) =>
     api.post<AuditFollowUp>(
-      `/audit/findings/${findingId}/follow-up/verify`,
+      `/audit/findings/${findingId}/followup/verify`,
       dto,
     ),
-};
-
-export const auditAssignmentsApi = {
-  listByEngagement: (engagementId: string) =>
-    api.get<AuditAssignment[]>(`/audit/engagements/${engagementId}/assignments`),
 };

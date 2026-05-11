@@ -84,7 +84,7 @@ export const CreateEngagementSlideOver = ({
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
-      plansApi.createEngagement(planId, itemId, {
+      plansApi.createEngagement(itemId, {
         title: v.title,
         description: v.description || undefined,
         leadAuditorId: v.leadAuditorId,
