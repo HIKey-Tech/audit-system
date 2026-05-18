@@ -670,6 +670,106 @@ const WORKING_PAPER_TEMPLATES: Array<{
       { title: 'Conclusion', description: 'Overall conclusion', placeholder: "Conclude on the system's control environment...", required: true },
     ],
   },
+  {
+    name: 'GBB General Audit Working Paper',
+    description: 'Reusable working paper for standard internal audit testing across audit types.',
+    auditType: 'all',
+    isDefault: true,
+    sections: [
+      { title: 'Working Paper Reference', description: 'Record the working paper number and cross-reference', placeholder: 'WP-01 / linked checklist item / evidence reference...', required: true },
+      { title: 'Objective', description: 'State the purpose of this work paper', placeholder: 'Describe the audit objective this work paper supports...', required: true },
+      { title: 'Risk Addressed', description: 'Describe the risk or control objective being addressed', placeholder: 'Summarise the risk, control objective, or audit criterion...', required: true },
+      { title: 'Procedure Performed', description: 'Document the work performed by the auditor', placeholder: 'Describe walkthroughs, inspection, reperformance, inquiry, observation, or analysis performed...', required: true },
+      { title: 'Evidence Reference', description: 'List evidence reviewed and file references', placeholder: 'Document evidence IDs, filenames, screenshots, reports, or source systems reviewed...', required: true },
+      { title: 'Results', description: 'Record the factual result of the procedure', placeholder: 'State what was found, including exceptions or no-exception results...', required: true },
+      { title: 'Conclusion', description: 'State the auditor conclusion', placeholder: 'Conclude whether the objective was achieved and whether a finding is required...', required: true },
+      { title: 'Reviewer Notes', description: 'Space for supervisory review comments', placeholder: 'Reviewer comments, clearance notes, and follow-up questions...', required: false },
+    ],
+  },
+  {
+    name: 'Walkthrough Working Paper',
+    description: 'Documents process walkthroughs, control understanding, and design assessment.',
+    auditType: 'all',
+    isDefault: false,
+    sections: [
+      { title: 'Process Walked Through', description: 'Name the process and period covered', placeholder: 'Process name, owner, date, location, and period covered...', required: true },
+      { title: 'Participants', description: 'List process owners and staff interviewed', placeholder: 'Names, roles, departments, and interview dates...', required: true },
+      { title: 'Process Narrative', description: 'Describe the process flow end to end', placeholder: 'Document initiation, approvals, processing, controls, exceptions, and outputs...', required: true },
+      { title: 'Key Controls Identified', description: 'List controls identified during the walkthrough', placeholder: 'Control owner, frequency, evidence, system/manual nature...', required: true },
+      { title: 'Design Gaps', description: 'Record weaknesses in control design', placeholder: 'Describe missing controls, segregation issues, unclear accountability, or documentation gaps...', required: false },
+      { title: 'Conclusion', description: 'Conclude on process understanding and design adequacy', placeholder: 'State whether controls are suitably designed for testing...', required: true },
+    ],
+  },
+  {
+    name: 'Control Test Working Paper',
+    description: 'Documents operating effectiveness testing for a specific control.',
+    auditType: 'all',
+    isDefault: false,
+    sections: [
+      { title: 'Control Tested', description: 'Identify the control and owner', placeholder: 'Control ID, owner, frequency, system/manual, preventive/detective...', required: true },
+      { title: 'Population', description: 'Define the population used for testing', placeholder: 'Source report, period, total population, completeness check...', required: true },
+      { title: 'Sample Selection', description: 'Document sample size and selection method', placeholder: 'Random/judgmental/stratified sample, sample count, selection rationale...', required: true },
+      { title: 'Test Steps', description: 'List the test procedures performed', placeholder: 'Inspection, reperformance, evidence matching, approval verification...', required: true },
+      { title: 'Exceptions', description: 'Record exceptions and exception rate', placeholder: 'Exception details, affected samples, root cause, value/impact...', required: false },
+      { title: 'Conclusion', description: 'Conclude on operating effectiveness', placeholder: 'Effective / partially effective / ineffective, with rationale...', required: true },
+    ],
+  },
+  {
+    name: 'Sampling Worksheet',
+    description: 'Documents population validation and sample selection for audit testing.',
+    auditType: 'all',
+    isDefault: false,
+    sections: [
+      { title: 'Population Source', description: 'Identify the system/report used as population', placeholder: 'System name, report name, extraction date, period, owner...', required: true },
+      { title: 'Completeness Check', description: 'Describe how the population was validated', placeholder: 'Record totals, reconciliations, tie-outs, duplicate checks, exclusions...', required: true },
+      { title: 'Sampling Method', description: 'State the sampling method and rationale', placeholder: 'Random, judgmental, monetary unit, stratified, full population...', required: true },
+      { title: 'Sample Details', description: 'List sample identifiers or attach evidence reference', placeholder: 'Sample IDs, transaction numbers, dates, values, evidence reference...', required: true },
+      { title: 'Limitations', description: 'Document any population or sampling limitations', placeholder: 'Data quality issues, unavailable fields, exclusions, management constraints...', required: false },
+      { title: 'Conclusion', description: 'Conclude whether the sample is appropriate', placeholder: 'State whether sample supports the planned testing objective...', required: true },
+    ],
+  },
+  {
+    name: 'ITGC Test Working Paper',
+    description: 'Documents IT general control testing for access, change, operations, and backup controls.',
+    auditType: 'it',
+    isDefault: false,
+    sections: [
+      { title: 'ITGC Domain', description: 'Identify the ITGC domain being tested', placeholder: 'User access, privileged access, change management, job monitoring, backup/restore...', required: true },
+      { title: 'System In Scope', description: 'Describe the application, database, or infrastructure component', placeholder: 'System name, owner, business purpose, hosting model, criticality...', required: true },
+      { title: 'Control Objective', description: 'State the expected control objective', placeholder: 'Describe the security, availability, integrity, or confidentiality objective...', required: true },
+      { title: 'Evidence Reviewed', description: 'List technical evidence reviewed', placeholder: 'Access listings, change tickets, logs, screenshots, configuration exports...', required: true },
+      { title: 'Testing Result', description: 'Document testing result and exceptions', placeholder: 'Pass/fail result, exceptions, affected users/changes/jobs, risk impact...', required: true },
+      { title: 'Conclusion', description: 'Conclude on control effectiveness', placeholder: 'State whether the ITGC is designed and operating effectively...', required: true },
+    ],
+  },
+  {
+    name: 'Finding Validation Working Paper',
+    description: 'Documents validation of a potential audit finding before it is raised formally.',
+    auditType: 'all',
+    isDefault: false,
+    sections: [
+      { title: 'Condition', description: 'Describe what was found', placeholder: 'Factual condition supported by evidence...', required: true },
+      { title: 'Criteria', description: 'Document the expected policy, standard, regulation, or control', placeholder: 'Policy clause, ISO/COBIT/NIST/PCI requirement, procedure, SLA...', required: true },
+      { title: 'Cause', description: 'Assess why the condition occurred', placeholder: 'Process gap, control failure, system limitation, oversight, resource issue...', required: true },
+      { title: 'Effect/Risk', description: 'Describe the impact or exposure', placeholder: 'Operational, financial, compliance, security, reputational, or service impact...', required: true },
+      { title: 'Recommendation', description: 'Propose corrective action', placeholder: 'Specific, practical recommendation and responsible owner...', required: true },
+      { title: 'Management Discussion', description: 'Document discussion with the auditee', placeholder: 'Date discussed, participants, agreement/disagreement, clarification received...', required: false },
+    ],
+  },
+  {
+    name: 'Follow-up Verification Working Paper',
+    description: 'Documents validation that management actions have remediated an issued finding.',
+    auditType: 'all',
+    isDefault: false,
+    sections: [
+      { title: 'Finding Reference', description: 'Identify the finding being followed up', placeholder: 'Finding ID, report reference, severity, original due date...', required: true },
+      { title: 'Management Action', description: 'Summarise the agreed management action', placeholder: 'Action owner, commitment, due date, response summary...', required: true },
+      { title: 'Evidence Received', description: 'List remediation evidence reviewed', placeholder: 'Evidence files, system records, screenshots, policies, tickets...', required: true },
+      { title: 'Verification Procedure', description: 'Document follow-up testing performed', placeholder: 'Inspection, reperformance, inquiry, observation, sample retest...', required: true },
+      { title: 'Verification Result', description: 'State whether remediation is adequate', placeholder: 'Verified / partially verified / rejected, with rationale...', required: true },
+      { title: 'Residual Risk', description: 'Document any remaining exposure', placeholder: 'Residual issue, further action required, revised due date...', required: false },
+    ],
+  },
 ];
 
 const REPORT_TEMPLATES: Array<{
@@ -678,9 +778,9 @@ const REPORT_TEMPLATES: Array<{
   isDefault: boolean;
   sections: ReportSectionSeed[];
   availableVariables: ReportVariableSeed[];
-  headerConfig: Record<string, string>;
-  footerConfig: { confidentialityNotice: string; includePageNumbers: boolean };
-  signatureConfig: Record<string, { label: string; showName: boolean; showTitle: boolean; showDate: boolean }>;
+  headerConfig: Record<string, unknown>;
+  footerConfig: Record<string, unknown>;
+  signatureConfig: Record<string, unknown>;
 }> = [
   {
     name: 'GBB Standard Audit Report',
@@ -716,6 +816,9 @@ const REPORT_TEMPLATES: Array<{
       orgName: 'Galaxy Backbone Limited',
       address: 'Plot 1510, Cadastral Zone, Abuja',
       reportTitle: 'INTERNAL AUDIT REPORT',
+      classification: 'CONFIDENTIAL',
+      primaryColor: '003087',
+      accentColor: '00A3E0',
     },
     footerConfig: {
       confidentialityNotice: 'This report is confidential and intended solely for the use of Galaxy Backbone Limited Internal Audit Department.',
@@ -723,6 +826,145 @@ const REPORT_TEMPLATES: Array<{
     },
     signatureConfig: {
       preparedBy: { label: 'Prepared by', showName: true, showTitle: true, showDate: true },
+      reviewedBy: { label: 'Reviewed by', showName: true, showTitle: true, showDate: true },
+      approvedBy: { label: 'Approved by', showName: true, showTitle: true, showDate: true },
+    },
+  },
+  {
+    name: 'GBB Executive Summary Report',
+    description: 'Short executive-facing report with emphasis on opinion, high-risk findings, and management action.',
+    isDefault: false,
+    sections: [
+      { key: 'executive_summary', title: 'Executive Summary', description: 'Concise executive summary and overall conclusion', include_findings: false },
+      { key: 'findings_summary', title: 'Priority Findings', description: 'Condensed table of findings by severity and status', include_findings: true },
+      { key: 'detailed_findings', title: 'Key Details and Management Actions', description: 'Focused details for decision makers', include_findings: true },
+      { key: 'conclusion', title: 'Audit Opinion', description: 'Overall audit opinion and next steps', include_findings: false },
+    ],
+    availableVariables: [
+      { key: '{{engagementTitle}}', description: 'Title of the audit engagement', example: 'Network Operations Review' },
+      { key: '{{engagementReference}}', description: 'Engagement reference number', example: 'AUD-2027-014' },
+      { key: '{{findingCount}}', description: 'Total findings', example: '5' },
+      { key: '{{highCount}}', description: 'High findings', example: '2' },
+      { key: '{{reportDate}}', description: 'Report date', example: '30 June 2027' },
+    ],
+    headerConfig: {
+      orgName: 'Galaxy Backbone Limited',
+      reportTitle: 'EXECUTIVE AUDIT SUMMARY',
+      classification: 'CONFIDENTIAL',
+      primaryColor: '0F172A',
+      accentColor: '00A3E0',
+    },
+    footerConfig: {
+      confidentialityNotice: 'Executive summary prepared for authorised GBB management and oversight stakeholders.',
+      includePageNumbers: true,
+    },
+    signatureConfig: {
+      preparedBy: { label: 'Prepared by', showName: true, showTitle: false, showDate: true },
+      approvedBy: { label: 'Approved by', showName: true, showTitle: true, showDate: true },
+    },
+  },
+  {
+    name: 'IT and Cybersecurity Audit Report',
+    description: 'Report structure for IT, cybersecurity, ISO 27001, NIST, COBIT, and PCI DSS audits.',
+    isDefault: false,
+    sections: [
+      { key: 'executive_summary', title: 'Executive Summary', description: 'Security posture and key audit result', include_findings: false },
+      { key: 'background', title: 'System and Control Environment', description: 'System context and control environment', include_findings: false },
+      { key: 'objectives', title: 'Audit Objectives and Criteria', description: 'IT control objectives and criteria used', include_findings: false },
+      { key: 'methodology', title: 'Testing Approach', description: 'Technical testing and evidence approach', include_findings: false },
+      { key: 'findings_summary', title: 'Security Findings Summary', description: 'Findings by severity and remediation priority', include_findings: true },
+      { key: 'detailed_findings', title: 'Detailed Security Findings', description: 'Detailed IT/cyber findings and management actions', include_findings: true },
+      { key: 'conclusion', title: 'Control Effectiveness Opinion', description: 'Overall IT control effectiveness conclusion', include_findings: false },
+    ],
+    availableVariables: [
+      { key: '{{auditType}}', description: 'Audit type', example: 'IT Audit' },
+      { key: '{{universeName}}', description: 'System or entity audited', example: 'Active Directory' },
+      { key: '{{criticalCount}}', description: 'Critical findings', example: '1' },
+      { key: '{{highCount}}', description: 'High findings', example: '3' },
+      { key: '{{leadAuditorName}}', description: 'Lead auditor name', example: 'Amina Musa' },
+    ],
+    headerConfig: {
+      orgName: 'Galaxy Backbone Limited',
+      reportTitle: 'IT AND CYBERSECURITY AUDIT REPORT',
+      classification: 'RESTRICTED',
+      primaryColor: '003087',
+      accentColor: '16A34A',
+    },
+    footerConfig: {
+      confidentialityNotice: 'This IT audit report may contain sensitive security information and must be handled as restricted.',
+      includePageNumbers: true,
+    },
+    signatureConfig: {
+      preparedBy: { label: 'Prepared by', showName: true, showTitle: true, showDate: true },
+      reviewedBy: { label: 'Reviewed by', showName: true, showTitle: true, showDate: true },
+      approvedBy: { label: 'Approved by', showName: true, showTitle: true, showDate: true },
+    },
+  },
+  {
+    name: 'Compliance Audit Report',
+    description: 'Report structure for NDPR, ISO, PCI DSS, policy, and regulatory compliance audits.',
+    isDefault: false,
+    sections: [
+      { key: 'executive_summary', title: 'Compliance Summary', description: 'Overall compliance position', include_findings: false },
+      { key: 'objectives', title: 'Compliance Criteria and Scope', description: 'Requirements and scope tested', include_findings: false },
+      { key: 'methodology', title: 'Assessment Methodology', description: 'Evidence and testing approach', include_findings: false },
+      { key: 'findings_summary', title: 'Compliance Exceptions Summary', description: 'Exceptions by severity and status', include_findings: true },
+      { key: 'detailed_findings', title: 'Detailed Compliance Exceptions', description: 'Detailed compliance observations and actions', include_findings: true },
+      { key: 'conclusion', title: 'Compliance Opinion', description: 'Overall compliance conclusion', include_findings: false },
+    ],
+    availableVariables: [
+      { key: '{{engagementTitle}}', description: 'Engagement title', example: 'NDPR Compliance Review' },
+      { key: '{{auditPeriod}}', description: 'Audit period', example: 'Q2 2027' },
+      { key: '{{findingCount}}', description: 'Total exceptions', example: '4' },
+      { key: '{{auditeeName}}', description: 'Responsible auditee', example: 'Data Protection Officer' },
+    ],
+    headerConfig: {
+      orgName: 'Galaxy Backbone Limited',
+      reportTitle: 'COMPLIANCE AUDIT REPORT',
+      classification: 'CONFIDENTIAL',
+      primaryColor: '003087',
+      accentColor: 'CA8A04',
+    },
+    footerConfig: {
+      confidentialityNotice: 'Compliance audit report for authorised GBB use only.',
+      includePageNumbers: true,
+    },
+    signatureConfig: {
+      preparedBy: { label: 'Prepared by', showName: true, showTitle: true, showDate: true },
+      reviewedBy: { label: 'Reviewed by', showName: true, showTitle: true, showDate: true },
+      approvedBy: { label: 'Approved by', showName: true, showTitle: true, showDate: true },
+    },
+  },
+  {
+    name: 'Follow-up Audit Report',
+    description: 'Report structure for follow-up reviews and remediation validation engagements.',
+    isDefault: false,
+    sections: [
+      { key: 'executive_summary', title: 'Follow-up Summary', description: 'Status of remediation and residual exposure', include_findings: false },
+      { key: 'background', title: 'Original Audit Context', description: 'Original report and follow-up basis', include_findings: false },
+      { key: 'methodology', title: 'Verification Methodology', description: 'How remediation was verified', include_findings: false },
+      { key: 'findings_summary', title: 'Remediation Status Summary', description: 'Status of followed-up findings', include_findings: true },
+      { key: 'detailed_findings', title: 'Detailed Verification Results', description: 'Finding-by-finding verification result', include_findings: true },
+      { key: 'conclusion', title: 'Residual Risk Conclusion', description: 'Overall residual risk conclusion', include_findings: false },
+    ],
+    availableVariables: [
+      { key: '{{engagementReference}}', description: 'Engagement reference', example: 'AUD-2027-006' },
+      { key: '{{findingCount}}', description: 'Findings followed up', example: '7' },
+      { key: '{{reportDate}}', description: 'Report date', example: '30 June 2027' },
+    ],
+    headerConfig: {
+      orgName: 'Galaxy Backbone Limited',
+      reportTitle: 'FOLLOW-UP AUDIT REPORT',
+      classification: 'CONFIDENTIAL',
+      primaryColor: '003087',
+      accentColor: '7C3AED',
+    },
+    footerConfig: {
+      confidentialityNotice: 'Follow-up audit report for remediation monitoring and audit committee reporting.',
+      includePageNumbers: true,
+    },
+    signatureConfig: {
+      preparedBy: { label: 'Verified by', showName: true, showTitle: true, showDate: true },
       reviewedBy: { label: 'Reviewed by', showName: true, showTitle: true, showDate: true },
       approvedBy: { label: 'Approved by', showName: true, showTitle: true, showDate: true },
     },

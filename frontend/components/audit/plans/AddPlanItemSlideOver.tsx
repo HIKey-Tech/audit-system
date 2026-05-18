@@ -13,6 +13,10 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { plansApi, universeApi } from '@/lib/api/audit';
 
+function toISODatetime(dateStr: string): string {
+  return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
+}
+
 const Schema = z.object({
   universeId: z.string().min(1, 'Select an entity'),
   auditType: z.enum(['it', 'financial', 'compliance', 'systems']),
@@ -75,9 +79,8 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
         universeId: v.universeId,
         auditType: v.auditType,
         priority: v.priority,
-        plannedStartDate: v.plannedStartDate,
-        plannedEndDate: v.plannedEndDate,
-        notes: v.notes || undefined,
+        plannedStartDate: toISODatetime(v.plannedStartDate),
+        plannedEndDate: toISODatetime(v.plannedEndDate),
       }),
     onSuccess: () => {
       toast.success('Item added to plan');

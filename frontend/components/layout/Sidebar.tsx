@@ -22,6 +22,7 @@ import {
   LogOut,
   ChevronsLeft,
   ChevronsRight,
+  Users,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -68,10 +69,11 @@ const NAV: NavItem[] = [
   { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister' },
   { type: 'link', label: 'Workflow', href: '/workflow', icon: GitBranch, matchPrefix: '/workflow', visKey: 'workflow' },
 
-  { type: 'divider', label: 'System', sectionKeys: ['documents', 'notifications', 'auditLogs'] },
+  { type: 'divider', label: 'System', sectionKeys: ['documents', 'notifications', 'auditLogs', 'users'] },
   { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents' },
   { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications' },
   { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs' },
+  { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users' },
 
   { type: 'divider', sectionKeys: ['integrations', 'predictive', 'settings'] },
   { type: 'link', label: 'Integrations', href: '/integrations', icon: Plug, comingSoon: true, visKey: 'integrations' },

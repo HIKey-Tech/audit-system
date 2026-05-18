@@ -21,18 +21,23 @@ import { UserSelect } from '@/components/common/UserSelect';
 import { findingsApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
-import { useSession, hasPermission } from '@/components/providers/AuthProvider';
+import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
 
+/** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
+function toISODatetime(dateStr: string): string {
+  return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
+}
+
 const Schema = z.object({
-  title: z.string().min(2).max(300),
-  description: z.string().min(5),
-  category: z.string().min(2),
+  title: z.string().min(2).max(200),
+  description: z.string().min(1),
+  category: z.enum(['it', 'financial', 'compliance', 'operational']),
   severity: z.enum(['critical', 'high', 'medium', 'low', 'informational']),
-  rootCause: z.string().optional().or(z.literal('')),
-  riskImplication: z.string().optional().or(z.literal('')),
-  recommendation: z.string().optional().or(z.literal('')),
+  rootCause: z.string().min(1, 'Root cause is required'),
+  riskImplication: z.string().min(1, 'Risk implication is required'),
+  recommendation: z.string().min(1, 'Recommendation is required'),
   auditeeId: z.string().min(1),
   dueDate: z.string().min(1),
 });
@@ -41,8 +46,7 @@ type FormValues = z.infer<typeof Schema>;
 
 export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
-  const session = useSession();
-  const canWrite = hasPermission(session, 'finding:write') || hasPermission(session, 'audit:write');
+  const canWrite = usePermission('finding:create');
 
   const [open, setOpen] = useState(false);
 
@@ -63,7 +67,7 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
     defaultValues: {
       title: '',
       description: '',
-      category: 'control_deficiency',
+      category: 'compliance',
       severity: 'medium',
       rootCause: '',
       riskImplication: '',
@@ -80,11 +84,11 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
         description: v.description,
         category: v.category,
         severity: v.severity,
-        rootCause: v.rootCause || undefined,
-        riskImplication: v.riskImplication || undefined,
-        recommendation: v.recommendation || undefined,
+        rootCause: v.rootCause,
+        riskImplication: v.riskImplication,
+        recommendation: v.recommendation,
         auditeeId: v.auditeeId,
-        dueDate: v.dueDate,
+        dueDate: toISODatetime(v.dueDate),
       }),
     onSuccess: () => {
       toast.success('Finding created');
@@ -194,12 +198,10 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
           <div className="grid grid-cols-2 gap-3">
             <FormField label="Category" required error={errors.category?.message}>
               <Select error={errors.category?.message} {...register('category')}>
-                <option value="control_deficiency">Control deficiency</option>
-                <option value="compliance_breach">Compliance breach</option>
-                <option value="operational_risk">Operational risk</option>
-                <option value="security_risk">Security risk</option>
-                <option value="financial_misstatement">Financial misstatement</option>
-                <option value="other">Other</option>
+                <option value="it">IT</option>
+                <option value="financial">Financial</option>
+                <option value="compliance">Compliance</option>
+                <option value="operational">Operational</option>
               </Select>
             </FormField>
             <FormField label="Severity" required error={errors.severity?.message}>
@@ -212,13 +214,13 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
               </Select>
             </FormField>
           </div>
-          <FormField label="Root cause">
+          <FormField label="Root cause" required error={errors.rootCause?.message}>
             <Textarea rows={3} {...register('rootCause')} />
           </FormField>
-          <FormField label="Risk implication">
+          <FormField label="Risk implication" required error={errors.riskImplication?.message}>
             <Textarea rows={3} {...register('riskImplication')} />
           </FormField>
-          <FormField label="Recommendation">
+          <FormField label="Recommendation" required error={errors.recommendation?.message}>
             <Textarea rows={3} {...register('recommendation')} />
           </FormField>
           <div className="grid grid-cols-2 gap-3">

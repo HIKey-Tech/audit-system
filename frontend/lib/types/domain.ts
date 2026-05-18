@@ -274,26 +274,30 @@ export interface AuditEngagement {
   id: string;
   referenceNumber: string;
   title: string;
-  description: string | null;
+  universeId: string;
+  planItemId: string | null;
   auditType: string;
   status: string;
   priority: string;
   leadAuditorId: string;
-  leadAuditorName: string;
-  auditManagerId: string | null;
-  auditManagerName: string | null;
+  auditManagerId: string;
   auditeeId: string;
-  auditeeName: string;
-  startDate: string;
-  endDate: string;
+  plannedStartDate: string;
+  plannedEndDate: string;
+  actualStartDate: string | null;
+  actualEndDate: string | null;
   slaDeadline: string;
-  isAdHoc: boolean;
-  adHocReason: string | null;
-  universeId: string | null;
-  universeName: string | null;
-  planItemId: string | null;
+  isAdhoc: boolean;
+  adhocReason: string | null;
+  createdById: string;
   createdAt: string;
   updatedAt: string;
+  /** Enriched by list/detail queries; may be absent on create responses */
+  leadAuditorName?: string;
+  auditManagerName?: string;
+  auditeeName?: string;
+  universeName?: string;
+  description?: string | null;
 }
 
 export interface AuditEngagementDetail extends AuditEngagement {
@@ -317,9 +321,13 @@ export interface AuditAssignment {
 export interface AuditWorkingPaper {
   id: string;
   engagementId: string;
+  templateId: string | null;
+  sourceDocumentId: string | null;
+  workingPaperType: string;
   title: string;
   content: string | null;
   version: number;
+  versionNumber?: number;
   status: string;
   createdById: string;
   createdByName: string;
@@ -327,8 +335,32 @@ export interface AuditWorkingPaper {
   reviewerName: string | null;
   reviewedAt: string | null;
   reviewComment: string | null;
+  importMetadata?: unknown | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WorkingPaperImportSectionPreview {
+  title: string;
+  description: string;
+  required: boolean;
+  content: string;
+  confidence: number;
+}
+
+export interface WorkingPaperImportPreview {
+  documentId: string;
+  fileName: string;
+  fileType: string;
+  templateId: string | null;
+  templateName: string | null;
+  workingPaperType: string;
+  suggestedTitle: string;
+  extractedText: string;
+  mappedSections: WorkingPaperImportSectionPreview[];
+  content: string;
+  confidence: number;
+  warnings: string[];
 }
 
 export interface AuditEvidence {
@@ -565,6 +597,75 @@ export interface DocumentTemplateDto {
   documentId: string | null;
   content: string | null;
   isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ============================================================
+// Settings
+// ============================================================
+export type SettingsAuditType = 'it' | 'financial' | 'compliance' | 'systems' | 'all';
+
+export interface WorkingPaperTemplateSection {
+  title: string;
+  description: string;
+  placeholder: string;
+  required: boolean;
+}
+
+export interface WorkingPaperTemplateDto {
+  id: string;
+  name: string;
+  description: string | null;
+  auditType: SettingsAuditType;
+  sections: WorkingPaperTemplateSection[];
+  isActive: boolean;
+  isDefault: boolean;
+  createdById: string | null;
+  updatedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface ReportTemplateSection {
+  key: string;
+  title: string;
+  description: string;
+  includeFindings: boolean;
+}
+
+export interface ReportTemplateVariable {
+  key: string;
+  description: string;
+  example: string;
+}
+
+export interface ReportTemplateDto {
+  id: string;
+  name: string;
+  description: string | null;
+  sections: ReportTemplateSection[];
+  headerConfig: unknown | null;
+  footerConfig: unknown | null;
+  signatureConfig: unknown | null;
+  availableVariables: ReportTemplateVariable[];
+  isActive: boolean;
+  isDefault: boolean;
+  createdById: string | null;
+  updatedById: string | null;
+  createdAt: string;
+  updatedAt: string;
+  deletedAt: string | null;
+}
+
+export interface SystemConfigDto {
+  id: string;
+  key: string;
+  value: string | null;
+  description: string | null;
+  isPublic: boolean;
+  updatedById: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -17,6 +17,11 @@ import { engagementsApi, plansApi, universeApi } from '@/lib/api/audit';
 
 type Mode = 'plan' | 'ad_hoc';
 
+/** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
+function toISODatetime(dateStr: string): string {
+  return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
+}
+
 const Schema = z.object({
   mode: z.enum(['plan', 'ad_hoc']),
   planId: z.string().optional().or(z.literal('')),
@@ -24,22 +29,21 @@ const Schema = z.object({
   universeId: z.string().optional().or(z.literal('')),
   auditType: z.enum(['it', 'financial', 'compliance', 'systems']),
   priority: z.enum(['low', 'medium', 'high', 'critical']),
-  adHocReason: z.string().optional().or(z.literal('')),
+  adhocReason: z.string().optional().or(z.literal('')),
   title: z.string().min(2).max(200),
-  description: z.string().max(2000).optional().or(z.literal('')),
   leadAuditorId: z.string().min(1, 'Lead auditor required'),
-  auditManagerId: z.string().optional().or(z.literal('')),
+  auditManagerId: z.string().min(1, 'Audit manager required'),
   auditeeId: z.string().min(1, 'Auditee required'),
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
+  plannedStartDate: z.string().min(1),
+  plannedEndDate: z.string().min(1),
   slaDeadline: z.string().min(1),
 }).superRefine((v, ctx) => {
   if (v.mode === 'plan') {
     if (!v.planItemId) ctx.addIssue({ code: 'custom', path: ['planItemId'], message: 'Plan item required' });
   } else {
     if (!v.universeId) ctx.addIssue({ code: 'custom', path: ['universeId'], message: 'Auditable entity required' });
-    if (!v.adHocReason || v.adHocReason.trim().length < 5) {
-      ctx.addIssue({ code: 'custom', path: ['adHocReason'], message: 'Provide an ad-hoc reason' });
+    if (!v.adhocReason || v.adhocReason.trim().length < 5) {
+      ctx.addIssue({ code: 'custom', path: ['adhocReason'], message: 'Provide an ad-hoc reason' });
     }
   }
 });
@@ -70,12 +74,11 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
       auditType: 'compliance',
       priority: 'medium',
       title: '',
-      description: '',
       leadAuditorId: '',
       auditManagerId: '',
       auditeeId: '',
-      startDate: '',
-      endDate: '',
+      plannedStartDate: '',
+      plannedEndDate: '',
       slaDeadline: '',
     },
   });
@@ -88,12 +91,11 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
         auditType: 'compliance',
         priority: 'medium',
         title: '',
-        description: '',
         leadAuditorId: '',
         auditManagerId: '',
         auditeeId: '',
-        startDate: '',
-        endDate: '',
+        plannedStartDate: '',
+        plannedEndDate: '',
         slaDeadline: '',
       });
     }
@@ -124,32 +126,32 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
 
   const create = useMutation({
     mutationFn: async (v: FormValues) => {
-      if (v.mode === 'plan' && v.planId && v.planItemId) {
-        return plansApi.createEngagement(v.planItemId, {
+      if (v.mode === 'plan' && v.planItemId) {
+        // POST /audit/engagements — CreateEngagementFromPlanRequestSchema
+        return engagementsApi.createFromPlan({
           title: v.title,
-          description: v.description || undefined,
           leadAuditorId: v.leadAuditorId,
-          auditManagerId: v.auditManagerId || undefined,
+          auditManagerId: v.auditManagerId,
           auditeeId: v.auditeeId,
-          startDate: v.startDate,
-          endDate: v.endDate,
-          slaDeadline: v.slaDeadline,
+          plannedStartDate: toISODatetime(v.plannedStartDate),
+          plannedEndDate: toISODatetime(v.plannedEndDate),
+          slaDeadline: toISODatetime(v.slaDeadline),
+          planItemId: v.planItemId,
         });
       }
-      return engagementsApi.create({
+      // POST /audit/engagements/adhoc — CreateAdhocEngagementRequestSchema
+      return engagementsApi.createAdhoc({
         title: v.title,
-        description: v.description || undefined,
+        leadAuditorId: v.leadAuditorId,
+        auditManagerId: v.auditManagerId,
+        auditeeId: v.auditeeId,
+        plannedStartDate: toISODatetime(v.plannedStartDate),
+        plannedEndDate: toISODatetime(v.plannedEndDate),
+        slaDeadline: toISODatetime(v.slaDeadline),
+        universeId: v.universeId!,
         auditType: v.auditType,
         priority: v.priority,
-        leadAuditorId: v.leadAuditorId,
-        auditManagerId: v.auditManagerId || undefined,
-        auditeeId: v.auditeeId,
-        startDate: v.startDate,
-        endDate: v.endDate,
-        slaDeadline: v.slaDeadline,
-        isAdHoc: true,
-        adHocReason: v.adHocReason!,
-        universeId: v.universeId!,
+        adhocReason: v.adhocReason!,
       });
     },
     onSuccess: (eng) => {
@@ -258,8 +260,8 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
                 </Select>
               </FormField>
             </div>
-            <FormField label="Ad-hoc reason" required error={errors.adHocReason?.message}>
-              <Textarea rows={3} placeholder="Why outside the approved plan?" {...register('adHocReason')} />
+            <FormField label="Ad-hoc reason" required error={errors.adhocReason?.message}>
+              <Textarea rows={3} placeholder="Why outside the approved plan?" {...register('adhocReason')} />
             </FormField>
           </>
         )}
@@ -267,15 +269,12 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
         <FormField label="Title" required error={errors.title?.message}>
           <Input error={errors.title?.message} {...register('title')} />
         </FormField>
-        <FormField label="Description" error={errors.description?.message}>
-          <Textarea rows={3} {...register('description')} />
-        </FormField>
 
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Lead auditor" required error={errors.leadAuditorId?.message}>
             <UserSelect value={lead} onChange={(v) => setValue('leadAuditorId', v, { shouldValidate: true })} />
           </FormField>
-          <FormField label="Audit manager" error={errors.auditManagerId?.message}>
+          <FormField label="Audit manager" required error={errors.auditManagerId?.message}>
             <UserSelect value={manager} onChange={(v) => setValue('auditManagerId', v, { shouldValidate: true })} />
           </FormField>
         </div>
@@ -284,11 +283,11 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
         </FormField>
 
         <div className="grid grid-cols-3 gap-3">
-          <FormField label="Start" required error={errors.startDate?.message}>
-            <Input type="date" {...register('startDate')} />
+          <FormField label="Start" required error={errors.plannedStartDate?.message}>
+            <Input type="date" {...register('plannedStartDate')} />
           </FormField>
-          <FormField label="End" required error={errors.endDate?.message}>
-            <Input type="date" {...register('endDate')} />
+          <FormField label="End" required error={errors.plannedEndDate?.message}>
+            <Input type="date" {...register('plannedEndDate')} />
           </FormField>
           <FormField label="SLA deadline" required error={errors.slaDeadline?.message}>
             <Input type="date" {...register('slaDeadline')} />

@@ -11,18 +11,22 @@ import { toast } from 'sonner';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { UserSelect } from '@/components/common/UserSelect';
 import { plansApi } from '@/lib/api/audit';
 
+/** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
+function toISODatetime(dateStr: string): string {
+  return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
+}
+
 const Schema = z.object({
   title: z.string().min(2).max(200),
-  description: z.string().max(2000).optional().or(z.literal('')),
   leadAuditorId: z.string().min(1, 'Lead auditor required'),
-  auditManagerId: z.string().optional().or(z.literal('')),
+  auditManagerId: z.string().min(1, 'Audit manager required'),
   auditeeId: z.string().min(1, 'Auditee required'),
-  startDate: z.string().min(1),
-  endDate: z.string().min(1),
+  plannedStartDate: z.string().min(1),
+  plannedEndDate: z.string().min(1),
   slaDeadline: z.string().min(1),
 });
 
@@ -57,12 +61,11 @@ export const CreateEngagementSlideOver = ({
     resolver: zodResolver(Schema),
     defaultValues: {
       title: '',
-      description: '',
       leadAuditorId: '',
       auditManagerId: '',
       auditeeId: '',
-      startDate: '',
-      endDate: '',
+      plannedStartDate: '',
+      plannedEndDate: '',
       slaDeadline: '',
     },
   });
@@ -71,12 +74,11 @@ export const CreateEngagementSlideOver = ({
     if (open) {
       reset({
         title: defaultTitle ?? '',
-        description: '',
         leadAuditorId: '',
         auditManagerId: '',
         auditeeId: '',
-        startDate: '',
-        endDate: '',
+        plannedStartDate: '',
+        plannedEndDate: '',
         slaDeadline: '',
       });
     }
@@ -86,13 +88,12 @@ export const CreateEngagementSlideOver = ({
     mutationFn: (v: FormValues) =>
       plansApi.createEngagement(itemId, {
         title: v.title,
-        description: v.description || undefined,
         leadAuditorId: v.leadAuditorId,
-        auditManagerId: v.auditManagerId || undefined,
+        auditManagerId: v.auditManagerId,
         auditeeId: v.auditeeId,
-        startDate: v.startDate,
-        endDate: v.endDate,
-        slaDeadline: v.slaDeadline,
+        plannedStartDate: toISODatetime(v.plannedStartDate),
+        plannedEndDate: toISODatetime(v.plannedEndDate),
+        slaDeadline: toISODatetime(v.slaDeadline),
       }),
     onSuccess: (eng) => {
       toast.success('Engagement created');
@@ -131,9 +132,6 @@ export const CreateEngagementSlideOver = ({
         <FormField label="Title" required error={errors.title?.message}>
           <Input error={errors.title?.message} {...register('title')} />
         </FormField>
-        <FormField label="Description" error={errors.description?.message}>
-          <Textarea rows={3} {...register('description')} />
-        </FormField>
 
         <FormField label="Lead auditor" required error={errors.leadAuditorId?.message}>
           <UserSelect
@@ -142,10 +140,11 @@ export const CreateEngagementSlideOver = ({
             error={errors.leadAuditorId?.message}
           />
         </FormField>
-        <FormField label="Audit manager" error={errors.auditManagerId?.message}>
+        <FormField label="Audit manager" required error={errors.auditManagerId?.message}>
           <UserSelect
             value={manager}
             onChange={(v) => setValue('auditManagerId', v, { shouldValidate: true })}
+            error={errors.auditManagerId?.message}
           />
         </FormField>
         <FormField label="Auditee" required error={errors.auditeeId?.message}>
@@ -157,11 +156,11 @@ export const CreateEngagementSlideOver = ({
         </FormField>
 
         <div className="grid grid-cols-2 gap-3">
-          <FormField label="Start" required error={errors.startDate?.message}>
-            <Input type="date" error={errors.startDate?.message} {...register('startDate')} />
+          <FormField label="Start" required error={errors.plannedStartDate?.message}>
+            <Input type="date" error={errors.plannedStartDate?.message} {...register('plannedStartDate')} />
           </FormField>
-          <FormField label="End" required error={errors.endDate?.message}>
-            <Input type="date" error={errors.endDate?.message} {...register('endDate')} />
+          <FormField label="End" required error={errors.plannedEndDate?.message}>
+            <Input type="date" error={errors.plannedEndDate?.message} {...register('plannedEndDate')} />
           </FormField>
         </div>
         <FormField label="SLA deadline" required error={errors.slaDeadline?.message}>

@@ -7,6 +7,7 @@ import type {
   AuditEngagement,
   AuditEngagementDetail,
   AuditWorkingPaper,
+  WorkingPaperImportPreview,
   AuditEvidence,
   AuditFinding,
   AuditChecklistItem,
@@ -33,10 +34,11 @@ export interface CreateUniverseEntityDto {
   category: string;
   ownerId: string;
   auditFrequency: string;
-  status?: string;
 }
 
-export interface UpdateUniverseEntityDto extends Partial<CreateUniverseEntityDto> {}
+export interface UpdateUniverseEntityDto extends Partial<CreateUniverseEntityDto> {
+  status?: string;
+}
 
 export const universeApi = {
   list: (q?: UniverseListQuery) =>
@@ -62,7 +64,6 @@ export interface PlansListQuery {
 export interface CreatePlanDto {
   title: string;
   year: number;
-  description?: string;
 }
 
 export interface AddPlanItemDto {
@@ -71,7 +72,6 @@ export interface AddPlanItemDto {
   priority: string;
   plannedStartDate: string;
   plannedEndDate: string;
-  notes?: string;
 }
 
 export const plansApi = {
@@ -91,8 +91,8 @@ export const plansApi = {
     api.post<AuditPlan>(`/audit/plans/${id}/approve`, { comment }),
   reject: (id: string, reason: string) =>
     api.post<AuditPlan>(`/audit/plans/${id}/reject`, { reason }),
-  /** Fix 12: POST /audit/engagements with planItemId in body */
-  createEngagement: (planItemId: string, dto: CreateEngagementDto) =>
+  /** POST /audit/engagements with planItemId in body */
+  createEngagement: (planItemId: string, dto: Omit<CreateEngagementFromPlanDto, 'planItemId'>) =>
     api.post<AuditEngagement>('/audit/engagements', { ...dto, planItemId }),
 };
 
@@ -110,34 +110,61 @@ export interface EngagementsListQuery {
   search?: string;
 }
 
-export interface CreateEngagementDto {
+export interface CreateEngagementFromPlanDto {
   title: string;
-  description?: string;
+  leadAuditorId: string;
+  auditManagerId: string;
+  auditeeId: string;
+  plannedStartDate: string;
+  plannedEndDate: string;
+  slaDeadline: string;
+  planItemId: string;
+  universeId?: string;
   auditType?: string;
   priority?: string;
+}
+
+export interface CreateAdhocEngagementDto {
+  title: string;
   leadAuditorId: string;
-  auditManagerId?: string;
+  auditManagerId: string;
   auditeeId: string;
-  startDate: string;
-  endDate: string;
+  plannedStartDate: string;
+  plannedEndDate: string;
   slaDeadline: string;
-  isAdHoc?: boolean;
-  adHocReason?: string;
-  universeId?: string;
-  planItemId?: string;
+  universeId: string;
+  auditType: string;
+  priority: string;
+  adhocReason: string;
+}
+
+export interface UpdateEngagementDto {
+  title?: string;
+  leadAuditorId?: string;
+  auditManagerId?: string;
+  auditeeId?: string;
+  plannedStartDate?: string;
+  plannedEndDate?: string;
+  slaDeadline?: string;
+  priority?: string;
+  adhocReason?: string | null;
 }
 
 export const engagementsApi = {
   list: (q?: EngagementsListQuery) =>
     api.getPaginated<AuditEngagement>('/audit/engagements', q as Record<string, string | number | boolean | undefined>),
   get: (id: string) => api.get<AuditEngagementDetail>(`/audit/engagements/${id}`),
-  create: (dto: CreateEngagementDto) =>
+  /** POST /audit/engagements — create from plan item */
+  createFromPlan: (dto: CreateEngagementFromPlanDto) =>
     api.post<AuditEngagement>('/audit/engagements', dto),
-  update: (id: string, dto: Partial<CreateEngagementDto>) =>
-    api.patch<AuditEngagement>(`/audit/engagements/${id}`, dto),
+  /** POST /audit/engagements/adhoc — create ad-hoc engagement */
+  createAdhoc: (dto: CreateAdhocEngagementDto) =>
+    api.post<AuditEngagement>('/audit/engagements/adhoc', dto),
+  /** PUT /audit/engagements/:id */
+  update: (id: string, dto: UpdateEngagementDto) =>
+    api.put<AuditEngagement>(`/audit/engagements/${id}`, dto),
   updateStatus: (id: string, status: string) =>
     api.patch<AuditEngagement>(`/audit/engagements/${id}/status`, { status }),
-  remove: (id: string) => api.delete(`/audit/engagements/${id}`),
 };
 
 // ============================================================
@@ -151,12 +178,33 @@ export const workingPapersApi = {
   get: (id: string) => api.get<AuditWorkingPaper>(`/audit/working-papers/${id}`),
   create: (
     engagementId: string,
-    dto: { title: string; content?: string },
+    dto: {
+      title: string;
+      content: string;
+      templateId?: string;
+      sourceDocumentId?: string;
+      workingPaperType?: string;
+      importMetadata?: Record<string, unknown>;
+    },
   ) =>
     api.post<AuditWorkingPaper>(
       `/audit/engagements/${engagementId}/working-papers`,
       dto,
     ),
+  importPreview: (
+    engagementId: string,
+    file: File,
+    dto?: { templateId?: string; workingPaperType?: string },
+  ) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    if (dto?.templateId) fd.append('templateId', dto.templateId);
+    if (dto?.workingPaperType) fd.append('workingPaperType', dto.workingPaperType);
+    return api.upload<WorkingPaperImportPreview>(
+      `/audit/engagements/${engagementId}/working-papers/import-preview`,
+      fd,
+    );
+  },
   /** Fix 1: PATCH → PUT */
   update: (id: string, dto: { title?: string; content?: string }) =>
     api.put<AuditWorkingPaper>(`/audit/working-papers/${id}`, dto),
@@ -208,11 +256,12 @@ export interface CreateFindingDto {
   description: string;
   category: string;
   severity: string;
-  rootCause?: string;
-  riskImplication?: string;
-  recommendation?: string;
+  rootCause: string;
+  riskImplication: string;
+  recommendation: string;
   auditeeId: string;
   dueDate: string;
+  workingPaperId?: string;
 }
 
 export const findingsApi = {
@@ -243,8 +292,8 @@ export const findingsApi = {
 // ============================================================
 export const checklistsApi = {
   listByEngagement: (engagementId: string) =>
-    api.get<AuditChecklistItem[]>(`/audit/engagements/${engagementId}/checklists`),
-  update: (id: string, dto: { result?: string; notes?: string; evidenceId?: string }) =>
+    api.get<Record<string, AuditChecklistItem[]>>(`/audit/engagements/${engagementId}/checklists`),
+  update: (id: string, dto: { result: string; notes?: string | null }) =>
     api.patch<AuditChecklistItem>(`/audit/checklists/${id}`, dto),
 };
 
@@ -287,8 +336,30 @@ export const reportsApi = {
   reject: (id: string, reason: string) =>
     api.post<AuditReport>(`/audit/reports/${id}/reject`, { reason }),
   issue: (id: string) => api.post<AuditReport>(`/audit/reports/${id}/issue`),
-  exportDocx: (id: string) =>
-    api.get<{ buffer: string; fileName: string }>(`/audit/reports/${id}/export`),
+  exportFile: async (
+    id: string,
+    format: 'pdf' | 'docx',
+    referenceNumber?: string,
+  ): Promise<{ blob: Blob; fileName: string }> => {
+    const res = await fetch(`/api/proxy/audit/reports/${id}/export?format=${format}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      let msg = `Export failed (${res.status})`;
+      try {
+        const body = (await res.json()) as { message?: string };
+        if (body.message) msg = body.message;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match = /filename[^;=\n]*=["']?([^"';\n]+)["']?/i.exec(disposition);
+    const fileName =
+      match?.[1]?.trim() ??
+      `GBB-IAR-${referenceNumber ?? 'RPT'}-${new Date().toISOString().slice(0, 10)}.${format}`;
+    return { blob, fileName };
+  },
 };
 
 // ============================================================

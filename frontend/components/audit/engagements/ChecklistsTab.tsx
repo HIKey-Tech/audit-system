@@ -9,10 +9,30 @@ import { Card } from '@/components/ui/Card';
 import { Select, Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { Badge } from '@/components/ui/Badge';
 import { checklistsApi } from '@/lib/api/audit';
 import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditEngagementDetail, AuditChecklistItem } from '@/lib/types/domain';
+
+function normalizeChecklists(
+  data: Record<string, AuditChecklistItem[]> | AuditChecklistItem[] | undefined | null,
+): { flat: AuditChecklistItem[]; grouped: [string, AuditChecklistItem[]][] } {
+  if (!data) return { flat: [], grouped: [] };
+
+  if (Array.isArray(data)) {
+    const map = new Map<string, AuditChecklistItem[]>();
+    data.forEach((it) => {
+      const key = it.auditType;
+      const arr = map.get(key) ?? [];
+      arr.push(it);
+      map.set(key, arr);
+    });
+    return { flat: data, grouped: Array.from(map.entries()) };
+  }
+
+  const flat = Object.values(data).flat();
+  const grouped = Object.entries(data).sort(([a], [b]) => a.localeCompare(b));
+  return { flat, grouped };
+}
 
 export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
@@ -22,7 +42,7 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
   });
 
   const update = useMutation({
-    mutationFn: ({ id, dto }: { id: string; dto: { result?: string; notes?: string } }) =>
+    mutationFn: ({ id, dto }: { id: string; dto: { result: string; notes?: string | null } }) =>
       checklistsApi.update(id, dto),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'checklists'] });
@@ -31,21 +51,12 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const grouped = useMemo(() => {
-    const map = new Map<string, AuditChecklistItem[]>();
-    (list.data ?? []).forEach((it) => {
-      const key = it.auditType;
-      const arr = map.get(key) ?? [];
-      arr.push(it);
-      map.set(key, arr);
-    });
-    return Array.from(map.entries());
-  }, [list.data]);
+  const { flat, grouped } = useMemo(() => normalizeChecklists(list.data), [list.data]);
 
-  const total = list.data?.length ?? 0;
-  const passed = (list.data ?? []).filter((c) => c.result === 'passed').length;
-  const failed = (list.data ?? []).filter((c) => c.result === 'failed').length;
-  const tested = (list.data ?? []).filter((c) => c.result !== 'not_tested').length;
+  const total = flat.length;
+  const tested = flat.filter((c) => c.result !== 'not_tested').length;
+  const passed = flat.filter((c) => c.result === 'passed').length;
+  const failed = flat.filter((c) => c.result === 'failed').length;
 
   return (
     <div>
@@ -59,7 +70,7 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
           <Skeleton className="h-3 w-1/3 mb-3" />
           <Skeleton className="h-10 w-full" />
         </Card>
-      ) : !list.data || list.data.length === 0 ? (
+      ) : grouped.length === 0 ? (
         <Card>
           <EmptyState
             icon={<ListChecks className="h-4 w-4" />}
@@ -119,7 +130,7 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
                         </Select>
                         <NotesInput
                           initial={item.notes ?? ''}
-                          onSave={(v) => update.mutate({ id: item.id, dto: { notes: v } })}
+                          onSave={(v) => update.mutate({ id: item.id, dto: { result: item.result, notes: v || null } })}
                         />
                       </div>
                     </div>

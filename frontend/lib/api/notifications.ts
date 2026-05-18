@@ -10,8 +10,6 @@ export interface NotificationsListQuery {
   page?: number;
   pageSize?: number;
   isRead?: boolean;
-  sortBy?: string;
-  sortOrder?: 'asc' | 'desc';
 }
 
 export const notificationsApi = {

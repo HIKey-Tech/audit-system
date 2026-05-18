@@ -1,11 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { FileText, Send, Check, X, Download, Sparkles } from 'lucide-react';
+import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -17,7 +17,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Textarea } from '@/components/ui/Input';
 import { reportsApi } from '@/lib/api/audit';
 import { formatRelative } from '@/lib/utils/format';
-import { useSession, hasAnyRole, hasPermission } from '@/components/providers/AuthProvider';
+import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 const GenSchema = z.object({
@@ -30,9 +30,11 @@ type GenValues = z.infer<typeof GenSchema>;
 
 export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
-  const session = useSession();
-  const canWrite = hasPermission(session, 'audit:write');
-  const canApprove = hasAnyRole(session, ['audit_admin', 'super_admin', 'director', 'cae']);
+  const canGenerateReport = usePermission('report:create');
+  const canSubmitReport = usePermission('report:submit');
+  const canApproveReport = usePermission('report:approve');
+  const canIssueReport = usePermission('report:issue');
+  const canExportReport = usePermission('report:export');
 
   const report = useQuery({
     queryKey: ['engagements', engagement.id, 'report'],
@@ -81,15 +83,42 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const exportNow = async () => {
+  const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
+  const [showExportMenu, setShowExportMenu] = useState(false);
+  const exportMenuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showExportMenu) return;
+    const handler = (e: MouseEvent) => {
+      if (exportMenuRef.current && !exportMenuRef.current.contains(e.target as Node)) {
+        setShowExportMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showExportMenu]);
+
+  const handleExport = async (format: 'pdf' | 'docx') => {
+    setExportingFormat(format);
+    setShowExportMenu(false);
     try {
-      const r = await reportsApi.exportDocx(report.data!.id);
+      const { blob, fileName } = await reportsApi.exportFile(
+        report.data!.id,
+        format,
+        engagement.referenceNumber,
+      );
+      const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = `data:application/vnd.openxmlformats-officedocument.wordprocessingml.document;base64,${r.buffer}`;
-      link.download = r.fileName ?? `${report.data!.title}.docx`;
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
       link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingFormat(null);
     }
   };
 
@@ -120,7 +149,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     return (
       <Card>
         <CardHeader title="Audit report" subtitle="Generate the formal audit report once fieldwork is complete." />
-        {!canWrite ? (
+        {!canGenerateReport ? (
           <EmptyState
             icon={<FileText className="h-4 w-4" />}
             title="No report yet"
@@ -166,15 +195,53 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button variant="secondary" leftIcon={<Download className="h-4 w-4" />} size="sm" onClick={exportNow}>
-              Export DOCX
-            </Button>
-            {canWrite && (r.status === 'draft' || r.status === 'rejected') && (
+            {canExportReport && (
+              <div ref={exportMenuRef} className="relative flex">
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Download className="h-4 w-4" />}
+                  isLoading={exportingFormat === 'pdf'}
+                  disabled={exportingFormat === 'docx'}
+                  onClick={() => handleExport('pdf')}
+                  className="rounded-r-none border-r-0"
+                >
+                  Export PDF
+                </Button>
+                <button
+                  type="button"
+                  onClick={() => setShowExportMenu((v) => !v)}
+                  disabled={exportingFormat !== null}
+                  aria-label="More export options"
+                  className="inline-flex h-8 items-center rounded-r-md border border-border bg-white px-1.5 text-text-secondary hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </button>
+                {showExportMenu && (
+                  <div className="absolute right-0 top-full z-10 mt-1 w-36 rounded-md border border-border bg-white py-1 shadow-lg">
+                    <button
+                      type="button"
+                      onClick={() => handleExport('docx')}
+                      disabled={exportingFormat !== null}
+                      className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {exportingFormat === 'docx' ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileText className="h-3.5 w-3.5" />
+                      )}
+                      Export DOCX
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+            {canSubmitReport && (r.status === 'draft' || r.status === 'rejected') && (
               <Button leftIcon={<Send className="h-4 w-4" />} size="sm" onClick={() => submitMut.mutate()} isLoading={submitMut.isPending}>
                 Submit for approval
               </Button>
             )}
-            {canApprove && r.status === 'submitted' && (
+            {canApproveReport && r.status === 'submitted' && (
               <>
                 <Button variant="success" size="sm" leftIcon={<Check className="h-4 w-4" />} onClick={() => approveMut.mutate()} isLoading={approveMut.isPending}>
                   Approve
@@ -187,7 +254,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                 </Button>
               </>
             )}
-            {canApprove && r.status === 'approved' && (
+            {canIssueReport && r.status === 'approved' && (
               <Button size="sm" onClick={() => issueMut.mutate()} isLoading={issueMut.isPending}>
                 Issue report
               </Button>

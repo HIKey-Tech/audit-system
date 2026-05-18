@@ -288,6 +288,7 @@ model Document {
   templates   Document_Template[]
   evidence    Audit_Evidence[]
   reports     Audit_Report[]
+  working_paper_sources Audit_Working_Paper[] @relation("WorkingPaperSourceDocument")
 
   @@index([entity_type, entity_id])
   @@map("documents")
@@ -523,6 +524,9 @@ model Audit_Engagement {
 model Audit_Working_Paper {
   id               String    @id @default(uuid())
   engagement_id    String
+  template_id       String?
+  source_document_id String?
+  working_paper_type String   @default("general")
   title            String
   content          String    @db.NVarChar(Max)
   version_number   Int       @default(1)
@@ -530,17 +534,23 @@ model Audit_Working_Paper {
   created_by_id    String
   reviewed_by_id   String?
   rejection_reason String?   @db.NVarChar(Max)
+  import_metadata  String?   @db.NVarChar(Max)
   deleted_at       DateTime?
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
 
   engagement  Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  template    Working_Paper_Template? @relation(fields: [template_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  source_document Document?        @relation("WorkingPaperSourceDocument", fields: [source_document_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   created_by  User             @relation("WorkingPaperCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   reviewed_by User?            @relation("WorkingPaperReviewedBy", fields: [reviewed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   evidence    Audit_Evidence[]
   findings    Audit_Finding[]
 
   @@index([engagement_id])
+  @@index([template_id])
+  @@index([source_document_id])
+  @@index([working_paper_type])
   @@index([status])
   @@index([created_by_id])
   @@map("audit_working_papers")
@@ -911,6 +921,7 @@ model Working_Paper_Template {
 
   created_by User? @relation("WorkingPaperTemplateCreatedBy", fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
   updated_by User? @relation("WorkingPaperTemplateUpdatedBy", fields: [updated_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  working_papers Audit_Working_Paper[]
 
   @@index([audit_type])
   @@index([is_active])

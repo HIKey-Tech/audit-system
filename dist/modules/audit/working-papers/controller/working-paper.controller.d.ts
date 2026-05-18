@@ -6,6 +6,7 @@ export declare class WorkingPaperController {
     constructor(workingPaperService: IWorkingPaperService);
     private _registerRoutes;
     private _createWorkingPaper;
+    private _previewWorkingPaperImport;
     private _updateWorkingPaper;
     private _submitWorkingPaper;
     private _approveWorkingPaper;

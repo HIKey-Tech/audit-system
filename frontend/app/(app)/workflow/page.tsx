@@ -269,7 +269,7 @@ const NewAssignmentSlideOver = ({
 }): JSX.Element => {
   const [engagementId, setEngagementId] = useState('');
   const [userId, setUserId] = useState('');
-  const [role, setRole] = useState('auditor');
+  const [role, setRole] = useState<'lead_auditor' | 'supporting_auditor'>('lead_auditor');
 
   const engagements = useQuery({
     queryKey: ['engagements', 'all'],
@@ -325,11 +325,12 @@ const NewAssignmentSlideOver = ({
           <UserSelect value={userId} onChange={setUserId} />
         </FormField>
         <FormField label="Role" required>
-          <Select value={role} onChange={(e) => setRole(e.target.value)}>
-            <option value="auditor">Auditor</option>
-            <option value="reviewer">Reviewer</option>
-            <option value="observer">Observer</option>
-            <option value="specialist">Specialist</option>
+          <Select
+            value={role}
+            onChange={(e) => setRole(e.target.value as 'lead_auditor' | 'supporting_auditor')}
+          >
+            <option value="lead_auditor">Lead auditor</option>
+            <option value="supporting_auditor">Supporting auditor</option>
           </Select>
         </FormField>
       </div>

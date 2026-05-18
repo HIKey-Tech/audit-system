@@ -5,32 +5,92 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
+const working_paper_template_service_1 = require("../../../../settings/service/implementation/working-paper-template.service");
 const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const working_paper_response_dto_1 = require("../../dto/response/working-paper.response.dto");
+const working_paper_import_utility_1 = require("../../utility/working-paper-import.utility");
 class WorkingPaperService {
     documentService;
+    templateService;
     approvalService;
-    constructor(documentService, approvalService = approval_service_1.workflowApprovalService) {
+    constructor(documentService, templateService = working_paper_template_service_1.workingPaperTemplateService, approvalService = approval_service_1.workflowApprovalService) {
         this.documentService = documentService;
+        this.templateService = templateService;
         this.approvalService = approvalService;
     }
     async createWorkingPaper(engagementId, dto, actor) {
         (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
         await this._assertEngagementInProgress(engagementId);
+        await this._assertOptionalImportReferences(dto.templateId, dto.sourceDocumentId);
         const paper = await prisma_client_1.prisma.audit_Working_Paper.create({
             data: {
                 engagement_id: engagementId,
+                template_id: dto.templateId ?? null,
+                source_document_id: dto.sourceDocumentId ?? null,
+                working_paper_type: dto.workingPaperType ?? 'general',
                 title: dto.title,
                 content: dto.content,
+                import_metadata: dto.importMetadata ? JSON.stringify(dto.importMetadata) : null,
                 created_by_id: actor.id,
             },
         });
         logger_util_1.logger.info('Audit working paper created', { workingPaperId: paper.id, engagementId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.create', module: 'audit', entityType: 'audit_working_paper', entityId: paper.id });
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper);
+    }
+    async previewWorkingPaperImport(engagementId, file, dto, actor) {
+        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        const engagement = await this._getEngagementForWorkingPaperImport(engagementId);
+        const extracted = await (0, working_paper_import_utility_1.extractWorkingPaperText)(file.buffer, file.mimeType, file.originalName);
+        const template = await this._resolveImportTemplate(dto.templateId, engagement.audit_type);
+        const mappedSections = template
+            ? (0, working_paper_import_utility_1.mapTextToWorkingPaperSections)(extracted.text, template.sections)
+            : [];
+        const content = mappedSections.length > 0
+            ? (0, working_paper_import_utility_1.buildWorkingPaperContentFromSections)(mappedSections)
+            : extracted.text;
+        const confidence = mappedSections.length > 0 ? (0, working_paper_import_utility_1.averageSectionConfidence)(mappedSections) : 0.35;
+        const document = await this.documentService.upload({
+            uploadedById: actor.id,
+            originalName: file.originalName,
+            mimeType: file.mimeType,
+            fileSize: file.fileSize,
+            buffer: file.buffer,
+            module: 'audit',
+            entityType: 'audit_working_paper_source',
+            entityId: engagementId,
+        });
+        const suggestedTitle = this._suggestTitle(file.originalName, template?.name);
+        const warnings = [...extracted.warnings];
+        if (!template) {
+            warnings.push('No working paper template matched this engagement. The extracted text was returned as free-form content.');
+        }
+        if (confidence < 0.5) {
+            warnings.push('Low section-mapping confidence. Review and edit the preview before saving.');
+        }
+        logger_util_1.logger.info('Audit working paper import preview generated', {
+            engagementId,
+            documentId: document.id,
+            templateId: template?.id ?? null,
+            actorId: actor.id,
+        });
+        return {
+            documentId: document.id,
+            fileName: file.originalName,
+            fileType: file.mimeType,
+            templateId: template?.id ?? null,
+            templateName: template?.name ?? null,
+            workingPaperType: dto.workingPaperType ?? 'imported',
+            suggestedTitle,
+            extractedText: (0, working_paper_import_utility_1.truncateExtractedText)(extracted.text),
+            mappedSections,
+            content,
+            confidence,
+            warnings,
+        };
     }
     async updateWorkingPaper(id, dto, actor) {
         const paper = await this._getPaper(id);
@@ -158,6 +218,56 @@ class WorkingPaperService {
             throw app_error_1.AppError.notFound('Audit engagement');
         if (engagement.status !== audit_enum_1.EngagementStatus.InProgress)
             throw app_error_1.AppError.badRequest('Engagement must be in progress');
+    }
+    async _getEngagementForWorkingPaperImport(engagementId) {
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { status: true, audit_type: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        if (engagement.status !== audit_enum_1.EngagementStatus.InProgress)
+            throw app_error_1.AppError.badRequest('Engagement must be in progress');
+        return { audit_type: engagement.audit_type };
+    }
+    async _resolveImportTemplate(templateId, auditType) {
+        if (templateId)
+            return this.templateService.getTemplateById(templateId);
+        try {
+            return await this.templateService.getDefaultTemplate(auditType);
+        }
+        catch {
+            try {
+                return await this.templateService.getDefaultTemplate('all');
+            }
+            catch {
+                return null;
+            }
+        }
+    }
+    async _assertOptionalImportReferences(templateId, sourceDocumentId) {
+        if (templateId) {
+            const template = await prisma_client_1.prisma.working_Paper_Template.findFirst({
+                where: { id: templateId, deleted_at: null, is_active: true },
+                select: { id: true },
+            });
+            if (!template)
+                throw app_error_1.AppError.notFound('Working paper template');
+        }
+        if (sourceDocumentId) {
+            const document = await prisma_client_1.prisma.document.findFirst({
+                where: { id: sourceDocumentId, deleted_at: null },
+                select: { id: true },
+            });
+            if (!document)
+                throw app_error_1.AppError.notFound('Source document');
+        }
+    }
+    _suggestTitle(originalName, templateName) {
+        const baseName = originalName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
+        if (baseName)
+            return baseName.slice(0, 200);
+        return (templateName ? `${templateName} Import` : 'Imported working paper').slice(0, 200);
     }
     async _getPaper(id) {
         const paper = await prisma_client_1.prisma.audit_Working_Paper.findFirst({ where: { id, deleted_at: null } });

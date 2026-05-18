@@ -7,6 +7,8 @@ export interface UsersListQuery {
   pageSize?: number;
   search?: string;
   isActive?: boolean;
+  roleId?: string;
+  department?: string;
 }
 
 export interface CreateUserDto {

@@ -97,6 +97,15 @@ interface TemplateConfig {
   footerNotice: string;
 }
 
+interface RenderHeaderConfig {
+  orgName: string;
+  orgAddress: string;
+  reportTitle: string;
+  classification: string;
+  primaryColor: string;
+  accentColor: string;
+}
+
 // ────────────────────────────────────────────────────────────
 // Severity ordering & colours
 // ────────────────────────────────────────────────────────────
@@ -142,6 +151,37 @@ const FINDING_STATUS_LABEL: Record<string, string> = {
 // ────────────────────────────────────────────────────────────
 // Service
 // ────────────────────────────────────────────────────────────
+
+const isPlainRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const readString = (
+  record: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string => {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value.trim() : fallback;
+};
+
+const readColor = (
+  record: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string => {
+  const value = readString(record, key, fallback).replace(/^#/, '').trim();
+  return /^[0-9a-fA-F]{6}$/.test(value) ? value.toUpperCase() : fallback;
+};
+
+const readNestedLabel = (
+  record: Record<string, unknown>,
+  key: string,
+  fallback: string,
+): string => {
+  const nested = record[key];
+  if (!isPlainRecord(nested)) return fallback;
+  return readString(nested, 'label', fallback);
+};
 
 export class ReportGenerationService implements IReportGenerationService {
   constructor(
@@ -308,12 +348,14 @@ export class ReportGenerationService implements IReportGenerationService {
 
   private _buildDocxDocument(data: ReportData, config: TemplateConfig, approval: ApprovalResponseDto | null): Document {
     const children: (Paragraph | Table)[] = [];
+    const header = this._getHeaderConfig(config);
+    const footerNotice = this._getFooterNotice(config);
 
     // Header
-    children.push(...this._buildDocxHeader(config.orgName, config.orgAddress));
+    children.push(...this._buildDocxHeader(header));
 
     // Metadata table
-    children.push(this._buildDocxMetadataTable(data));
+    children.push(this._buildDocxMetadataTable(data, header.classification));
 
     // Sections
     config.template.sections.forEach((section, idx) => {
@@ -325,7 +367,7 @@ export class ReportGenerationService implements IReportGenerationService {
               text: `${idx + 1}. ${section.title}`,
               bold: true,
               size: 24,
-              color: '003087',
+              color: header.primaryColor,
             }),
           ],
         }),
@@ -334,7 +376,7 @@ export class ReportGenerationService implements IReportGenerationService {
     });
 
     // Signature block
-    children.push(this._buildDocxSignatureBlock(data, approval));
+    children.push(this._buildDocxSignatureBlock(data, approval, config));
 
     // Footer notice
     children.push(
@@ -342,7 +384,7 @@ export class ReportGenerationService implements IReportGenerationService {
         spacing: { before: 240 },
         children: [
           new TextRun({
-            text: config.footerNotice,
+            text: footerNotice,
             size: 18,
             color: '64748B',
             italics: true,
@@ -371,7 +413,7 @@ export class ReportGenerationService implements IReportGenerationService {
                   alignment: AlignmentType.CENTER,
                   children: [
                     new TextRun({
-                      text: `${config.footerNotice} — Page `,
+                      text: `${footerNotice} - Page `,
                       size: 18,
                       color: '64748B',
                     }),
@@ -401,40 +443,40 @@ export class ReportGenerationService implements IReportGenerationService {
     });
   }
 
-  private _buildDocxHeader(orgName: string, orgAddress: string): Paragraph[] {
+  private _buildDocxHeader(header: RenderHeaderConfig): Paragraph[] {
     return [
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: orgName, size: 20, color: '003087' })],
+        children: [new TextRun({ text: header.orgName, size: 20, color: header.primaryColor })],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
         spacing: { before: 120, after: 120 },
         children: [
           new TextRun({
-            text: 'INTERNAL AUDIT REPORT',
+            text: header.reportTitle,
             bold: true,
             size: 28,
-            color: '003087',
+            color: header.primaryColor,
             allCaps: true,
           }),
         ],
       }),
       new Paragraph({
         alignment: AlignmentType.CENTER,
-        children: [new TextRun({ text: orgAddress, size: 18, color: '64748B' })],
+        children: [new TextRun({ text: header.orgAddress, size: 18, color: '64748B' })],
       }),
       new Paragraph({
         spacing: { before: 120, after: 240 },
         border: {
-          bottom: { color: '003087', space: 1, style: BorderStyle.SINGLE, size: 12 },
+          bottom: { color: header.accentColor, space: 1, style: BorderStyle.SINGLE, size: 12 },
         },
         children: [],
       }),
     ];
   }
 
-  private _buildDocxMetadataTable(data: ReportData): Table {
+  private _buildDocxMetadataTable(data: ReportData, classification: string): Table {
     const rows = [
       this._docxMetadataRow('Report Reference', data.engagement.referenceNumber),
       this._docxMetadataRow('Audit Type', AUDIT_TYPE_LABEL[data.engagement.auditType] ?? data.engagement.auditType),
@@ -447,7 +489,7 @@ export class ReportGenerationService implements IReportGenerationService {
         'Report Date',
         data.report.issuedAt ? formatDate(data.report.issuedAt, 'dd MMMM yyyy') : 'Not yet issued',
       ),
-      this._docxMetadataRow('Classification', 'CONFIDENTIAL'),
+      this._docxMetadataRow('Classification', classification),
     ];
 
     return new Table({
@@ -829,7 +871,8 @@ export class ReportGenerationService implements IReportGenerationService {
     });
   }
 
-  private _buildDocxSignatureBlock(data: ReportData, approval: ApprovalResponseDto | null): Table {
+  private _buildDocxSignatureBlock(data: ReportData, approval: ApprovalResponseDto | null, config: TemplateConfig): Table {
+    const labels = this._getSignatureLabels(config);
     const leadAuditorName =
       data.engagement.leadAuditor.displayName ??
       `${data.engagement.leadAuditor.firstName} ${data.engagement.leadAuditor.lastName}`.trim() ??
@@ -863,7 +906,7 @@ export class ReportGenerationService implements IReportGenerationService {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({ text: 'Prepared by:', bold: true, color: '003087' }),
+                    new TextRun({ text: `${labels.preparedBy}:`, bold: true, color: '003087' }),
                   ],
                 }),
                 new Paragraph({ children: [new TextRun({ text: leadAuditorName })] }),
@@ -876,7 +919,7 @@ export class ReportGenerationService implements IReportGenerationService {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({ text: 'Reviewed by:', bold: true, color: '003087' }),
+                    new TextRun({ text: `${labels.reviewedBy}:`, bold: true, color: '003087' }),
                   ],
                 }),
                 new Paragraph({ children: [new TextRun({ text: auditManagerName })] }),
@@ -888,7 +931,7 @@ export class ReportGenerationService implements IReportGenerationService {
               children: [
                 new Paragraph({
                   children: [
-                    new TextRun({ text: 'Approved by:', bold: true, color: '003087' }),
+                    new TextRun({ text: `${labels.approvedBy}:`, bold: true, color: '003087' }),
                   ],
                 }),
                 new Paragraph({ children: [new TextRun({ text: caeApproverName })] }),
@@ -922,6 +965,7 @@ export class ReportGenerationService implements IReportGenerationService {
       approval = null;
     }
     const html = this._buildPdfHtml(data, config, approval);
+    const footerNotice = this._getFooterNotice(config);
     const browser = await puppeteer.launch({ headless: true });
     try {
       const page = await browser.newPage();
@@ -932,7 +976,7 @@ export class ReportGenerationService implements IReportGenerationService {
         margin: { top: '20mm', bottom: '25mm', left: '20mm', right: '20mm' },
         displayHeaderFooter: true,
         headerTemplate: '<div></div>',
-        footerTemplate: `<div style="font-size:9px;width:100%;text-align:center;color:#64748B;padding:0 20mm;">${this._escapeHtml(config.footerNotice)} — Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
+        footerTemplate: `<div style="font-size:9px;width:100%;text-align:center;color:#64748B;padding:0 20mm;">${this._escapeHtml(footerNotice)} - Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
       });
       return Buffer.from(pdfBuffer);
     } finally {
@@ -941,6 +985,9 @@ export class ReportGenerationService implements IReportGenerationService {
   }
 
   private _buildPdfHtml(data: ReportData, config: TemplateConfig, approval: ApprovalResponseDto | null): string {
+    const header = this._getHeaderConfig(config);
+    const footerNotice = this._getFooterNotice(config);
+    const labels = this._getSignatureLabels(config);
     const leadAuditorName =
       this._escapeHtml(
         data.engagement.leadAuditor.displayName ??
@@ -1116,37 +1163,37 @@ export class ReportGenerationService implements IReportGenerationService {
   <style>
     @page { margin: 20mm; }
     body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1a1a1a; margin: 0; padding: 0; }
-    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #003087; padding-bottom: 10px; }
-    .org-name { font-size: 14pt; color: #003087; font-weight: bold; }
-    .report-title { font-size: 18pt; font-weight: bold; text-transform: uppercase; margin: 10px 0; color: #003087; }
+    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #${header.accentColor}; padding-bottom: 10px; }
+    .org-name { font-size: 14pt; color: #${header.primaryColor}; font-weight: bold; }
+    .report-title { font-size: 18pt; font-weight: bold; text-transform: uppercase; margin: 10px 0; color: #${header.primaryColor}; }
     .org-address { font-size: 10pt; color: #64748B; }
     table { width: 100%; border-collapse: collapse; margin: 15px 0; }
     th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-    th { background-color: #003087; color: white; font-weight: 600; }
-    .section-title { font-size: 14pt; font-weight: bold; color: #003087; margin-top: 25px; margin-bottom: 10px; }
+    th { background-color: #${header.primaryColor}; color: white; font-weight: 600; }
+    .section-title { font-size: 14pt; font-weight: bold; color: #${header.primaryColor}; margin-top: 25px; margin-bottom: 10px; }
     .finding-heading { font-size: 12pt; font-weight: bold; margin-top: 20px; color: #1a1a1a; }
-    .label { font-weight: bold; color: #003087; }
+    .label { font-weight: bold; color: #${header.primaryColor}; }
     .severity-critical { background-color: #DC2626; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
     .severity-high { background-color: #EA580C; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
     .severity-medium { background-color: #CA8A04; color: black; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
     .severity-low { background-color: #16A34A; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
     .severity-informational { background-color: #64748B; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
     .signature-table td { border: none; vertical-align: top; width: 33%; padding: 10px; }
-    .signature-table .sig-label { font-weight: bold; color: #003087; margin-bottom: 5px; display: block; }
+    .signature-table .sig-label { font-weight: bold; color: #${header.primaryColor}; margin-bottom: 5px; display: block; }
     .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 9pt; color: #64748B; text-align: center; }
     .separator { border-top: 1px solid #ccc; margin: 15px 0; }
     .meta { font-style: italic; font-size: 10pt; color: #64748B; }
     .finding { margin-bottom: 10px; }
     .details-table { margin: 10px 0; }
     .details-table td { border: 1px solid #ccc; padding: 6px 10px; }
-    .details-table td:first-child { width: 20%; font-weight: bold; color: #003087; background-color: #f8f9fa; }
+    .details-table td:first-child { width: 20%; font-weight: bold; color: #${header.primaryColor}; background-color: #f8f9fa; }
   </style>
 </head>
 <body>
   <div class="header">
-    <div class="org-name">${this._escapeHtml(config.orgName)}</div>
-    <div class="report-title">INTERNAL AUDIT REPORT</div>
-    <div class="org-address">${this._escapeHtml(config.orgAddress)}</div>
+    <div class="org-name">${this._escapeHtml(header.orgName)}</div>
+    <div class="report-title">${this._escapeHtml(header.reportTitle)}</div>
+    <div class="org-address">${this._escapeHtml(header.orgAddress)}</div>
   </div>
 
   <table class="data-table">
@@ -1155,7 +1202,7 @@ export class ReportGenerationService implements IReportGenerationService {
     <tr><td class="label">Audited Entity</td><td>${this._escapeHtml(data.engagement.universe.name)}</td></tr>
     <tr><td class="label">Audit Period</td><td>${formatDate(data.engagement.plannedStartDate, 'dd MMM yyyy')} to ${formatDate(data.engagement.plannedEndDate, 'dd MMM yyyy')}</td></tr>
     <tr><td class="label">Report Date</td><td>${data.report.issuedAt ? formatDate(data.report.issuedAt, 'dd MMMM yyyy') : 'Not yet issued'}</td></tr>
-    <tr><td class="label">Classification</td><td><strong>CONFIDENTIAL</strong></td></tr>
+    <tr><td class="label">Classification</td><td><strong>${this._escapeHtml(header.classification)}</strong></td></tr>
   </table>
 
   ${sectionsHtml}
@@ -1164,18 +1211,18 @@ export class ReportGenerationService implements IReportGenerationService {
     <table class="signature-table">
       <tr>
         <td>
-          <span class="sig-label">Prepared by:</span>
+          <span class="sig-label">${this._escapeHtml(labels.preparedBy)}:</span>
           ${leadAuditorName}<br>
           ${leadAuditorTitle}<br>
           ${preparedDate}
         </td>
         <td>
-          <span class="sig-label">Reviewed by:</span>
+          <span class="sig-label">${this._escapeHtml(labels.reviewedBy)}:</span>
           ${auditManagerName}<br>
           ${auditManagerTitle}
         </td>
         <td>
-          <span class="sig-label">Approved by:</span>
+          <span class="sig-label">${this._escapeHtml(labels.approvedBy)}:</span>
           ${caeApproverName}
         </td>
       </tr>
@@ -1183,10 +1230,36 @@ export class ReportGenerationService implements IReportGenerationService {
   </div>
 
   <div class="footer">
-    ${this._escapeHtml(config.footerNotice)}
+    ${this._escapeHtml(footerNotice)}
   </div>
 </body>
 </html>`;
+  }
+
+  private _getHeaderConfig(config: TemplateConfig): RenderHeaderConfig {
+    const header = isPlainRecord(config.template.headerConfig) ? config.template.headerConfig : {};
+    return {
+      orgName: readString(header, 'orgName', config.orgName),
+      orgAddress: readString(header, 'address', config.orgAddress),
+      reportTitle: readString(header, 'reportTitle', 'INTERNAL AUDIT REPORT'),
+      classification: readString(header, 'classification', 'CONFIDENTIAL'),
+      primaryColor: readColor(header, 'primaryColor', '003087'),
+      accentColor: readColor(header, 'accentColor', '003087'),
+    };
+  }
+
+  private _getFooterNotice(config: TemplateConfig): string {
+    const footer = isPlainRecord(config.template.footerConfig) ? config.template.footerConfig : {};
+    return readString(footer, 'confidentialityNotice', config.footerNotice);
+  }
+
+  private _getSignatureLabels(config: TemplateConfig): { preparedBy: string; reviewedBy: string; approvedBy: string } {
+    const signature = isPlainRecord(config.template.signatureConfig) ? config.template.signatureConfig : {};
+    return {
+      preparedBy: readNestedLabel(signature, 'preparedBy', 'Prepared by'),
+      reviewedBy: readNestedLabel(signature, 'reviewedBy', 'Reviewed by'),
+      approvedBy: readNestedLabel(signature, 'approvedBy', 'Approved by'),
+    };
   }
 
   private _escapeHtml(text: string): string {

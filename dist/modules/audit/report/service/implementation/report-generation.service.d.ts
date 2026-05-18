@@ -99,6 +99,9 @@ export declare class ReportGenerationService implements IReportGenerationService
     private _buildDocxSignatureBlock;
     generatePdf(reportId: string): Promise<Buffer>;
     private _buildPdfHtml;
+    private _getHeaderConfig;
+    private _getFooterNotice;
+    private _getSignatureLabels;
     private _escapeHtml;
     exportReport(reportId: string, format: 'docx' | 'pdf'): Promise<{
         buffer: Buffer;

@@ -2,13 +2,13 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-05-11 (rev 16)
+> Last updated: 2026-05-18 (rev 17)
 
 ---
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), Settings module (role admin, working paper templates, report templates, system config), and app entry point (`server.ts`) are complete and production-shaped. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, automated Jest coverage, and the Next.js frontend are **not started**.
+Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), Settings module (role admin, working paper templates, report templates, system config), and app entry point (`server.ts`) are complete and production-shaped. The Next.js frontend is now in active implementation for audit/settings workflows. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, and automated Jest coverage are **not started**.
 
 ---
 
@@ -239,7 +239,9 @@ Folder: `src/modules/audit/`
 - Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit queues report-issue and remediation-verification notifications through Messaging.
 - Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
 - Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data, rendered via the shared `docx-template.utility.ts`. Two default DOCX templates (`Working Paper - GBB Default`, `Audit Report - GBB Default`) are seeded into `document_templates` from `prisma/templates/`.
-- Report generation accepts optional report body fields (`executiveSummary`, `scope`, `methodology`) and falls back to generated defaults when omitted.
+- Working-paper import preview accepts uploaded DOCX, XLS/XLSX, PDF, TXT/CSV, and Markdown files, stores the source file through DocumentService, maps extracted content into the selected/default working-paper template, and returns a reviewable draft preview before creating the working paper.
+- Working papers now persist optional template linkage, source document linkage, working-paper type, and import metadata for traceability.
+- Report generation accepts optional report body fields (`executiveSummary`, `scope`, `methodology`) and falls back to generated defaults when omitted. DOCX/PDF report output now reads template header, footer, signature, classification, and colour configuration from the selected/default report template.
 
 **Verification:**
 - `npm run build` passes.
@@ -361,7 +363,7 @@ Folder: `src/modules/settings/`
 - `ReportTemplateService` supports create, update, deactivate, single system default, default lookup, available-variable lookup from the default template, single lookup, and paginated listing filtered by `is_active`.
 - `SystemConfigService` supports private/public config reads, single-key update, and transactional bulk update.
 - SQL Server does not support Prisma `Json`, so template JSON payloads are validated at the API boundary and stored as `NVARCHAR(MAX)` JSON strings, matching the existing metadata/audit-log convention.
-- Seeded defaults: 4 working paper templates (financial, IT, compliance, systems), 1 GBB audit report template, and 10 system config keys.
+- Seeded defaults: 11 working paper templates (financial, IT, compliance, systems, general, walkthrough, control test, sampling, ITGC, finding validation, follow-up verification), 5 report templates, and 10 system config keys.
 
 **Routes mounted by the module:**
 
@@ -434,7 +436,7 @@ Folder: `src/modules/settings/`
 | `audit_plans` | Annual plan headers. Status: `draft → submitted → approved/rejected`. |
 | `audit_plan_items` | Line items inside a plan, each tied to a universe entry. `engagement_created` flag tracks rollover. |
 | `audit_engagements` | Active audit instances. Reference number, lead/manager/auditee triplet, SLA deadline, ad-hoc support. |
-| `audit_working_papers` | Versioned working papers per engagement. Status: `draft → submitted → approved/rejected`. |
+| `audit_working_papers` | Versioned working papers per engagement. Status: `draft → submitted → approved/rejected`. Optional links to a working-paper template and uploaded source document support import traceability. |
 | `audit_evidence` | Files supporting an engagement / working paper / finding. Wraps `Document`, supports dispute. |
 | `audit_findings` | Issues raised. Category × severity × status workflow ending in `closed`. Each has a single follow-up. |
 | `audit_reports` | One per engagement (`engagement_id` is `@unique`). Status: `draft → submitted → approved → issued`. Includes `rejection_reason` (NVarChar(Max)) for rejected submissions. |
@@ -521,7 +523,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 | Messaging | 15 in-app notifications, 13 email logs, 18 notification-queue rows, all queue rows `sent` |
 | Documents | 2 seeded document templates, 0 uploaded documents, 0 document versions |
 | Background/logging | 5 scheduled jobs, 303 job-run rows, 145 audit-log rows |
-| Settings | 4 working paper templates, 1 default report template, 10 system config keys |
+| Settings | 11 working paper templates, 5 report templates, 10 system config keys |
 
 ---
 

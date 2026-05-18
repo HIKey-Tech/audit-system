@@ -6,6 +6,8 @@ import type {
   EscalationPolicy,
 } from '../types/domain';
 
+type WorkflowAssignmentRole = 'lead_auditor' | 'supporting_auditor';
+
 export const workflowApi = {
   // approvals
   listPending: () => api.get<WorkflowApproval[]>('/workflow/approvals/pending'),
@@ -21,7 +23,7 @@ export const workflowApi = {
   cancel: (id: string) => api.post(`/workflow/approvals/${id}/cancel`),
 
   // assignments
-  createAssignment: (dto: { engagementId: string; userId: string; role: string }) =>
+  createAssignment: (dto: { engagementId: string; userId: string; role: WorkflowAssignmentRole }) =>
     api.post<WorkflowAssignment>('/workflow/assignments', dto),
   listMine: () => api.get<WorkflowAssignment[]>('/workflow/assignments/mine'),
   listByEngagement: (engagementId: string) =>

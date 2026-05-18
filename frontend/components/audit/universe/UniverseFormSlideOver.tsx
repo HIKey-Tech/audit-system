@@ -20,7 +20,7 @@ const Schema = z.object({
   description: z.string().max(2000).optional().or(z.literal('')),
   category: z.enum(['department', 'system', 'process', 'asset', 'project']),
   ownerId: z.string().min(1, 'Owner is required'),
-  auditFrequency: z.enum(['monthly', 'quarterly', 'biannual', 'annual', 'biennial', 'ad_hoc']),
+  auditFrequency: z.enum(['monthly', 'quarterly', 'biannual', 'annual']),
   status: z.enum(['active', 'inactive']),
 });
 
@@ -85,7 +85,6 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
         category: values.category,
         ownerId: values.ownerId,
         auditFrequency: values.auditFrequency,
-        status: values.status,
       }),
     onSuccess: () => {
       toast.success('Auditable entity created');
@@ -184,8 +183,6 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
             <option value="quarterly">Quarterly</option>
             <option value="biannual">Bi-annual</option>
             <option value="annual">Annual</option>
-            <option value="biennial">Biennial</option>
-            <option value="ad_hoc">Ad-hoc</option>
           </Select>
         </FormField>
       </form>

@@ -2,12 +2,24 @@ import { z } from 'zod';
 export declare const CreateWorkingPaperRequestSchema: z.ZodObject<{
     title: z.ZodString;
     content: z.ZodString;
+    templateId: z.ZodOptional<z.ZodString>;
+    sourceDocumentId: z.ZodOptional<z.ZodString>;
+    workingPaperType: z.ZodOptional<z.ZodString>;
+    importMetadata: z.ZodOptional<z.ZodRecord<z.ZodString, z.ZodUnknown>>;
 }, "strip", z.ZodTypeAny, {
     title: string;
     content: string;
+    templateId?: string | undefined;
+    sourceDocumentId?: string | undefined;
+    workingPaperType?: string | undefined;
+    importMetadata?: Record<string, unknown> | undefined;
 }, {
     title: string;
     content: string;
+    templateId?: string | undefined;
+    sourceDocumentId?: string | undefined;
+    workingPaperType?: string | undefined;
+    importMetadata?: Record<string, unknown> | undefined;
 }>;
 export declare const UpdateWorkingPaperRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
@@ -19,6 +31,16 @@ export declare const UpdateWorkingPaperRequestSchema: z.ZodObject<{
     title?: string | undefined;
     content?: string | undefined;
 }>;
+export declare const ImportWorkingPaperMetadataSchema: z.ZodObject<{
+    templateId: z.ZodOptional<z.ZodString>;
+    workingPaperType: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    templateId?: string | undefined;
+    workingPaperType?: string | undefined;
+}, {
+    templateId?: string | undefined;
+    workingPaperType?: string | undefined;
+}>;
 export declare const RejectWorkingPaperRequestSchema: z.ZodObject<{
     reason: z.ZodString;
 }, "strip", z.ZodTypeAny, {
@@ -28,5 +50,6 @@ export declare const RejectWorkingPaperRequestSchema: z.ZodObject<{
 }>;
 export type CreateWorkingPaperRequestDto = z.infer<typeof CreateWorkingPaperRequestSchema>;
 export type UpdateWorkingPaperRequestDto = z.infer<typeof UpdateWorkingPaperRequestSchema>;
+export type ImportWorkingPaperMetadataDto = z.infer<typeof ImportWorkingPaperMetadataSchema>;
 export type RejectWorkingPaperRequestDto = z.infer<typeof RejectWorkingPaperRequestSchema>;
 //# sourceMappingURL=working-paper.request.dto.d.ts.map

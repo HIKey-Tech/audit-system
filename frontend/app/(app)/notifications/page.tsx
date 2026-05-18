@@ -43,8 +43,6 @@ export default function NotificationsPage(): JSX.Element {
         page,
         pageSize: 30,
         isRead: tab === 'unread' ? false : undefined,
-        sortBy: 'createdAt',
-        sortOrder: 'desc',
       }),
   });
 

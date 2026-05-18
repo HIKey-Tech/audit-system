@@ -14,7 +14,7 @@ import { engagementsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { formatDate, initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
-import { useSession, hasPermission } from '@/components/providers/AuthProvider';
+import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 const NEXT_STATUS: Record<string, string | null> = {
@@ -27,8 +27,7 @@ const NEXT_STATUS: Record<string, string | null> = {
 
 export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
-  const session = useSession();
-  const canWrite = hasPermission(session, 'audit:write');
+  const canUpdateEngagement = usePermission('engagement:update');
 
   const assignments = useQuery({
     queryKey: ['engagements', engagement.id, 'assignments'],
@@ -68,7 +67,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
           title="Engagement details"
           subtitle={`Reference ${engagement.referenceNumber}`}
           action={
-            canWrite && next ? (
+            canUpdateEngagement && next ? (
               <Button
                 size="sm"
                 leftIcon={<ArrowRight className="h-3.5 w-3.5" />}
@@ -101,7 +100,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Ad-hoc</dt>
-            <dd className="mt-1 text-sm text-text-primary">{engagement.isAdHoc ? 'Yes' : 'No'}</dd>
+            <dd className="mt-1 text-sm text-text-primary">{engagement.isAdhoc ? 'Yes' : 'No'}</dd>
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Lead auditor</dt>
@@ -121,20 +120,20 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Start</dt>
-            <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.startDate)}</dd>
+            <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.plannedStartDate)}</dd>
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">End</dt>
-            <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.endDate)}</dd>
+            <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.plannedEndDate)}</dd>
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">SLA deadline</dt>
             <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.slaDeadline)}</dd>
           </div>
-          {engagement.adHocReason && (
+          {engagement.adhocReason && (
             <div className="col-span-2">
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Ad-hoc reason</dt>
-              <dd className="mt-1 text-sm text-text-primary">{engagement.adHocReason}</dd>
+              <dd className="mt-1 text-sm text-text-primary">{engagement.adhocReason}</dd>
             </div>
           )}
         </dl>

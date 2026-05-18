@@ -5,6 +5,7 @@ const express_1 = require("express");
 const document_1 = require("../document");
 const register_service_1 = require("../risk/register/service/implementation/register.service");
 const report_template_service_1 = require("../settings/service/implementation/report-template.service");
+const working_paper_template_service_1 = require("../settings/service/implementation/working-paper-template.service");
 const system_config_service_1 = require("../settings/service/implementation/system-config.service");
 const approval_service_1 = require("../workflow/approval/service/implementation/approval.service");
 const universe_service_1 = require("./universe/service/implementation/universe.service");
@@ -34,7 +35,7 @@ const createAuditModule = () => {
     const planningService = new planning_service_1.PlanningService();
     const checklistService = new checklist_service_1.ChecklistService();
     const engagementService = new engagement_service_1.EngagementService(checklistService);
-    const workingPaperService = new working_paper_service_1.WorkingPaperService(documentService);
+    const workingPaperService = new working_paper_service_1.WorkingPaperService(documentService, working_paper_template_service_1.workingPaperTemplateService);
     const evidenceService = new evidence_service_1.EvidenceService(documentService);
     const findingService = new finding_service_1.FindingService();
     const followUpService = new follow_up_service_1.FollowUpService();

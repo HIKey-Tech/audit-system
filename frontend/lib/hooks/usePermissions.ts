@@ -81,6 +81,7 @@ export interface NavVisibility {
   integrations: boolean;
   predictive: boolean;
   settings: boolean;
+  users: boolean;
 }
 
 export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
@@ -100,51 +101,26 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
       integrations: false,
       predictive: false,
       settings: false,
+      users: false,
     };
   }
 
-  const admin = canManageAuditProgramme(user);
-  const field = isFieldAuditor(user);
-  const auditeeRole = isAuditee(user);
-  const exec = isExecutive(user);
-  const caeRole = userHasRole(user, 'cae');
-
   return {
-    // Everyone sees the dashboard
     dashboard: true,
-
-    // Audit Universe & Plans: only admin-level (super_admin, audit_admin) + cae + director (read-only)
-    auditUniverse: admin || caeRole || isDirector(user),
-    auditPlans: admin || caeRole || isDirector(user),
-
-    // Engagements: everyone sees (filtered by backend for auditee/auditor)
-    engagements: true,
-
-    // Findings: everyone sees (filtered by backend for auditee)
-    findings: true,
-
-    // Reports: admin, exec, cae, audit_lead see all; auditee sees relevant ones; auditor might see
-    reports: admin || exec || field || caeRole,
-
-    // Risk Register: admin, cae, director, audit_lead
-    riskRegister: admin || caeRole || isDirector(user) || userHasRole(user, 'audit_lead'),
-
-    // Workflow: everyone (but filtered content)
-    workflow: true,
-
-    // Documents: everyone
-    documents: true,
-
-    // Notifications: everyone
+    auditUniverse: userHasPermission(user, 'universe:read'),
+    auditPlans: userHasPermission(user, 'plan:read'),
+    engagements: userHasPermission(user, 'engagement:read'),
+    findings: userHasPermission(user, 'finding:read'),
+    reports: userHasPermission(user, 'report:read'),
+    riskRegister: userHasPermission(user, 'risk:read'),
+    workflow: userHasPermission(user, 'approval:read') || userHasPermission(user, 'assignment:read'),
+    documents: userHasPermission(user, 'document:read'),
     notifications: true,
-
-    // Audit Logs: only users with log:read permission
     auditLogs: userHasPermission(user, 'log:read'),
-
-    // Integrations / Predictive / Settings: coming soon — show to admins
-    integrations: admin || caeRole,
+    integrations: userHasPermission(user, 'integration:read'),
     predictive: userHasPermission(user, 'predictive:read'),
-    settings: admin,
+    settings: userHasPermission(user, 'settings:read'),
+    users: userHasPermission(user, 'user:read'),
   };
 };
 
@@ -225,11 +201,24 @@ export const usePermissions = () => {
       dashboard: getDashboardVisibility(session),
 
       // Can this user create/edit audit content?
-      canWriteAudit: userHasPermission(session, 'audit:write'),
-      canDeleteAudit: userHasPermission(session, 'audit:delete'),
-      canWriteFindings: userHasPermission(session, 'finding:write'),
+      canWriteAudit:
+        userHasPermission(session, 'engagement:create')
+        || userHasPermission(session, 'engagement:update')
+        || userHasPermission(session, 'plan:create')
+        || userHasPermission(session, 'working_paper:create'),
+      canDeleteAudit:
+        userHasPermission(session, 'engagement:delete')
+        || userHasPermission(session, 'plan:add_item')
+        || userHasPermission(session, 'universe:delete'),
+      canWriteFindings:
+        userHasPermission(session, 'finding:create')
+        || userHasPermission(session, 'finding:update')
+        || userHasPermission(session, 'finding:close'),
       canWriteDocuments: userHasPermission(session, 'document:write'),
-      canManageUsers: userHasPermission(session, 'user:write'),
+      canManageUsers:
+        userHasPermission(session, 'user:create')
+        || userHasPermission(session, 'user:update')
+        || userHasPermission(session, 'user:admin'),
       canReadUsers: userHasPermission(session, 'user:read'),
     }),
     [session],

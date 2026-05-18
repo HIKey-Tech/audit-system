@@ -27,6 +27,7 @@ const TITLE_MAP: { match: RegExp; title: string }[] = [
   { match: /^\/integrations/, title: 'Integrations' },
   { match: /^\/predictive/, title: 'Predictive' },
   { match: /^\/settings/, title: 'Settings' },
+  { match: /^\/users/, title: 'Users' },
 ];
 
 const titleFor = (pathname: string | null): string => {
@@ -49,7 +50,7 @@ export const Header = (): JSX.Element => {
 
   const { data: latestList } = useQuery({
     queryKey: ['notifications', 'latest'],
-    queryFn: () => notificationsApi.list({ pageSize: 5, sortBy: 'createdAt', sortOrder: 'desc' }),
+    queryFn: () => notificationsApi.list({ pageSize: 5 }),
     enabled: open,
   });
 

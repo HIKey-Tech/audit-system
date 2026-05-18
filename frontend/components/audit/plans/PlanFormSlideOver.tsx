@@ -44,7 +44,7 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
-      plansApi.create({ title: v.title, year: v.year, description: v.description || undefined }),
+      plansApi.create({ title: v.title, year: v.year }),
     onSuccess: () => {
       toast.success('Plan created');
       qc.invalidateQueries({ queryKey: ['plans'] });

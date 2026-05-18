@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { DocumentService } from '../document';
 import { RiskRegisterService } from '../risk/register/service/implementation/register.service';
 import { reportTemplateService } from '../settings/service/implementation/report-template.service';
+import { workingPaperTemplateService } from '../settings/service/implementation/working-paper-template.service';
 import { systemConfigService } from '../settings/service/implementation/system-config.service';
 import { workflowApprovalService } from '../workflow/approval/service/implementation/approval.service';
 import { UniverseService } from './universe/service/implementation/universe.service';
@@ -33,7 +34,7 @@ export const createAuditModule = (): Router => {
   const planningService = new PlanningService();
   const checklistService = new ChecklistService();
   const engagementService = new EngagementService(checklistService);
-  const workingPaperService = new WorkingPaperService(documentService);
+  const workingPaperService = new WorkingPaperService(documentService, workingPaperTemplateService);
   const evidenceService = new EvidenceService(documentService);
   const findingService = new FindingService();
   const followUpService = new FollowUpService();
