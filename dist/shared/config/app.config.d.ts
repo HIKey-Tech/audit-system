@@ -55,6 +55,13 @@ export declare const config: {
             readonly connectionString: string;
             readonly container: string;
         };
+        readonly aws: {
+            readonly region: string;
+            readonly bucket: string;
+            readonly prefix: string;
+            readonly signedUrlTtlSeconds: number;
+            readonly forcePathStyle: boolean;
+        };
     };
     readonly rateLimit: {
         readonly windowMs: number;

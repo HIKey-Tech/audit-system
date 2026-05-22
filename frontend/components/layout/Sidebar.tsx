@@ -6,6 +6,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import {
   LayoutDashboard,
+  BarChart3,
   Globe,
   ClipboardList,
   Briefcase,
@@ -57,6 +58,7 @@ type NavItem = NavLink | NavDivider;
 
 const NAV: NavItem[] = [
   { type: 'link', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard' },
+  { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics' },
 
   { type: 'divider', label: 'Audit', sectionKeys: ['auditUniverse', 'auditPlans', 'engagements', 'findings', 'reports'] },
   { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse' },

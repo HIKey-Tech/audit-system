@@ -8,6 +8,7 @@ const api_response_type_1 = require("../../../../../shared/types/api-response.ty
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const engagement_response_dto_1 = require("../../dto/response/engagement.response.dto");
 const engagementInclude = { universe: true };
 class EngagementService {
@@ -116,7 +117,9 @@ class EngagementService {
         if (!engagement)
             throw app_error_1.AppError.notFound('Audit engagement');
         (0, audit_utility_1.assertTransition)(engagement.status, newStatus, audit_utility_1.ENGAGEMENT_TRANSITIONS, 'engagement');
-        if (newStatus === audit_enum_1.EngagementStatus.Closed) {
+        await this._assertLifecycleGate(id, newStatus);
+        const lifecycleRules = await (0, audit_config_utility_1.getAuditLifecycleRules)();
+        if (newStatus === audit_enum_1.EngagementStatus.Closed && lifecycleRules.requireClosedFindingsBeforeClose) {
             const openFindingCount = await prisma_client_1.prisma.audit_Finding.count({
                 where: {
                     engagement_id: id,
@@ -227,6 +230,49 @@ class EngagementService {
             workingPaperCount,
             checklistProgress: progress,
         });
+    }
+    async _assertLifecycleGate(id, newStatus) {
+        const lifecycleRules = await (0, audit_config_utility_1.getAuditLifecycleRules)();
+        if (newStatus === audit_enum_1.EngagementStatus.UnderReview) {
+            if (lifecycleRules.requireAllChecklistsTestedBeforeUnderReview) {
+                const [totalChecklistCount, notTestedCount] = await prisma_client_1.prisma.$transaction([
+                    prisma_client_1.prisma.audit_Checklist.count({ where: { engagement_id: id } }),
+                    prisma_client_1.prisma.audit_Checklist.count({
+                        where: { engagement_id: id, result: 'not_tested' },
+                    }),
+                ]);
+                if (totalChecklistCount === 0) {
+                    throw app_error_1.AppError.badRequest('Cannot move engagement to review before checklist procedures are populated');
+                }
+                if (notTestedCount > 0) {
+                    throw app_error_1.AppError.badRequest('Cannot move engagement to review while checklist procedures remain untested');
+                }
+            }
+            if (lifecycleRules.requireApprovedWorkingPaperBeforeUnderReview) {
+                const approvedPaperCount = await prisma_client_1.prisma.audit_Working_Paper.count({
+                    where: {
+                        engagement_id: id,
+                        deleted_at: null,
+                        status: 'approved',
+                    },
+                });
+                if (approvedPaperCount === 0) {
+                    throw app_error_1.AppError.badRequest('Cannot move engagement to review before at least one working paper is approved');
+                }
+            }
+        }
+        if (newStatus === audit_enum_1.EngagementStatus.Reported && lifecycleRules.requireReportIssuedBeforeReported) {
+            const issuedReportCount = await prisma_client_1.prisma.audit_Report.count({
+                where: {
+                    engagement_id: id,
+                    deleted_at: null,
+                    status: 'issued',
+                },
+            });
+            if (issuedReportCount === 0) {
+                throw app_error_1.AppError.badRequest('Cannot mark engagement as reported before an audit report is issued');
+            }
+        }
     }
 }
 exports.EngagementService = EngagementService;

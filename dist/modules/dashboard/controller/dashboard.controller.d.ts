@@ -12,5 +12,6 @@ export declare class DashboardController {
     private _getEscalationOverview;
     private _getMyWork;
     private _getApprovalInboxSummary;
+    private _getAuditAnalytics;
 }
 //# sourceMappingURL=dashboard.controller.d.ts.map

@@ -422,6 +422,8 @@ const PERMISSIONS: PermissionSeed[] = [
   permission('risk_monitoring:read', 'View risk monitoring data', 'risk'),
 
   permission('dashboard:read', 'View dashboard data', 'dashboard'),
+  permission('integration:read', 'View integration status and configuration', 'integration'),
+  permission('predictive:read', 'View predictive analytics insights', 'predictive'),
 
   permission('settings:read', 'View settings', 'settings'),
   permission('settings:manage', 'Manage system settings', 'settings'),
@@ -459,6 +461,8 @@ const ROLES: Array<{
       'risk:read', 'risk:create', 'risk:update', 'risk:assess',
       'risk_category:read', 'risk_category:write',
       'risk_monitoring:read',
+      'integration:read',
+      'predictive:read',
       'approval:read', 'approval:approve', 'approval:reject', 'approval:cancel',
       'assignment:read', 'assignment:create', 'assignment:delete',
       'escalation:read', 'escalation:acknowledge',
@@ -541,6 +545,8 @@ const ROLES: Array<{
       'approval:read', 'approval:approve', 'approval:reject',
       'risk:read',
       'risk_monitoring:read',
+      'integration:read',
+      'predictive:read',
       'universe:read',
       'plan:read',
       'dashboard:read',
@@ -558,6 +564,8 @@ const ROLES: Array<{
       'report:read', 'report:issue',
       'approval:read', 'approval:approve', 'approval:reject',
       'risk:read', 'risk_monitoring:read',
+      'integration:read',
+      'predictive:read',
       'universe:read',
       'plan:read', 'plan:approve', 'plan:reject',
       'dashboard:read',
@@ -575,6 +583,8 @@ const ROLES: Array<{
       'report:read',
       'risk:read',
       'risk_monitoring:read',
+      'integration:read',
+      'predictive:read',
       'universe:read',
       'plan:read',
       'dashboard:read',
@@ -987,6 +997,137 @@ const SYSTEM_CONFIGS: Array<{
   { key: 'default_sla_days', value: '30', description: 'Default SLA days for audit engagements.', isPublic: false },
   { key: 'finding_due_days', value: '90', description: 'Default due days assigned to audit findings.', isPublic: false },
   { key: 'report_footer_notice', value: 'This report is confidential and intended solely for the use of Galaxy Backbone Limited Internal Audit Department.', description: 'Default confidentiality notice displayed in audit report footers.', isPublic: false },
+  {
+    key: 'audit_lifecycle_rules',
+    value: JSON.stringify({
+      requireAllChecklistsTestedBeforeUnderReview: true,
+      requireApprovedWorkingPaperBeforeUnderReview: true,
+      requireReportIssuedBeforeReported: true,
+      requireClosedFindingsBeforeClose: true,
+    }, null, 2),
+    description: 'Configurable gates for engagement status transitions.',
+    isPublic: false,
+  },
+  {
+    key: 'audit_sla_rules',
+    value: JSON.stringify({
+      defaultEngagementSlaDays: 30,
+      defaultFindingDueDays: 90,
+      highRiskFindingDueDays: 60,
+      criticalFindingDueDays: 30,
+    }, null, 2),
+    description: 'Default SLA windows used by audit planning, findings, and analytics.',
+    isPublic: false,
+  },
+  {
+    key: 'dashboard_kpi_visibility',
+    value: JSON.stringify({
+      lifecycle: true,
+      findings: true,
+      riskCoverage: true,
+      auditorWorkload: true,
+      reporting: true,
+      followUp: true,
+    }, null, 2),
+    description: 'Controls which KPI groups are visible on analytics dashboards.',
+    isPublic: false,
+  },
+  {
+    key: 'audit_taxonomy',
+    value: JSON.stringify({
+      auditTypes: ['it', 'financial', 'compliance', 'systems'],
+      priorities: ['critical', 'high', 'medium', 'low'],
+      findingSeverities: ['critical', 'high', 'medium', 'low', 'informational'],
+      findingCategories: ['it', 'financial', 'compliance', 'operational'],
+    }, null, 2),
+    description: 'Admin-maintained labels used for audit classification and reporting.',
+    isPublic: false,
+  },
+  {
+    key: 'approval_matrix',
+    value: JSON.stringify({
+      auditPlan: ['audit_admin'],
+      workingPaper: ['audit_manager'],
+      auditReport: ['audit_manager', 'director', 'cae'],
+    }, null, 2),
+    description: 'Role sequence used to document approval responsibilities.',
+    isPublic: false,
+  },
+  {
+    key: 'checklist_templates',
+    value: JSON.stringify({
+      it: [
+        {
+          controlReference: 'ISO27001-A.5.15',
+          controlDescription: 'Access control rules are established and enforced for information assets.',
+          testProcedure: 'Inspect access control policy, review user access listings, and sample approval evidence.',
+        },
+        {
+          controlReference: 'ISO27001-A.8.16',
+          controlDescription: 'Monitoring activities detect anomalous events in systems and networks.',
+          testProcedure: 'Review monitoring coverage, alert handling records, and sample incident escalation evidence.',
+        },
+        {
+          controlReference: 'ISO27001-A.8.13',
+          controlDescription: 'Information and system backups are maintained and tested.',
+          testProcedure: 'Inspect backup schedules, restoration test records, and exception handling logs.',
+        },
+      ],
+      financial: [
+        {
+          controlReference: 'FIN-AP-001',
+          controlDescription: 'Payment approvals are segregated from payment preparation.',
+          testProcedure: 'Sample payment transactions and verify maker-checker evidence against approval limits.',
+        },
+        {
+          controlReference: 'FIN-REC-001',
+          controlDescription: 'Bank and ledger reconciliations are prepared and independently reviewed.',
+          testProcedure: 'Inspect monthly reconciliations, reconciling items, and reviewer sign-off evidence.',
+        },
+        {
+          controlReference: 'FIN-FA-001',
+          controlDescription: 'Fixed assets are recorded, tagged, and periodically verified.',
+          testProcedure: 'Trace sampled assets to the register and verify physical existence and ownership.',
+        },
+      ],
+      compliance: [
+        {
+          controlReference: 'NDPR-PRIV-001',
+          controlDescription: 'Personal data processing has a lawful basis and documented privacy notices.',
+          testProcedure: 'Review processing register, privacy notices, and sampled consent or lawful-basis evidence.',
+        },
+        {
+          controlReference: 'ISO9001-9.2',
+          controlDescription: 'Internal audits are planned and conducted against quality management requirements.',
+          testProcedure: 'Inspect audit schedules, audit records, nonconformities, and corrective action follow-up.',
+        },
+        {
+          controlReference: 'ISO22301-8.4',
+          controlDescription: 'Business continuity procedures are tested and maintained.',
+          testProcedure: 'Review BCP test records, issues raised, and management sign-off.',
+        },
+      ],
+      systems: [
+        {
+          controlReference: 'SYS-INF-001',
+          controlDescription: 'Infrastructure configuration baselines are defined and monitored.',
+          testProcedure: 'Compare sampled server or network configurations against approved baselines.',
+        },
+        {
+          controlReference: 'SYS-CHG-001',
+          controlDescription: 'Production changes are approved, tested, and traceable.',
+          testProcedure: 'Sample production changes and verify approval, test evidence, and rollback plans.',
+        },
+        {
+          controlReference: 'SYS-DR-001',
+          controlDescription: 'Disaster recovery capability aligns with approved recovery objectives.',
+          testProcedure: 'Inspect DR plans, RTO/RPO mapping, and recent DR test evidence.',
+        },
+      ],
+    }, null, 2),
+    description: 'Control procedures used when an engagement starts and checklists are populated.',
+    isPublic: false,
+  },
 ];
 
 type SeedUser = {

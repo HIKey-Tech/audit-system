@@ -10,11 +10,9 @@ const document_response_dto_1 = require("../../dto/response/document.response.dt
 const storage_client_1 = require("../client/storage.client");
 const docx_template_utility_1 = require("../../utility/docx-template.utility");
 class DocumentService {
-    storageClient;
-    constructor() {
-        this.storageClient = (0, storage_client_1.createStorageClient)();
-    }
     async upload(dto) {
+        const storageProvider = app_config_1.config.storage.provider;
+        const storageClient = this._storageClient(storageProvider);
         const document = await prisma_client_1.prisma.$transaction(async (tx) => {
             const pendingStoragePath = `pending:${dto.originalName}`;
             const createdDocument = await tx.document.create({
@@ -25,7 +23,7 @@ class DocumentService {
                     mime_type: dto.mimeType,
                     file_size: dto.fileSize,
                     storage_path: pendingStoragePath,
-                    storage_provider: app_config_1.config.storage.provider,
+                    storage_provider: storageProvider,
                     module: dto.module,
                     entity_type: dto.entityType,
                     entity_id: dto.entityId,
@@ -33,7 +31,7 @@ class DocumentService {
             });
             let storedName;
             try {
-                storedName = await this.storageClient.save(dto.buffer, dto.originalName);
+                storedName = await storageClient.save(dto.buffer, dto.originalName);
                 return await tx.document.update({
                     where: { id: createdDocument.id },
                     data: {
@@ -44,13 +42,13 @@ class DocumentService {
             }
             catch (err) {
                 if (storedName) {
-                    await this.storageClient.delete(storedName).catch(() => undefined);
+                    await storageClient.delete(storedName).catch(() => undefined);
                 }
                 throw err;
             }
         });
         logger_util_1.logger.info('Document uploaded', { documentId: document.id, module: dto.module });
-        const url = await this.storageClient.getUrl(document.storage_path);
+        const url = await this._storageClient(document.storage_provider).getUrl(document.storage_path);
         return (0, document_response_dto_1.mapDocumentToResponse)(document, url);
     }
     async getById(id) {
@@ -59,17 +57,17 @@ class DocumentService {
         });
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
-        const url = await this.storageClient.getUrl(doc.storage_path);
+        const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
         return (0, document_response_dto_1.mapDocumentToResponse)(doc, url);
     }
     async getDownloadUrl(id) {
         const doc = await prisma_client_1.prisma.document.findUnique({
             where: { id, deleted_at: null },
-            select: { storage_path: true },
+            select: { storage_path: true, storage_provider: true },
         });
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
-        return this.storageClient.getUrl(doc.storage_path);
+        return this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
     }
     async delete(id, actorId) {
         const doc = await prisma_client_1.prisma.document.findUnique({
@@ -81,7 +79,7 @@ class DocumentService {
             where: { id },
             data: { deleted_at: new Date() },
         });
-        await this.storageClient.delete(doc.storage_path);
+        await this._storageClient(doc.storage_provider).delete(doc.storage_path);
         logger_util_1.logger.info('Document deleted', { documentId: id, actorId });
     }
     async listByEntity(entityType, entityId) {
@@ -90,7 +88,7 @@ class DocumentService {
             orderBy: { created_at: 'desc' },
         });
         return Promise.all(docs.map(async (doc) => {
-            const url = await this.storageClient.getUrl(doc.storage_path);
+            const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
             return (0, document_response_dto_1.mapDocumentToResponse)(doc, url);
         }));
     }
@@ -100,15 +98,17 @@ class DocumentService {
         // must exist and not belong to a soft-deleted document.
         const doc = await prisma_client_1.prisma.document.findFirst({
             where: { storage_path: storedName, deleted_at: null },
-            select: { mime_type: true, original_name: true, file_size: true },
+            select: { mime_type: true, original_name: true, file_size: true, storage_provider: true },
         });
         let mimeType;
         let originalName;
         let fileSize;
+        let storageProvider;
         if (doc) {
             mimeType = doc.mime_type;
             originalName = doc.original_name;
             fileSize = doc.file_size;
+            storageProvider = doc.storage_provider;
         }
         else {
             const version = await prisma_client_1.prisma.document_Version.findFirst({
@@ -116,21 +116,24 @@ class DocumentService {
                     storage_path: storedName,
                     document: { deleted_at: null },
                 },
-                select: { mime_type: true, original_name: true, file_size: true },
+                select: { mime_type: true, original_name: true, file_size: true, storage_provider: true },
             });
             if (!version)
                 throw app_error_1.AppError.notFound('File');
             mimeType = version.mime_type;
             originalName = version.original_name;
             fileSize = version.file_size;
+            storageProvider = version.storage_provider;
         }
-        const buffer = await this.storageClient.read(storedName);
+        const buffer = await this._storageClient(storageProvider).read(storedName);
         return { buffer, mimeType, originalName, fileSize };
     }
     // ────────────────────────────────────────────────────────────
     // Versioning
     // ────────────────────────────────────────────────────────────
     async uploadNewVersion(documentId, dto) {
+        const storageProvider = app_config_1.config.storage.provider;
+        const storageClient = this._storageClient(storageProvider);
         const doc = await prisma_client_1.prisma.document.findUnique({
             where: { id: documentId, deleted_at: null },
         });
@@ -177,7 +180,7 @@ class DocumentService {
                     mime_type: dto.mimeType,
                     file_size: dto.fileSize,
                     storage_path: pendingStoragePath,
-                    storage_provider: app_config_1.config.storage.provider,
+                    storage_provider: storageProvider,
                     change_note: dto.changeNote ?? null,
                 },
             });
@@ -190,13 +193,13 @@ class DocumentService {
                     mime_type: dto.mimeType,
                     file_size: dto.fileSize,
                     storage_path: pendingStoragePath,
-                    storage_provider: app_config_1.config.storage.provider,
+                    storage_provider: storageProvider,
                     version_number: newVersionNumber,
                 },
             });
             let storedName;
             try {
-                storedName = await this.storageClient.save(dto.buffer, dto.originalName);
+                storedName = await storageClient.save(dto.buffer, dto.originalName);
                 await tx.document.update({
                     where: { id: doc.id },
                     data: {
@@ -214,7 +217,7 @@ class DocumentService {
             }
             catch (err) {
                 if (storedName) {
-                    await this.storageClient.delete(storedName).catch(() => undefined);
+                    await storageClient.delete(storedName).catch(() => undefined);
                 }
                 throw err;
             }
@@ -225,7 +228,7 @@ class DocumentService {
             newVersion: newVersionNumber,
             actorId: dto.uploadedById,
         });
-        const url = await this.storageClient.getUrl(version.storage_path);
+        const url = await this._storageClient(version.storage_provider).getUrl(version.storage_path);
         return (0, document_response_dto_1.mapVersionToResponse)(version, true, url);
     }
     async listVersions(documentId) {
@@ -238,15 +241,17 @@ class DocumentService {
             where: { document_id: documentId },
             orderBy: { version_number: 'desc' },
         });
-        const currentUrl = await this.storageClient.getUrl(doc.storage_path);
         const currentVersion = history.find((v) => v.version_number === doc.version_number);
+        const currentUrl = currentVersion
+            ? await this._storageClient(currentVersion.storage_provider).getUrl(currentVersion.storage_path)
+            : await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
         const current = currentVersion
             ? (0, document_response_dto_1.mapVersionToResponse)(currentVersion, true, currentUrl)
             : (0, document_response_dto_1.mapCurrentDocumentToVersion)(doc, currentUrl);
         const historical = await Promise.all(history
             .filter((v) => v.version_number !== doc.version_number)
             .map(async (v) => {
-            const url = await this.storageClient.getUrl(v.storage_path);
+            const url = await this._storageClient(v.storage_provider).getUrl(v.storage_path);
             return (0, document_response_dto_1.mapVersionToResponse)(v, false, url);
         }));
         return [current, ...historical];
@@ -258,7 +263,6 @@ class DocumentService {
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
         if (versionNumber === doc.version_number) {
-            const url = await this.storageClient.getUrl(doc.storage_path);
             const currentVersion = await prisma_client_1.prisma.document_Version.findUnique({
                 where: {
                     document_id_version_number: {
@@ -267,6 +271,9 @@ class DocumentService {
                     },
                 },
             });
+            const url = currentVersion
+                ? await this._storageClient(currentVersion.storage_provider).getUrl(currentVersion.storage_path)
+                : await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
             return currentVersion
                 ? (0, document_response_dto_1.mapVersionToResponse)(currentVersion, true, url)
                 : (0, document_response_dto_1.mapCurrentDocumentToVersion)(doc, url);
@@ -281,18 +288,18 @@ class DocumentService {
         });
         if (!version)
             throw app_error_1.AppError.notFound('Document version');
-        const url = await this.storageClient.getUrl(version.storage_path);
+        const url = await this._storageClient(version.storage_provider).getUrl(version.storage_path);
         return (0, document_response_dto_1.mapVersionToResponse)(version, false, url);
     }
     async getVersionDownloadUrl(documentId, versionNumber) {
         const doc = await prisma_client_1.prisma.document.findUnique({
             where: { id: documentId, deleted_at: null },
-            select: { storage_path: true, version_number: true },
+            select: { storage_path: true, storage_provider: true, version_number: true },
         });
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
         if (versionNumber === doc.version_number) {
-            return this.storageClient.getUrl(doc.storage_path);
+            return this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
         }
         const version = await prisma_client_1.prisma.document_Version.findUnique({
             where: {
@@ -301,11 +308,11 @@ class DocumentService {
                     version_number: versionNumber,
                 },
             },
-            select: { storage_path: true },
+            select: { storage_path: true, storage_provider: true },
         });
         if (!version)
             throw app_error_1.AppError.notFound('Document version');
-        return this.storageClient.getUrl(version.storage_path);
+        return this._storageClient(version.storage_provider).getUrl(version.storage_path);
     }
     // ────────────────────────────────────────────────────────────
     // Templates
@@ -429,6 +436,9 @@ class DocumentService {
             throw app_error_1.AppError.notFound(`Active DOCX template for category '${category}'`);
         }
         return (0, docx_template_utility_1.renderDocxFromDocumentXml)(template.content, data);
+    }
+    _storageClient(provider = app_config_1.config.storage.provider) {
+        return (0, storage_client_1.createStorageClient)(provider);
     }
     async _assertTemplateExists(id) {
         const template = await prisma_client_1.prisma.document_Template.findFirst({

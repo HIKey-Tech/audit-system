@@ -1,20 +1,22 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, FileText, BookOpen, SlidersHorizontal } from 'lucide-react';
+import { Shield, FileText, BookOpen, SlidersHorizontal, Workflow } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { RoleManagementTab } from '@/components/settings/roles/RoleManagementTab';
 import { WorkingPaperTemplatesTab } from '@/components/settings/working-papers/WorkingPaperTemplatesTab';
 import { ReportTemplatesTab } from '@/components/settings/reports/ReportTemplatesTab';
 import { SystemConfigTab } from '@/components/settings/config/SystemConfigTab';
+import { AuditCustomizationTab } from '@/components/settings/customization/AuditCustomizationTab';
 
-type TabKey = 'roles' | 'wp-templates' | 'report-templates' | 'config';
+type TabKey = 'roles' | 'wp-templates' | 'report-templates' | 'customization' | 'config';
 
 const TABS: TabItem[] = [
   { key: 'roles', label: <span className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Role Management</span> },
   { key: 'wp-templates', label: <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />Working Paper Templates</span> },
   { key: 'report-templates', label: <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Report Templates</span> },
+  { key: 'customization', label: <span className="flex items-center gap-1.5"><Workflow className="h-3.5 w-3.5" />Audit Customization</span> },
   { key: 'config', label: <span className="flex items-center gap-1.5"><SlidersHorizontal className="h-3.5 w-3.5" />System Configuration</span> },
 ];
 
@@ -38,6 +40,7 @@ export default function SettingsPage(): JSX.Element {
       {activeTab === 'roles' && <RoleManagementTab />}
       {activeTab === 'wp-templates' && <WorkingPaperTemplatesTab />}
       {activeTab === 'report-templates' && <ReportTemplatesTab />}
+      {activeTab === 'customization' && <AuditCustomizationTab />}
       {activeTab === 'config' && <SystemConfigTab />}
     </div>
   );

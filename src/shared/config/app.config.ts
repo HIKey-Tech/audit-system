@@ -99,6 +99,13 @@ export const config = {
       connectionString: optionalEnv('AZURE_STORAGE_CONNECTION_STRING'),
       container: optionalEnv('AZURE_STORAGE_CONTAINER', 'audit-documents'),
     },
+    aws: {
+      region: optionalEnv('AWS_REGION', 'eu-west-1'),
+      bucket: optionalEnv('AWS_S3_BUCKET'),
+      prefix: optionalEnv('AWS_S3_PREFIX'),
+      signedUrlTtlSeconds: parseInt(optionalEnv('AWS_S3_SIGNED_URL_TTL_SECONDS', '300'), 10),
+      forcePathStyle: optionalEnv('AWS_S3_FORCE_PATH_STYLE', 'false') === 'true',
+    },
   },
 
   rateLimit: {

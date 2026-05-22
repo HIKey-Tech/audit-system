@@ -12,6 +12,7 @@ import {
 } from '../../utility/dashboard.utility';
 import {
   ApprovalInboxSummaryResponseDto,
+  AuditAnalyticsResponseDto,
   AuditSummaryResponseDto,
   EscalationOverviewResponseDto,
   FindingsSummaryResponseDto,
@@ -76,6 +77,27 @@ const normalizeCount = (count: bigint | number | null): number => {
 };
 
 export class DashboardService {
+  async getAuditAnalytics(actor: DashboardActorContext): Promise<AuditAnalyticsResponseDto> {
+    const [lifecycle, workingPapers, findings, reporting, followUp, riskCoverage] = await Promise.all([
+      this._getLifecycleAnalytics(actor),
+      this._getWorkingPaperAnalytics(actor),
+      this.getFindingsSummary(actor),
+      this._getReportingAnalytics(actor),
+      this._getFollowUpAnalytics(actor),
+      this._getRiskCoverageAnalytics(),
+    ]);
+
+    return {
+      generatedAt: new Date().toISOString(),
+      lifecycle,
+      workingPapers,
+      findings,
+      reporting,
+      followUp,
+      riskCoverage,
+    };
+  }
+
   // =============================================================
   // Audit summary
   // =============================================================
@@ -746,7 +768,184 @@ export class DashboardService {
       `,
     );
   }
+
+  private async _getLifecycleAnalytics(
+    actor: DashboardActorContext,
+  ): Promise<AuditAnalyticsResponseDto['lifecycle']> {
+    const summary = await this.getAuditSummary(actor);
+    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const where: Prisma.Audit_EngagementWhereInput = {
+      deleted_at: null,
+      ...(restrictToLead ? { lead_auditor_id: actor.id } : {}),
+    };
+
+    const engagements = await prisma.audit_Engagement.findMany({
+      where,
+      select: {
+        planned_start_date: true,
+        actual_start_date: true,
+        actual_end_date: true,
+        updated_at: true,
+        status: true,
+      },
+    });
+
+    const cycleDurations = engagements
+      .filter((engagement) => engagement.actual_end_date)
+      .map((engagement) => daysBetween(engagement.planned_start_date, engagement.actual_end_date!));
+    const fieldworkDurations = engagements
+      .filter((engagement) => engagement.actual_start_date && engagement.actual_end_date)
+      .map((engagement) => daysBetween(engagement.actual_start_date!, engagement.actual_end_date!));
+    const reportingDurations = engagements
+      .filter((engagement) => engagement.status === 'reported' || engagement.status === 'closed')
+      .map((engagement) => daysBetween(engagement.planned_start_date, engagement.updated_at));
+
+    return {
+      byStatus: summary.byStatus,
+      overdueEngagements: summary.overdueEngagements,
+      dueSoon: summary.dueSoon,
+      averageCycleDays: average(cycleDurations),
+      averageFieldworkDays: average(fieldworkDurations),
+      averageReportingDays: average(reportingDurations),
+    };
+  }
+
+  private async _getWorkingPaperAnalytics(
+    actor: DashboardActorContext,
+  ): Promise<AuditAnalyticsResponseDto['workingPapers']> {
+    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const where: Prisma.Audit_Working_PaperWhereInput = {
+      deleted_at: null,
+      ...(restrictToLead ? { engagement: { lead_auditor_id: actor.id } } : {}),
+    };
+    const [total, imported, submittedAwaitingReview, groups] = await prisma.$transaction([
+      prisma.audit_Working_Paper.count({ where }),
+      prisma.audit_Working_Paper.count({
+        where: { ...where, source_document_id: { not: null } },
+      }),
+      prisma.audit_Working_Paper.count({ where: { ...where, status: 'submitted' } }),
+      prisma.audit_Working_Paper.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
+        orderBy: { status: 'asc' },
+      }),
+    ]);
+
+    return {
+      total,
+      imported,
+      submittedAwaitingReview,
+      byStatus: toBreakdown(groups, 'status'),
+    };
+  }
+
+  private async _getReportingAnalytics(
+    actor: DashboardActorContext,
+  ): Promise<AuditAnalyticsResponseDto['reporting']> {
+    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const where: Prisma.Audit_ReportWhereInput = {
+      deleted_at: null,
+      ...(restrictToLead ? { engagement: { lead_auditor_id: actor.id } } : {}),
+    };
+    const [total, groups, issuedReports] = await prisma.$transaction([
+      prisma.audit_Report.count({ where }),
+      prisma.audit_Report.groupBy({
+        by: ['status'],
+        where,
+        _count: { _all: true },
+        orderBy: { status: 'asc' },
+      }),
+      prisma.audit_Report.findMany({
+        where: { ...where, issued_at: { not: null } },
+        select: { created_at: true, issued_at: true },
+      }),
+    ]);
+
+    return {
+      total,
+      byStatus: toBreakdown(groups, 'status'),
+      averageDaysToIssue: average(
+        issuedReports.map((report) => daysBetween(report.created_at, report.issued_at!)),
+      ),
+    };
+  }
+
+  private async _getFollowUpAnalytics(
+    actor: DashboardActorContext,
+  ): Promise<AuditAnalyticsResponseDto['followUp']> {
+    const restrictToAuditee = isRestrictedAuditee(actor.roles);
+    const where: Prisma.Audit_Follow_UpWhereInput = {
+      ...(restrictToAuditee ? { finding: { auditee_id: actor.id } } : {}),
+    };
+    const now = new Date();
+    const [total, pending, verified, rejected, overdueFindings] = await prisma.$transaction([
+      prisma.audit_Follow_Up.count({ where }),
+      prisma.audit_Follow_Up.count({ where: { ...where, verification_status: 'pending' } }),
+      prisma.audit_Follow_Up.count({ where: { ...where, verification_status: 'verified' } }),
+      prisma.audit_Follow_Up.count({ where: { ...where, verification_status: 'rejected' } }),
+      prisma.audit_Finding.count({
+        where: {
+          deleted_at: null,
+          due_date: { lt: now },
+          status: { notIn: FINDING_RESOLVED_STATUSES as unknown as string[] },
+          ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
+        },
+      }),
+    ]);
+
+    return { total, pending, verified, rejected, overdueFindings };
+  }
+
+  private async _getRiskCoverageAnalytics(): Promise<AuditAnalyticsResponseDto['riskCoverage']> {
+    const now = new Date();
+    const yearStart = startOfCurrentYear(now);
+    const highRiskWhere: Prisma.Audit_UniverseWhereInput = {
+      deleted_at: null,
+      risk_score: { gte: new Prisma.Decimal(15) },
+    };
+    const [universeItems, highRiskUniverseItems, highRiskAuditedThisYear] = await prisma.$transaction([
+      prisma.audit_Universe.count({ where: { deleted_at: null } }),
+      prisma.audit_Universe.count({ where: highRiskWhere }),
+      prisma.audit_Universe.count({
+        where: {
+          ...highRiskWhere,
+          engagements: {
+            some: {
+              deleted_at: null,
+              created_at: { gte: yearStart },
+            },
+          },
+        },
+      }),
+    ]);
+
+    return {
+      universeItems,
+      highRiskUniverseItems,
+      highRiskAuditedThisYear,
+      highRiskCoverageRate: highRiskUniverseItems === 0
+        ? 0
+        : Math.round((highRiskAuditedThisYear / highRiskUniverseItems) * 10000) / 100,
+    };
+  }
 }
 
 // Singleton for re-use across HTTP requests.
 export const dashboardService = new DashboardService();
+
+const average = (values: number[]): number | null => {
+  if (values.length === 0) return null;
+  return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+};
+
+const toBreakdown = <T extends Record<string, unknown>>(
+  groups: Array<T & { _count?: true | { _all?: number } }>,
+  key: keyof T,
+): Record<string, number> =>
+  groups.reduce<Record<string, number>>((acc, group) => {
+    const value = group[key];
+    const count = typeof group._count === 'object' ? group._count._all ?? 0 : 0;
+    if (typeof value === 'string') acc[value] = count;
+    return acc;
+  }, {});

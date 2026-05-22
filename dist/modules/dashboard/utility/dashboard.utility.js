@@ -5,6 +5,7 @@ exports.daysBetween = exports.daysFromNow = exports.startOfNextMonth = exports.s
 exports.DASHBOARD_ADMIN_ROLES = [
     'super_admin',
     'audit_admin',
+    'audit_manager',
     'director',
     'cae',
 ];

@@ -3,16 +3,16 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createStorageClient = exports.AzureBlobStorageClient = exports.LocalStorageClient = void 0;
+exports.createStorageClient = exports.AwsS3StorageClient = exports.AzureBlobStorageClient = exports.LocalStorageClient = void 0;
 // src/modules/document/service/client/storage.client.ts
+const client_s3_1 = require("@aws-sdk/client-s3");
+const s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
 const promises_1 = __importDefault(require("fs/promises"));
 const path_1 = __importDefault(require("path"));
 const uuid_1 = require("uuid");
 const app_config_1 = require("../../../../shared/config/app.config");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
-// ──────────────────────────────────────────────
-// Local Storage
-// ──────────────────────────────────────────────
+const document_enum_1 = require("../../domain/enum/document.enum");
 class LocalStorageClient {
     basePath;
     constructor() {
@@ -38,19 +38,15 @@ class LocalStorageClient {
         });
     }
     async getUrl(storedName) {
-        // Served by Express static or a dedicated endpoint
         return `${app_config_1.config.app.url}/api/${app_config_1.config.app.apiVersion}/documents/serve/${storedName}`;
     }
 }
 exports.LocalStorageClient = LocalStorageClient;
-// ──────────────────────────────────────────────
-// Azure Blob Storage (stub — implement as needed)
-// ──────────────────────────────────────────────
+// Azure Blob Storage remains a stub until the Azure SDK adapter is needed.
 class AzureBlobStorageClient {
     async save(_buffer, originalName) {
         const ext = path_1.default.extname(originalName);
         const blobName = `${(0, uuid_1.v4)()}${ext}`;
-        // TODO: implement @azure/storage-blob SDK
         logger_util_1.logger.warn('AzureBlobStorageClient.save() not yet implemented');
         return blobName;
     }
@@ -65,14 +61,95 @@ class AzureBlobStorageClient {
     }
 }
 exports.AzureBlobStorageClient = AzureBlobStorageClient;
-// ──────────────────────────────────────────────
-// Factory
-// ──────────────────────────────────────────────
-const createStorageClient = () => {
-    switch (app_config_1.config.storage.provider) {
-        case 'azure_blob':
+class AwsS3StorageClient {
+    client;
+    bucket;
+    keyPrefix;
+    constructor() {
+        if (!app_config_1.config.storage.aws.bucket) {
+            throw new Error('AWS_S3_BUCKET is required when STORAGE_PROVIDER=aws_s3');
+        }
+        this.bucket = app_config_1.config.storage.aws.bucket;
+        this.keyPrefix = normalizePrefix(app_config_1.config.storage.aws.prefix);
+        this.client = new client_s3_1.S3Client({
+            region: app_config_1.config.storage.aws.region,
+            forcePathStyle: app_config_1.config.storage.aws.forcePathStyle,
+        });
+    }
+    async save(buffer, originalName) {
+        const ext = path_1.default.extname(originalName);
+        const now = new Date();
+        const datePath = [
+            now.getUTCFullYear(),
+            String(now.getUTCMonth() + 1).padStart(2, '0'),
+            String(now.getUTCDate()).padStart(2, '0'),
+        ].join('/');
+        const objectKey = withPrefix(this.keyPrefix, `${datePath}/${(0, uuid_1.v4)()}${ext}`);
+        await this.client.send(new client_s3_1.PutObjectCommand({
+            Bucket: this.bucket,
+            Key: objectKey,
+            Body: buffer,
+        }));
+        logger_util_1.logger.debug('File saved to S3 storage', { objectKey, bucket: this.bucket });
+        return objectKey;
+    }
+    async read(storagePath) {
+        const response = await this.client.send(new client_s3_1.GetObjectCommand({
+            Bucket: this.bucket,
+            Key: storagePath,
+        }));
+        return streamToBuffer(response.Body);
+    }
+    async delete(storagePath) {
+        await this.client.send(new client_s3_1.DeleteObjectCommand({
+            Bucket: this.bucket,
+            Key: storagePath,
+        }));
+    }
+    async getUrl(storagePath) {
+        const command = new client_s3_1.GetObjectCommand({
+            Bucket: this.bucket,
+            Key: storagePath,
+        });
+        return (0, s3_request_presigner_1.getSignedUrl)(this.client, command, {
+            expiresIn: app_config_1.config.storage.aws.signedUrlTtlSeconds,
+        });
+    }
+}
+exports.AwsS3StorageClient = AwsS3StorageClient;
+const streamToBuffer = async (body) => {
+    if (!body)
+        return Buffer.alloc(0);
+    if (body instanceof Uint8Array)
+        return Buffer.from(body);
+    if (hasByteArrayTransformer(body)) {
+        return Buffer.from(await body.transformToByteArray());
+    }
+    if (!isAsyncIterable(body)) {
+        throw new Error('Unsupported S3 response body type');
+    }
+    const chunks = [];
+    for await (const chunk of body) {
+        chunks.push(Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
+};
+const hasByteArrayTransformer = (body) => typeof body === 'object' &&
+    body !== null &&
+    'transformToByteArray' in body &&
+    typeof body.transformToByteArray === 'function';
+const isAsyncIterable = (body) => typeof body === 'object' &&
+    body !== null &&
+    Symbol.asyncIterator in body;
+const normalizePrefix = (prefix) => prefix.trim().replace(/^\/+|\/+$/g, '');
+const withPrefix = (prefix, key) => prefix ? `${prefix}/${key}` : key;
+const createStorageClient = (provider = app_config_1.config.storage.provider) => {
+    switch (provider) {
+        case document_enum_1.StorageProvider.AZURE_BLOB:
             return new AzureBlobStorageClient();
-        case 'local':
+        case document_enum_1.StorageProvider.AWS_S3:
+            return new AwsS3StorageClient();
+        case document_enum_1.StorageProvider.LOCAL:
         default:
             return new LocalStorageClient();
     }

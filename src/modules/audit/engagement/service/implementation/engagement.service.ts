@@ -15,6 +15,7 @@ import {
   hasAuditeeRole,
   parseReferenceSequence,
 } from '../../../utility/audit.utility';
+import { getAuditLifecycleRules } from '../../../utility/audit-config.utility';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
 import {
   CreateAdhocEngagementRequestDto,
@@ -143,8 +144,10 @@ export class EngagementService implements IEngagementService {
     if (!engagement) throw AppError.notFound('Audit engagement');
 
     assertTransition(engagement.status as EngagementStatus, newStatus, ENGAGEMENT_TRANSITIONS, 'engagement');
+    await this._assertLifecycleGate(id, newStatus);
 
-    if (newStatus === EngagementStatus.Closed) {
+    const lifecycleRules = await getAuditLifecycleRules();
+    if (newStatus === EngagementStatus.Closed && lifecycleRules.requireClosedFindingsBeforeClose) {
       const openFindingCount = await prisma.audit_Finding.count({
         where: {
           engagement_id: id,
@@ -266,5 +269,52 @@ export class EngagementService implements IEngagementService {
       workingPaperCount,
       checklistProgress: progress,
     });
+  }
+
+  private async _assertLifecycleGate(id: string, newStatus: EngagementStatus): Promise<void> {
+    const lifecycleRules = await getAuditLifecycleRules();
+
+    if (newStatus === EngagementStatus.UnderReview) {
+      if (lifecycleRules.requireAllChecklistsTestedBeforeUnderReview) {
+        const [totalChecklistCount, notTestedCount] = await prisma.$transaction([
+          prisma.audit_Checklist.count({ where: { engagement_id: id } }),
+          prisma.audit_Checklist.count({
+            where: { engagement_id: id, result: 'not_tested' },
+          }),
+        ]);
+        if (totalChecklistCount === 0) {
+          throw AppError.badRequest('Cannot move engagement to review before checklist procedures are populated');
+        }
+        if (notTestedCount > 0) {
+          throw AppError.badRequest('Cannot move engagement to review while checklist procedures remain untested');
+        }
+      }
+
+      if (lifecycleRules.requireApprovedWorkingPaperBeforeUnderReview) {
+        const approvedPaperCount = await prisma.audit_Working_Paper.count({
+          where: {
+            engagement_id: id,
+            deleted_at: null,
+            status: 'approved',
+          },
+        });
+        if (approvedPaperCount === 0) {
+          throw AppError.badRequest('Cannot move engagement to review before at least one working paper is approved');
+        }
+      }
+    }
+
+    if (newStatus === EngagementStatus.Reported && lifecycleRules.requireReportIssuedBeforeReported) {
+      const issuedReportCount = await prisma.audit_Report.count({
+        where: {
+          engagement_id: id,
+          deleted_at: null,
+          status: 'issued',
+        },
+      });
+      if (issuedReportCount === 0) {
+        throw AppError.badRequest('Cannot mark engagement as reported before an audit report is issued');
+      }
+    }
   }
 }

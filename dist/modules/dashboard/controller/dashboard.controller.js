@@ -59,6 +59,12 @@ class DashboardController {
          * @access Private — audit:read
          */
         this.router.get('/approval-inbox', (0, auth_middleware_1.requirePermission)('dashboard:read'), this._getApprovalInboxSummary.bind(this));
+        /**
+         * @route  GET /dashboard/analytics
+         * @desc   Dedicated audit analytics bundle for lifecycle, reporting, follow-up, and risk coverage
+         * @access Private - dashboard:read
+         */
+        this.router.get('/analytics', (0, auth_middleware_1.requirePermission)('dashboard:read'), this._getAuditAnalytics.bind(this));
     }
     async _getAuditSummary(req, res, next) {
         try {
@@ -119,6 +125,15 @@ class DashboardController {
         try {
             const summary = await this.dashboardService.getApprovalInboxSummary(req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(summary));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getAuditAnalytics(req, res, next) {
+        try {
+            const analytics = await this.dashboardService.getAuditAnalytics(req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(analytics));
         }
         catch (err) {
             next(err);

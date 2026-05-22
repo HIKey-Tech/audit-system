@@ -20,5 +20,6 @@ export declare class EngagementService implements IEngagementService {
     private _nextReferenceNumber;
     private _assertEngagementExists;
     private _withMetrics;
+    private _assertLifecycleGate;
 }
 //# sourceMappingURL=engagement.service.d.ts.map

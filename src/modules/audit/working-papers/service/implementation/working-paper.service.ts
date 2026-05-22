@@ -81,6 +81,7 @@ export class WorkingPaperService implements IWorkingPaperService {
       ? buildWorkingPaperContentFromSections(mappedSections)
       : extracted.text;
     const confidence = mappedSections.length > 0 ? averageSectionConfidence(mappedSections) : 0.35;
+    const matchedSectionCount = mappedSections.filter((section) => section.content.trim().length > 0).length;
 
     const document = await this.documentService.upload({
       uploadedById: actor.id,
@@ -97,6 +98,12 @@ export class WorkingPaperService implements IWorkingPaperService {
     const warnings = [...extracted.warnings];
     if (!template) {
       warnings.push('No working paper template matched this engagement. The extracted text was returned as free-form content.');
+    }
+    if (!extracted.text.trim()) {
+      warnings.push('The file was read, but no usable text was extracted. Scanned PDFs or image-only documents may require OCR before import.');
+    }
+    if (template && matchedSectionCount === 0) {
+      warnings.push('No template section headings were detected in the uploaded file. Use headings like Objective, Test Steps, Evidence, Results, and Conclusion, or copy the extracted text into the expected sections below.');
     }
     if (confidence < 0.5) {
       warnings.push('Low section-mapping confidence. Review and edit the preview before saving.');

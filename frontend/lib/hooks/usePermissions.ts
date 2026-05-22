@@ -9,6 +9,7 @@ import { useSession, type SessionUser } from '@/components/providers/AuthProvide
 export type AppRole =
   | 'super_admin'
   | 'audit_admin'
+  | 'audit_manager'
   | 'audit_lead'
   | 'auditor'
   | 'director'
@@ -39,13 +40,13 @@ export const userHasPermission = (user: SessionUser | null, permission: string):
   return user.permissions.includes(permission);
 };
 
-/** Convenience: is this user an admin-level role? (super_admin, audit_admin, cae) */
+/** Convenience: is this user an admin-level role? (super_admin, audit_admin, audit_manager, cae) */
 export const isAdminLevel = (user: SessionUser | null): boolean =>
-  userHasAnyRole(user, ['super_admin', 'audit_admin', 'cae']);
+  userHasAnyRole(user, ['super_admin', 'audit_admin', 'audit_manager', 'cae']);
 
 /** Can this user manage the full audit programme (plans, universe, engagements creation)? */
 export const canManageAuditProgramme = (user: SessionUser | null): boolean =>
-  userHasAnyRole(user, ['super_admin', 'audit_admin']);
+  userHasAnyRole(user, ['super_admin', 'audit_admin', 'audit_manager']);
 
 /** Is this user a fieldwork-level auditor? (audit_lead or auditor) */
 export const isFieldAuditor = (user: SessionUser | null): boolean =>
@@ -68,6 +69,7 @@ export const isExecutive = (user: SessionUser | null): boolean =>
 // ─────────────────────────────────────────────────────────────
 export interface NavVisibility {
   dashboard: boolean;
+  analytics: boolean;
   auditUniverse: boolean;
   auditPlans: boolean;
   engagements: boolean;
@@ -88,6 +90,7 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
   if (!user) {
     return {
       dashboard: false,
+      analytics: false,
       auditUniverse: false,
       auditPlans: false,
       engagements: false,
@@ -107,6 +110,7 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
 
   return {
     dashboard: true,
+    analytics: userHasPermission(user, 'dashboard:read'),
     auditUniverse: userHasPermission(user, 'universe:read'),
     auditPlans: userHasPermission(user, 'plan:read'),
     engagements: userHasPermission(user, 'engagement:read'),
@@ -186,6 +190,7 @@ export const usePermissions = () => {
       // Convenience booleans
       isSuperAdmin: session.roles.includes('super_admin'),
       isAuditAdmin: session.roles.includes('audit_admin'),
+      isAuditManager: session.roles.includes('audit_manager'),
       isAdminLevel: isAdminLevel(session),
       canManageAuditProgramme: canManageAuditProgramme(session),
       isFieldAuditor: isFieldAuditor(session),

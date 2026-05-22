@@ -23,6 +23,25 @@ const normalizeCount = (count) => {
     return typeof count === 'number' ? count : 0;
 };
 class DashboardService {
+    async getAuditAnalytics(actor) {
+        const [lifecycle, workingPapers, findings, reporting, followUp, riskCoverage] = await Promise.all([
+            this._getLifecycleAnalytics(actor),
+            this._getWorkingPaperAnalytics(actor),
+            this.getFindingsSummary(actor),
+            this._getReportingAnalytics(actor),
+            this._getFollowUpAnalytics(actor),
+            this._getRiskCoverageAnalytics(),
+        ]);
+        return {
+            generatedAt: new Date().toISOString(),
+            lifecycle,
+            workingPapers,
+            findings,
+            reporting,
+            followUp,
+            riskCoverage,
+        };
+    }
     // =============================================================
     // Audit summary
     // =============================================================
@@ -592,8 +611,159 @@ class DashboardService {
         ORDER BY step.created_at ASC
       `);
     }
+    async _getLifecycleAnalytics(actor) {
+        const summary = await this.getAuditSummary(actor);
+        const restrictToLead = (0, dashboard_utility_1.isRestrictedAuditor)(actor.roles);
+        const where = {
+            deleted_at: null,
+            ...(restrictToLead ? { lead_auditor_id: actor.id } : {}),
+        };
+        const engagements = await prisma_client_1.prisma.audit_Engagement.findMany({
+            where,
+            select: {
+                planned_start_date: true,
+                actual_start_date: true,
+                actual_end_date: true,
+                updated_at: true,
+                status: true,
+            },
+        });
+        const cycleDurations = engagements
+            .filter((engagement) => engagement.actual_end_date)
+            .map((engagement) => (0, dashboard_utility_1.daysBetween)(engagement.planned_start_date, engagement.actual_end_date));
+        const fieldworkDurations = engagements
+            .filter((engagement) => engagement.actual_start_date && engagement.actual_end_date)
+            .map((engagement) => (0, dashboard_utility_1.daysBetween)(engagement.actual_start_date, engagement.actual_end_date));
+        const reportingDurations = engagements
+            .filter((engagement) => engagement.status === 'reported' || engagement.status === 'closed')
+            .map((engagement) => (0, dashboard_utility_1.daysBetween)(engagement.planned_start_date, engagement.updated_at));
+        return {
+            byStatus: summary.byStatus,
+            overdueEngagements: summary.overdueEngagements,
+            dueSoon: summary.dueSoon,
+            averageCycleDays: average(cycleDurations),
+            averageFieldworkDays: average(fieldworkDurations),
+            averageReportingDays: average(reportingDurations),
+        };
+    }
+    async _getWorkingPaperAnalytics(actor) {
+        const restrictToLead = (0, dashboard_utility_1.isRestrictedAuditor)(actor.roles);
+        const where = {
+            deleted_at: null,
+            ...(restrictToLead ? { engagement: { lead_auditor_id: actor.id } } : {}),
+        };
+        const [total, imported, submittedAwaitingReview, groups] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Working_Paper.count({ where }),
+            prisma_client_1.prisma.audit_Working_Paper.count({
+                where: { ...where, source_document_id: { not: null } },
+            }),
+            prisma_client_1.prisma.audit_Working_Paper.count({ where: { ...where, status: 'submitted' } }),
+            prisma_client_1.prisma.audit_Working_Paper.groupBy({
+                by: ['status'],
+                where,
+                _count: { _all: true },
+                orderBy: { status: 'asc' },
+            }),
+        ]);
+        return {
+            total,
+            imported,
+            submittedAwaitingReview,
+            byStatus: toBreakdown(groups, 'status'),
+        };
+    }
+    async _getReportingAnalytics(actor) {
+        const restrictToLead = (0, dashboard_utility_1.isRestrictedAuditor)(actor.roles);
+        const where = {
+            deleted_at: null,
+            ...(restrictToLead ? { engagement: { lead_auditor_id: actor.id } } : {}),
+        };
+        const [total, groups, issuedReports] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Report.count({ where }),
+            prisma_client_1.prisma.audit_Report.groupBy({
+                by: ['status'],
+                where,
+                _count: { _all: true },
+                orderBy: { status: 'asc' },
+            }),
+            prisma_client_1.prisma.audit_Report.findMany({
+                where: { ...where, issued_at: { not: null } },
+                select: { created_at: true, issued_at: true },
+            }),
+        ]);
+        return {
+            total,
+            byStatus: toBreakdown(groups, 'status'),
+            averageDaysToIssue: average(issuedReports.map((report) => (0, dashboard_utility_1.daysBetween)(report.created_at, report.issued_at))),
+        };
+    }
+    async _getFollowUpAnalytics(actor) {
+        const restrictToAuditee = (0, dashboard_utility_1.isRestrictedAuditee)(actor.roles);
+        const where = {
+            ...(restrictToAuditee ? { finding: { auditee_id: actor.id } } : {}),
+        };
+        const now = new Date();
+        const [total, pending, verified, rejected, overdueFindings] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Follow_Up.count({ where }),
+            prisma_client_1.prisma.audit_Follow_Up.count({ where: { ...where, verification_status: 'pending' } }),
+            prisma_client_1.prisma.audit_Follow_Up.count({ where: { ...where, verification_status: 'verified' } }),
+            prisma_client_1.prisma.audit_Follow_Up.count({ where: { ...where, verification_status: 'rejected' } }),
+            prisma_client_1.prisma.audit_Finding.count({
+                where: {
+                    deleted_at: null,
+                    due_date: { lt: now },
+                    status: { notIn: FINDING_RESOLVED_STATUSES },
+                    ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
+                },
+            }),
+        ]);
+        return { total, pending, verified, rejected, overdueFindings };
+    }
+    async _getRiskCoverageAnalytics() {
+        const now = new Date();
+        const yearStart = (0, dashboard_utility_1.startOfCurrentYear)(now);
+        const highRiskWhere = {
+            deleted_at: null,
+            risk_score: { gte: new client_1.Prisma.Decimal(15) },
+        };
+        const [universeItems, highRiskUniverseItems, highRiskAuditedThisYear] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Universe.count({ where: { deleted_at: null } }),
+            prisma_client_1.prisma.audit_Universe.count({ where: highRiskWhere }),
+            prisma_client_1.prisma.audit_Universe.count({
+                where: {
+                    ...highRiskWhere,
+                    engagements: {
+                        some: {
+                            deleted_at: null,
+                            created_at: { gte: yearStart },
+                        },
+                    },
+                },
+            }),
+        ]);
+        return {
+            universeItems,
+            highRiskUniverseItems,
+            highRiskAuditedThisYear,
+            highRiskCoverageRate: highRiskUniverseItems === 0
+                ? 0
+                : Math.round((highRiskAuditedThisYear / highRiskUniverseItems) * 10000) / 100,
+        };
+    }
 }
 exports.DashboardService = DashboardService;
 // Singleton for re-use across HTTP requests.
 exports.dashboardService = new DashboardService();
+const average = (values) => {
+    if (values.length === 0)
+        return null;
+    return Math.round((values.reduce((sum, value) => sum + value, 0) / values.length) * 100) / 100;
+};
+const toBreakdown = (groups, key) => groups.reduce((acc, group) => {
+    const value = group[key];
+    const count = typeof group._count === 'object' ? group._count._all ?? 0 : 0;
+    if (typeof value === 'string')
+        acc[value] = count;
+    return acc;
+}, {});
 //# sourceMappingURL=dashboard.service.js.map

@@ -7,6 +7,7 @@ const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const checklist_response_dto_1 = require("../../dto/response/checklist.response.dto");
 class ChecklistService {
     async populateChecklists(engagementId, actorId) {
@@ -20,7 +21,7 @@ class ChecklistService {
         if (existing > 0)
             return;
         const auditType = engagement.audit_type;
-        const controls = audit_utility_1.CONTROL_SETS[auditType] ?? [];
+        const controls = await (0, audit_config_utility_1.getChecklistTemplateControls)(auditType);
         await prisma_client_1.prisma.audit_Checklist.createMany({
             data: controls.map((control) => ({
                 engagement_id: engagementId,

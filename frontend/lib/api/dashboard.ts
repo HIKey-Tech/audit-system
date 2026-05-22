@@ -7,6 +7,7 @@ import type {
   EscalationOverview,
   MyWork,
   ApprovalInboxSummary,
+  AuditAnalytics,
 } from '../types/domain';
 
 export const dashboardApi = {
@@ -18,4 +19,5 @@ export const dashboardApi = {
   getEscalations: () => api.get<EscalationOverview>('/dashboard/escalations'),
   getMyWork: () => api.get<MyWork>('/dashboard/my-work'),
   getApprovalInbox: () => api.get<ApprovalInboxSummary>('/dashboard/approval-inbox'),
+  getAnalytics: () => api.get<AuditAnalytics>('/dashboard/analytics'),
 };

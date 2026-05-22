@@ -173,3 +173,58 @@ export interface ApprovalInboxSummaryResponseDto {
   pendingCount: number;
   oldestPendingDays: number;
 }
+
+// =============================================================
+// Analytics
+// =============================================================
+
+export interface AnalyticsCountBreakdown {
+  [key: string]: number;
+}
+
+export interface LifecycleAnalyticsDto {
+  byStatus: EngagementStatusBreakdown;
+  overdueEngagements: number;
+  dueSoon: number;
+  averageCycleDays: number | null;
+  averageFieldworkDays: number | null;
+  averageReportingDays: number | null;
+}
+
+export interface WorkPaperAnalyticsDto {
+  total: number;
+  imported: number;
+  byStatus: AnalyticsCountBreakdown;
+  submittedAwaitingReview: number;
+}
+
+export interface ReportingAnalyticsDto {
+  total: number;
+  byStatus: AnalyticsCountBreakdown;
+  averageDaysToIssue: number | null;
+}
+
+export interface FollowUpAnalyticsDto {
+  total: number;
+  pending: number;
+  verified: number;
+  rejected: number;
+  overdueFindings: number;
+}
+
+export interface RiskCoverageAnalyticsDto {
+  universeItems: number;
+  highRiskUniverseItems: number;
+  highRiskAuditedThisYear: number;
+  highRiskCoverageRate: number;
+}
+
+export interface AuditAnalyticsResponseDto {
+  generatedAt: string;
+  lifecycle: LifecycleAnalyticsDto;
+  workingPapers: WorkPaperAnalyticsDto;
+  findings: FindingsSummaryResponseDto;
+  reporting: ReportingAnalyticsDto;
+  followUp: FollowUpAnalyticsDto;
+  riskCoverage: RiskCoverageAnalyticsDto;
+}

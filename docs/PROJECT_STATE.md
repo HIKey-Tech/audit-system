@@ -241,6 +241,8 @@ Folder: `src/modules/audit/`
 - Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data, rendered via the shared `docx-template.utility.ts`. Two default DOCX templates (`Working Paper - GBB Default`, `Audit Report - GBB Default`) are seeded into `document_templates` from `prisma/templates/`.
 - Working-paper import preview accepts uploaded DOCX, XLS/XLSX, PDF, TXT/CSV, and Markdown files, stores the source file through DocumentService, maps extracted content into the selected/default working-paper template, and returns a reviewable draft preview before creating the working paper.
 - Working papers now persist optional template linkage, source document linkage, working-paper type, and import metadata for traceability.
+- Engagement status transitions now enforce configurable lifecycle gates from `system_config.audit_lifecycle_rules`: checklist completion and approved working papers before review, issued reports before reported status, and verified/closed findings before closure.
+- Engagement checklist population now reads admin-configurable control templates from `system_config.checklist_templates`, with code defaults as fallback.
 - Report generation accepts optional report body fields (`executiveSummary`, `scope`, `methodology`) and falls back to generated defaults when omitted. DOCX/PDF report output now reads template header, footer, signature, classification, and colour configuration from the selected/default report template.
 
 **Verification:**
@@ -363,7 +365,8 @@ Folder: `src/modules/settings/`
 - `ReportTemplateService` supports create, update, deactivate, single system default, default lookup, available-variable lookup from the default template, single lookup, and paginated listing filtered by `is_active`.
 - `SystemConfigService` supports private/public config reads, single-key update, and transactional bulk update.
 - SQL Server does not support Prisma `Json`, so template JSON payloads are validated at the API boundary and stored as `NVARCHAR(MAX)` JSON strings, matching the existing metadata/audit-log convention.
-- Seeded defaults: 11 working paper templates (financial, IT, compliance, systems, general, walkthrough, control test, sampling, ITGC, finding validation, follow-up verification), 5 report templates, and 10 system config keys.
+- Seeded defaults: 11 working paper templates (financial, IT, compliance, systems, general, walkthrough, control test, sampling, ITGC, finding validation, follow-up verification), 5 report templates, and 16 system config keys.
+- Admin customization now includes JSON-backed lifecycle gates, SLA rules, checklist templates, approval matrix documentation, audit taxonomy, and analytics KPI visibility through the Settings UI.
 
 **Routes mounted by the module:**
 
@@ -523,7 +526,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 | Messaging | 15 in-app notifications, 13 email logs, 18 notification-queue rows, all queue rows `sent` |
 | Documents | 2 seeded document templates, 0 uploaded documents, 0 document versions |
 | Background/logging | 5 scheduled jobs, 303 job-run rows, 145 audit-log rows |
-| Settings | 11 working paper templates, 5 report templates, 10 system config keys |
+| Settings | 11 working paper templates, 5 report templates, 16 system config keys |
 
 ---
 

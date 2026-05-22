@@ -177,6 +177,43 @@ export interface ApprovalInboxSummary {
   oldestPendingDays: number;
 }
 
+export interface AuditAnalytics {
+  generatedAt: string;
+  lifecycle: {
+    byStatus: AuditSummary['byStatus'];
+    overdueEngagements: number;
+    dueSoon: number;
+    averageCycleDays: number | null;
+    averageFieldworkDays: number | null;
+    averageReportingDays: number | null;
+  };
+  workingPapers: {
+    total: number;
+    imported: number;
+    byStatus: Record<string, number>;
+    submittedAwaitingReview: number;
+  };
+  findings: FindingsSummary;
+  reporting: {
+    total: number;
+    byStatus: Record<string, number>;
+    averageDaysToIssue: number | null;
+  };
+  followUp: {
+    total: number;
+    pending: number;
+    verified: number;
+    rejected: number;
+    overdueFindings: number;
+  };
+  riskCoverage: {
+    universeItems: number;
+    highRiskUniverseItems: number;
+    highRiskAuditedThisYear: number;
+    highRiskCoverageRate: number;
+  };
+}
+
 // ============================================================
 // Audit
 // ============================================================

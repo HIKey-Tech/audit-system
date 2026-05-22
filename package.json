@@ -3,6 +3,9 @@
   "version": "1.0.0",
   "description": "Modular Monolith Internal Audit System",
   "main": "dist/server.js",
+  "engines": {
+    "node": ">=20"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/server.js",
@@ -20,6 +23,8 @@
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "^7.3.4",
+    "@aws-sdk/client-s3": "^3.1052.0",
+    "@aws-sdk/s3-request-presigner": "^3.1052.0",
     "@azure/msal-node": "^2.6.3",
     "@prisma/client": "^6.16.0",
     "bcryptjs": "^2.4.3",

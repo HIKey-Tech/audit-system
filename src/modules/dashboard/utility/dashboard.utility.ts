@@ -2,6 +2,7 @@
 export const DASHBOARD_ADMIN_ROLES: readonly string[] = [
   'super_admin',
   'audit_admin',
+  'audit_manager',
   'director',
   'cae',
 ];

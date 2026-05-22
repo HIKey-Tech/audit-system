@@ -487,6 +487,8 @@ const ImportPaperSlideOver = ({
       toast.error('Title required');
       return;
     }
+    const hasMappedContent = preview.mappedSections.length > 0
+      && sectionContents.some((value) => value.trim().length > 0);
 
     const content = preview.mappedSections.length > 0
       ? JSON.stringify({
@@ -497,8 +499,8 @@ const ImportPaperSlideOver = ({
         })
       : freeformContent.trim();
 
-    if (!content) {
-      toast.error('Content required');
+    if ((preview.mappedSections.length > 0 && !hasMappedContent) || !content) {
+      toast.error('No content has been added yet. Review the extracted text and fill at least one section before saving.');
       return;
     }
 
@@ -592,7 +594,17 @@ const ImportPaperSlideOver = ({
             </FormField>
 
             {preview.mappedSections.length > 0 ? (
-              preview.mappedSections.map((section, index) => (
+              <>
+                {preview.confidence < 0.5 && (
+                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    <p className="font-semibold">Auto-fill needs review</p>
+                    <p className="mt-1">
+                      The importer looks for section headings that match the selected template. For best results, uploaded files should use headings such as Objective, Test Steps, Evidence, Results, Exceptions, and Conclusion.
+                    </p>
+                  </div>
+                )}
+
+                {preview.mappedSections.map((section, index) => (
                 <div key={`${section.title}-${index}`} className="space-y-1.5">
                   <label className="block text-xs font-semibold text-text-primary">
                     {section.title}
@@ -605,6 +617,7 @@ const ImportPaperSlideOver = ({
                   <Textarea
                     rows={5}
                     value={sectionContents[index] ?? ''}
+                    placeholder={section.confidence === 0 ? 'No matching content was detected. Copy the relevant text from the extracted source below.' : undefined}
                     onChange={(e) => {
                       const next = [...sectionContents];
                       next[index] = e.target.value;
@@ -612,7 +625,20 @@ const ImportPaperSlideOver = ({
                     }}
                   />
                 </div>
-              ))
+                ))}
+
+                <details className="rounded-md border border-border bg-surface-alt px-3 py-2">
+                  <summary className="cursor-pointer text-xs font-semibold text-text-primary">
+                    Extracted source text
+                  </summary>
+                  <Textarea
+                    rows={10}
+                    value={preview.extractedText || 'No text could be extracted from this file.'}
+                    readOnly
+                    className="mt-2 font-mono text-xs"
+                  />
+                </details>
+              </>
             ) : (
               <FormField label="Extracted content">
                 <Textarea

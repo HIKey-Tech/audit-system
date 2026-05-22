@@ -10,9 +10,9 @@ import {
   WorkingPaperStatus,
 } from '../domain/enum/audit.enum';
 
-export const AUDIT_ADMIN_ROLES: readonly string[] = ['super_admin', 'audit_admin'];
-export const AUDIT_REVIEW_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_lead'];
-export const AUDIT_WORK_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_lead', 'auditor'];
+export const AUDIT_ADMIN_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_manager', 'cae'];
+export const AUDIT_REVIEW_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_manager', 'audit_lead'];
+export const AUDIT_WORK_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_manager', 'audit_lead', 'auditor'];
 export const AUDITEE_ROLE = 'auditee';
 
 export const hasAuditeeRole = (roles: string[]): boolean =>
