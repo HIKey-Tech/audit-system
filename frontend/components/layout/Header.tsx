@@ -4,13 +4,14 @@ import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell } from 'lucide-react';
+import { Bell, Menu } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils/cn';
 import { formatRelative } from '@/lib/utils/format';
 import { notificationsApi } from '@/lib/api/notifications';
 import { useSession } from '@/components/providers/AuthProvider';
+import { useLayout } from '@/components/providers/LayoutProvider';
 
 const TITLE_MAP: { match: RegExp; title: string }[] = [
   { match: /^\/dashboard/, title: 'Dashboard' },
@@ -39,8 +40,10 @@ export const Header = (): JSX.Element => {
   const pathname = usePathname();
   const session = useSession();
   const qc = useQueryClient();
+  const { toggleSidebar } = useLayout();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+
 
   const { data: unread } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -74,12 +77,21 @@ export const Header = (): JSX.Element => {
   }, [open]);
 
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-surface-elevated px-6">
-      <div className="min-w-0">
+    <header className="sticky top-0 z-20 flex h-16 items-center justify-between border-b border-border bg-surface-elevated px-4 sm:px-6 gap-4">
+      <div className="flex items-center gap-3 min-w-0 flex-1">
+        <button
+          type="button"
+          onClick={toggleSidebar}
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-secondary hover:bg-surface-alt hover:text-text-primary lg:hidden shrink-0"
+          aria-label="Toggle sidebar"
+        >
+          <Menu className="h-5 w-5" />
+        </button>
         <h1 className="text-base font-semibold text-text-primary truncate">
           {titleFor(pathname)}
         </h1>
       </div>
+
 
       <div className="flex items-center gap-4">
         <div className="relative" ref={ref}>
@@ -98,7 +110,7 @@ export const Header = (): JSX.Element => {
           </button>
 
           {open && (
-            <div className="absolute right-0 top-full mt-2 w-80 overflow-hidden rounded-lg border border-border bg-white shadow-card-hover animate-fade-in">
+            <div className="absolute right-0 top-full mt-2 w-[calc(100vw-2rem)] max-w-sm sm:w-80 overflow-hidden rounded-lg border border-border bg-white shadow-card-hover animate-fade-in">
               <div className="flex items-center justify-between border-b border-border px-4 py-3">
                 <p className="text-xs font-semibold text-text-primary">Notifications</p>
                 <Link

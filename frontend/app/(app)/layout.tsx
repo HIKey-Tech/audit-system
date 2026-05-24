@@ -1,7 +1,7 @@
 import { redirect } from 'next/navigation';
-import { Sidebar } from '@/components/layout/Sidebar';
-import { Header } from '@/components/layout/Header';
 import { AuthProvider } from '@/components/providers/AuthProvider';
+import { LayoutProvider } from '@/components/providers/LayoutProvider';
+import { AppLayoutContainer } from '@/components/layout/AppLayoutContainer';
 import { readSessionUserFromCookies } from '@/lib/session';
 
 export default function AppLayout({
@@ -16,13 +16,9 @@ export default function AppLayout({
 
   return (
     <AuthProvider user={user}>
-      <div className="flex min-h-screen bg-surface">
-        <Sidebar />
-        <div className="flex w-full flex-col lg:pl-60">
-          <Header />
-          <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
-        </div>
-      </div>
+      <LayoutProvider>
+        <AppLayoutContainer>{children}</AppLayoutContainer>
+      </LayoutProvider>
     </AuthProvider>
   );
 }

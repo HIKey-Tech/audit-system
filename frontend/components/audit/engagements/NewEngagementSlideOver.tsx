@@ -208,7 +208,7 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
         </div>
 
         {mode === 'plan' ? (
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <FormField label="Plan" required error={errors.planId?.message}>
               <Select {...register('planId')}>
                 <option value="">Select plan…</option>
@@ -242,7 +242,7 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
                 ))}
               </Select>
             </FormField>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <FormField label="Audit type" required error={errors.auditType?.message}>
                 <Select {...register('auditType')}>
                   <option value="it">IT</option>
@@ -270,7 +270,7 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
           <Input error={errors.title?.message} {...register('title')} />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Lead auditor" required error={errors.leadAuditorId?.message}>
             <UserSelect value={lead} onChange={(v) => setValue('leadAuditorId', v, { shouldValidate: true })} />
           </FormField>
@@ -282,7 +282,7 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
           <UserSelect value={auditee} onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })} />
         </FormField>
 
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <FormField label="Start" required error={errors.plannedStartDate?.message}>
             <Input type="date" {...register('plannedStartDate')} />
           </FormField>

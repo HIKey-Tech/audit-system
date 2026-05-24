@@ -209,7 +209,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
                   )}
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FormField
                     label="Key"
                     required
@@ -299,7 +299,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
                   </button>
                 </div>
 
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <FormField
                     label="Key"
                     required

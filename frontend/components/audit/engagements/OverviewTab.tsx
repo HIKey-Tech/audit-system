@@ -79,7 +79,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
             ) : null
           }
         />
-        <dl className="grid grid-cols-2 gap-4">
+        <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {engagement.description && (
             <div className="col-span-2">
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Description</dt>

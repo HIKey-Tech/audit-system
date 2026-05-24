@@ -124,7 +124,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
         <FormField label="Description" error={errors.description?.message}>
           <Textarea rows={3} {...register('description')} />
         </FormField>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Category" required error={errors.categoryId?.message}>
             <Select error={errors.categoryId?.message} {...register('categoryId')}>
               <option value="">Select…</option>
@@ -147,7 +147,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
         <FormField label="Owner" required error={errors.ownerId?.message}>
           <UserSelect value={ownerId} onChange={(v) => setValue('ownerId', v, { shouldValidate: true })} />
         </FormField>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Likelihood" required error={errors.likelihood?.message}>
             <Select error={errors.likelihood?.message} {...register('likelihood')}>
               {[1, 2, 3, 4, 5].map((n) => (

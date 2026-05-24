@@ -10,9 +10,13 @@ export interface DocumentsListQuery {
 }
 
 export const documentsApi = {
-  upload: (file: File, opts?: { entityType?: string; entityId?: string; description?: string }) => {
+  upload: (
+    file: File,
+    opts?: { module?: string; entityType?: string; entityId?: string; description?: string },
+  ) => {
     const fd = new FormData();
     fd.append('file', file);
+    fd.append('module', opts?.module ?? 'document');
     if (opts?.entityType) fd.append('entityType', opts.entityType);
     if (opts?.entityId) fd.append('entityId', opts.entityId);
     if (opts?.description) fd.append('description', opts.description);

@@ -96,8 +96,8 @@ export const SystemConfigTab = (): JSX.Element => {
 
   return (
     <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
-      <div className="bg-surface-alt px-4 py-2.5">
-        <div className="grid grid-cols-[220px_1fr_200px_100px_56px] gap-4">
+      <div className="bg-surface-alt px-4 py-2.5 hidden md:block">
+        <div className="grid grid-cols-[180px_1fr_150px_100px_56px] gap-4">
           <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
             Key
           </span>
@@ -123,17 +123,21 @@ export const SystemConfigTab = (): JSX.Element => {
             <div
               key={cfg.id}
               className={cn(
-                'grid grid-cols-[220px_1fr_200px_100px_56px] items-center gap-4 px-4 py-3 transition-colors',
+                'flex flex-col gap-3 p-4 md:grid md:grid-cols-[180px_1fr_150px_100px_56px] md:items-center md:gap-4 md:px-4 md:py-3 transition-colors',
                 isEditing && 'bg-blue-50/30',
               )}
             >
               {/* Key */}
-              <code className="truncate rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-text-primary">
-                {cfg.key}
-              </code>
+              <div className="flex items-center justify-between md:block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden">Key</span>
+                <code className="truncate rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-text-primary">
+                  {cfg.key}
+                </code>
+              </div>
 
               {/* Value */}
-              <div className="min-w-0">
+              <div className="min-w-0 flex flex-col md:block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden mb-1">Value</span>
                 {isEditing ? (
                   <input
                     type="text"
@@ -159,17 +163,23 @@ export const SystemConfigTab = (): JSX.Element => {
               </div>
 
               {/* Description */}
-              <p className="truncate text-xs text-text-secondary">
-                {cfg.description ?? '—'}
-              </p>
+              <div className="flex flex-col md:block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden mb-1">Description</span>
+                <p className="truncate text-xs text-text-secondary">
+                  {cfg.description ?? '—'}
+                </p>
+              </div>
 
               {/* Visibility */}
-              <Badge tone={cfg.isPublic ? 'green' : 'gray'}>
-                {cfg.isPublic ? 'Public' : 'Private'}
-              </Badge>
+              <div className="flex items-center justify-between md:block">
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden">Visibility</span>
+                <Badge tone={cfg.isPublic ? 'green' : 'gray'}>
+                  {cfg.isPublic ? 'Public' : 'Private'}
+                </Badge>
+              </div>
 
               {/* Actions */}
-              <div className="flex items-center justify-end gap-1">
+              <div className="flex items-center justify-end border-t border-border/40 pt-2 mt-1 md:border-none md:pt-0 md:mt-0 gap-1">
                 {isEditing ? (
                   <>
                     <button

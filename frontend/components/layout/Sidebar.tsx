@@ -34,6 +34,7 @@ import { notificationsApi } from '@/lib/api/notifications';
 import { useSession } from '@/components/providers/AuthProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { usePermissions, type NavVisibility } from '@/lib/hooks/usePermissions';
+import { useLayout } from '@/components/providers/LayoutProvider';
 
 interface NavLink {
   type: 'link';
@@ -88,7 +89,7 @@ export const Sidebar = (): JSX.Element => {
   const router = useRouter();
   const session = useSession();
   const { nav } = usePermissions();
-  const [collapsed, setCollapsed] = useState(false);
+  const { isOpen, setIsOpen, isCollapsed, toggleCollapse } = useLayout();
   const [signingOut, setSigningOut] = useState(false);
 
   const { data: unread } = useQuery({
@@ -136,105 +137,119 @@ export const Sidebar = (): JSX.Element => {
   const primaryRole = session.roles[0] ?? 'viewer';
 
   return (
-    <aside
-      className={cn(
-        'fixed inset-y-0 left-0 z-30 flex flex-col bg-primary text-white shadow-sidebar',
-        'transition-[width] duration-200 ease-out',
-        collapsed ? 'w-16' : 'w-60',
+    <>
+      {/* Mobile Backdrop */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 z-20 bg-slate-900/40 lg:hidden"
+          onClick={() => setIsOpen(false)}
+          aria-hidden="true"
+        />
       )}
-    >
-      {/* Brand */}
-      <div className={cn('flex items-center justify-between px-4 h-16 border-b border-white/10', collapsed && 'justify-center px-0')}>
-        {!collapsed ? (
-          <Link href="/dashboard" className="flex flex-col leading-tight">
+
+      <aside
+        className={cn(
+          'fixed inset-y-0 left-0 z-30 flex flex-col bg-primary text-white shadow-sidebar',
+          'transition-all duration-200 ease-out',
+          isCollapsed ? 'lg:w-16' : 'lg:w-60',
+          isOpen ? 'translate-x-0 w-60' : '-translate-x-full lg:translate-x-0',
+        )}
+      >
+        {/* Brand */}
+        <div className={cn('flex items-center justify-between px-4 h-16 border-b border-white/10', isCollapsed && 'lg:justify-center lg:px-0')}>
+          {!isCollapsed ? (
+            <Link href="/dashboard" className="flex flex-col leading-tight">
+              <span className="text-lg font-bold tracking-tight">GBB</span>
+              <span className="text-[10px] font-semibold tracking-widest text-accent uppercase">
+                IAMS
+              </span>
+            </Link>
+          ) : (
+            <Link href="/dashboard" className="text-lg font-bold tracking-tight lg:block hidden">
+              GBB
+            </Link>
+          )}
+          {/* Mobile brand (always expanded display when visible on mobile) */}
+          <Link href="/dashboard" className="flex flex-col leading-tight lg:hidden">
             <span className="text-lg font-bold tracking-tight">GBB</span>
             <span className="text-[10px] font-semibold tracking-widest text-accent uppercase">
               IAMS
             </span>
           </Link>
-        ) : (
-          <Link href="/dashboard" className="text-lg font-bold tracking-tight">
-            GBB
-          </Link>
-        )}
-      </div>
+        </div>
 
-      {/* Nav */}
-      <nav className="flex-1 overflow-y-auto py-3 scrollbar-thin">
-        <ul className="space-y-0.5 px-2">
-          {visibleNav.map((item, i) => {
-            if (item.type === 'divider') {
+        {/* Nav */}
+        <nav className="flex-1 overflow-y-auto py-3 scrollbar-thin">
+          <ul className="space-y-0.5 px-2">
+            {visibleNav.map((item, i) => {
+              if (item.type === 'divider') {
+                return (
+                  <li key={`div-${i}`} className="px-2 pt-4 pb-1">
+                    {!isCollapsed && item.label && (
+                      <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
+                        {item.label}
+                      </span>
+                    )}
+                    {((isCollapsed && !item.label) || (!item.label)) && (
+                      <div className="border-t border-white/10" />
+                    )}
+                  </li>
+                );
+              }
+
+              const Icon = item.icon;
+              const active = isActive(item);
+              const unreadCount =
+                item.badgeKey === 'notifications' ? (unread?.unread ?? 0) : 0;
+
               return (
-                <li key={`div-${i}`} className="px-2 pt-4 pb-1">
-                  {!collapsed && item.label && (
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
-                      {item.label}
-                    </span>
-                  )}
-                  {(collapsed || !item.label) && (
-                    <div className="border-t border-white/10" />
-                  )}
-                </li>
-              );
-            }
-
-            const Icon = item.icon;
-            const active = isActive(item);
-            const unreadCount =
-              item.badgeKey === 'notifications' ? (unread?.unread ?? 0) : 0;
-
-            return (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  className={cn(
-                    'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                    active
-                      ? 'bg-white text-primary'
-                      : 'text-white/85 hover:bg-white/10 hover:text-white',
-                    collapsed && 'justify-center px-0',
-                  )}
-                  title={collapsed ? item.label : undefined}
-                >
-                  {active && !collapsed && (
-                    <span
-                      className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent"
+                <li key={item.href}>
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                      active
+                        ? 'bg-white text-primary'
+                        : 'text-white/85 hover:bg-white/10 hover:text-white',
+                      isCollapsed && 'lg:justify-center lg:px-0',
+                    )}
+                    title={isCollapsed ? item.label : undefined}
+                  >
+                    {active && !isCollapsed && (
+                      <span
+                        className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent lg:block hidden"
+                        aria-hidden
+                      />
+                    )}
+                    <Icon
+                      className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-white')}
                       aria-hidden
                     />
-                  )}
-                  <Icon
-                    className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-white')}
-                    aria-hidden
-                  />
-                  {!collapsed && (
-                    <>
-                      <span className="flex-1 truncate">{item.label}</span>
-                      {item.comingSoon && (
-                        <span className="text-[9px] font-semibold uppercase tracking-wide text-white/50">
-                          Soon
-                        </span>
-                      )}
-                      {!item.comingSoon && unreadCount > 0 && (
-                        <span className="inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold">
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                      )}
-                    </>
-                  )}
-                  {collapsed && unreadCount > 0 && (
-                    <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent" />
-                  )}
-                </Link>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+                    {/* Always show text on mobile, hide only on desktop collapsed */}
+                    <span className={cn('flex-1 truncate', isCollapsed && 'lg:hidden')}>{item.label}</span>
+                    {item.comingSoon && (
+                      <span className={cn('text-[9px] font-semibold uppercase tracking-wide text-white/50', isCollapsed && 'lg:hidden')}>
+                        Soon
+                      </span>
+                    )}
+                    {!item.comingSoon && unreadCount > 0 && (
+                      <span className={cn('inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold', isCollapsed && 'lg:hidden')}>
+                        {unreadCount > 99 ? '99+' : unreadCount}
+                      </span>
+                    )}
+                    {isCollapsed && unreadCount > 0 && (
+                      <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
+                    )}
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </nav>
 
-      {/* User block */}
-      <div className="border-t border-white/10 px-3 py-3">
-        {!collapsed ? (
-          <div className="flex items-center gap-3">
+        {/* User block */}
+        <div className="border-t border-white/10 px-3 py-3">
+          <div className={cn('flex items-center gap-3', isCollapsed && 'lg:hidden')}>
             <Avatar initials={initials} tone="green" size="sm" />
             <div className="min-w-0 flex-1">
               <p className="truncate text-xs font-semibold">
@@ -254,39 +269,41 @@ export const Sidebar = (): JSX.Element => {
               <LogOut className="h-4 w-4" />
             </button>
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-2">
-            <Avatar initials={initials} tone="green" size="sm" />
-            <button
-              type="button"
-              onClick={onLogout}
-              disabled={signingOut}
-              aria-label="Sign out"
-              className="rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50"
-            >
-              <LogOut className="h-4 w-4" />
-            </button>
-          </div>
-        )}
 
-        <button
-          type="button"
-          onClick={() => setCollapsed((c) => !c)}
-          className={cn(
-            'mt-3 flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-[11px] font-medium text-white/60 hover:bg-white/10 hover:text-white',
-            'lg:flex hidden',
+          {isCollapsed && (
+            <div className="flex-col items-center gap-2 lg:flex hidden">
+              <Avatar initials={initials} tone="green" size="sm" />
+              <button
+                type="button"
+                onClick={onLogout}
+                disabled={signingOut}
+                aria-label="Sign out"
+                className="rounded-md p-1.5 text-white/70 hover:bg-white/10 hover:text-white disabled:opacity-50"
+              >
+                <LogOut className="h-4 w-4" />
+              </button>
+            </div>
           )}
-        >
-          {collapsed ? (
-            <ChevronsRight className="h-3.5 w-3.5" />
-          ) : (
-            <>
-              <ChevronsLeft className="h-3.5 w-3.5" />
-              <span>Collapse</span>
-            </>
-          )}
-        </button>
-      </div>
-    </aside>
+
+          <button
+            type="button"
+            onClick={toggleCollapse}
+            className={cn(
+              'mt-3 flex w-full items-center justify-center gap-2 rounded-md py-1.5 text-[11px] font-medium text-white/60 hover:bg-white/10 hover:text-white',
+              'lg:flex hidden',
+            )}
+          >
+            {isCollapsed ? (
+              <ChevronsRight className="h-3.5 w-3.5" />
+            ) : (
+              <>
+                <ChevronsLeft className="h-3.5 w-3.5" />
+                <span>Collapse</span>
+              </>
+            )}
+          </button>
+        </div>
+      </aside>
+    </>
   );
 };

@@ -145,7 +145,7 @@ export default function RiskDetailPage(): JSX.Element {
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
           <CardHeader title="Risk profile" />
-          <dl className="grid grid-cols-2 gap-4">
+          <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Score</dt>
               <dd className="mt-1">

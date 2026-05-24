@@ -197,7 +197,7 @@ export default function LogsPage(): JSX.Element {
       >
         {selected && (
           <div className="space-y-4 text-xs">
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <KV label="Action" value={humanizeStatus(selected.action)} />
               <KV label="Module" value={selected.module} />
               <KV label="Status" value={<StatusBadge status={selected.status} />} />

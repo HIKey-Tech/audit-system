@@ -121,7 +121,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
           </Select>
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Audit type" required error={errors.auditType?.message}>
             <Select error={errors.auditType?.message} {...register('auditType')}>
               <option value="it">IT</option>
@@ -140,7 +140,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
           </FormField>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Planned start" required error={errors.plannedStartDate?.message}>
             <Input type="date" error={errors.plannedStartDate?.message} {...register('plannedStartDate')} />
           </FormField>

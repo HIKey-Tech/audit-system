@@ -177,7 +177,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
       }
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="First Name" required error={errors.firstName?.message}>
             <Input
               placeholder="Chidi"
@@ -204,7 +204,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
           />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Job Title" error={errors.jobTitle?.message}>
             <Input
               placeholder="Internal Auditor"

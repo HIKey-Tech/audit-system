@@ -86,7 +86,7 @@ export const NewAssessmentSlideOver = ({ open, onClose, riskId }: Props): JSX.El
       }
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Likelihood" required error={errors.likelihood?.message}>
             <Select error={errors.likelihood?.message} {...register('likelihood')}>
               {[1, 2, 3, 4, 5].map((n) => (

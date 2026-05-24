@@ -150,7 +150,7 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
           <Textarea rows={3} placeholder="Short description of the entity" {...register('description')} />
         </FormField>
 
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Category" required error={errors.category?.message}>
             <Select error={errors.category?.message} {...register('category')}>
               <option value="department">Department</option>

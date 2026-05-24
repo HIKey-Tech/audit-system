@@ -18,8 +18,8 @@ interface TabsProps {
 }
 
 export const Tabs = ({ tabs, active, onChange, className }: TabsProps): JSX.Element => (
-  <div className={cn('border-b border-border', className)}>
-    <nav className="-mb-px flex flex-wrap gap-x-1" role="tablist">
+  <div className={cn('border-b border-border overflow-x-auto scrollbar-none', className)}>
+    <nav className="-mb-px flex gap-x-1 whitespace-nowrap min-w-max" role="tablist">
       {tabs.map((t) => {
         const isActive = active === t.key;
         return (
