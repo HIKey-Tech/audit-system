@@ -4,7 +4,7 @@ import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
-import { assertHasRole, RISK_ADMIN_ROLES } from '../../../utility/risk.utility';
+import { assertHasPermission, RISK_ADMIN_ROLES } from '../../../utility/risk.utility';
 import {
   CreateRiskCategoryRequestDto,
   RiskCategoryQueryDto,
@@ -21,7 +21,7 @@ export class CategoryService implements ICategoryService {
     dto: CreateRiskCategoryRequestDto,
     actor: RiskActorContext,
   ): Promise<RiskCategoryResponseDto> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk_category:write');
 
     const existing = await prisma.risk_Category.findUnique({
       where: { name: dto.name },
@@ -57,7 +57,7 @@ export class CategoryService implements ICategoryService {
     dto: UpdateRiskCategoryRequestDto,
     actor: RiskActorContext,
   ): Promise<RiskCategoryResponseDto> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk_category:write');
     await this._assertCategoryExists(id);
 
     const category = await prisma.risk_Category.update({
@@ -83,7 +83,7 @@ export class CategoryService implements ICategoryService {
   }
 
   async deactivateCategory(id: string, actor: RiskActorContext): Promise<void> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk_category:delete');
     await this._assertCategoryExists(id);
 
     await prisma.risk_Category.update({

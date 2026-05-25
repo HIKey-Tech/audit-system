@@ -10,7 +10,10 @@ export declare class DocumentController {
     private _getDownloadUrl;
     private _delete;
     private _listByEntity;
+    private _list;
     private _serve;
+    private _getFileById;
+    private _sendFile;
     private _uploadNewVersion;
     private _listVersions;
     private _getVersion;

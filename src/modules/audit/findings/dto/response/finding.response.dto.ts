@@ -4,6 +4,7 @@ import { FollowUpResponseDto, mapFollowUpToResponse } from '../../../follow-up/d
 export interface FindingResponseDto {
   id: string;
   engagementId: string;
+  engagementReference?: string;
   workingPaperId: string | null;
   title: string;
   description: string;
@@ -13,9 +14,11 @@ export interface FindingResponseDto {
   riskImplication: string;
   recommendation: string;
   auditeeId: string;
+  auditeeName?: string;
   status: string;
   dueDate: string;
   createdById: string;
+  createdByName?: string;
   closedById: string | null;
   closedAt: string | null;
   createdAt: string;
@@ -24,9 +27,21 @@ export interface FindingResponseDto {
   followUp?: FollowUpResponseDto | null;
 }
 
+const formatUserName = (user?: {
+  display_name: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+}): string | undefined => {
+  if (!user) return undefined;
+  const name = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+  return name || user.email;
+};
+
 export const mapFindingToResponse = (finding: {
   id: string;
   engagement_id: string;
+  engagement?: { reference_number: string };
   working_paper_id: string | null;
   title: string;
   description: string;
@@ -36,9 +51,11 @@ export const mapFindingToResponse = (finding: {
   risk_implication: string;
   recommendation: string;
   auditee_id: string;
+  auditee?: Parameters<typeof formatUserName>[0];
   status: string;
   due_date: Date;
   created_by_id: string;
+  created_by?: Parameters<typeof formatUserName>[0];
   closed_by_id: string | null;
   closed_at: Date | null;
   created_at: Date;
@@ -48,6 +65,7 @@ export const mapFindingToResponse = (finding: {
 }): FindingResponseDto => ({
   id: finding.id,
   engagementId: finding.engagement_id,
+  engagementReference: finding.engagement?.reference_number,
   workingPaperId: finding.working_paper_id,
   title: finding.title,
   description: finding.description,
@@ -57,9 +75,11 @@ export const mapFindingToResponse = (finding: {
   riskImplication: finding.risk_implication,
   recommendation: finding.recommendation,
   auditeeId: finding.auditee_id,
+  auditeeName: formatUserName(finding.auditee),
   status: finding.status,
   dueDate: finding.due_date.toISOString(),
   createdById: finding.created_by_id,
+  createdByName: formatUserName(finding.created_by),
   closedById: finding.closed_by_id,
   closedAt: finding.closed_at?.toISOString() ?? null,
   createdAt: finding.created_at.toISOString(),

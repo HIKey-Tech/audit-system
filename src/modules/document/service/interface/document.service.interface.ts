@@ -12,6 +12,7 @@ import {
   CreateTemplateRequestDto,
   UpdateTemplateRequestDto,
   TemplateQueryDto,
+  DocumentListQueryDto,
 } from '../../dto/request/document.request.dto';
 
 export interface IDocumentService {
@@ -20,8 +21,12 @@ export interface IDocumentService {
   getById(id: string): Promise<DocumentResponseDto>;
   getDownloadUrl(id: string): Promise<string>;
   delete(id: string, actorId: string): Promise<void>;
+  list(
+    query: DocumentListQueryDto,
+  ): Promise<{ documents: DocumentResponseDto[]; meta: PaginationMeta }>;
   listByEntity(entityType: string, entityId: string): Promise<DocumentResponseDto[]>;
   serveFile(storedName: string): Promise<ServedFileDto>;
+  getFileById(id: string): Promise<ServedFileDto>;
 
   // ──────────── Versioning ────────────
   uploadNewVersion(
@@ -70,4 +75,12 @@ export interface IDocumentService {
     category: string,
     data: Record<string, unknown>,
   ): Promise<Buffer>;
+
+  // ──────────── Retention ────────────
+  /**
+   * Prune old document versions when version_retention is enabled in system config.
+   * Reads the `version_retention` config, keeps the N most recent versions per document,
+   * deletes older versions from storage and DB. No-op when disabled (default).
+   */
+  pruneOldVersions(): Promise<{ prunedCount: number; failedCount: number }>;
 }

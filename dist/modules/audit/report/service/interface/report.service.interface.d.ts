@@ -1,5 +1,6 @@
+import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
-import { UpdateReportRequestDto } from '../../dto/request/report.request.dto';
+import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto } from '../../dto/response/report.response.dto';
 export interface IReportService {
     generateReport(engagementId: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
@@ -9,6 +10,11 @@ export interface IReportService {
     rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto>;
     issueReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
     getReport(engagementId: string): Promise<ReportResponseDto>;
+    getReportById(id: string): Promise<ReportResponseDto>;
+    listReports(query: ReportQueryDto): Promise<{
+        reports: ReportResponseDto[];
+        meta: PaginationMeta;
+    }>;
     exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile>;
 }
 //# sourceMappingURL=report.service.interface.d.ts.map

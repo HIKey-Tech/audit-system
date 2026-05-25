@@ -4,6 +4,7 @@ import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   ExportReportQuerySchema,
+  ReportQuerySchema,
   RejectReportRequestSchema,
   UpdateReportRequestSchema,
 } from '../dto/request/report.request.dto';
@@ -33,6 +34,20 @@ export class ReportController {
      * @access Private - audit:read
      */
     this.router.get('/engagements/:id/report', requirePermission('report:read'), this._getReport.bind(this));
+
+    /**
+     * @route  GET /audit/reports
+     * @desc   List audit reports
+     * @access Private - audit:read
+     */
+    this.router.get('/reports', requirePermission('report:read'), validate(ReportQuerySchema, 'query'), this._listReports.bind(this));
+
+    /**
+     * @route  GET /audit/reports/:id
+     * @desc   Get audit report by id
+     * @access Private - audit:read
+     */
+    this.router.get('/reports/:id', requirePermission('report:read'), this._getReportById.bind(this));
 
     /**
      * @route  PUT /audit/reports/:id
@@ -135,6 +150,24 @@ export class ReportController {
     try {
       const report = await this.reportService.getReport(req.params.id);
       res.status(200).json(buildResponse(report));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getReportById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const report = await this.reportService.getReportById(req.params.id);
+      res.status(200).json(buildResponse(report));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listReports(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { reports, meta } = await this.reportService.listReports(req.query as never);
+      res.status(200).json(buildResponse(reports, 'Audit reports retrieved', meta));
     } catch (err) {
       next(err);
     }

@@ -26,6 +26,11 @@ export interface UpdateRoleDto {
 
 export type PermissionsGrouped = Record<string, Array<PermissionDto & { description: string | null }>>;
 
+export interface PermissionGroupDto {
+  module: string;
+  permissions: Array<PermissionDto & { description: string | null }>;
+}
+
 export const rolesApi = {
   list: () => api.get<RoleListDto[]>('/settings/roles'),
   get: (id: string) => api.get<RoleListDto>(`/settings/roles/${id}`),
@@ -38,7 +43,13 @@ export const rolesApi = {
 };
 
 export const permissionsApi = {
-  listGrouped: () => api.get<PermissionsGrouped>('/settings/permissions'),
+  listGrouped: async (): Promise<PermissionsGrouped> => {
+    const data = await api.get<PermissionGroupDto[]>('/settings/permissions');
+    return data.reduce<PermissionsGrouped>((acc, item) => {
+      acc[item.module] = item.permissions;
+      return acc;
+    }, {});
+  },
 };
 
 // ============================================================

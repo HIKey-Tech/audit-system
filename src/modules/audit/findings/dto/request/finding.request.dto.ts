@@ -32,10 +32,15 @@ export const UpdateFindingStatusRequestSchema = z.object({
 });
 
 export const FindingQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().trim().optional(),
   severity: z.nativeEnum(FindingSeverity).optional(),
   status: z.nativeEnum(FindingStatus).optional(),
   category: z.nativeEnum(FindingCategory).optional(),
   auditeeId: z.string().uuid().optional(),
+  sortBy: z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
 export type CreateFindingRequestDto = z.infer<typeof CreateFindingRequestSchema>;

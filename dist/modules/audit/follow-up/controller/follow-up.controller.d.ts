@@ -7,6 +7,7 @@ export declare class FollowUpController {
     private _registerRoutes;
     private _submitManagementResponse;
     private _submitRemediationEvidence;
+    private _uploadRemediationEvidence;
     private _verifyRemediation;
     private _getFollowUp;
     private _listPendingFollowUps;

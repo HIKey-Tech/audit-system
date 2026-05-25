@@ -2,8 +2,11 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../shared/errors/app.error';
+import { config } from '../../../../shared/config/app.config';
 import { logger } from '../../../../shared/utils/logger.util';
 import { PaginationMeta, parsePagination, buildPaginationMeta } from '../../../../shared/types/api-response.type';
+import { INotificationService } from '../../../messaging/service/interface/notification.service.interface';
+import { notificationService } from '../../../messaging/service/implementation/notification.service';
 import {
   IUserService,
   AzureAdProfile,
@@ -28,11 +31,30 @@ import {
   mapRoleToResponse,
   mapPermissionToResponse,
 } from '../../dto/response/user.response.dto';
-import { hashPassword, comparePassword } from '../../utility/token.utility';
+import { hashPassword, comparePassword, generateTemporaryPassword } from '../../utility/token.utility';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
 
+const escapeHtml = (value: string): string =>
+  value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case '&':
+        return '&amp;';
+      case '<':
+        return '&lt;';
+      case '>':
+        return '&gt;';
+      case '"':
+        return '&quot;';
+      case "'":
+        return '&#39;';
+      default:
+        return char;
+    }
+  });
 
 export class UserService implements IUserService {
+  constructor(private readonly notifier: INotificationService = notificationService) {}
+
   async createUser(
     dto: CreateUserRequestDto,
     actorId: string,
@@ -53,9 +75,8 @@ export class UserService implements IUserService {
       throw AppError.badRequest('One or more role IDs are invalid');
     }
 
-    const password_hash = dto.password
-      ? await hashPassword(dto.password)
-      : null;
+    const initialPassword = dto.password ?? generateTemporaryPassword();
+    const password_hash = await hashPassword(initialPassword);
 
     const user = await prisma.user.create({
       data: {
@@ -66,6 +87,7 @@ export class UserService implements IUserService {
         phone: dto.phone,
         department: dto.department,
         job_title: dto.jobTitle,
+        ...(dto.skills && { skills: JSON.stringify(dto.skills) }),
         password_hash,
         is_super_admin: assignedRoles.some((role) => role.name === 'super_admin'),
         ...(dto.roleIds?.length
@@ -83,6 +105,7 @@ export class UserService implements IUserService {
     }) as UserWithRoles;
 
     logger.info('User created', { userId: user.id, actorId });
+    await this._sendOnboardingEmail(user, initialPassword);
     return mapUserToResponse(user);
   }
 
@@ -355,7 +378,7 @@ export class UserService implements IUserService {
         ...(dto.phone !== undefined && { phone: dto.phone }),
         ...(dto.department !== undefined && { department: dto.department }),
         ...(dto.jobTitle !== undefined && { job_title: dto.jobTitle }),
-        ...(dto.isActive !== undefined && { is_active: dto.isActive }),
+        ...(dto.skills !== undefined && { skills: dto.skills ? JSON.stringify(dto.skills) : null }),
       },
       include: userWithRolesInclude,
     }) as UserWithRoles;
@@ -364,8 +387,36 @@ export class UserService implements IUserService {
     return mapUserToResponse(user);
   }
 
+  async setUserActiveStatus(
+    id: string,
+    isActive: boolean,
+    actorId: string,
+  ): Promise<UserResponseDto> {
+    await this._assertUserExists(id);
+
+    if (id === actorId && !isActive) {
+      throw AppError.badRequest('You cannot deactivate your own account');
+    }
+
+    const user = await prisma.user.update({
+      where: { id },
+      data: { is_active: isActive },
+      include: userWithRolesInclude,
+    }) as UserWithRoles;
+
+    logger.info(isActive ? 'User activated' : 'User deactivated', {
+      userId: id,
+      actorId,
+    });
+    return mapUserToResponse(user);
+  }
+
   async deleteUser(id: string, actorId: string): Promise<void> {
     await this._assertUserExists(id);
+
+    if (id === actorId) {
+      throw AppError.badRequest('You cannot delete your own account');
+    }
 
     await prisma.user.update({
       where: { id },
@@ -560,6 +611,43 @@ export class UserService implements IUserService {
     await prisma.user.update({
       where: { id: userId },
       data: { is_super_admin: Boolean(superAdminRole) },
+    });
+  }
+
+  private async _sendOnboardingEmail(
+    user: UserWithRoles,
+    temporaryPassword: string,
+  ): Promise<void> {
+    const displayName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+    const loginUrl = `${config.app.url.replace(/\/$/, '')}/login`;
+    const appName = config.app.name;
+
+    await this.notifier.sendEmail({
+      to: user.email,
+      subject: `Welcome to ${appName}`,
+      template: 'user-onboarding',
+      text: [
+        `Hello ${displayName},`,
+        '',
+        `Your ${appName} account has been created.`,
+        '',
+        `Login URL: ${loginUrl}`,
+        `Email: ${user.email}`,
+        `Temporary password: ${temporaryPassword}`,
+        '',
+        'Please sign in and change your password immediately.',
+      ].join('\n'),
+      html: [
+        `<p>Hello ${escapeHtml(displayName)},</p>`,
+        `<p>Your ${escapeHtml(appName)} account has been created.</p>`,
+        '<p>Use the credentials below to sign in:</p>',
+        '<ul>',
+        `<li><strong>Login URL:</strong> <a href="${escapeHtml(loginUrl)}">${escapeHtml(loginUrl)}</a></li>`,
+        `<li><strong>Email:</strong> ${escapeHtml(user.email)}</li>`,
+        `<li><strong>Temporary password:</strong> ${escapeHtml(temporaryPassword)}</li>`,
+        '</ul>',
+        '<p>Please sign in and change your password immediately.</p>',
+      ].join(''),
     });
   }
 }

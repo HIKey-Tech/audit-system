@@ -4,11 +4,14 @@ import {
   AddPlanItemRequestDto,
   CreatePlanRequestDto,
   PlanQueryDto,
+  UpdatePlanRequestDto,
 } from '../../dto/request/planning.request.dto';
 import { PlanResponseDto } from '../../dto/response/planning.response.dto';
 
 export interface IPlanningService {
   createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto>;
+  updatePlan(planId: string, dto: UpdatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto>;
+  deletePlan(planId: string, actor: ActorContext): Promise<void>;
   addPlanItem(planId: string, dto: AddPlanItemRequestDto, actor: ActorContext): Promise<PlanResponseDto>;
   removePlanItem(planId: string, itemId: string, actor: ActorContext): Promise<void>;
   submitPlanForApproval(planId: string, actor: ActorContext): Promise<PlanResponseDto>;

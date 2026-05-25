@@ -60,6 +60,12 @@ export interface IUserService {
     actorId: string,
   ): Promise<UserResponseDto>;
 
+  setUserActiveStatus(
+    id: string,
+    isActive: boolean,
+    actorId: string,
+  ): Promise<UserResponseDto>;
+
   deleteUser(id: string, actorId: string): Promise<void>;
 
   assignRoles(

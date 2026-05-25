@@ -1,29 +1,13 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.daysBetween = exports.daysFromNow = exports.startOfNextMonth = exports.startOfCurrentMonth = exports.startOfCurrentYear = exports.isRestrictedAuditee = exports.isRestrictedAuditor = exports.hasAdminLevelRole = exports.AUDITEE_ROLE = exports.DASHBOARD_AUDITOR_ROLES = exports.DASHBOARD_ADMIN_ROLES = void 0;
-// Roles whose holder always sees data across the entire organisation.
-exports.DASHBOARD_ADMIN_ROLES = [
-    'super_admin',
-    'audit_admin',
-    'audit_manager',
-    'director',
-    'cae',
-];
-exports.DASHBOARD_AUDITOR_ROLES = [
-    'audit_lead',
-    'auditor',
-];
-exports.AUDITEE_ROLE = 'auditee';
-const hasAdminLevelRole = (roles) => roles.some((role) => exports.DASHBOARD_ADMIN_ROLES.includes(role));
-exports.hasAdminLevelRole = hasAdminLevelRole;
+exports.daysBetween = exports.daysFromNow = exports.startOfNextMonth = exports.startOfCurrentMonth = exports.startOfCurrentYear = exports.isRestrictedAuditee = exports.isRestrictedAuditor = void 0;
 // True when the user must be scoped to engagements they lead.
-// Admin-level roles always override the scoping.
-const isRestrictedAuditor = (roles) => !(0, exports.hasAdminLevelRole)(roles)
-    && roles.some((role) => exports.DASHBOARD_AUDITOR_ROLES.includes(role));
+// Having engagement:read_all overrides the scoping.
+const isRestrictedAuditor = (permissions) => !permissions.includes('engagement:read_all') && permissions.includes('engagement:read');
 exports.isRestrictedAuditor = isRestrictedAuditor;
 // True when the user must be scoped to findings against them.
-// Admin-level roles always override the scoping.
-const isRestrictedAuditee = (roles) => !(0, exports.hasAdminLevelRole)(roles) && roles.includes(exports.AUDITEE_ROLE);
+// Having finding:read_all overrides the scoping.
+const isRestrictedAuditee = (permissions) => !permissions.includes('finding:read_all') && (permissions.includes('followup:respond') || !permissions.includes('engagement:read'));
 exports.isRestrictedAuditee = isRestrictedAuditee;
 const startOfCurrentYear = (now = new Date()) => new Date(now.getFullYear(), 0, 1);
 exports.startOfCurrentYear = startOfCurrentYear;

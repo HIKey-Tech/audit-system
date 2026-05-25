@@ -11,6 +11,7 @@ exports.CreateUserRequestSchema = zod_1.z.object({
     phone: zod_1.z.string().max(20).optional(),
     department: zod_1.z.string().max(100).optional(),
     jobTitle: zod_1.z.string().max(100).optional(),
+    skills: zod_1.z.array(zod_1.z.string().trim().min(1, 'Skill tag must not be empty').max(100)).max(30, 'Maximum 30 skill tags').optional(),
     password: zod_1.z
         .string()
         .min(8)
@@ -25,7 +26,7 @@ exports.UpdateUserRequestSchema = zod_1.z.object({
     phone: zod_1.z.string().max(20).optional(),
     department: zod_1.z.string().max(100).optional(),
     jobTitle: zod_1.z.string().max(100).optional(),
-    isActive: zod_1.z.boolean().optional(),
+    skills: zod_1.z.array(zod_1.z.string().trim().min(1, 'Skill tag must not be empty').max(100)).max(30, 'Maximum 30 skill tags').optional(),
 });
 exports.AssignRoleRequestSchema = zod_1.z.object({
     roleIds: zod_1.z.array(zod_1.z.string().uuid()).min(1),

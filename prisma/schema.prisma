@@ -24,6 +24,7 @@ model User {
   phone          String?
   department     String?
   job_title      String?
+  skills         String?   @db.NVarChar(Max) // JSON array of skill tags e.g. ["ISO 27001","ITGC"]
   is_active      Boolean   @default(true)
   is_system_user Boolean   @default(false)
   is_super_admin Boolean   @default(false)

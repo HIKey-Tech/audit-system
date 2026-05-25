@@ -3,13 +3,16 @@
 export interface DocumentResponseDto {
   id: string;
   originalName: string;
+  fileName: string;
   mimeType: string;
+  fileType: string;
   fileSize: number;
   storageProvider: string;
   module: string;
   entityType: string | null;
   entityId: string | null;
   uploadedById: string;
+  uploadedByName: string;
   versionNumber: number;
   createdAt: string;
   downloadUrl?: string;
@@ -66,22 +69,32 @@ export const mapDocumentToResponse = (
     uploaded_by_id: string;
     version_number: number;
     created_at: Date;
+    uploaded_by?: { display_name: string | null; first_name: string; last_name: string } | null;
   },
   downloadUrl?: string,
-): DocumentResponseDto => ({
-  id: doc.id,
-  originalName: doc.original_name,
-  mimeType: doc.mime_type,
-  fileSize: doc.file_size,
-  storageProvider: doc.storage_provider,
-  module: doc.module,
-  entityType: doc.entity_type,
-  entityId: doc.entity_id,
-  uploadedById: doc.uploaded_by_id,
-  versionNumber: doc.version_number,
-  createdAt: doc.created_at.toISOString(),
-  downloadUrl,
-});
+): DocumentResponseDto => {
+  const uploader = doc.uploaded_by;
+  const uploadedByName = uploader
+    ? uploader.display_name?.trim() || `${uploader.first_name} ${uploader.last_name}`.trim()
+    : '';
+  return {
+    id: doc.id,
+    originalName: doc.original_name,
+    fileName: doc.original_name,
+    mimeType: doc.mime_type,
+    fileType: doc.mime_type,
+    fileSize: doc.file_size,
+    storageProvider: doc.storage_provider,
+    module: doc.module,
+    entityType: doc.entity_type,
+    entityId: doc.entity_id,
+    uploadedById: doc.uploaded_by_id,
+    uploadedByName,
+    versionNumber: doc.version_number,
+    createdAt: doc.created_at.toISOString(),
+    downloadUrl,
+  };
+};
 
 // Mapper: Prisma Document_Version → Response DTO
 export const mapVersionToResponse = (

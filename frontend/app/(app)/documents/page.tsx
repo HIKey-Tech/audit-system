@@ -1,47 +1,75 @@
 'use client';
 
-import { useState, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, FolderOpen, Download, History } from 'lucide-react';
+import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Input, Select } from '@/components/ui/Input';
-import { EmptyState } from '@/components/ui/EmptyState';
-import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge } from '@/components/ui/Badge';
-import { SlideOver } from '@/components/ui/SlideOver';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { Table, type Column } from '@/components/ui/Table';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { documentsApi } from '@/lib/api/documents';
-import { formatDate, formatFileSize } from '@/lib/utils/format';
-import { humanizeStatus } from '@/lib/utils/status';
-import type { DocumentDto, DocumentVersionDto } from '@/lib/types/domain';
+import { formatDate } from '@/lib/utils/format';
+import { usePermission } from '@/hooks/usePermission';
+import type { DocumentDto } from '@/lib/types/domain';
 
-export default function DocumentsPage(): JSX.Element {
+const ENTITY_LABELS: Record<string, string> = {
+  audit_engagement: 'Engagement',
+  audit_working_paper: 'Working Paper',
+  audit_finding: 'Finding',
+  audit_evidence: 'Evidence',
+};
+
+const extensionOf = (fileName: string): string => {
+  const dot = fileName.lastIndexOf('.');
+  if (dot === -1 || dot === fileName.length - 1) return 'FILE';
+  return fileName.slice(dot + 1).toUpperCase();
+};
+
+const linkedToLabel = (entityType: string | null): string => {
+  if (!entityType) return 'Standalone';
+  return ENTITY_LABELS[entityType] ?? entityType;
+};
+
+export default function DocumentsPage(): JSX.Element | null {
+  const router = useRouter();
   const qc = useQueryClient();
+  const canRead = usePermission('document:read');
+  const canWrite = usePermission('document:write');
+  const canDelete = usePermission('document:delete');
+
+  const [page, setPage] = useState(1);
+  const [search, setSearch] = useState('');
   const [entityType, setEntityType] = useState('');
-  const [entityId, setEntityId] = useState('');
-  const [versionsOf, setVersionsOf] = useState<DocumentDto | null>(null);
+  const [pendingDelete, setPendingDelete] = useState<DocumentDto | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
 
+  useEffect(() => {
+    if (!canRead) {
+      router.replace('/dashboard');
+    }
+  }, [canRead, router]);
+
   const list = useQuery({
-    queryKey: ['documents', entityType, entityId],
-    queryFn: () => {
-      if (entityType && entityId) {
-        return documentsApi.listByEntity(entityType, entityId);
-      }
-      return Promise.resolve([] as DocumentDto[]);
-    },
-    enabled: Boolean(entityType && entityId),
+    queryKey: ['documents', { page, search, entityType }],
+    queryFn: () =>
+      documentsApi.list({
+        page,
+        pageSize: 20,
+        search: search.trim() || undefined,
+        entityType: entityType || undefined,
+      }),
+    enabled: canRead,
   });
 
   const upload = useMutation({
-    mutationFn: (file: File) =>
-      documentsApi.upload(file, {
-        entityType: entityType || undefined,
-        entityId: entityId || undefined,
-      }),
+    mutationFn: (file: File) => documentsApi.upload(file),
     onSuccess: () => {
       toast.success('Document uploaded');
       qc.invalidateQueries({ queryKey: ['documents'] });
@@ -49,15 +77,110 @@ export default function DocumentsPage(): JSX.Element {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to upload'),
   });
 
+  const remove = useMutation({
+    mutationFn: (id: string) => documentsApi.remove(id),
+    onSuccess: () => {
+      toast.success('Document deleted');
+      setPendingDelete(null);
+      qc.invalidateQueries({ queryKey: ['documents'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to delete'),
+  });
+
+  const download = useMutation({
+    mutationFn: ({ id, fileName }: { id: string; fileName: string }) =>
+      documentsApi.download(id, fileName),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to download'),
+  });
+
+  if (!canRead) return null;
+
+  const columns: Column<DocumentDto>[] = [
+    {
+      key: 'fileName',
+      header: 'File Name',
+      render: (d) => (
+        <div className="min-w-0">
+          <p className="truncate font-medium text-text-primary">{d.fileName}</p>
+          {d.versionNumber > 1 && (
+            <p className="text-[11px] text-text-muted">Version {d.versionNumber}</p>
+          )}
+        </div>
+      ),
+    },
+    {
+      key: 'type',
+      header: 'Type',
+      render: (d) => <Badge tone="gray">{extensionOf(d.fileName)}</Badge>,
+      width: '110px',
+    },
+    {
+      key: 'linkedTo',
+      header: 'Linked To',
+      render: (d) => (
+        <span className="text-text-secondary">{linkedToLabel(d.entityType)}</span>
+      ),
+      width: '160px',
+    },
+    {
+      key: 'uploadedBy',
+      header: 'Uploaded By',
+      render: (d) => (
+        <span className="text-text-secondary">{d.uploadedByName || '—'}</span>
+      ),
+      width: '180px',
+    },
+    {
+      key: 'date',
+      header: 'Date',
+      render: (d) => <span className="text-text-secondary">{formatDate(d.createdAt)}</span>,
+      width: '130px',
+    },
+    {
+      key: 'actions',
+      header: '',
+      align: 'right',
+      width: canDelete ? '170px' : '120px',
+      render: (d) => (
+        <div className="flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            leftIcon={<Download className="h-3.5 w-3.5" />}
+            isLoading={download.isPending && download.variables?.id === d.id}
+            onClick={() => download.mutate({ id: d.id, fileName: d.fileName })}
+          >
+            Download
+          </Button>
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              leftIcon={<Trash2 className="h-3.5 w-3.5" />}
+              onClick={() => setPendingDelete(d)}
+              aria-label={`Delete ${d.fileName}`}
+            />
+          )}
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
       <PageHeader
         title="Documents"
-        subtitle="Files attached to engagements, working papers, findings, and templates."
+        subtitle="All files uploaded across engagements, working papers, findings, and evidence."
         actions={
-          <Button leftIcon={<Upload className="h-4 w-4" />} onClick={() => inputRef.current?.click()}>
-            Upload Document
-          </Button>
+          canWrite ? (
+            <Button
+              leftIcon={<Upload className="h-4 w-4" />}
+              onClick={() => inputRef.current?.click()}
+              isLoading={upload.isPending}
+            >
+              Upload Document
+            </Button>
+          ) : null
         }
       />
       <input
@@ -72,133 +195,88 @@ export default function DocumentsPage(): JSX.Element {
       />
 
       <Card padded className="mb-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-          <div>
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-              Entity type
-            </label>
-            <Select
-              className="mt-1"
-              value={entityType}
-              onChange={(e) => setEntityType(e.target.value)}
-            >
-              <option value="">Select…</option>
-              <option value="audit_engagement">Engagement</option>
-              <option value="audit_working_paper">Working paper</option>
-              <option value="audit_finding">Finding</option>
-              <option value="audit_evidence">Evidence</option>
-              <option value="audit_report">Report</option>
-            </Select>
-          </div>
-          <div className="sm:col-span-2">
-            <label className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-              Entity ID
-            </label>
-            <Input
-              className="mt-1"
-              value={entityId}
-              onChange={(e) => setEntityId(e.target.value)}
-              placeholder="UUID of the parent entity"
-            />
-          </div>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-[1fr_220px]">
+          <Input
+            placeholder="Search by file name…"
+            leftIcon={<Search className="h-4 w-4" />}
+            value={search}
+            onChange={(e) => {
+              setSearch(e.target.value);
+              setPage(1);
+            }}
+          />
+          <Select
+            value={entityType}
+            onChange={(e) => {
+              setEntityType(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All entity types</option>
+            <option value="audit_engagement">Engagement</option>
+            <option value="audit_working_paper">Working Paper</option>
+            <option value="audit_finding">Finding</option>
+            <option value="audit_evidence">Evidence</option>
+          </Select>
         </div>
       </Card>
 
-      <Card padded={false}>
-        {!entityType || !entityId ? (
+      <Table<DocumentDto>
+        columns={columns}
+        data={list.data?.items}
+        rowKey={(d) => d.id}
+        isLoading={list.isLoading}
+        isError={list.isError}
+        onRetry={() => list.refetch()}
+        emptyState={
           <EmptyState
-            icon={<FolderOpen className="h-4 w-4" />}
-            title="Pick an entity to view its documents"
-            description="Documents are scoped to a parent entity. Choose the entity type and paste an ID to browse files."
-          />
-        ) : list.isLoading ? (
-          <div className="p-5 space-y-3">
-            <Skeleton className="h-12 w-full" />
-            <Skeleton className="h-12 w-full" />
-          </div>
-        ) : !list.data || list.data.length === 0 ? (
-          <EmptyState
-            icon={<FolderOpen className="h-4 w-4" />}
-            title="No documents on this entity"
-            description="Upload a file to attach it."
-          />
-        ) : (
-          <ul className="divide-y divide-border">
-            {list.data.map((d) => (
-              <li key={d.id} className="px-5 py-3 flex flex-wrap items-center gap-3">
-                <div className="min-w-0 flex-1">
-                  <p className="truncate text-sm font-medium text-text-primary">{d.fileName}</p>
-                  <p className="text-[11px] text-text-muted">
-                    {humanizeStatus(d.entityType ?? 'standalone')} · {formatFileSize(d.fileSize)} · {d.uploadedByName} · {formatDate(d.createdAt)}
-                  </p>
-                </div>
-                <Badge tone="gray">v{d.versionNumber}</Badge>
-                <a
-                  href={documentsApi.downloadUrl(d.id)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-                >
-                  <Download className="h-3.5 w-3.5" />
-                  Download
-                </a>
+            icon={<FileText className="h-4 w-4" />}
+            title="No documents yet"
+            description={
+              search || entityType
+                ? 'No documents match the current filters.'
+                : 'Upload a file to get started.'
+            }
+            action={
+              canWrite && !search && !entityType ? (
                 <Button
                   size="sm"
-                  variant="ghost"
-                  leftIcon={<History className="h-3.5 w-3.5" />}
-                  onClick={() => setVersionsOf(d)}
+                  leftIcon={<Upload className="h-3.5 w-3.5" />}
+                  onClick={() => inputRef.current?.click()}
+                  isLoading={upload.isPending}
                 >
-                  Versions
+                  Upload Document
                 </Button>
-              </li>
-            ))}
-          </ul>
-        )}
-      </Card>
+              ) : undefined
+            }
+          />
+        }
+        pagination={
+          list.data
+            ? {
+                page: list.data.meta.page,
+                pageSize: list.data.meta.pageSize,
+                total: list.data.meta.total,
+                onPageChange: setPage,
+              }
+            : undefined
+        }
+      />
 
-      <VersionsSlideOver document={versionsOf} onClose={() => setVersionsOf(null)} />
+      <ConfirmDialog
+        open={Boolean(pendingDelete)}
+        title="Delete document?"
+        description={
+          pendingDelete
+            ? `“${pendingDelete.fileName}” will be removed. This cannot be undone.`
+            : undefined
+        }
+        confirmLabel="Delete"
+        variant="danger"
+        isLoading={remove.isPending}
+        onConfirm={() => pendingDelete && remove.mutate(pendingDelete.id)}
+        onCancel={() => setPendingDelete(null)}
+      />
     </div>
   );
 }
-
-const VersionsSlideOver = ({
-  document,
-  onClose,
-}: {
-  document: DocumentDto | null;
-  onClose: () => void;
-}): JSX.Element => {
-  const versions = useQuery({
-    queryKey: ['documents', document?.id, 'versions'],
-    queryFn: () => documentsApi.listVersions(document!.id),
-    enabled: Boolean(document),
-  });
-
-  return (
-    <SlideOver
-      open={Boolean(document)}
-      onClose={onClose}
-      title="Version history"
-      description={document?.fileName}
-      width="lg"
-    >
-      {!document ? null : versions.isLoading ? (
-        <Skeleton className="h-12 w-full" />
-      ) : !versions.data || versions.data.length === 0 ? (
-        <p className="text-xs text-text-muted">No prior versions.</p>
-      ) : (
-        <ul className="divide-y divide-border rounded-md border border-border">
-          {(versions.data as DocumentVersionDto[]).map((v) => (
-            <li key={v.id} className="flex items-center justify-between gap-3 px-3 py-2 text-xs">
-              <div>
-                <p className="font-mono">v{v.versionNumber}</p>
-                <p className="text-text-muted">{v.uploadedByName} · {formatDate(v.createdAt)}</p>
-              </div>
-              <span className="text-text-secondary">{formatFileSize(v.fileSize)}</span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </SlideOver>
-  );
-};

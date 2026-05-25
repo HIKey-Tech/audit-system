@@ -13,12 +13,10 @@ import {
   AlertTriangle,
   FileText,
   ShieldAlert,
-  GitBranch,
+  CheckSquare,
   FolderOpen,
   Bell,
   ScrollText,
-  Plug,
-  Brain,
   Settings,
   LogOut,
   ChevronsLeft,
@@ -58,30 +56,25 @@ interface NavDivider {
 type NavItem = NavLink | NavDivider;
 
 const NAV: NavItem[] = [
-  { type: 'link', label: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard' },
-  { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics' },
-
-  { type: 'divider', label: 'Audit', sectionKeys: ['auditUniverse', 'auditPlans', 'engagements', 'findings', 'reports'] },
-  { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse' },
-  { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans' },
+  // Workspace — what you act on day to day, in priority order.
+  { type: 'link', label: 'Home', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard' },
+  { type: 'link', label: 'Approvals', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow' },
   { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements' },
   { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings' },
-  { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports' },
-
-  { type: 'divider', label: 'Risk & Workflow', sectionKeys: ['riskRegister', 'workflow'] },
-  { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister' },
-  { type: 'link', label: 'Workflow', href: '/workflow', icon: GitBranch, matchPrefix: '/workflow', visKey: 'workflow' },
-
-  { type: 'divider', label: 'System', sectionKeys: ['documents', 'notifications', 'auditLogs', 'users'] },
-  { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents' },
   { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications' },
+
+  { type: 'divider', label: 'Audit Library', sectionKeys: ['auditPlans', 'auditUniverse', 'reports', 'riskRegister', 'documents'] },
+  { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans' },
+  { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse' },
+  { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports' },
+  { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister' },
+  { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents' },
+
+  { type: 'divider', label: 'Administration', sectionKeys: ['analytics', 'auditLogs', 'users', 'settings'] },
+  { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics' },
   { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs' },
   { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users' },
-
-  { type: 'divider', sectionKeys: ['integrations', 'predictive', 'settings'] },
-  { type: 'link', label: 'Integrations', href: '/integrations', icon: Plug, comingSoon: true, visKey: 'integrations' },
-  { type: 'link', label: 'Predictive', href: '/predictive', icon: Brain, comingSoon: true, visKey: 'predictive' },
-  { type: 'link', label: 'Settings', href: '/settings', icon: Settings, comingSoon: true, visKey: 'settings' },
+  { type: 'link', label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings', visKey: 'settings' },
 ];
 
 export const Sidebar = (): JSX.Element => {

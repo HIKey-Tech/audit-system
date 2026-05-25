@@ -42,7 +42,7 @@ class ChecklistService {
         });
     }
     async updateChecklistItem(id, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:update');
         await this._assertChecklistExists(id);
         const item = await prisma_client_1.prisma.audit_Checklist.update({
             where: { id },
@@ -65,7 +65,7 @@ class ChecklistService {
         return (0, checklist_response_dto_1.mapChecklistToResponse)(item);
     }
     async linkEvidenceToChecklistItem(checklistItemId, evidenceId, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:update');
         const checklist = await prisma_client_1.prisma.audit_Checklist.findUnique({
             where: { id: checklistItemId },
             select: { engagement_id: true },

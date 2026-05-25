@@ -11,10 +11,11 @@ const register_response_dto_1 = require("../../../register/dto/response/register
 class RiskMonitoringService {
     async getHighRiskItems(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const where = {
             deleted_at: null,
             current_score: { gte: query.threshold },
-            ...((0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+            ...(restrictToOwner && { owner_id: actor.id }),
         };
         const [total, risks] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.risk_Register.count({ where }),
@@ -32,7 +33,7 @@ class RiskMonitoringService {
         };
     }
     async getRisksRequiringAttention(actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ASSESSOR_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk_monitoring:read');
         const staleCutoff = new Date();
         staleCutoff.setDate(staleCutoff.getDate() - 90);
         const risks = await prisma_client_1.prisma.risk_Register.findMany({
@@ -51,11 +52,12 @@ class RiskMonitoringService {
         return risks.map(register_response_dto_1.mapRiskRegisterToResponse);
     }
     async getRiskScoreTrend(riskId, actor) {
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const risk = await prisma_client_1.prisma.risk_Register.findFirst({
             where: {
                 id: riskId,
                 deleted_at: null,
-                ...((0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+                ...(restrictToOwner && { owner_id: actor.id }),
             },
             select: { id: true },
         });
@@ -81,10 +83,11 @@ class RiskMonitoringService {
         }));
     }
     async getOrganizationRiskSummary(actor) {
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const risks = await prisma_client_1.prisma.risk_Register.findMany({
             where: {
                 deleted_at: null,
-                ...((0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+                ...(restrictToOwner && { owner_id: actor.id }),
             },
             select: { current_score: true, status: true },
         });

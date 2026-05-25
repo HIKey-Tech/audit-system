@@ -29,6 +29,18 @@ class ReportController {
          */
         this.router.get('/engagements/:id/report', (0, auth_middleware_1.requirePermission)('report:read'), this._getReport.bind(this));
         /**
+         * @route  GET /audit/reports
+         * @desc   List audit reports
+         * @access Private - audit:read
+         */
+        this.router.get('/reports', (0, auth_middleware_1.requirePermission)('report:read'), (0, validate_middleware_1.validate)(report_request_dto_1.ReportQuerySchema, 'query'), this._listReports.bind(this));
+        /**
+         * @route  GET /audit/reports/:id
+         * @desc   Get audit report by id
+         * @access Private - audit:read
+         */
+        this.router.get('/reports/:id', (0, auth_middleware_1.requirePermission)('report:read'), this._getReportById.bind(this));
+        /**
          * @route  PUT /audit/reports/:id
          * @desc   Update audit report
          * @access Private - audit:write
@@ -123,6 +135,24 @@ class ReportController {
         try {
             const report = await this.reportService.getReport(req.params.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(report));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getReportById(req, res, next) {
+        try {
+            const report = await this.reportService.getReportById(req.params.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(report));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listReports(req, res, next) {
+        try {
+            const { reports, meta } = await this.reportService.listReports(req.query);
+            res.status(200).json((0, api_response_type_1.buildResponse)(reports, 'Audit reports retrieved', meta));
         }
         catch (err) {
             next(err);

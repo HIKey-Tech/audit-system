@@ -30,10 +30,10 @@ class EscalationController {
         this.router.post('/escalations/:id/acknowledge', (0, auth_middleware_1.requirePermission)('escalation:acknowledge'), this._acknowledgeEscalation.bind(this));
         /**
          * @route  GET /workflow/escalation-policy
-         * @desc   Get escalation policy
+         * @desc   List all active escalation policies
          * @access Private - audit:read
          */
-        this.router.get('/escalation-policy', (0, auth_middleware_1.requirePermission)('escalation_policy:read'), (0, validate_middleware_1.validate)(escalation_request_dto_1.EscalationPolicyQuerySchema, 'query'), this._getEscalationPolicy.bind(this));
+        this.router.get('/escalation-policy', (0, auth_middleware_1.requirePermission)('escalation_policy:read'), this._listEscalationPolicies.bind(this));
         /**
          * @route  POST /workflow/escalation-policy
          * @desc   Create or update escalation policy
@@ -59,10 +59,10 @@ class EscalationController {
             next(err);
         }
     }
-    async _getEscalationPolicy(req, res, next) {
+    async _listEscalationPolicies(_req, res, next) {
         try {
-            const policy = await this.escalationService.getEscalationPolicy(req.query.auditType);
-            res.status(200).json((0, api_response_type_1.buildResponse)(policy));
+            const policies = await this.escalationService.listEscalationPolicies();
+            res.status(200).json((0, api_response_type_1.buildResponse)(policies));
         }
         catch (err) {
             next(err);

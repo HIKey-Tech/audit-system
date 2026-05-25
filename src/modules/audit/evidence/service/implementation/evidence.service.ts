@@ -5,7 +5,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, AUDIT_WORK_ROLES, assertHasRole } from '../../../utility/audit.utility';
+import { AUDIT_ADMIN_ROLES, AUDIT_WORK_ROLES, assertHasPermission } from '../../../utility/audit.utility';
 import { EvidenceQueryDto, UploadEvidenceDto } from '../../dto/request/evidence.request.dto';
 import { EvidenceResponseDto, mapEvidenceToResponse } from '../../dto/response/evidence.response.dto';
 import { IEvidenceService } from '../interface/evidence.service.interface';
@@ -14,7 +14,7 @@ export class EvidenceService implements IEvidenceService {
   constructor(private readonly documentService: IDocumentService) {}
 
   async uploadEvidence(engagementId: string, file: UploadEvidenceDto, actor: ActorContext): Promise<EvidenceResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'evidence:upload');
     await this._assertEngagementInProgress(engagementId);
 
     if (file.workingPaperId) {
@@ -53,7 +53,7 @@ export class EvidenceService implements IEvidenceService {
   }
 
   async linkToWorkingPaper(evidenceId: string, workingPaperId: string, actor: ActorContext): Promise<EvidenceResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'evidence:upload');
     const evidence = await this._getEvidence(evidenceId);
     const paper = await prisma.audit_Working_Paper.findFirst({
       where: { id: workingPaperId, deleted_at: null },
@@ -69,7 +69,7 @@ export class EvidenceService implements IEvidenceService {
   }
 
   async linkToFinding(evidenceId: string, findingId: string, actor: ActorContext): Promise<EvidenceResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'evidence:upload');
     const evidence = await this._getEvidence(evidenceId);
     const finding = await prisma.audit_Finding.findFirst({
       where: { id: findingId, deleted_at: null },
@@ -85,7 +85,7 @@ export class EvidenceService implements IEvidenceService {
   }
 
   async disputeEvidence(evidenceId: string, reason: string, actor: ActorContext): Promise<EvidenceResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'evidence:dispute');
     await this._getEvidence(evidenceId);
 
     const updated = await prisma.audit_Evidence.update({

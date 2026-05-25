@@ -20,7 +20,7 @@ class PlanningService {
         this.approvalService = approvalService;
     }
     async createPlan(dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:create');
         const existingCount = await prisma_client_1.prisma.audit_Plan.count({
             where: { year: dto.year, deleted_at: null },
         });
@@ -42,8 +42,61 @@ class PlanningService {
         });
         return (0, planning_response_dto_1.mapPlanToResponse)(plan, existingCount > 0 ? [`A plan for ${dto.year} already exists`] : undefined);
     }
+    async updatePlan(planId, dto, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:update');
+        if (dto.title === undefined && dto.year === undefined) {
+            throw app_error_1.AppError.badRequest('At least one field is required');
+        }
+        await this._assertDraftPlan(planId);
+        const updated = await prisma_client_1.prisma.audit_Plan.update({
+            where: { id: planId },
+            data: {
+                ...(dto.title !== undefined && { title: dto.title }),
+                ...(dto.year !== undefined && { year: dto.year }),
+            },
+            include: planInclude,
+        });
+        logger_util_1.logger.info('Audit plan updated', { planId, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.plan.update',
+            module: 'audit',
+            entityType: 'audit_plan',
+            entityId: planId,
+            newValues: dto,
+        });
+        return (0, planning_response_dto_1.mapPlanToResponse)(updated);
+    }
+    async deletePlan(planId, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:update');
+        await this._assertDraftPlan(planId);
+        const engagementCount = await prisma_client_1.prisma.audit_Engagement.count({
+            where: {
+                deleted_at: null,
+                plan_item: { plan_id: planId },
+            },
+        });
+        if (engagementCount > 0) {
+            throw app_error_1.AppError.badRequest('Cannot delete a plan after engagements have been created from it');
+        }
+        await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Plan_Item.deleteMany({ where: { plan_id: planId } }),
+            prisma_client_1.prisma.audit_Plan.update({
+                where: { id: planId },
+                data: { deleted_at: new Date() },
+            }),
+        ]);
+        logger_util_1.logger.info('Audit plan deleted', { planId, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.plan.delete',
+            module: 'audit',
+            entityType: 'audit_plan',
+            entityId: planId,
+        });
+    }
     async addPlanItem(planId, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:add_item');
         await this._assertDraftPlan(planId);
         await this._assertUniverseExists(dto.universeId);
         await prisma_client_1.prisma.audit_Plan_Item.create({
@@ -68,7 +121,7 @@ class PlanningService {
         return this.getPlanById(planId);
     }
     async removePlanItem(planId, itemId, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:add_item');
         await this._assertDraftPlan(planId);
         const item = await prisma_client_1.prisma.audit_Plan_Item.findFirst({
             where: { id: itemId, plan_id: planId },
@@ -89,7 +142,7 @@ class PlanningService {
         });
     }
     async submitPlanForApproval(planId, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:submit');
         const plan = await this._getPlanForMutation(planId);
         if (plan.status !== audit_enum_1.PlanStatus.Draft)
             throw app_error_1.AppError.badRequest('Only draft plans can be submitted');
@@ -113,7 +166,7 @@ class PlanningService {
         return (0, planning_response_dto_1.mapPlanToResponse)(submittedPlan);
     }
     async approvePlan(planId, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:approve');
         const plan = await this._getPlanForMutation(planId);
         if (plan.status !== audit_enum_1.PlanStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted plans can be approved');
@@ -125,7 +178,7 @@ class PlanningService {
         return updated;
     }
     async rejectPlan(planId, reason, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:reject');
         const plan = await this._getPlanForMutation(planId);
         if (plan.status !== audit_enum_1.PlanStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted plans can be rejected');

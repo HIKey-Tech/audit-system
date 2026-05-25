@@ -11,5 +11,6 @@ export declare class FindingController {
     private _closeFinding;
     private _getFindingById;
     private _listFindings;
+    private _listAllFindings;
 }
 //# sourceMappingURL=finding.controller.d.ts.map

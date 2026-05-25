@@ -1,10 +1,12 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
+import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, FINDING_TRANSITIONS, assertHasRole, assertTransition, hasAuditeeRole } from '../../../utility/audit.utility';
+import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, FINDING_TRANSITIONS, assertHasPermission, assertTransition } from '../../../utility/audit.utility';
 import {
   CreateFindingRequestDto,
   FindingQueryDto,
@@ -13,9 +15,15 @@ import {
 import { FindingResponseDto, mapFindingToResponse } from '../../dto/response/finding.response.dto';
 import { IFindingService } from '../interface/finding.service.interface';
 
+const findingInclude = {
+  engagement: { select: { reference_number: true } },
+  auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+  created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+};
+
 export class FindingService implements IFindingService {
   async createFinding(engagementId: string, dto: CreateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'finding:create');
     await this._assertEngagementAllowsFindings(engagementId);
     if (dto.workingPaperId) {
       await this._assertWorkingPaperInEngagement(dto.workingPaperId, engagementId);
@@ -74,7 +82,7 @@ export class FindingService implements IFindingService {
   }
 
   async updateFindingStatus(id: string, newStatus: FindingStatus, actor: ActorContext): Promise<FindingResponseDto> {
-    assertHasRole(actor.roles, AUDIT_REVIEW_ROLES);
+    assertHasPermission(actor.permissions, 'finding:update');
     const finding = await this._getFinding(id);
     assertTransition(finding.status as FindingStatus, newStatus, FINDING_TRANSITIONS, 'finding');
 
@@ -89,7 +97,7 @@ export class FindingService implements IFindingService {
   }
 
   async closeFinding(id: string, actor: ActorContext): Promise<FindingResponseDto> {
-    assertHasRole(actor.roles, AUDIT_REVIEW_ROLES);
+    assertHasPermission(actor.permissions, 'finding:close');
     const finding = await this._getFinding(id);
     if (finding.status !== FindingStatus.Verified) throw AppError.badRequest('Only verified findings can be closed');
 
@@ -104,32 +112,83 @@ export class FindingService implements IFindingService {
   }
 
   async getFindingById(id: string, actor: ActorContext): Promise<FindingResponseDto> {
+    const isAuditee = !actor.permissions.includes('engagement:read');
     const finding = await prisma.audit_Finding.findFirst({
       where: {
         id,
         deleted_at: null,
-        ...(hasAuditeeRole(actor.roles) && { auditee_id: actor.id }),
+        ...(isAuditee && { auditee_id: actor.id }),
       },
-      include: { evidence: true, follow_up: { include: { remediation_evidence: true } } },
+      include: {
+        ...findingInclude,
+        evidence: true,
+        follow_up: { include: { remediation_evidence: true } },
+      },
     });
     if (!finding) throw AppError.notFound('Audit finding');
     return mapFindingToResponse(finding);
   }
 
+  async listAllFindings(query: FindingQueryDto, actor: ActorContext): Promise<{ findings: FindingResponseDto[]; meta: PaginationMeta }> {
+    const { skip, take, page, pageSize } = parsePagination(query);
+    const where = this._buildFindingWhere(query, actor);
+
+    const [total, findings] = await prisma.$transaction([
+      prisma.audit_Finding.count({ where }),
+      prisma.audit_Finding.findMany({
+        where,
+        include: findingInclude,
+        orderBy: { [query.sortBy]: query.sortOrder },
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      findings: findings.map(mapFindingToResponse),
+      meta: buildPaginationMeta(total, page, pageSize),
+    };
+  }
+
   async listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]> {
     const findings = await prisma.audit_Finding.findMany({
       where: {
+        ...this._buildFindingWhere(query, actor),
         engagement_id: engagementId,
-        deleted_at: null,
-        ...(query.severity && { severity: query.severity }),
-        ...(query.status && { status: query.status }),
-        ...(query.category && { category: query.category }),
-        ...(query.auditeeId && { auditee_id: query.auditeeId }),
-        ...(hasAuditeeRole(actor.roles) && { auditee_id: actor.id }),
       },
+      include: findingInclude,
       orderBy: { created_at: 'desc' },
     });
     return findings.map(mapFindingToResponse);
+  }
+
+  private _buildFindingWhere(query: FindingQueryDto, actor: ActorContext): Prisma.Audit_FindingWhereInput {
+    const isOversight = actor.permissions.includes('finding:read_all');
+    const isAuditee = !actor.permissions.includes('engagement:read');
+
+    return {
+      deleted_at: null,
+      ...(query.severity && { severity: query.severity }),
+      ...(query.status && { status: query.status }),
+      ...(query.category && { category: query.category }),
+      ...(query.auditeeId && { auditee_id: query.auditeeId }),
+      ...(query.search && {
+        OR: [
+          { title: { contains: query.search } },
+          { description: { contains: query.search } },
+          { recommendation: { contains: query.search } },
+        ],
+      }),
+      ...(isAuditee && { auditee_id: actor.id }),
+      ...(!isOversight && !isAuditee && {
+        engagement: {
+          OR: [
+            { lead_auditor_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+          ],
+        },
+      }),
+    };
   }
 
   private async _assertEngagementAllowsFindings(engagementId: string): Promise<void> {

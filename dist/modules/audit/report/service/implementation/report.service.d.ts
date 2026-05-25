@@ -1,8 +1,9 @@
+import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
-import { UpdateReportRequestDto } from '../../dto/request/report.request.dto';
+import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
@@ -19,6 +20,11 @@ export declare class ReportService implements IReportService {
     rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto>;
     issueReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
     getReport(engagementId: string): Promise<ReportResponseDto>;
+    getReportById(id: string): Promise<ReportResponseDto>;
+    listReports(query: ReportQueryDto): Promise<{
+        reports: ReportResponseDto[];
+        meta: PaginationMeta;
+    }>;
     exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile>;
     private _getReport;
     private _assertSubmittedReportHasNoApproval;

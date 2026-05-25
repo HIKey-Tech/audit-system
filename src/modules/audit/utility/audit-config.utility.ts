@@ -71,6 +71,29 @@ export const getChecklistTemplateControls = async (
     }));
 };
 
+export interface ApprovalMatrix {
+  /** Ordered list of role names whose holders approve each level, per entity type. */
+  auditPlan: string[];
+  workingPaper: string[];
+  auditReport: string[];
+}
+
+export const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix = {
+  auditPlan: ['cae'],
+  workingPaper: ['audit_manager'],
+  auditReport: ['audit_manager', 'director', 'cae'],
+};
+
+/**
+ * Reads the GBB-configurable approval matrix from system_config. Admins edit this
+ * in Settings to control who signs off on plans, working papers, and reports — the
+ * approval engine resolves these role names to users instead of hardcoding them.
+ */
+export const getApprovalMatrix = async (): Promise<ApprovalMatrix> => {
+  const parsed = await getJsonConfig<Partial<ApprovalMatrix>>('approval_matrix', {});
+  return { ...DEFAULT_APPROVAL_MATRIX, ...parsed };
+};
+
 const getJsonConfig = async <T>(key: string, fallback: T): Promise<T> => {
   const config = await prisma.system_Config.findUnique({
     where: { key },

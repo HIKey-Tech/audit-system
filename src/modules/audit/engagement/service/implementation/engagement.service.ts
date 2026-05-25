@@ -9,7 +9,7 @@ import { EngagementStatus, FindingStatus, PlanStatus } from '../../../domain/enu
 import {
   AUDIT_ADMIN_ROLES,
   ENGAGEMENT_TRANSITIONS,
-  assertHasRole,
+  assertHasPermission,
   assertTransition,
   buildReferenceNumber,
   hasAuditeeRole,
@@ -36,7 +36,7 @@ export class EngagementService implements IEngagementService {
     dto: CreateEngagementFromPlanRequestDto,
     actor: ActorContext,
   ): Promise<EngagementResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'engagement:create');
 
     const planItem = await prisma.audit_Plan_Item.findUnique({
       where: { id: planItemId },
@@ -81,7 +81,7 @@ export class EngagementService implements IEngagementService {
   }
 
   async createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'engagement:create');
     if (!dto.adhocReason) throw AppError.badRequest('Ad-hoc reason is required');
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
@@ -111,7 +111,7 @@ export class EngagementService implements IEngagementService {
   }
 
   async updateEngagement(id: string, dto: UpdateEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'engagement:update');
     await this._assertEngagementExists(id);
 
     const engagement = await prisma.audit_Engagement.update({
@@ -136,7 +136,7 @@ export class EngagementService implements IEngagementService {
   }
 
   async updateStatus(id: string, newStatus: EngagementStatus, actor: ActorContext): Promise<EngagementResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'engagement:update');
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id, deleted_at: null },
       include: engagementInclude,
@@ -189,11 +189,12 @@ export class EngagementService implements IEngagementService {
   }
 
   async getEngagementById(id: string, actor: ActorContext): Promise<EngagementResponseDto> {
+    const isAuditee = !actor.permissions.includes('engagement:read');
     const engagement = await prisma.audit_Engagement.findFirst({
       where: {
         id,
         deleted_at: null,
-        ...(hasAuditeeRole(actor.roles) && { auditee_id: actor.id }),
+        ...(isAuditee && { auditee_id: actor.id }),
       },
       include: engagementInclude,
     });
@@ -203,8 +204,8 @@ export class EngagementService implements IEngagementService {
 
   async listEngagements(query: EngagementQueryDto, actor: ActorContext): Promise<{ engagements: EngagementResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
-    const isAdmin = actor.roles.some((role) => AUDIT_ADMIN_ROLES.includes(role));
-    const isAuditee = hasAuditeeRole(actor.roles);
+    const canReadAll = actor.permissions.includes('engagement:read_all');
+    const isAuditee = !actor.permissions.includes('engagement:read');
     const where: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
       ...(query.status && { status: query.status }),
@@ -212,7 +213,12 @@ export class EngagementService implements IEngagementService {
       ...(query.leadAuditorId && { lead_auditor_id: query.leadAuditorId }),
       ...(query.auditManagerId && { audit_manager_id: query.auditManagerId }),
       ...(isAuditee && { auditee_id: actor.id }),
-      ...(!isAdmin && !isAuditee && { lead_auditor_id: actor.id }),
+      ...(!canReadAll && !isAuditee && {
+        OR: [
+          { lead_auditor_id: actor.id },
+          { workflow_assignments: { some: { user_id: actor.id } } },
+        ],
+      }),
     };
 
     const [total, engagements] = await prisma.$transaction([

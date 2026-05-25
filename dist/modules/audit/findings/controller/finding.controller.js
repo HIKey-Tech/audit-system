@@ -29,6 +29,12 @@ class FindingController {
          */
         this.router.get('/engagements/:id/findings', (0, auth_middleware_1.requirePermission)('finding:read'), (0, validate_middleware_1.validate)(finding_request_dto_1.FindingQuerySchema, 'query'), this._listFindings.bind(this));
         /**
+         * @route  GET /audit/findings
+         * @desc   List findings across engagements
+         * @access Private - audit:read
+         */
+        this.router.get('/findings', (0, auth_middleware_1.requirePermission)('finding:read'), (0, validate_middleware_1.validate)(finding_request_dto_1.FindingQuerySchema, 'query'), this._listAllFindings.bind(this));
+        /**
          * @route  GET /audit/findings/:id
          * @desc   Get finding
          * @access Private - finding:read
@@ -102,6 +108,15 @@ class FindingController {
         try {
             const findings = await this.findingService.listFindings(req.params.id, req.query, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(findings));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listAllFindings(req, res, next) {
+        try {
+            const { findings, meta } = await this.findingService.listAllFindings(req.query, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(findings, 'Findings retrieved', meta));
         }
         catch (err) {
             next(err);

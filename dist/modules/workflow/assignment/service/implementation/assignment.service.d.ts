@@ -1,7 +1,7 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { AssignStaffRequestDto, MyAssignmentsQueryDto } from '../../dto/request/assignment.request.dto';
-import { AssignmentResponseDto, WorkloadResponseDto } from '../../dto/response/assignment.response.dto';
+import { AssignmentResponseDto, WorkloadResponseDto, AssignmentCandidateDto } from '../../dto/response/assignment.response.dto';
 import { IAssignmentService } from '../interface/assignment.service.interface';
 export declare class AssignmentService implements IAssignmentService {
     assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto>;
@@ -12,6 +12,7 @@ export declare class AssignmentService implements IAssignmentService {
         meta: PaginationMeta;
     }>;
     getUserWorkload(userId: string): Promise<WorkloadResponseDto>;
+    getCandidates(engagementId: string): Promise<AssignmentCandidateDto[]>;
 }
 export declare const workflowAssignmentService: AssignmentService;
 //# sourceMappingURL=assignment.service.d.ts.map

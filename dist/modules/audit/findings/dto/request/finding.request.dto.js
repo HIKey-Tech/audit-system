@@ -31,9 +31,14 @@ exports.UpdateFindingStatusRequestSchema = zod_1.z.object({
     status: zod_1.z.nativeEnum(audit_enum_1.FindingStatus),
 });
 exports.FindingQuerySchema = zod_1.z.object({
+    page: zod_1.z.coerce.number().int().positive().default(1),
+    pageSize: zod_1.z.coerce.number().int().positive().max(100).default(20),
+    search: zod_1.z.string().trim().optional(),
     severity: zod_1.z.nativeEnum(audit_enum_1.FindingSeverity).optional(),
     status: zod_1.z.nativeEnum(audit_enum_1.FindingStatus).optional(),
     category: zod_1.z.nativeEnum(audit_enum_1.FindingCategory).optional(),
     auditeeId: zod_1.z.string().uuid().optional(),
+    sortBy: zod_1.z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
+    sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
 });
 //# sourceMappingURL=finding.request.dto.js.map

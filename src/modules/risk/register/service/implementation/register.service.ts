@@ -6,7 +6,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { riskRegisterWithDetailsInclude, RiskRegisterWithDetails } from '../../../../../shared/prisma/prisma.types';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
-import { assertHasRole, calculateRiskScore, hasAuditeeRole, RISK_ADMIN_ROLES } from '../../../utility/risk.utility';
+import { assertHasPermission, calculateRiskScore } from '../../../utility/risk.utility';
 import {
   CreateRiskRequestDto,
   RiskRegisterQueryDto,
@@ -24,7 +24,7 @@ export class RiskRegisterService implements IRegisterService {
     dto: CreateRiskRequestDto,
     actor: RiskActorContext,
   ): Promise<RiskRegisterResponseDto> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk:create');
 
     const score = calculateRiskScore(dto.likelihood, dto.impact);
 
@@ -62,7 +62,7 @@ export class RiskRegisterService implements IRegisterService {
     dto: UpdateRiskRequestDto,
     actor: RiskActorContext,
   ): Promise<RiskRegisterResponseDto> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk:update');
     const existing = await this._getExistingRisk(id);
 
     const likelihood = dto.likelihood ?? existing.likelihood;
@@ -103,7 +103,7 @@ export class RiskRegisterService implements IRegisterService {
     dto: UpdateRiskStatusRequestDto,
     actor: RiskActorContext,
   ): Promise<RiskRegisterResponseDto> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk:update');
     await this._getExistingRisk(id);
 
     const risk = await prisma.risk_Register.update({
@@ -126,7 +126,7 @@ export class RiskRegisterService implements IRegisterService {
   }
 
   async deleteRisk(id: string, actor: RiskActorContext): Promise<void> {
-    assertHasRole(actor.roles, RISK_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'risk:delete');
     await this._getExistingRisk(id);
 
     await prisma.risk_Register.update({
@@ -145,11 +145,12 @@ export class RiskRegisterService implements IRegisterService {
   }
 
   async getRiskById(id: string, actor: RiskActorContext): Promise<RiskRegisterResponseDto> {
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
     const risk = await prisma.risk_Register.findFirst({
       where: {
         id,
         deleted_at: null,
-        ...(hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+        ...(restrictToOwner && { owner_id: actor.id }),
       },
       include: riskRegisterWithDetailsInclude,
     }) as RiskRegisterWithDetails | null;
@@ -163,12 +164,13 @@ export class RiskRegisterService implements IRegisterService {
     actor: RiskActorContext,
   ): Promise<{ risks: RiskRegisterResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
     const where: Prisma.Risk_RegisterWhereInput = {
       deleted_at: null,
       ...(query.categoryId && { category_id: query.categoryId }),
       ...(query.status && { status: query.status }),
       ...(query.ownerId && { owner_id: query.ownerId }),
-      ...(hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+      ...(restrictToOwner && { owner_id: actor.id }),
     };
 
     const [total, risks] = await prisma.$transaction([
@@ -189,11 +191,12 @@ export class RiskRegisterService implements IRegisterService {
   }
 
   async getRisksByUniverseEntity(universeId: string, actor?: RiskActorContext): Promise<RiskRegisterResponseDto[]> {
+    const restrictToOwner = actor ? !actor.permissions.includes('risk:read_all') : false;
     const risks = await prisma.risk_Register.findMany({
       where: {
         universe_id: universeId,
         deleted_at: null,
-        ...(actor && hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+        ...(restrictToOwner && actor && { owner_id: actor.id }),
       },
       include: riskRegisterWithDetailsInclude,
       orderBy: { current_score: 'desc' },

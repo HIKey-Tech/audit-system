@@ -73,11 +73,23 @@ class UserController {
          */
         this.router.patch('/:id', (0, auth_middleware_1.requirePermission)('user:update'), (0, validate_middleware_1.validate)(user_request_dto_1.UpdateUserRequestSchema), this._updateUser.bind(this));
         /**
+         * @route  POST /users/:id/deactivate
+         * @desc   Deactivate user
+         * @access Private - super_admin + user:deactivate
+         */
+        this.router.post('/:id/deactivate', (0, auth_middleware_1.requireRole)('super_admin'), (0, auth_middleware_1.requirePermission)('user:deactivate'), this._deactivateUser.bind(this));
+        /**
+         * @route  POST /users/:id/activate
+         * @desc   Activate user
+         * @access Private - super_admin + user:deactivate
+         */
+        this.router.post('/:id/activate', (0, auth_middleware_1.requireRole)('super_admin'), (0, auth_middleware_1.requirePermission)('user:deactivate'), this._activateUser.bind(this));
+        /**
          * @route  DELETE /users/:id
          * @desc   Soft-delete user
          * @access Private — user:delete
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('user:delete'), this._deleteUser.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requireRole)('super_admin'), (0, auth_middleware_1.requirePermission)('user:delete'), this._deleteUser.bind(this));
         /**
          * @route  PUT /users/:id/roles
          * @desc   Assign roles to user
@@ -176,6 +188,24 @@ class UserController {
         try {
             await this.userService.deleteUser(req.params.id, req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(null, 'User deleted'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _deactivateUser(req, res, next) {
+        try {
+            const user = await this.userService.setUserActiveStatus(req.params.id, false, req.user.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(user, 'User deactivated'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _activateUser(req, res, next) {
+        try {
+            const user = await this.userService.setUserActiveStatus(req.params.id, true, req.user.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(user, 'User activated'));
         }
         catch (err) {
             next(err);

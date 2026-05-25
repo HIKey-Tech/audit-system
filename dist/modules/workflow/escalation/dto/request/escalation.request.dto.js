@@ -1,14 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.UpsertEscalationPolicyRequestSchema = exports.EscalationPolicyQuerySchema = exports.EscalationEntityParamsSchema = void 0;
+exports.UpsertEscalationPolicyRequestSchema = exports.EscalationEntityParamsSchema = void 0;
 const zod_1 = require("zod");
 const workflow_enum_1 = require("../../../domain/enum/workflow.enum");
 exports.EscalationEntityParamsSchema = zod_1.z.object({
     type: zod_1.z.nativeEnum(workflow_enum_1.WorkflowEscalationEntityType),
     id: zod_1.z.string().uuid(),
-});
-exports.EscalationPolicyQuerySchema = zod_1.z.object({
-    auditType: zod_1.z.nativeEnum(workflow_enum_1.EscalationPolicyAuditType).default(workflow_enum_1.EscalationPolicyAuditType.All),
 });
 exports.UpsertEscalationPolicyRequestSchema = zod_1.z.object({
     auditType: zod_1.z.nativeEnum(workflow_enum_1.EscalationPolicyAuditType),

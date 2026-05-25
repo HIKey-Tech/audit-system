@@ -7,6 +7,8 @@ export declare class PlanningController {
     private _registerRoutes;
     private _createPlan;
     private _addPlanItem;
+    private _updatePlan;
+    private _deletePlan;
     private _removePlanItem;
     private _submitPlanForApproval;
     private _approvePlan;

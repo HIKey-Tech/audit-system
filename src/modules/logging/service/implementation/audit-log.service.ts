@@ -1,6 +1,17 @@
 // src/modules/logging/service/implementation/audit-log.service.ts
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
+
+const auditLogUserInclude = {
+  user: {
+    select: {
+      display_name: true,
+      first_name: true,
+      last_name: true,
+      email: true,
+    },
+  },
+} as const;
 import { logger } from '../../../../shared/utils/logger.util';
 import { AppError } from '../../../../shared/errors/app.error';
 import {
@@ -64,6 +75,7 @@ export class AuditLogService implements IAuditLogService {
       prisma.audit_Log.count({ where }),
       prisma.audit_Log.findMany({
         where,
+        include: auditLogUserInclude,
         orderBy: { created_at: query.sortOrder },
         skip,
         take,
@@ -79,6 +91,7 @@ export class AuditLogService implements IAuditLogService {
   async getLogById(id: string): Promise<AuditLogResponseDto> {
     const log = await prisma.audit_Log.findUnique({
       where: { id },
+      include: auditLogUserInclude,
     });
 
     if (!log) {

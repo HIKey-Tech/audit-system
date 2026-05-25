@@ -3,6 +3,7 @@ import { FollowUpResponseDto, mapFollowUpToResponse } from '../../../follow-up/d
 export interface FindingResponseDto {
     id: string;
     engagementId: string;
+    engagementReference?: string;
     workingPaperId: string | null;
     title: string;
     description: string;
@@ -12,9 +13,11 @@ export interface FindingResponseDto {
     riskImplication: string;
     recommendation: string;
     auditeeId: string;
+    auditeeName?: string;
     status: string;
     dueDate: string;
     createdById: string;
+    createdByName?: string;
     closedById: string | null;
     closedAt: string | null;
     createdAt: string;
@@ -22,9 +25,18 @@ export interface FindingResponseDto {
     evidence?: EvidenceResponseDto[];
     followUp?: FollowUpResponseDto | null;
 }
+declare const formatUserName: (user?: {
+    display_name: string | null;
+    first_name: string;
+    last_name: string;
+    email: string;
+}) => string | undefined;
 export declare const mapFindingToResponse: (finding: {
     id: string;
     engagement_id: string;
+    engagement?: {
+        reference_number: string;
+    };
     working_paper_id: string | null;
     title: string;
     description: string;
@@ -34,9 +46,11 @@ export declare const mapFindingToResponse: (finding: {
     risk_implication: string;
     recommendation: string;
     auditee_id: string;
+    auditee?: Parameters<typeof formatUserName>[0];
     status: string;
     due_date: Date;
     created_by_id: string;
+    created_by?: Parameters<typeof formatUserName>[0];
     closed_by_id: string | null;
     closed_at: Date | null;
     created_at: Date;
@@ -44,4 +58,5 @@ export declare const mapFindingToResponse: (finding: {
     evidence?: Array<Parameters<typeof mapEvidenceToResponse>[0]>;
     follow_up?: Parameters<typeof mapFollowUpToResponse>[0] | null;
 }) => FindingResponseDto;
+export {};
 //# sourceMappingURL=finding.response.dto.d.ts.map

@@ -16,7 +16,7 @@ class UniverseService {
         this.riskRegisterService = riskRegisterService;
     }
     async createEntity(dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:create');
         const entity = await prisma_client_1.prisma.audit_Universe.create({
             data: {
                 name: dto.name,
@@ -41,7 +41,7 @@ class UniverseService {
         return (0, universe_response_dto_1.mapUniverseToResponse)(entity);
     }
     async updateEntity(id, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:update');
         await this._assertEntityExists(id);
         const entity = await prisma_client_1.prisma.audit_Universe.update({
             where: { id },
@@ -72,7 +72,7 @@ class UniverseService {
         return (0, universe_response_dto_1.mapUniverseToResponse)(entity);
     }
     async deactivateEntity(id, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:delete');
         await this._assertEntityExists(id);
         await prisma_client_1.prisma.audit_Universe.update({
             where: { id },

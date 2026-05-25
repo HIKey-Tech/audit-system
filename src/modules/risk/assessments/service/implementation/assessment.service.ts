@@ -6,7 +6,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { riskAssessmentWithAssessorInclude, RiskAssessmentWithAssessor } from '../../../../../shared/prisma/prisma.types';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
-import { assertHasRole, calculateRiskScore, hasAuditeeRole, RISK_ASSESSOR_ROLES } from '../../../utility/risk.utility';
+import { assertHasPermission, calculateRiskScore } from '../../../utility/risk.utility';
 import {
   CreateRiskAssessmentRequestDto,
   RiskAssessmentQueryDto,
@@ -30,7 +30,7 @@ export class RiskAssessmentService implements IAssessmentService {
     dto: CreateRiskAssessmentRequestDto,
     actor: RiskActorContext,
   ): Promise<RiskAssessmentResponseDto> {
-    assertHasRole(actor.roles, RISK_ASSESSOR_ROLES);
+    assertHasPermission(actor.permissions, 'risk:assess');
 
     const score = calculateRiskScore(dto.likelihood, dto.impact);
     const assessedAt = dto.assessedAt ? new Date(dto.assessedAt) : new Date();
@@ -115,10 +115,12 @@ export class RiskAssessmentService implements IAssessmentService {
       },
     }) as RiskAssessmentWithRiskOwner | null;
 
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
+
     if (
       !assessment ||
       assessment.risk.deleted_at !== null ||
-      (hasAuditeeRole(actor.roles) && assessment.risk.owner_id !== actor.id)
+      (restrictToOwner && assessment.risk.owner_id !== actor.id)
     ) {
       throw AppError.notFound('Risk assessment');
     }
@@ -164,11 +166,12 @@ export class RiskAssessmentService implements IAssessmentService {
   }
 
   private async _assertRiskExists(riskId: string, actor: RiskActorContext): Promise<void> {
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
     const risk = await prisma.risk_Register.findFirst({
       where: {
         id: riskId,
         deleted_at: null,
-        ...(hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+        ...(restrictToOwner && { owner_id: actor.id }),
       },
       select: { id: true },
     });

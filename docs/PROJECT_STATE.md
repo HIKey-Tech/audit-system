@@ -2,7 +2,9 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-05-18 (rev 17)
+> Last updated: 2026-05-25 (rev 19)
+
+> **rev 19 changelog:** Two features added. **C2 — Skill-based staff assignment:** `User` model gains a `skills` column (`NVARCHAR(max)` JSON array of free-text tags, up to 30 × 100 chars each); user create/update DTOs accept `skills`; response DTOs parse/return `skills: string[]`; new `GET /workflow/assignments/candidates/:engagementId` endpoint returns un-assigned active users with parsed skills, department, job title, and active-engagement workload count (permission-gated by `assignment:read`). **E3 — Configurable version retention:** `version_retention` system config seed added (opt-in, disabled by default, `keepLastVersions: 10`); `DocumentService.pruneOldVersions()` reads the config, respects the enabled flag, iterates all documents with > N versions, deletes excess from storage then DB, returns `{ prunedCount, failedCount }`; `BG:DOCUMENT:VERSION:PRUNE:WEEKLY` cron job registered at Sunday 03:00, no-op when retention is disabled.
 
 ---
 
@@ -45,6 +47,7 @@ Folder: `src/modules/user/`
 | Role assignment / removal | Done | `user.service.ts#assignRoles`, `#removeRole` |
 | Role + permission catalogue endpoints | Done | `GET /users/roles`, `GET /users/permissions` |
 | RBAC seed (8 roles, 20 permissions) | Done | `prisma/seed.ts` — `director` and `cae` include `audit:write` for audit report approval |
+| Skills (free-text tags) | Done | `users.skills NVARCHAR(max)` JSON array; Zod-validated (max 30 tags, 100 chars each); parsed by `parseSkills()` in response DTO |
 | Module factory | Done | `modules/user/index.ts` — `createUserModule(): Router` |
 
 **Routes mounted by the module:**
@@ -193,7 +196,7 @@ Folder: `src/modules/document/`
 
 **Not yet built:**
 - AWS S3 adapter (`service/client/storage.client.ts` has only `LocalStorageClient` + `AzureBlobStorageClient` stub).
-- File deletion of old versions (version history today retains `storage_path` references forever).
+- ~~File deletion of old versions~~ — now implemented via opt-in `version_retention` system config + `DocumentService.pruneOldVersions()` + weekly background job `BG:DOCUMENT:VERSION:PRUNE:WEEKLY`.
 
 ### 2.6 Background module — COMPLETE HTTP/control plane, PARTIAL job catalogue
 
@@ -206,9 +209,10 @@ Folder: `src/modules/background/`
 - Local database snapshot as of 2026-05-01 has 5 registered jobs and 303 recorded job runs. `BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE`, `BG:TOKEN:CLEANUP:HOURLY`, and `BG:WORKFLOW:ESCALATION:HOURLY` have successful last runs.
 - Registered jobs (via `registerAllJobs()`):
   - `BG:TOKEN:CLEANUP:HOURLY` — deletes expired / revoked refresh tokens. **Working.**
-  - `BG:AUDIT:REMINDER:DAILY` — registered + cron-scheduled, but the handler is **stubbed** (logs "skipped" and returns). The original due-date query was removed; needs to be restored now that `Audit_Engagement` exists. See `scheduler.service.ts:165`.
+  - `BG:AUDIT:REMINDER:DAILY` — sends in-app + email reminders for audit engagements with SLA deadlines within 3 days. **Working.**
   - `BG:WORKFLOW:ESCALATION:HOURLY` — calls `workflowEscalationService.checkAndEscalate()` every hour for breached engagement SLAs and stalled approvals. **Working logic; runtime depends on database connectivity.**
   - `BG:LOG:ARCHIVE:WEEKLY` — pulls audit logs older than 90 days. **Partially working** — reads logs, does not yet push to data warehouse (TODO).
+  - `BG:DOCUMENT:VERSION:PRUNE:WEEKLY` — calls `DocumentService.pruneOldVersions()` every Sunday at 03:00. Reads `version_retention` from `system_config`; no-op when disabled (default). **Working.**
 
 **Routes mounted by the module:**
 
@@ -244,6 +248,10 @@ Folder: `src/modules/audit/`
 - Engagement status transitions now enforce configurable lifecycle gates from `system_config.audit_lifecycle_rules`: checklist completion and approved working papers before review, issued reports before reported status, and verified/closed findings before closure.
 - Engagement checklist population now reads admin-configurable control templates from `system_config.checklist_templates`, with code defaults as fallback.
 - Report generation accepts optional report body fields (`executiveSummary`, `scope`, `methodology`) and falls back to generated defaults when omitted. DOCX/PDF report output now reads template header, footer, signature, classification, and colour configuration from the selected/default report template.
+- Audit plans now support draft-only update and soft delete via backend routes, matching the frontend client surface.
+- Findings and reports now have global list/detail HTTP routes (`GET /audit/findings`, `GET /audit/reports`, `GET /audit/reports/:id`) so managers can review consolidated registers without selecting one engagement first.
+- Follow-up remediation evidence now supports both linking an existing evidence record and direct auditee upload through `POST /audit/findings/:id/followup/evidence/upload`; uploaded files are stored through DocumentService, recorded as Audit Evidence, and linked to the follow-up.
+- The Audit frontend uses the global findings/report routes, aligns Universe and Plan update calls with backend `PUT` routes, and shows report approval actions to the current Workflow approver instead of only users with `report:approve`.
 
 **Verification:**
 - `npm run build` passes.
@@ -316,6 +324,7 @@ Folder: `src/modules/workflow/`
 /workflow/assignments/engagement/:id              GET     audit:read
 /workflow/assignments/mine                        GET     audit:read
 /workflow/assignments/workload/:userId            GET     audit:read
+/workflow/assignments/candidates/:engagementId    GET     assignment:read  — un-assigned users with skills + workload
 /workflow/assignments/:id                         DELETE  audit:write
 
 /workflow/escalations/entity/:type/:id            GET     audit:read
@@ -548,7 +557,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 
 ### 4.4 Frontend
 
-- Next.js not yet scaffolded. Not started until backend is complete (build order rule).
+- Next.js frontend is scaffolded and active for dashboard, audit, risk, workflow, documents, logs, notifications, users, and settings workflows. Integration and predictive pages remain placeholders.
 
 ---
 

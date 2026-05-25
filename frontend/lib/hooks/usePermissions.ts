@@ -42,27 +42,37 @@ export const userHasPermission = (user: SessionUser | null, permission: string):
 
 /** Convenience: is this user an admin-level role? (super_admin, audit_admin, audit_manager, cae) */
 export const isAdminLevel = (user: SessionUser | null): boolean =>
-  userHasAnyRole(user, ['super_admin', 'audit_admin', 'audit_manager', 'cae']);
+  userHasPermission(user, 'plan:approve') ||
+  userHasPermission(user, 'settings:read') ||
+  userHasPermission(user, 'user:admin');
 
 /** Can this user manage the full audit programme (plans, universe, engagements creation)? */
 export const canManageAuditProgramme = (user: SessionUser | null): boolean =>
-  userHasAnyRole(user, ['super_admin', 'audit_admin', 'audit_manager']);
+  userHasPermission(user, 'engagement:create') ||
+  userHasPermission(user, 'plan:create');
 
 /** Is this user a fieldwork-level auditor? (audit_lead or auditor) */
 export const isFieldAuditor = (user: SessionUser | null): boolean =>
-  userHasAnyRole(user, ['audit_lead', 'auditor']);
+  userHasPermission(user, 'working_paper:create') &&
+  !userHasPermission(user, 'plan:approve');
 
 /** Is this user an auditee? */
 export const isAuditee = (user: SessionUser | null): boolean =>
-  userHasRole(user, 'auditee');
+  userHasPermission(user, 'followup:respond') &&
+  !userHasPermission(user, 'working_paper:read');
 
 /** Is this user a director? (read-only oversight) */
 export const isDirector = (user: SessionUser | null): boolean =>
-  userHasRole(user, 'director');
+  userHasPermission(user, 'engagement:read_all') &&
+  !userHasPermission(user, 'working_paper:create') &&
+  !userHasPermission(user, 'report:issue') &&
+  !userHasPermission(user, 'settings:read');
 
 /** Is this user executive-level (director or cae)? */
 export const isExecutive = (user: SessionUser | null): boolean =>
-  userHasAnyRole(user, ['director', 'cae']);
+  userHasPermission(user, 'engagement:read_all') &&
+  !userHasPermission(user, 'working_paper:create') &&
+  !userHasPermission(user, 'plan:create');
 
 // ─────────────────────────────────────────────────────────────
 // Navigation visibility rules
@@ -145,30 +155,29 @@ export const getDashboardVisibility = (user: SessionUser | null): DashboardVisib
     return { statCards: false, recentActivity: false, findingsBySeverity: false, myWork: false, topRisks: false, escalations: false };
   }
 
-  const admin = canManageAuditProgramme(user);
-  const exec = isExecutive(user);
-  const caeRole = userHasRole(user, 'cae');
-  const auditeeRole = isAuditee(user);
-  const field = isFieldAuditor(user);
+  // Permission-driven so the dashboard adapts to whatever roles GBB defines.
+  const can = (perm: string): boolean => userHasPermission(user, perm);
+  // "Oversight" = anyone who reviews/approves work or monitors risk programme-wide.
+  const oversight = can('approval:read') || can('risk_monitoring:read');
 
   return {
-    // Org-wide stat cards: admin, exec, cae
-    statCards: admin || exec || caeRole,
+    // Org-wide programme stat cards: oversight roles.
+    statCards: oversight,
 
-    // Recent activity: everyone (filtered)
-    recentActivity: !auditeeRole,
+    // Recent activity feed: oversight roles or anyone who can read the audit log.
+    recentActivity: oversight || can('log:read'),
 
-    // Findings by severity: admin, exec, cae, field auditors
-    findingsBySeverity: admin || exec || caeRole || field,
+    // Findings by severity: anyone who can read findings (data is scoped server-side).
+    findingsBySeverity: can('finding:read'),
 
-    // My Work: field auditors, auditors, and auditees — NOT director/exec overview
-    myWork: field || auditeeRole,
+    // My Work: everyone lands on their own work first.
+    myWork: true,
 
-    // Top risks: admin, exec, cae, audit_lead
-    topRisks: admin || exec || caeRole || userHasRole(user, 'audit_lead'),
+    // Top risks: risk monitors.
+    topRisks: can('risk_monitoring:read'),
 
-    // Escalations: admin, exec, cae
-    escalations: admin || exec || caeRole,
+    // Escalations: anyone who can see escalations.
+    escalations: can('escalation:read'),
   };
 };
 
@@ -224,6 +233,12 @@ export const usePermissions = () => {
         userHasPermission(session, 'user:create')
         || userHasPermission(session, 'user:update')
         || userHasPermission(session, 'user:admin'),
+      canDeactivateUsers:
+        session.roles.includes('super_admin')
+        && userHasPermission(session, 'user:deactivate'),
+      canDeleteUsers:
+        session.roles.includes('super_admin')
+        && userHasPermission(session, 'user:delete'),
       canReadUsers: userHasPermission(session, 'user:read'),
     }),
     [session],

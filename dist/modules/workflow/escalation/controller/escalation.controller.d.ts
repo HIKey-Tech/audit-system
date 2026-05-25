@@ -7,7 +7,7 @@ export declare class EscalationController {
     private _registerRoutes;
     private _getEscalationHistory;
     private _acknowledgeEscalation;
-    private _getEscalationPolicy;
+    private _listEscalationPolicies;
     private _createOrUpdateEscalationPolicy;
 }
 //# sourceMappingURL=escalation.controller.d.ts.map

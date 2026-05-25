@@ -12,6 +12,7 @@ import {
   CreateTemplateRequestSchema,
   UpdateTemplateRequestSchema,
   TemplateQuerySchema,
+  DocumentListQuerySchema,
 } from '../dto/request/document.request.dto';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
@@ -125,6 +126,18 @@ export class DocumentController {
     // ────────── Document CRUD ──────────
 
     /**
+     * @route  GET /documents
+     * @desc   List documents (paginated, optional entityType + search filters)
+     * @access Private — document:read
+     */
+    this.router.get(
+      '/',
+      requirePermission('document:read'),
+      validate(DocumentListQuerySchema, 'query'),
+      this._list.bind(this),
+    );
+
+    /**
      * @route  POST /documents
      * @desc   Upload a new document (multipart/form-data, field "file")
      * @access Private — document:write
@@ -157,6 +170,19 @@ export class DocumentController {
       '/:id/download',
       requirePermission('document:read'),
       this._getDownloadUrl.bind(this),
+    );
+
+    /**
+     * @route  GET /documents/:id/file
+     * @desc   Stream the raw file bytes for a document, regardless of
+     *         storage provider. Lets the browser download from a same-origin
+     *         URL so cross-origin S3/Azure objects don't require bucket CORS.
+     * @access Private — document:read
+     */
+    this.router.get(
+      '/:id/file',
+      requirePermission('document:read'),
+      this._getFileById.bind(this),
     );
 
     /**
@@ -284,21 +310,46 @@ export class DocumentController {
     }
   }
 
-  private async _serve(req: Request, res: Response, next: NextFunction): Promise<void> {
+  private async _list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const file = await this.documentService.serveFile(req.params.storedName);
-      // RFC 5987 encoding keeps non-ASCII filenames intact for browsers.
-      const encodedName = encodeURIComponent(file.originalName);
-      res.setHeader('Content-Type', file.mimeType);
-      res.setHeader('Content-Length', file.fileSize);
-      res.setHeader(
-        'Content-Disposition',
-        `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`,
-      );
-      res.status(200).send(file.buffer);
+      const { documents, meta } = await this.documentService.list(req.query as never);
+      res.status(200).json({ ...buildResponse(documents), meta });
     } catch (err) {
       next(err);
     }
+  }
+
+  private async _serve(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const file = await this.documentService.serveFile(req.params.storedName);
+      this._sendFile(res, file);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getFileById(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const file = await this.documentService.getFileById(req.params.id);
+      this._sendFile(res, file);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private _sendFile(
+    res: Response,
+    file: { buffer: Buffer; mimeType: string; originalName: string; fileSize: number },
+  ): void {
+    // RFC 5987 encoding keeps non-ASCII filenames intact for browsers.
+    const encodedName = encodeURIComponent(file.originalName);
+    res.setHeader('Content-Type', file.mimeType);
+    res.setHeader('Content-Length', file.fileSize);
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`,
+    );
+    res.status(200).send(file.buffer);
   }
 
   // ──────────────────────────────────────────────────────────

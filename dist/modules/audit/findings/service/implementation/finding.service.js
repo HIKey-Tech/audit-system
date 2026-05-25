@@ -4,13 +4,19 @@ exports.FindingService = void 0;
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
+const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const finding_response_dto_1 = require("../../dto/response/finding.response.dto");
+const findingInclude = {
+    engagement: { select: { reference_number: true } },
+    auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+    created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+};
 class FindingService {
     async createFinding(engagementId, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'finding:create');
         await this._assertEngagementAllowsFindings(engagementId);
         if (dto.workingPaperId) {
             await this._assertWorkingPaperInEngagement(dto.workingPaperId, engagementId);
@@ -65,7 +71,7 @@ class FindingService {
         return (0, finding_response_dto_1.mapFindingToResponse)(updated);
     }
     async updateFindingStatus(id, newStatus, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'finding:update');
         const finding = await this._getFinding(id);
         (0, audit_utility_1.assertTransition)(finding.status, newStatus, audit_utility_1.FINDING_TRANSITIONS, 'finding');
         const updated = await prisma_client_1.prisma.audit_Finding.update({
@@ -77,7 +83,7 @@ class FindingService {
         return (0, finding_response_dto_1.mapFindingToResponse)(updated);
     }
     async closeFinding(id, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'finding:close');
         const finding = await this._getFinding(id);
         if (finding.status !== audit_enum_1.FindingStatus.Verified)
             throw app_error_1.AppError.badRequest('Only verified findings can be closed');
@@ -90,32 +96,78 @@ class FindingService {
         return (0, finding_response_dto_1.mapFindingToResponse)(updated);
     }
     async getFindingById(id, actor) {
+        const isAuditee = !actor.permissions.includes('engagement:read');
         const finding = await prisma_client_1.prisma.audit_Finding.findFirst({
             where: {
                 id,
                 deleted_at: null,
-                ...((0, audit_utility_1.hasAuditeeRole)(actor.roles) && { auditee_id: actor.id }),
+                ...(isAuditee && { auditee_id: actor.id }),
             },
-            include: { evidence: true, follow_up: { include: { remediation_evidence: true } } },
+            include: {
+                ...findingInclude,
+                evidence: true,
+                follow_up: { include: { remediation_evidence: true } },
+            },
         });
         if (!finding)
             throw app_error_1.AppError.notFound('Audit finding');
         return (0, finding_response_dto_1.mapFindingToResponse)(finding);
     }
+    async listAllFindings(query, actor) {
+        const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const where = this._buildFindingWhere(query, actor);
+        const [total, findings] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Finding.count({ where }),
+            prisma_client_1.prisma.audit_Finding.findMany({
+                where,
+                include: findingInclude,
+                orderBy: { [query.sortBy]: query.sortOrder },
+                skip,
+                take,
+            }),
+        ]);
+        return {
+            findings: findings.map(finding_response_dto_1.mapFindingToResponse),
+            meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
+        };
+    }
     async listFindings(engagementId, query, actor) {
         const findings = await prisma_client_1.prisma.audit_Finding.findMany({
             where: {
+                ...this._buildFindingWhere(query, actor),
                 engagement_id: engagementId,
-                deleted_at: null,
-                ...(query.severity && { severity: query.severity }),
-                ...(query.status && { status: query.status }),
-                ...(query.category && { category: query.category }),
-                ...(query.auditeeId && { auditee_id: query.auditeeId }),
-                ...((0, audit_utility_1.hasAuditeeRole)(actor.roles) && { auditee_id: actor.id }),
             },
+            include: findingInclude,
             orderBy: { created_at: 'desc' },
         });
         return findings.map(finding_response_dto_1.mapFindingToResponse);
+    }
+    _buildFindingWhere(query, actor) {
+        const isOversight = actor.permissions.includes('finding:read_all');
+        const isAuditee = !actor.permissions.includes('engagement:read');
+        return {
+            deleted_at: null,
+            ...(query.severity && { severity: query.severity }),
+            ...(query.status && { status: query.status }),
+            ...(query.category && { category: query.category }),
+            ...(query.auditeeId && { auditee_id: query.auditeeId }),
+            ...(query.search && {
+                OR: [
+                    { title: { contains: query.search } },
+                    { description: { contains: query.search } },
+                    { recommendation: { contains: query.search } },
+                ],
+            }),
+            ...(isAuditee && { auditee_id: actor.id }),
+            ...(!isOversight && !isAuditee && {
+                engagement: {
+                    OR: [
+                        { lead_auditor_id: actor.id },
+                        { workflow_assignments: { some: { user_id: actor.id } } },
+                    ],
+                },
+            }),
+        };
     }
     async _assertEngagementAllowsFindings(engagementId) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({

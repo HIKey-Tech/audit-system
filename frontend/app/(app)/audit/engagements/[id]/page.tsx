@@ -22,6 +22,7 @@ import { FindingsTab } from '@/components/audit/engagements/FindingsTab';
 import { ChecklistsTab } from '@/components/audit/engagements/ChecklistsTab';
 import { ReportTab } from '@/components/audit/engagements/ReportTab';
 import { FollowUpTab } from '@/components/audit/engagements/FollowUpTab';
+import { StatusStepper } from '@/components/audit/engagements/StatusStepper';
 
 type TabKey =
   | 'overview'
@@ -109,6 +110,8 @@ export default function EngagementDetailPage(): JSX.Element {
           </div>
         }
       />
+
+      <StatusStepper engagement={data} />
 
       <div className="mb-6">
         <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />

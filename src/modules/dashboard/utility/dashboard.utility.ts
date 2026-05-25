@@ -1,32 +1,12 @@
-// Roles whose holder always sees data across the entire organisation.
-export const DASHBOARD_ADMIN_ROLES: readonly string[] = [
-  'super_admin',
-  'audit_admin',
-  'audit_manager',
-  'director',
-  'cae',
-];
-
-export const DASHBOARD_AUDITOR_ROLES: readonly string[] = [
-  'audit_lead',
-  'auditor',
-];
-
-export const AUDITEE_ROLE = 'auditee';
-
-export const hasAdminLevelRole = (roles: string[]): boolean =>
-  roles.some((role) => DASHBOARD_ADMIN_ROLES.includes(role));
-
 // True when the user must be scoped to engagements they lead.
-// Admin-level roles always override the scoping.
-export const isRestrictedAuditor = (roles: string[]): boolean =>
-  !hasAdminLevelRole(roles)
-  && roles.some((role) => DASHBOARD_AUDITOR_ROLES.includes(role));
+// Having engagement:read_all overrides the scoping.
+export const isRestrictedAuditor = (permissions: string[]): boolean =>
+  !permissions.includes('engagement:read_all') && permissions.includes('engagement:read');
 
 // True when the user must be scoped to findings against them.
-// Admin-level roles always override the scoping.
-export const isRestrictedAuditee = (roles: string[]): boolean =>
-  !hasAdminLevelRole(roles) && roles.includes(AUDITEE_ROLE);
+// Having finding:read_all overrides the scoping.
+export const isRestrictedAuditee = (permissions: string[]): boolean =>
+  !permissions.includes('finding:read_all') && (permissions.includes('followup:respond') || !permissions.includes('engagement:read'));
 
 export const startOfCurrentYear = (now: Date = new Date()): Date =>
   new Date(now.getFullYear(), 0, 1);

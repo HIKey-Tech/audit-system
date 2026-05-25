@@ -53,6 +53,13 @@ export class AssignmentController {
      * @access Private - audit:write
      */
     this.router.delete('/:id', requirePermission('assignment:delete'), this._removeAssignment.bind(this));
+
+    /**
+     * @route  GET /workflow/assignments/candidates/:engagementId
+     * @desc   Get candidate users for engagement assignment with skills and workload
+     * @access Private - assignment:read
+     */
+    this.router.get('/candidates/:engagementId', requirePermission('assignment:read'), this._getCandidates.bind(this));
   }
 
   private async _assignStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -95,6 +102,15 @@ export class AssignmentController {
     try {
       await this.assignmentService.removeAssignment(req.params.id, req.user!);
       res.status(200).json(buildResponse(null, 'Assignment removed'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getCandidates(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const candidates = await this.assignmentService.getCandidates(req.params.engagementId);
+      res.json(buildResponse(candidates, 'Candidates retrieved'));
     } catch (err) {
       next(err);
     }

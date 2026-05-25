@@ -1,3 +1,4 @@
+import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus } from '../../../domain/enum/audit.enum';
 import { CreateFindingRequestDto, FindingQueryDto, UpdateFindingRequestDto } from '../../dto/request/finding.request.dto';
@@ -8,6 +9,10 @@ export interface IFindingService {
     updateFindingStatus(id: string, newStatus: FindingStatus, actor: ActorContext): Promise<FindingResponseDto>;
     closeFinding(id: string, actor: ActorContext): Promise<FindingResponseDto>;
     getFindingById(id: string, actor: ActorContext): Promise<FindingResponseDto>;
+    listAllFindings(query: FindingQueryDto, actor: ActorContext): Promise<{
+        findings: FindingResponseDto[];
+        meta: PaginationMeta;
+    }>;
     listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]>;
 }
 //# sourceMappingURL=finding.service.interface.d.ts.map

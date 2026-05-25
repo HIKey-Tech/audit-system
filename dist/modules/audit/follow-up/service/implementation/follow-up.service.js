@@ -10,6 +10,10 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const follow_up_response_dto_1 = require("../../dto/response/follow-up.response.dto");
 class FollowUpService {
+    documentService;
+    constructor(documentService) {
+        this.documentService = documentService;
+    }
     async createFollowUp(findingId) {
         const finding = await prisma_client_1.prisma.audit_Finding.findFirst({
             where: { id: findingId, deleted_at: null },
@@ -93,8 +97,45 @@ class FollowUpService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.evidence.submit', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: { evidenceId } });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
+    async uploadRemediationEvidence(findingId, file, actor) {
+        if (!this.documentService)
+            throw app_error_1.AppError.internal('Document service is not configured for follow-up evidence upload');
+        const finding = await this._getFinding(findingId);
+        if (finding.auditee_id !== actor.id)
+            throw app_error_1.AppError.forbidden('Only the assigned auditee can submit remediation evidence');
+        const document = await this.documentService.upload({
+            uploadedById: actor.id,
+            originalName: file.originalName,
+            mimeType: file.mimeType,
+            fileSize: file.fileSize,
+            buffer: file.buffer,
+            module: 'audit',
+            entityType: 'audit_follow_up_evidence',
+            entityId: findingId,
+        });
+        const evidence = await prisma_client_1.prisma.audit_Evidence.create({
+            data: {
+                engagement_id: finding.engagement_id,
+                finding_id: findingId,
+                document_id: document.id,
+                file_name: file.originalName,
+                file_type: file.mimeType,
+                uploaded_by_id: actor.id,
+            },
+        });
+        logger_util_1.logger.info('Remediation evidence uploaded', { findingId, evidenceId: evidence.id, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.follow_up.evidence.upload',
+            module: 'audit',
+            entityType: 'audit_follow_up',
+            entityId: findingId,
+            newValues: { evidenceId: evidence.id, documentId: document.id },
+        });
+        return this.submitRemediationEvidence(findingId, evidence.id, actor);
+    }
     async verifyRemediation(findingId, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'followup:verify');
         const finding = await this._getFinding(findingId);
         const followUp = await prisma_client_1.prisma.$transaction(async (tx) => {
             if (dto.verificationStatus === audit_enum_1.VerificationStatus.Verified) {

@@ -12,7 +12,7 @@ import { Table, type Column } from '@/components/ui/Table';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
-import { findingsApi, engagementsApi } from '@/lib/api/audit';
+import { findingsApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditFinding } from '@/lib/types/domain';
@@ -24,25 +24,17 @@ export default function FindingsListPage(): JSX.Element {
   const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState('');
   const [category, setCategory] = useState('');
-  const [engagementId, setEngagementId] = useState('');
 
-  /* Fetch engagements for the selector */
-  const engagements = useQuery({
-    queryKey: ['engagements', 'all'],
-    queryFn: () => engagementsApi.list({ pageSize: 100 }),
-  });
-
-  /* Fix 2: findingsApi.list now requires an engagementId */
   const query = useQuery({
-    queryKey: ['findings', { engagementId, search, severity, status, category }],
+    queryKey: ['findings', { search, severity, status, category }],
     queryFn: () =>
-      findingsApi.list(engagementId, {
+      findingsApi.list({
+        pageSize: 100,
         search: search || undefined,
         severity: severity || undefined,
         status: status || undefined,
         category: category || undefined,
       }),
-    enabled: Boolean(engagementId),
   });
 
   const columns: Column<AuditFinding>[] = [
@@ -114,15 +106,7 @@ export default function FindingsListPage(): JSX.Element {
       />
 
       <Card padded className="mb-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-5">
-          <Select value={engagementId} onChange={(e) => setEngagementId(e.target.value)}>
-            <option value="">Select engagement…</option>
-            {engagements.data?.items.map((eng) => (
-              <option key={eng.id} value={eng.id}>
-                {eng.referenceNumber} — {eng.title}
-              </option>
-            ))}
-          </Select>
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Input
             placeholder="Search findings…"
             leftIcon={<Search className="h-4 w-4" />}
@@ -157,33 +141,22 @@ export default function FindingsListPage(): JSX.Element {
         </div>
       </Card>
 
-      {!engagementId ? (
-        <Card padded>
+      <Table<AuditFinding>
+        columns={columns}
+        data={query.data?.items ?? []}
+        rowKey={(f) => f.id}
+        isLoading={query.isLoading}
+        isError={query.isError}
+        onRetry={() => query.refetch()}
+        onRowClick={(f) => router.push(`/audit/findings/${f.id}`)}
+        emptyState={
           <EmptyState
             icon={<AlertTriangle className="h-4 w-4" />}
-            title="Select an engagement"
-            description="Choose an engagement above to view its findings."
+            title="No findings"
+            description="Findings raised across engagements will appear here."
           />
-        </Card>
-      ) : (
-        <Table<AuditFinding>
-          columns={columns}
-          data={query.data ?? []}
-          rowKey={(f) => f.id}
-          isLoading={query.isLoading}
-          isError={query.isError}
-          onRetry={() => query.refetch()}
-          onRowClick={(f) => router.push(`/audit/findings/${f.id}`)}
-          emptyState={
-            <EmptyState
-              icon={<AlertTriangle className="h-4 w-4" />}
-              title="No findings"
-              description="Findings raised against this engagement will appear here."
-            />
-          }
-        />
-      )}
+        }
+      />
     </div>
   );
 }
-

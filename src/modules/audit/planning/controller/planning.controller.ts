@@ -7,6 +7,7 @@ import {
   CreatePlanRequestSchema,
   PlanQuerySchema,
   RejectPlanRequestSchema,
+  UpdatePlanRequestSchema,
 } from '../dto/request/planning.request.dto';
 import { IPlanningService } from '../service/interface/planning.service.interface';
 
@@ -41,6 +42,20 @@ export class PlanningController {
      * @access Private - audit:read
      */
     this.router.get('/:id', requirePermission('plan:read'), this._getPlanById.bind(this));
+
+    /**
+     * @route  PUT /audit/plans/:id
+     * @desc   Update draft audit plan
+     * @access Private - audit:write
+     */
+    this.router.put('/:id', requirePermission('plan:update'), validate(UpdatePlanRequestSchema), this._updatePlan.bind(this));
+
+    /**
+     * @route  DELETE /audit/plans/:id
+     * @desc   Delete draft audit plan
+     * @access Private - audit:write
+     */
+    this.router.delete('/:id', requirePermission('plan:update'), this._deletePlan.bind(this));
 
     /**
      * @route  POST /audit/plans/:id/items
@@ -91,6 +106,24 @@ export class PlanningController {
     try {
       const plan = await this.planningService.addPlanItem(req.params.id, req.body, req.user!);
       res.status(201).json(buildResponse(plan, 'Audit plan item added'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _updatePlan(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const plan = await this.planningService.updatePlan(req.params.id, req.body, req.user!);
+      res.status(200).json(buildResponse(plan, 'Audit plan updated'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _deletePlan(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await this.planningService.deletePlan(req.params.id, req.user!);
+      res.status(200).json(buildResponse(null, 'Audit plan deleted'));
     } catch (err) {
       next(err);
     }

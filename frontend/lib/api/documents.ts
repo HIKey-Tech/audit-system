@@ -1,5 +1,6 @@
 import { api } from '../api-client';
 import type { DocumentDto, DocumentVersionDto, DocumentTemplateDto } from '../types/domain';
+import type { PaginatedResult } from '../types/api';
 
 export interface DocumentsListQuery {
   page?: number;
@@ -9,7 +10,25 @@ export interface DocumentsListQuery {
   search?: string;
 }
 
+const triggerBlobDownload = (blob: Blob, fileName: string): void => {
+  const objectUrl = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = objectUrl;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  anchor.remove();
+  URL.revokeObjectURL(objectUrl);
+};
+
 export const documentsApi = {
+  list: (query: DocumentsListQuery) =>
+    api.getPaginated<DocumentDto>('/documents', {
+      page: query.page,
+      pageSize: query.pageSize,
+      entityType: query.entityType,
+      search: query.search,
+    }),
   upload: (
     file: File,
     opts?: { module?: string; entityType?: string; entityId?: string; description?: string },
@@ -41,5 +60,19 @@ export const documentsApi = {
   updateTemplate: (id: string, dto: { name?: string; description?: string; content?: string; isActive?: boolean }) =>
     api.patch<DocumentTemplateDto>(`/documents/templates/${id}`, dto),
   deleteTemplate: (id: string) => api.delete(`/documents/templates/${id}`),
-  downloadUrl: (id: string) => `/api/proxy/documents/${id}/download`,
+  // Same-origin streaming URL — works for any storage provider (local, S3,
+  // Azure) without requiring bucket CORS, because bytes are proxied through
+  // our own origin.
+  downloadUrl: (id: string) => `/api/proxy/documents/${id}/file`,
+  download: async (id: string, fileName: string): Promise<void> => {
+    const res = await fetch(`/api/proxy/documents/${id}/file`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      throw new Error(`Failed to download file (status ${res.status})`);
+    }
+    triggerBlobDownload(await res.blob(), fileName);
+  },
 };
+
+export type DocumentsListResult = PaginatedResult<DocumentDto>;

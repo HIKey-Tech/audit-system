@@ -7,6 +7,7 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     phone: z.ZodOptional<z.ZodString>;
     department: z.ZodOptional<z.ZodString>;
     jobTitle: z.ZodOptional<z.ZodString>;
+    skills: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     password: z.ZodOptional<z.ZodString>;
     roleIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
@@ -15,6 +16,7 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     lastName: string;
     phone?: string | undefined;
     department?: string | undefined;
+    skills?: string[] | undefined;
     password?: string | undefined;
     displayName?: string | undefined;
     jobTitle?: string | undefined;
@@ -25,6 +27,7 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     lastName: string;
     phone?: string | undefined;
     department?: string | undefined;
+    skills?: string[] | undefined;
     password?: string | undefined;
     displayName?: string | undefined;
     jobTitle?: string | undefined;
@@ -37,23 +40,23 @@ export declare const UpdateUserRequestSchema: z.ZodObject<{
     phone: z.ZodOptional<z.ZodString>;
     department: z.ZodOptional<z.ZodString>;
     jobTitle: z.ZodOptional<z.ZodString>;
-    isActive: z.ZodOptional<z.ZodBoolean>;
+    skills: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
     phone?: string | undefined;
     department?: string | undefined;
+    skills?: string[] | undefined;
     displayName?: string | undefined;
     firstName?: string | undefined;
     lastName?: string | undefined;
     jobTitle?: string | undefined;
-    isActive?: boolean | undefined;
 }, {
     phone?: string | undefined;
     department?: string | undefined;
+    skills?: string[] | undefined;
     displayName?: string | undefined;
     firstName?: string | undefined;
     lastName?: string | undefined;
     jobTitle?: string | undefined;
-    isActive?: boolean | undefined;
 }>;
 export declare const AssignRoleRequestSchema: z.ZodObject<{
     roleIds: z.ZodArray<z.ZodString, "many">;

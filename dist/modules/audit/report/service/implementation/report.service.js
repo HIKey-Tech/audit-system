@@ -5,6 +5,7 @@ const date_fns_1 = require("date-fns");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
+const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
@@ -34,7 +35,7 @@ class ReportService {
         this.approvalService = approvalService;
     }
     async generateReport(engagementId, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'report:create');
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
             include: { findings: { where: { deleted_at: null } } },
@@ -124,7 +125,7 @@ class ReportService {
         return (0, report_response_dto_1.mapReportToResponse)(submittedReport);
     }
     async approveReport(id, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'report:approve');
         const report = await this._getReport(id);
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be approved');
@@ -141,7 +142,7 @@ class ReportService {
         return (0, report_response_dto_1.mapReportToResponse)(updated);
     }
     async rejectReport(id, reason, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'report:reject');
         const report = await this._getReport(id);
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be rejected');
@@ -158,7 +159,7 @@ class ReportService {
         return (0, report_response_dto_1.mapReportToResponse)(updated);
     }
     async issueReport(id, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'report:issue');
         const report = await prisma_client_1.prisma.audit_Report.findFirst({
             where: { id, deleted_at: null },
             include: reportInclude,
@@ -262,6 +263,43 @@ class ReportService {
         if (!report)
             throw app_error_1.AppError.notFound('Audit report');
         return (0, report_response_dto_1.mapReportToResponse)(report);
+    }
+    async getReportById(id) {
+        const report = await prisma_client_1.prisma.audit_Report.findFirst({
+            where: { id, deleted_at: null },
+            include: reportInclude,
+        });
+        if (!report)
+            throw app_error_1.AppError.notFound('Audit report');
+        return (0, report_response_dto_1.mapReportToResponse)(report);
+    }
+    async listReports(query) {
+        const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const where = {
+            deleted_at: null,
+            ...(query.status && { status: query.status }),
+            ...(query.search && {
+                OR: [
+                    { title: { contains: query.search } },
+                    { executive_summary: { contains: query.search } },
+                    { engagement: { reference_number: { contains: query.search } } },
+                ],
+            }),
+        };
+        const [total, reports] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Report.count({ where }),
+            prisma_client_1.prisma.audit_Report.findMany({
+                where,
+                include: reportInclude,
+                orderBy: { [query.sortBy]: query.sortOrder },
+                skip,
+                take,
+            }),
+        ]);
+        return {
+            reports: reports.map(report_response_dto_1.mapReportToResponse),
+            meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
+        };
     }
     async exportReport(id, format) {
         const file = await this.reportGenerationService.exportReport(id, format);

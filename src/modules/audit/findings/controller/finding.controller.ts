@@ -36,6 +36,13 @@ export class FindingController {
     this.router.get('/engagements/:id/findings', requirePermission('finding:read'), validate(FindingQuerySchema, 'query'), this._listFindings.bind(this));
 
     /**
+     * @route  GET /audit/findings
+     * @desc   List findings across engagements
+     * @access Private - audit:read
+     */
+    this.router.get('/findings', requirePermission('finding:read'), validate(FindingQuerySchema, 'query'), this._listAllFindings.bind(this));
+
+    /**
      * @route  GET /audit/findings/:id
      * @desc   Get finding
      * @access Private - finding:read
@@ -113,6 +120,15 @@ export class FindingController {
     try {
       const findings = await this.findingService.listFindings(req.params.id, req.query as never, req.user!);
       res.status(200).json(buildResponse(findings));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listAllFindings(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { findings, meta } = await this.findingService.listAllFindings(req.query as never, req.user!);
+      res.status(200).json(buildResponse(findings, 'Findings retrieved', meta));
     } catch (err) {
       next(err);
     }

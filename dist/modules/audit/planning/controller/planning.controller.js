@@ -35,6 +35,18 @@ class PlanningController {
          */
         this.router.get('/:id', (0, auth_middleware_1.requirePermission)('plan:read'), this._getPlanById.bind(this));
         /**
+         * @route  PUT /audit/plans/:id
+         * @desc   Update draft audit plan
+         * @access Private - audit:write
+         */
+        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('plan:update'), (0, validate_middleware_1.validate)(planning_request_dto_1.UpdatePlanRequestSchema), this._updatePlan.bind(this));
+        /**
+         * @route  DELETE /audit/plans/:id
+         * @desc   Delete draft audit plan
+         * @access Private - audit:write
+         */
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('plan:update'), this._deletePlan.bind(this));
+        /**
          * @route  POST /audit/plans/:id/items
          * @desc   Add audit plan item
          * @access Private - audit:write
@@ -78,6 +90,24 @@ class PlanningController {
         try {
             const plan = await this.planningService.addPlanItem(req.params.id, req.body, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(plan, 'Audit plan item added'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _updatePlan(req, res, next) {
+        try {
+            const plan = await this.planningService.updatePlan(req.params.id, req.body, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(plan, 'Audit plan updated'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _deletePlan(req, res, next) {
+        try {
+            await this.planningService.deletePlan(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(null, 'Audit plan deleted'));
         }
         catch (err) {
             next(err);

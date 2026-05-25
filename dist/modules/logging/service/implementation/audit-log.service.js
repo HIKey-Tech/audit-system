@@ -2,6 +2,16 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.auditLogService = exports.AuditLogService = void 0;
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
+const auditLogUserInclude = {
+    user: {
+        select: {
+            display_name: true,
+            first_name: true,
+            last_name: true,
+            email: true,
+        },
+    },
+};
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
@@ -42,6 +52,7 @@ class AuditLogService {
             prisma_client_1.prisma.audit_Log.count({ where }),
             prisma_client_1.prisma.audit_Log.findMany({
                 where,
+                include: auditLogUserInclude,
                 orderBy: { created_at: query.sortOrder },
                 skip,
                 take,
@@ -55,6 +66,7 @@ class AuditLogService {
     async getLogById(id) {
         const log = await prisma_client_1.prisma.audit_Log.findUnique({
             where: { id },
+            include: auditLogUserInclude,
         });
         if (!log) {
             throw app_error_1.AppError.notFound('Audit log');

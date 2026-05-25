@@ -76,19 +76,34 @@ export declare const UpdateFindingStatusRequestSchema: z.ZodObject<{
     status: FindingStatus;
 }>;
 export declare const FindingQuerySchema: z.ZodObject<{
+    page: z.ZodDefault<z.ZodNumber>;
+    pageSize: z.ZodDefault<z.ZodNumber>;
+    search: z.ZodOptional<z.ZodString>;
     severity: z.ZodOptional<z.ZodNativeEnum<typeof FindingSeverity>>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof FindingStatus>>;
     category: z.ZodOptional<z.ZodNativeEnum<typeof FindingCategory>>;
     auditeeId: z.ZodOptional<z.ZodString>;
+    sortBy: z.ZodDefault<z.ZodEnum<["created_at", "updated_at", "due_date", "severity", "status"]>>;
+    sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "strip", z.ZodTypeAny, {
+    page: number;
+    pageSize: number;
+    sortBy: "created_at" | "updated_at" | "status" | "severity" | "due_date";
+    sortOrder: "asc" | "desc";
+    search?: string | undefined;
     status?: FindingStatus | undefined;
     category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     auditeeId?: string | undefined;
 }, {
+    search?: string | undefined;
     status?: FindingStatus | undefined;
     category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    sortBy?: "created_at" | "updated_at" | "status" | "severity" | "due_date" | undefined;
+    sortOrder?: "asc" | "desc" | undefined;
     auditeeId?: string | undefined;
 }>;
 export type CreateFindingRequestDto = z.infer<typeof CreateFindingRequestSchema>;

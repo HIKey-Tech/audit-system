@@ -46,6 +46,12 @@ class AssignmentController {
          * @access Private - audit:write
          */
         this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('assignment:delete'), this._removeAssignment.bind(this));
+        /**
+         * @route  GET /workflow/assignments/candidates/:engagementId
+         * @desc   Get candidate users for engagement assignment with skills and workload
+         * @access Private - assignment:read
+         */
+        this.router.get('/candidates/:engagementId', (0, auth_middleware_1.requirePermission)('assignment:read'), this._getCandidates.bind(this));
     }
     async _assignStaff(req, res, next) {
         try {
@@ -87,6 +93,15 @@ class AssignmentController {
         try {
             await this.assignmentService.removeAssignment(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(null, 'Assignment removed'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getCandidates(req, res, next) {
+        try {
+            const candidates = await this.assignmentService.getCandidates(req.params.engagementId);
+            res.json((0, api_response_type_1.buildResponse)(candidates, 'Candidates retrieved'));
         }
         catch (err) {
             next(err);

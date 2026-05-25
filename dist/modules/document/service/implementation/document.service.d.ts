@@ -1,13 +1,18 @@
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 import { IDocumentService } from '../interface/document.service.interface';
-import { UploadDocumentDto, UploadVersionDto, CreateTemplateRequestDto, UpdateTemplateRequestDto, TemplateQueryDto } from '../../dto/request/document.request.dto';
+import { UploadDocumentDto, UploadVersionDto, CreateTemplateRequestDto, UpdateTemplateRequestDto, TemplateQueryDto, DocumentListQueryDto } from '../../dto/request/document.request.dto';
 import { DocumentResponseDto, DocumentVersionResponseDto, DocumentTemplateResponseDto, ServedFileDto } from '../../dto/response/document.response.dto';
 export declare class DocumentService implements IDocumentService {
     upload(dto: UploadDocumentDto): Promise<DocumentResponseDto>;
     getById(id: string): Promise<DocumentResponseDto>;
     getDownloadUrl(id: string): Promise<string>;
     delete(id: string, actorId: string): Promise<void>;
+    list(query: DocumentListQueryDto): Promise<{
+        documents: DocumentResponseDto[];
+        meta: PaginationMeta;
+    }>;
     listByEntity(entityType: string, entityId: string): Promise<DocumentResponseDto[]>;
+    getFileById(id: string): Promise<ServedFileDto>;
     serveFile(storedName: string): Promise<ServedFileDto>;
     uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;
     listVersions(documentId: string): Promise<DocumentVersionResponseDto[]>;
@@ -22,6 +27,10 @@ export declare class DocumentService implements IDocumentService {
     updateTemplate(id: string, dto: UpdateTemplateRequestDto, actorId: string): Promise<DocumentTemplateResponseDto>;
     deleteTemplate(id: string, actorId: string): Promise<void>;
     renderDocxTemplate(category: string, data: Record<string, unknown>): Promise<Buffer>;
+    pruneOldVersions(): Promise<{
+        prunedCount: number;
+        failedCount: number;
+    }>;
     private _storageClient;
     private _assertTemplateExists;
     private _assertDocumentExists;

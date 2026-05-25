@@ -16,6 +16,7 @@ import { formatDate, initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
+import { ManageAssignmentsSlideOver } from './ManageAssignmentsSlideOver';
 
 const NEXT_STATUS: Record<string, string | null> = {
   planned: 'in_progress',
@@ -28,6 +29,8 @@ const NEXT_STATUS: Record<string, string | null> = {
 export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
   const canUpdateEngagement = usePermission('engagement:update');
+  const canManageAssignments = usePermission('assignment:create') || usePermission('assignment:delete');
+  const [showAssignments, setShowAssignments] = useState(false);
 
   const assignments = useQuery({
     queryKey: ['engagements', engagement.id, 'assignments'],
@@ -180,7 +183,17 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
         </Card>
 
         <Card>
-          <CardHeader title="Assigned staff" subtitle={`${assignments.data?.length ?? 0} active`} />
+          <CardHeader
+            title="Assigned staff"
+            subtitle={`${assignments.data?.length ?? 0} active`}
+            action={
+              canManageAssignments ? (
+                <Button size="sm" variant="secondary" onClick={() => setShowAssignments(true)}>
+                  Manage
+                </Button>
+              ) : null
+            }
+          />
           {assignments.isLoading ? (
             <p className="text-xs text-text-muted">Loading…</p>
           ) : !assignments.data || assignments.data.length === 0 ? (
@@ -206,6 +219,12 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
           )}
         </Card>
       </div>
+
+      <ManageAssignmentsSlideOver
+        open={showAssignments}
+        onClose={() => setShowAssignments(false)}
+        engagement={engagement}
+      />
     </div>
   );
 };

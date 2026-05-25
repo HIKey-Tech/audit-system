@@ -17,7 +17,7 @@ class EngagementService {
         this.checklistService = checklistService;
     }
     async createFromPlanItem(planItemId, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:create');
         const planItem = await prisma_client_1.prisma.audit_Plan_Item.findUnique({
             where: { id: planItemId },
             include: { plan: true },
@@ -59,7 +59,7 @@ class EngagementService {
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement);
     }
     async createAdhoc(dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:create');
         if (!dto.adhocReason)
             throw app_error_1.AppError.badRequest('Ad-hoc reason is required');
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
@@ -87,7 +87,7 @@ class EngagementService {
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement);
     }
     async updateEngagement(id, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:update');
         await this._assertEngagementExists(id);
         const engagement = await prisma_client_1.prisma.audit_Engagement.update({
             where: { id },
@@ -109,7 +109,7 @@ class EngagementService {
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement);
     }
     async updateStatus(id, newStatus, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:update');
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id, deleted_at: null },
             include: engagementInclude,
@@ -156,11 +156,12 @@ class EngagementService {
         return this._withMetrics(updated);
     }
     async getEngagementById(id, actor) {
+        const isAuditee = !actor.permissions.includes('engagement:read');
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: {
                 id,
                 deleted_at: null,
-                ...((0, audit_utility_1.hasAuditeeRole)(actor.roles) && { auditee_id: actor.id }),
+                ...(isAuditee && { auditee_id: actor.id }),
             },
             include: engagementInclude,
         });
@@ -170,8 +171,8 @@ class EngagementService {
     }
     async listEngagements(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
-        const isAdmin = actor.roles.some((role) => audit_utility_1.AUDIT_ADMIN_ROLES.includes(role));
-        const isAuditee = (0, audit_utility_1.hasAuditeeRole)(actor.roles);
+        const canReadAll = actor.permissions.includes('engagement:read_all');
+        const isAuditee = !actor.permissions.includes('engagement:read');
         const where = {
             deleted_at: null,
             ...(query.status && { status: query.status }),
@@ -179,7 +180,12 @@ class EngagementService {
             ...(query.leadAuditorId && { lead_auditor_id: query.leadAuditorId }),
             ...(query.auditManagerId && { audit_manager_id: query.auditManagerId }),
             ...(isAuditee && { auditee_id: actor.id }),
-            ...(!isAdmin && !isAuditee && { lead_auditor_id: actor.id }),
+            ...(!canReadAll && !isAuditee && {
+                OR: [
+                    { lead_auditor_id: actor.id },
+                    { workflow_assignments: { some: { user_id: actor.id } } },
+                ],
+            }),
         };
         const [total, engagements] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.count({ where }),

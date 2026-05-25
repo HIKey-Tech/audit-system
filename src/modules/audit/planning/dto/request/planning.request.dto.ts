@@ -6,6 +6,11 @@ export const CreatePlanRequestSchema = z.object({
   year: z.coerce.number().int().min(2000).max(2100),
 });
 
+export const UpdatePlanRequestSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  year: z.coerce.number().int().min(2000).max(2100).optional(),
+});
+
 export const AddPlanItemRequestSchema = z.object({
   universeId: z.string().uuid(),
   auditType: z.nativeEnum(AuditType),
@@ -28,6 +33,7 @@ export const PlanQuerySchema = z.object({
 });
 
 export type CreatePlanRequestDto = z.infer<typeof CreatePlanRequestSchema>;
+export type UpdatePlanRequestDto = z.infer<typeof UpdatePlanRequestSchema>;
 export type AddPlanItemRequestDto = z.infer<typeof AddPlanItemRequestSchema>;
 export type RejectPlanRequestDto = z.infer<typeof RejectPlanRequestSchema>;
 export type PlanQueryDto = z.infer<typeof PlanQuerySchema>;

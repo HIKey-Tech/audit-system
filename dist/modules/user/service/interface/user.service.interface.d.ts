@@ -21,6 +21,7 @@ export interface IUserService {
     replaceRolePermissions(id: string, dto: ReplaceRolePermissionsRequestDto, actorId: string): Promise<RoleListResponseDto>;
     listPermissionsGroupedByModule(): Promise<PermissionGroupResponseDto[]>;
     updateUser(id: string, dto: UpdateUserRequestDto, actorId: string): Promise<UserResponseDto>;
+    setUserActiveStatus(id: string, isActive: boolean, actorId: string): Promise<UserResponseDto>;
     deleteUser(id: string, actorId: string): Promise<void>;
     assignRoles(userId: string, dto: AssignRoleRequestDto, actorId: string): Promise<UserResponseDto>;
     removeRole(userId: string, roleId: string, actorId: string): Promise<UserResponseDto>;

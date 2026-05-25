@@ -5,7 +5,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { riskRegisterWithDetailsInclude, RiskRegisterWithDetails } from '../../../../../shared/prisma/prisma.types';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
 import { RiskStatus } from '../../../domain/enum/risk.enum';
-import { assertHasRole, getRiskScoreBand, hasAuditeeRole, RISK_ASSESSOR_ROLES } from '../../../utility/risk.utility';
+import { assertHasPermission, getRiskScoreBand } from '../../../utility/risk.utility';
 import { HighRiskQueryDto } from '../../dto/request/monitoring.request.dto';
 import {
   OrganizationRiskSummaryResponseDto,
@@ -20,10 +20,11 @@ export class RiskMonitoringService implements IMonitoringService {
     actor: RiskActorContext,
   ): Promise<{ risks: RiskRegisterResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
     const where: Prisma.Risk_RegisterWhereInput = {
       deleted_at: null,
       current_score: { gte: query.threshold },
-      ...(hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+      ...(restrictToOwner && { owner_id: actor.id }),
     };
 
     const [total, risks] = await prisma.$transaction([
@@ -44,7 +45,7 @@ export class RiskMonitoringService implements IMonitoringService {
   }
 
   async getRisksRequiringAttention(actor: RiskActorContext): Promise<RiskRegisterResponseDto[]> {
-    assertHasRole(actor.roles, RISK_ASSESSOR_ROLES);
+    assertHasPermission(actor.permissions, 'risk_monitoring:read');
 
     const staleCutoff = new Date();
     staleCutoff.setDate(staleCutoff.getDate() - 90);
@@ -67,11 +68,12 @@ export class RiskMonitoringService implements IMonitoringService {
   }
 
   async getRiskScoreTrend(riskId: string, actor: RiskActorContext): Promise<RiskScoreTrendResponseDto[]> {
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
     const risk = await prisma.risk_Register.findFirst({
       where: {
         id: riskId,
         deleted_at: null,
-        ...(hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+        ...(restrictToOwner && { owner_id: actor.id }),
       },
       select: { id: true },
     });
@@ -99,10 +101,11 @@ export class RiskMonitoringService implements IMonitoringService {
   }
 
   async getOrganizationRiskSummary(actor: RiskActorContext): Promise<OrganizationRiskSummaryResponseDto> {
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
     const risks = await prisma.risk_Register.findMany({
       where: {
         deleted_at: null,
-        ...(hasAuditeeRole(actor.roles) && { owner_id: actor.id }),
+        ...(restrictToOwner && { owner_id: actor.id }),
       },
       select: { current_score: true, status: true },
     });

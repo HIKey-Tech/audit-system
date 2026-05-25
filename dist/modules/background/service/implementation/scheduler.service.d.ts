@@ -13,6 +13,7 @@ export declare const JOB_KEYS: {
     readonly WORKFLOW_ESCALATION_HOURLY: "BG:WORKFLOW:ESCALATION:HOURLY";
     readonly LOG_ARCHIVE_WEEKLY: "BG:LOG:ARCHIVE:WEEKLY";
     readonly REPORT_GENERATE_MONTHLY: "BG:REPORT:GENERATE:MONTHLY";
+    readonly DOCUMENT_VERSION_PRUNE_WEEKLY: "BG:DOCUMENT:VERSION:PRUNE:WEEKLY";
 };
 export type JobKey = (typeof JOB_KEYS)[keyof typeof JOB_KEYS];
 interface RegisteredJob {

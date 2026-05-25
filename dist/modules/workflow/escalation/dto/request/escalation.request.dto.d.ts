@@ -10,13 +10,6 @@ export declare const EscalationEntityParamsSchema: z.ZodObject<{
     id: string;
     type: WorkflowEscalationEntityType;
 }>;
-export declare const EscalationPolicyQuerySchema: z.ZodObject<{
-    auditType: z.ZodDefault<z.ZodNativeEnum<typeof EscalationPolicyAuditType>>;
-}, "strip", z.ZodTypeAny, {
-    auditType: EscalationPolicyAuditType;
-}, {
-    auditType?: EscalationPolicyAuditType | undefined;
-}>;
 export declare const UpsertEscalationPolicyRequestSchema: z.ZodObject<{
     auditType: z.ZodNativeEnum<typeof EscalationPolicyAuditType>;
     level1Hours: z.ZodDefault<z.ZodNumber>;
@@ -39,6 +32,5 @@ export declare const UpsertEscalationPolicyRequestSchema: z.ZodObject<{
     level3Hours?: number | undefined;
     level4Hours?: number | undefined;
 }>;
-export type EscalationPolicyQueryDto = z.infer<typeof EscalationPolicyQuerySchema>;
 export type UpsertEscalationPolicyRequestDto = z.infer<typeof UpsertEscalationPolicyRequestSchema>;
 //# sourceMappingURL=escalation.request.dto.d.ts.map

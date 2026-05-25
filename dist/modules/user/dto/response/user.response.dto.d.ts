@@ -41,6 +41,7 @@ export interface UserResponseDto {
     phone: string | null;
     department: string | null;
     jobTitle: string | null;
+    skills: string[];
     isActive: boolean;
     isSuperAdmin: boolean;
     lastLoginAt: string | null;
@@ -95,6 +96,7 @@ export declare const mapUserToResponse: (user: {
     phone: string | null;
     department: string | null;
     job_title: string | null;
+    skills: string | null;
     is_active: boolean;
     is_super_admin: boolean;
     last_login_at: Date | null;

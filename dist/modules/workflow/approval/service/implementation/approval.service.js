@@ -9,6 +9,7 @@ const api_response_type_1 = require("../../../../../shared/types/api-response.ty
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const approval_status_service_1 = require("../../../../audit/approval-status/service/implementation/approval-status.service");
+const audit_config_utility_1 = require("../../../../audit/utility/audit-config.utility");
 const workflow_enum_1 = require("../../../domain/enum/workflow.enum");
 const workflow_utility_1 = require("../../../utility/workflow.utility");
 const approval_response_dto_1 = require("../../dto/response/approval.response.dto");
@@ -294,7 +295,7 @@ class ApprovalService {
         };
     }
     async cancelApproval(approvalId, cancelledBy) {
-        (0, workflow_utility_1.assertHasRole)(cancelledBy.roles, workflow_utility_1.WORKFLOW_ADMIN_ROLES);
+        (0, workflow_utility_1.assertHasPermission)(cancelledBy.permissions, 'approval:cancel');
         const approval = await this._getPendingApproval(approvalId);
         const updated = await prisma_client_1.prisma.workflow_Approval.update({
             where: { id: approvalId },
@@ -324,6 +325,12 @@ class ApprovalService {
         return (0, approval_response_dto_1.mapApprovalToResponse)(updated);
     }
     async _resolveApproverChain(db, entityType, entityId) {
+        const matrix = await (0, audit_config_utility_1.getApprovalMatrix)();
+        // Resolve the engagement's assigned manager for engagement-bound entities so
+        // the manager who owns the engagement reviews its working paper / report,
+        // rather than just any holder of the manager role.
+        let engagementManagerId = null;
+        let roleSequence;
         if (entityType === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper) {
             const paper = await db.audit_Working_Paper.findFirst({
                 where: { id: entityId, deleted_at: null },
@@ -331,38 +338,45 @@ class ApprovalService {
             });
             if (!paper)
                 throw app_error_1.AppError.notFound('Audit working paper');
-            return [paper.engagement.audit_manager_id];
+            engagementManagerId = paper.engagement.audit_manager_id;
+            roleSequence = matrix.workingPaper;
         }
-        if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan) {
-            const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
-            if (!plan)
-                throw app_error_1.AppError.notFound('Audit plan');
-        }
-        if (entityType === workflow_enum_1.WorkflowEntityType.AuditReport) {
+        else if (entityType === workflow_enum_1.WorkflowEntityType.AuditReport) {
             const report = await db.audit_Report.findFirst({
                 where: { id: entityId, deleted_at: null },
                 select: { engagement: { select: { audit_manager_id: true } } },
             });
             if (!report)
                 throw app_error_1.AppError.notFound('Audit report');
-            const directorId = await this._getFirstActiveUserByRole(db, 'director');
-            const caeId = await this._getFirstActiveUserByRole(db, 'cae');
-            if (!directorId)
-                throw app_error_1.AppError.badRequest('No active director user configured for audit report approval');
-            if (!caeId)
-                throw app_error_1.AppError.badRequest('No active CAE user configured for audit report approval');
-            return [report.engagement.audit_manager_id, directorId, caeId];
+            engagementManagerId = report.engagement.audit_manager_id;
+            roleSequence = matrix.auditReport;
         }
-        const approvers = await db.user.findMany({
-            where: {
-                deleted_at: null,
-                is_active: true,
-                user_roles: { some: { role: { name: 'audit_admin' } } },
-            },
-            select: { id: true },
-            orderBy: { created_at: 'asc' },
-        });
-        return approvers.map((approver) => approver.id);
+        else if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan) {
+            const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
+            if (!plan)
+                throw app_error_1.AppError.notFound('Audit plan');
+            roleSequence = matrix.auditPlan;
+        }
+        // Unknown entity type or empty matrix entry: fall back to the first active CAE.
+        if (!roleSequence || roleSequence.length === 0) {
+            const fallback = await this._getFirstActiveUserByRole(db, 'cae');
+            return fallback ? [fallback] : [];
+        }
+        const chain = [];
+        for (let level = 0; level < roleSequence.length; level += 1) {
+            // For engagement-bound entities the first approver is the engagement's
+            // assigned manager (a specific person), not just any holder of the role.
+            if (level === 0 && engagementManagerId) {
+                chain.push(engagementManagerId);
+                continue;
+            }
+            const userId = await this._getFirstActiveUserByRole(db, roleSequence[level]);
+            if (!userId) {
+                throw app_error_1.AppError.badRequest(`No active user with role '${roleSequence[level]}' configured for ${entityType} approval`);
+            }
+            chain.push(userId);
+        }
+        return chain;
     }
     async _getFirstActiveUserByRole(db, roleName) {
         const user = await db.user.findFirst({

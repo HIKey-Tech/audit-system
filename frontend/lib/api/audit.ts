@@ -47,7 +47,7 @@ export const universeApi = {
   create: (dto: CreateUniverseEntityDto) =>
     api.post<AuditUniverseEntity>('/audit/universe', dto),
   update: (id: string, dto: UpdateUniverseEntityDto) =>
-    api.patch<AuditUniverseEntity>(`/audit/universe/${id}`, dto),
+    api.put<AuditUniverseEntity>(`/audit/universe/${id}`, dto),
   remove: (id: string) => api.delete(`/audit/universe/${id}`),
 };
 
@@ -80,7 +80,7 @@ export const plansApi = {
   get: (id: string) => api.get<AuditPlan>(`/audit/plans/${id}`),
   create: (dto: CreatePlanDto) => api.post<AuditPlan>('/audit/plans', dto),
   update: (id: string, dto: Partial<CreatePlanDto>) =>
-    api.patch<AuditPlan>(`/audit/plans/${id}`, dto),
+    api.put<AuditPlan>(`/audit/plans/${id}`, dto),
   remove: (id: string) => api.delete(`/audit/plans/${id}`),
   addItem: (planId: string, dto: AddPlanItemDto) =>
     api.post<AuditPlanItem>(`/audit/plans/${planId}/items`, dto),
@@ -248,6 +248,7 @@ export interface FindingsListQuery {
   severity?: string;
   status?: string;
   category?: string;
+  auditeeId?: string;
   search?: string;
 }
 
@@ -265,15 +266,17 @@ export interface CreateFindingDto {
 }
 
 export const findingsApi = {
-  /** Fix 2: no GET /audit/findings — use GET /audit/engagements/:id/findings */
-  list: (engagementId: string, q?: FindingsListQuery) =>
+  list: (q?: FindingsListQuery) =>
+    api.getPaginated<AuditFinding>(
+      '/audit/findings',
+      q as Record<string, string | number | boolean | undefined>,
+    ),
+  get: (id: string) => api.get<AuditFinding>(`/audit/findings/${id}`),
+  listByEngagement: (engagementId: string, q?: FindingsListQuery) =>
     api.get<AuditFinding[]>(
       `/audit/engagements/${engagementId}/findings`,
       q as Record<string, string | number | boolean | undefined>,
     ),
-  get: (id: string) => api.get<AuditFinding>(`/audit/findings/${id}`),
-  listByEngagement: (engagementId: string) =>
-    api.get<AuditFinding[]>(`/audit/engagements/${engagementId}/findings`),
   create: (engagementId: string, dto: CreateFindingDto) =>
     api.post<AuditFinding>(`/audit/engagements/${engagementId}/findings`, dto),
   /** Fix 3: PATCH → PUT */
@@ -304,6 +307,7 @@ export interface ReportsListQuery {
   page?: number;
   pageSize?: number;
   status?: string;
+  search?: string;
 }
 
 export interface CreateReportDto {
@@ -314,14 +318,12 @@ export interface CreateReportDto {
 }
 
 export const reportsApi = {
-  /** Fix 5: no GET /audit/reports — stub that throws */
-  list: (_q?: ReportsListQuery): Promise<{ items: AuditReport[]; meta: { page: number; pageSize: number; total: number; totalPages: number; hasNext: boolean; hasPrev: boolean } }> => {
-    throw new Error('Not supported: no GET /audit/reports route. Use getByEngagement instead.');
-  },
-  /** Fix 6: no GET /audit/reports/:id — stub that throws */
-  get: (_id: string): Promise<AuditReport> => {
-    throw new Error('Not supported: no GET /audit/reports/:id route. Use getByEngagement instead.');
-  },
+  list: (q?: ReportsListQuery) =>
+    api.getPaginated<AuditReport>(
+      '/audit/reports',
+      q as Record<string, string | number | boolean | undefined>,
+    ),
+  get: (id: string) => api.get<AuditReport>(`/audit/reports/${id}`),
   getByEngagement: (engagementId: string) =>
     api.get<AuditReport>(`/audit/engagements/${engagementId}/report`),
   /** Fix 7: POST /audit/engagements/:id/report → POST /audit/engagements/:id/report/generate */
@@ -372,13 +374,26 @@ export const followUpApi = {
   /** Fix 10: follow-up → followup */
   submitResponse: (
     findingId: string,
-    dto: { managementResponse: string; remediationEvidenceId?: string },
+    dto: { managementResponse: string },
   ) =>
     api.post<AuditFollowUp>(
       `/audit/findings/${findingId}/followup/response`,
       dto,
     ),
   /** Fix 11: follow-up → followup */
+  submitEvidence: (findingId: string, evidenceId: string) =>
+    api.post<AuditFollowUp>(
+      `/audit/findings/${findingId}/followup/evidence`,
+      { evidenceId },
+    ),
+  uploadEvidence: (findingId: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.upload<AuditFollowUp>(
+      `/audit/findings/${findingId}/followup/evidence/upload`,
+      fd,
+    );
+  },
   verify: (
     findingId: string,
     dto: { verificationStatus: 'verified' | 'rejected'; verificationNotes?: string },

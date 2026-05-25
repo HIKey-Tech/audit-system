@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hasElapsed = exports.hoursAgo = exports.assertHasRole = exports.WORKFLOW_APPROVER_ROLES = exports.WORKFLOW_ADMIN_ROLES = void 0;
+exports.hasElapsed = exports.hoursAgo = exports.assertHasPermission = exports.assertHasRole = exports.WORKFLOW_APPROVER_ROLES = exports.WORKFLOW_ADMIN_ROLES = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 exports.WORKFLOW_ADMIN_ROLES = ['super_admin', 'audit_admin'];
 exports.WORKFLOW_APPROVER_ROLES = ['super_admin', 'audit_admin', 'audit_lead'];
@@ -10,6 +10,13 @@ const assertHasRole = (roles, allowedRoles, message = 'Insufficient role for thi
     }
 };
 exports.assertHasRole = assertHasRole;
+/** Permission-based authorization gate (see audit.utility for rationale). */
+const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
+    if (!permissions.includes(required)) {
+        throw app_error_1.AppError.forbidden(message);
+    }
+};
+exports.assertHasPermission = assertHasPermission;
 const hoursAgo = (hours) => {
     const value = new Date();
     value.setHours(value.getHours() - hours);

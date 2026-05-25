@@ -10,5 +10,6 @@ export declare class AssignmentController {
     private _getMyAssignments;
     private _getUserWorkload;
     private _removeAssignment;
+    private _getCandidates;
 }
 //# sourceMappingURL=assignment.controller.d.ts.map

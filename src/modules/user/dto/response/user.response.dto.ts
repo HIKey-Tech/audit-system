@@ -48,6 +48,7 @@ export interface UserResponseDto {
   phone: string | null;
   department: string | null;
   jobTitle: string | null;
+  skills: string[];
   isActive: boolean;
   isSuperAdmin: boolean;
   lastLoginAt: string | null;
@@ -121,6 +122,7 @@ export const mapUserToResponse = (user: {
   phone: string | null;
   department: string | null;
   job_title: string | null;
+  skills: string | null;
   is_active: boolean;
   is_super_admin: boolean;
   last_login_at: Date | null;
@@ -165,6 +167,7 @@ export const mapUserToResponse = (user: {
     phone: user.phone,
     department: user.department,
     jobTitle: user.job_title,
+    skills: parseSkills(user.skills),
     isActive: user.is_active,
     isSuperAdmin: user.is_super_admin,
     lastLoginAt: user.last_login_at?.toISOString() ?? null,
@@ -174,3 +177,15 @@ export const mapUserToResponse = (user: {
     permissions,
   };
 };
+
+function parseSkills(raw: string | null | undefined): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((s: unknown) => typeof s === 'string' && s.length > 0)
+      : [];
+  } catch {
+    return [];
+  }
+}

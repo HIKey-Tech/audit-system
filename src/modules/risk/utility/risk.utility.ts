@@ -18,6 +18,17 @@ export const assertHasRole = (
   }
 };
 
+/** Permission-based authorization gate (see audit.utility for rationale). */
+export const assertHasPermission = (
+  permissions: string[],
+  required: string,
+  message = 'Insufficient permission for this action',
+): void => {
+  if (!permissions.includes(required)) {
+    throw AppError.forbidden(message);
+  }
+};
+
 export const calculateRiskScore = (likelihood: number, impact: number): number =>
   likelihood * impact;
 

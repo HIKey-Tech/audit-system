@@ -37,6 +37,7 @@ export interface UserDto {
   phone: string | null;
   department: string | null;
   jobTitle: string | null;
+  skills: string[];
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -455,9 +456,11 @@ export interface AuditChecklistItem {
 export interface AuditReport {
   id: string;
   engagementId: string;
+  engagementReference?: string;
   title: string;
   status: string;
   version: number;
+  versionNumber?: number;
   executiveSummary: string | null;
   scope: string | null;
   methodology: string | null;
@@ -570,6 +573,16 @@ export interface WorkflowAssignment {
   assignedById: string;
   assignedByName: string;
   assignedAt: string;
+}
+
+export interface AssignmentCandidateDto {
+  id: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  jobTitle: string | null;
+  skills: string[];
+  activeEngagementCount: number;
 }
 
 export interface WorkflowEscalation {
@@ -765,8 +778,9 @@ export interface AuditLogEntry {
 
 export interface LogSummaryRow {
   module: string;
-  status: string;
-  total: number;
+  totalActions: number;
+  successCount: number;
+  failureCount: number;
 }
 
 // ============================================================

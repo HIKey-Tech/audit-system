@@ -26,7 +26,7 @@ const assignmentInclude = client_1.Prisma.validator()({
 });
 class AssignmentService {
     async assignStaff(dto, assignedBy) {
-        (0, workflow_utility_1.assertHasRole)(assignedBy.roles, workflow_utility_1.WORKFLOW_ADMIN_ROLES);
+        (0, workflow_utility_1.assertHasPermission)(assignedBy.permissions, 'assignment:create');
         const [engagement, user, existing] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.findFirst({
                 where: { id: dto.engagementId, deleted_at: null },
@@ -102,7 +102,7 @@ class AssignmentService {
         return (0, assignment_response_dto_1.mapAssignmentToResponse)(assignment);
     }
     async removeAssignment(assignmentId, removedBy) {
-        (0, workflow_utility_1.assertHasRole)(removedBy.roles, workflow_utility_1.WORKFLOW_ADMIN_ROLES);
+        (0, workflow_utility_1.assertHasPermission)(removedBy.permissions, 'assignment:delete');
         const assignment = await prisma_client_1.prisma.workflow_Assignment.findUnique({
             where: { id: assignmentId },
             include: {
@@ -196,7 +196,65 @@ class AssignmentService {
             byStatus: Array.from(counts.entries()).map(([status, count]) => ({ status, count })),
         };
     }
+    async getCandidates(engagementId) {
+        // Get already-assigned user IDs for this engagement
+        const existingAssignments = await prisma_client_1.prisma.workflow_Assignment.findMany({
+            where: { engagement_id: engagementId },
+            select: { user_id: true },
+        });
+        const assignedIds = new Set(existingAssignments.map(a => a.user_id));
+        // Get all active users
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: { deleted_at: null, is_active: true },
+            select: {
+                id: true,
+                display_name: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                department: true,
+                job_title: true,
+                skills: true,
+            },
+        });
+        // Get active engagement counts per user
+        const activeAssignments = await prisma_client_1.prisma.workflow_Assignment.groupBy({
+            by: ['user_id'],
+            where: {
+                engagement: {
+                    status: { in: ['planned', 'in_progress', 'under_review'] },
+                    deleted_at: null,
+                },
+            },
+            _count: { user_id: true },
+        });
+        const workloadMap = new Map(activeAssignments.map(a => [a.user_id, a._count.user_id]));
+        return users
+            .filter(u => !assignedIds.has(u.id))
+            .map(u => ({
+            id: u.id,
+            displayName: u.display_name || `${u.first_name} ${u.last_name}`.trim(),
+            email: u.email,
+            department: u.department,
+            jobTitle: u.job_title,
+            skills: parseSkillsJson(u.skills),
+            activeEngagementCount: workloadMap.get(u.id) ?? 0,
+        }));
+    }
 }
 exports.AssignmentService = AssignmentService;
 exports.workflowAssignmentService = new AssignmentService();
+function parseSkillsJson(raw) {
+    if (!raw)
+        return [];
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed)
+            ? parsed.filter((s) => typeof s === 'string' && s.length > 0)
+            : [];
+    }
+    catch {
+        return [];
+    }
+}
 //# sourceMappingURL=assignment.service.js.map

@@ -15,6 +15,16 @@ export const ExportReportQuerySchema = z.object({
   format: z.enum(['docx', 'pdf']).optional(),
 });
 
+export const ReportQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  status: z.string().trim().optional(),
+  search: z.string().trim().optional(),
+  sortBy: z.enum(['created_at', 'updated_at', 'issued_at', 'status', 'title']).default('created_at'),
+  sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
 export type UpdateReportRequestDto = z.infer<typeof UpdateReportRequestSchema>;
 export type RejectReportRequestDto = z.infer<typeof RejectReportRequestSchema>;
 export type ExportReportQueryDto = z.infer<typeof ExportReportQuerySchema>;
+export type ReportQueryDto = z.infer<typeof ReportQuerySchema>;

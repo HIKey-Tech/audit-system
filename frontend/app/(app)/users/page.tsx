@@ -1,7 +1,8 @@
 'use client';
 
 import { useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { Plus, Search, UserCog } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -12,6 +13,7 @@ import { Input, Select } from '@/components/ui/Input';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Avatar } from '@/components/ui/Avatar';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { usersApi } from '@/lib/api/users';
 import { initialsFromName } from '@/lib/utils/format';
@@ -19,8 +21,11 @@ import { UserFormSlideOver } from '@/components/users/UserFormSlideOver';
 import { UserDetailSlideOver } from '@/components/users/UserDetailSlideOver';
 import type { UserDto } from '@/lib/types/domain';
 
+type UserAction = 'activate' | 'deactivate' | 'delete';
+
 export default function UsersPage(): JSX.Element {
-  const { canManageUsers } = usePermissions();
+  const { user: currentUser, canManageUsers, canDeactivateUsers, canDeleteUsers } = usePermissions();
+  const qc = useQueryClient();
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
@@ -28,6 +33,10 @@ export default function UsersPage(): JSX.Element {
   const [slideOpen, setSlideOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserDto | null>(null);
   const [detailUserId, setDetailUserId] = useState<string | null>(null);
+  const [pendingAction, setPendingAction] = useState<{
+    type: UserAction;
+    user: UserDto;
+  } | null>(null);
 
   const query = useQuery({
     queryKey: ['users', { page, search, roleId }],
@@ -45,6 +54,29 @@ export default function UsersPage(): JSX.Element {
     queryFn: () => usersApi.getRoles(),
   });
 
+  const statusMut = useMutation({
+    mutationFn: ({ id, isActive }: { id: string; isActive: boolean }) =>
+      isActive ? usersApi.activate(id) : usersApi.deactivate(id),
+    onSuccess: (updated) => {
+      toast.success(updated.isActive ? 'User activated' : 'User deactivated');
+      qc.invalidateQueries({ queryKey: ['users'] });
+      qc.invalidateQueries({ queryKey: ['users', updated.id] });
+      setPendingAction(null);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to update user status'),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => usersApi.remove(id),
+    onSuccess: () => {
+      toast.success('User deleted');
+      qc.invalidateQueries({ queryKey: ['users'] });
+      if (pendingAction?.user.id === detailUserId) setDetailUserId(null);
+      setPendingAction(null);
+    },
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete user'),
+  });
+
   const openCreate = () => {
     setEditTarget(null);
     setSlideOpen(true);
@@ -54,6 +86,22 @@ export default function UsersPage(): JSX.Element {
     ev.stopPropagation();
     setEditTarget(u);
     setSlideOpen(true);
+  };
+
+  const confirmAction = () => {
+    if (!pendingAction) return;
+
+    if (pendingAction.type === 'activate') {
+      statusMut.mutate({ id: pendingAction.user.id, isActive: true });
+      return;
+    }
+
+    if (pendingAction.type === 'deactivate') {
+      statusMut.mutate({ id: pendingAction.user.id, isActive: false });
+      return;
+    }
+
+    deleteMut.mutate(pendingAction.user.id);
   };
 
   const columns: Column<UserDto>[] = [
@@ -124,7 +172,7 @@ export default function UsersPage(): JSX.Element {
       key: 'actions',
       header: '',
       align: 'right',
-      width: '110px',
+      width: '280px',
       render: (u) => (
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -140,6 +188,34 @@ export default function UsersPage(): JSX.Element {
           {canManageUsers && (
             <Button variant="ghost" size="sm" onClick={(ev) => openEdit(u, ev)}>
               Edit
+            </Button>
+          )}
+          {canDeactivateUsers && u.id !== currentUser.id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                setPendingAction({
+                  type: u.isActive ? 'deactivate' : 'activate',
+                  user: u,
+                });
+              }}
+            >
+              {u.isActive ? 'Deactivate' : 'Activate'}
+            </Button>
+          )}
+          {canDeleteUsers && u.id !== currentUser.id && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-danger hover:text-danger"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                setPendingAction({ type: 'delete', user: u });
+              }}
+            >
+              Delete
             </Button>
           )}
         </div>
@@ -236,6 +312,39 @@ export default function UsersPage(): JSX.Element {
       <UserDetailSlideOver
         userId={detailUserId}
         onClose={() => setDetailUserId(null)}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingAction)}
+        title={
+          pendingAction?.type === 'delete'
+            ? 'Delete user?'
+            : pendingAction?.type === 'deactivate'
+              ? 'Deactivate user?'
+              : 'Activate user?'
+        }
+        description={
+          pendingAction ? (
+            <span>
+              {pendingAction.type === 'delete'
+                ? 'This soft-deletes the user and removes them from normal user lists.'
+                : pendingAction.type === 'deactivate'
+                  ? 'This blocks the user from signing in until reactivated.'
+                  : 'This allows the user to sign in again.'}
+            </span>
+          ) : null
+        }
+        confirmLabel={
+          pendingAction?.type === 'delete'
+            ? 'Delete'
+            : pendingAction?.type === 'deactivate'
+              ? 'Deactivate'
+              : 'Activate'
+        }
+        variant={pendingAction?.type === 'activate' ? 'primary' : 'danger'}
+        isLoading={statusMut.isPending || deleteMut.isPending}
+        onConfirm={confirmAction}
+        onCancel={() => setPendingAction(null)}
       />
     </div>
   );

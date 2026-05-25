@@ -95,8 +95,19 @@ export const TemplateQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+// ──────────────────────────────────────────────────────────────
+// Global document listing (paginated, filterable)
+// ──────────────────────────────────────────────────────────────
+export const DocumentListQuerySchema = z.object({
+  page: z.coerce.number().int().positive().default(1),
+  pageSize: z.coerce.number().int().positive().max(100).default(20),
+  search: z.string().trim().min(1).optional(),
+  entityType: z.string().trim().min(1).optional(),
+});
+
 export type UploadDocumentMetadataDto = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UploadVersionMetadataDto = z.infer<typeof UploadVersionMetadataSchema>;
 export type CreateTemplateRequestDto = z.infer<typeof CreateTemplateRequestSchema>;
 export type UpdateTemplateRequestDto = z.infer<typeof UpdateTemplateRequestSchema>;
 export type TemplateQueryDto = z.infer<typeof TemplateQuerySchema>;
+export type DocumentListQueryDto = z.infer<typeof DocumentListQuerySchema>;

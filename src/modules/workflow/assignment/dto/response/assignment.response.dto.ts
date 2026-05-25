@@ -31,6 +31,16 @@ export interface WorkloadResponseDto {
   byStatus: Array<{ status: string; count: number }>;
 }
 
+export interface AssignmentCandidateDto {
+  id: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  jobTitle: string | null;
+  skills: string[];
+  activeEngagementCount: number;
+}
+
 export const mapAssignmentToResponse = (assignment: {
   id: string;
   engagement_id: string;

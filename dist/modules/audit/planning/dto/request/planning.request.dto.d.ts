@@ -10,6 +10,16 @@ export declare const CreatePlanRequestSchema: z.ZodObject<{
     title: string;
     year: number;
 }>;
+export declare const UpdatePlanRequestSchema: z.ZodObject<{
+    title: z.ZodOptional<z.ZodString>;
+    year: z.ZodOptional<z.ZodNumber>;
+}, "strip", z.ZodTypeAny, {
+    title?: string | undefined;
+    year?: number | undefined;
+}, {
+    title?: string | undefined;
+    year?: number | undefined;
+}>;
 export declare const AddPlanItemRequestSchema: z.ZodObject<{
     universeId: z.ZodString;
     auditType: z.ZodNativeEnum<typeof AuditType>;
@@ -59,6 +69,7 @@ export declare const PlanQuerySchema: z.ZodObject<{
     sortOrder?: "asc" | "desc" | undefined;
 }>;
 export type CreatePlanRequestDto = z.infer<typeof CreatePlanRequestSchema>;
+export type UpdatePlanRequestDto = z.infer<typeof UpdatePlanRequestSchema>;
 export type AddPlanItemRequestDto = z.infer<typeof AddPlanItemRequestSchema>;
 export type RejectPlanRequestDto = z.infer<typeof RejectPlanRequestSchema>;
 export type PlanQueryDto = z.infer<typeof PlanQuerySchema>;

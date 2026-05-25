@@ -11,6 +11,7 @@ const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
 const escalation_service_1 = require("../../../workflow/escalation/service/implementation/escalation.service");
+const document_service_1 = require("../../../document/service/implementation/document.service");
 /**
  * Job Key Naming Convention:
  *   BG:<MODULE>:<ACTION>:<FREQUENCY>
@@ -26,6 +27,7 @@ exports.JOB_KEYS = {
     WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
     LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
     REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
+    DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
 };
 class SchedulerService {
     jobs = [];
@@ -303,6 +305,18 @@ const registerAllJobs = () => {
             });
             logger_util_1.logger.info('Log archive job: logs ready for DWH export', { count: oldLogs.length });
             // TODO: push to data warehouse via DataWarehouseClient
+        },
+    });
+    // BG:DOCUMENT:VERSION:PRUNE:WEEKLY — prune old document versions when retention is enabled
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.DOCUMENT_VERSION_PRUNE_WEEKLY,
+        name: 'Document Version Prune',
+        description: 'Prunes old document versions when version_retention is enabled in system config. No-op when disabled (default).',
+        cronExpression: '0 3 * * 0', // Every Sunday at 03:00
+        handler: async () => {
+            const documentService = new document_service_1.DocumentService();
+            const result = await documentService.pruneOldVersions();
+            logger_util_1.logger.info('Document version prune job completed', result);
         },
     });
 };

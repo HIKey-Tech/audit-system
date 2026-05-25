@@ -11,7 +11,7 @@ import { Check, ChevronDown, X } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
-import { Input, Select } from '@/components/ui/Input';
+import { Input } from '@/components/ui/Input';
 import { usersApi } from '@/lib/api/users';
 import { cn } from '@/lib/utils/cn';
 import type { UserDto } from '@/lib/types/domain';
@@ -22,7 +22,6 @@ const Schema = z.object({
   email: z.string().email('Valid email required'),
   jobTitle: z.string().max(200).optional().or(z.literal('')),
   department: z.string().max(200).optional().or(z.literal('')),
-  isActive: z.enum(['true', 'false']),
 });
 
 type FormValues = z.infer<typeof Schema>;
@@ -40,6 +39,8 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [roleDropOpen, setRoleDropOpen] = useState(false);
   const roleDropRef = useRef<HTMLDivElement>(null);
+  const [skillTags, setSkillTags] = useState<string[]>([]);
+  const [skillInput, setSkillInput] = useState('');
 
   const rolesQuery = useQuery({
     queryKey: ['users', 'roles'],
@@ -59,7 +60,6 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
       email: '',
       jobTitle: '',
       department: '',
-      isActive: 'true',
     },
   });
 
@@ -71,9 +71,10 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         email: user.email,
         jobTitle: user.jobTitle ?? '',
         department: user.department ?? '',
-        isActive: user.isActive ? 'true' : 'false',
       });
       setSelectedRoleIds(user.roles.map((r) => r.id));
+      setSkillTags(user.skills ?? []);
+      setSkillInput('');
     } else if (open && !user) {
       reset({
         firstName: '',
@@ -81,9 +82,10 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         email: '',
         jobTitle: '',
         department: '',
-        isActive: 'true',
       });
       setSelectedRoleIds([]);
+      setSkillTags([]);
+      setSkillInput('');
     }
   }, [open, user, reset]);
 
@@ -106,6 +108,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         email: values.email,
         jobTitle: values.jobTitle || undefined,
         department: values.department || undefined,
+        skills: skillTags.length > 0 ? skillTags : undefined,
       });
       if (selectedRoleIds.length > 0) {
         await usersApi.assignRoles(created.id, selectedRoleIds);
@@ -113,7 +116,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
       return created;
     },
     onSuccess: () => {
-      toast.success('User created');
+      toast.success('User created and onboarding email sent');
       qc.invalidateQueries({ queryKey: ['users'] });
       onClose();
     },
@@ -127,7 +130,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         lastName: values.lastName,
         jobTitle: values.jobTitle || undefined,
         department: values.department || undefined,
-        isActive: values.isActive === 'true',
+        skills: skillTags,
       });
       await usersApi.assignRoles(user!.id, selectedRoleIds);
       return updated;
@@ -221,14 +224,54 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
           </FormField>
         </div>
 
-        {isEdit && (
-          <FormField label="Status">
-            <Select {...register('isActive')}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
-            </Select>
-          </FormField>
-        )}
+        <FormField label="Skills" hint="Press Enter or comma to add a skill tag">
+          <div className="flex flex-wrap gap-1.5 rounded-md border border-border bg-white px-2 py-2 focus-within:ring-2 focus-within:ring-primary/30 focus-within:border-primary min-h-[40px] transition-colors">
+            {skillTags.map((tag) => (
+              <span
+                key={tag}
+                className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-200"
+              >
+                {tag}
+                <button
+                  type="button"
+                  onClick={() => setSkillTags((prev) => prev.filter((t) => t !== tag))}
+                  className="text-emerald-400 hover:text-emerald-700 cursor-pointer"
+                  aria-label={`Remove ${tag}`}
+                >
+                  <X className="h-2.5 w-2.5" />
+                </button>
+              </span>
+            ))}
+            <input
+              value={skillInput}
+              onChange={(e) => setSkillInput(e.target.value)}
+              onKeyDown={(e) => {
+                if ((e.key === 'Enter' || e.key === ',') && skillInput.trim()) {
+                  e.preventDefault();
+                  const val = skillInput.trim().replace(/,$/g, '');
+                  if (val && !skillTags.includes(val) && skillTags.length < 30) {
+                    setSkillTags((prev) => [...prev, val]);
+                  }
+                  setSkillInput('');
+                }
+                if (e.key === 'Backspace' && !skillInput && skillTags.length > 0) {
+                  setSkillTags((prev) => prev.slice(0, -1));
+                }
+              }}
+              onBlur={() => {
+                if (skillInput.trim()) {
+                  const val = skillInput.trim();
+                  if (val && !skillTags.includes(val) && skillTags.length < 30) {
+                    setSkillTags((prev) => [...prev, val]);
+                  }
+                  setSkillInput('');
+                }
+              }}
+              placeholder={skillTags.length === 0 ? 'e.g. ISO 27001, ITGC, SOX…' : ''}
+              className="flex-1 min-w-[120px] border-0 bg-transparent text-sm outline-none placeholder:text-text-muted"
+            />
+          </div>
+        </FormField>
 
         <FormField label="Roles">
           <div ref={roleDropRef} className="relative">

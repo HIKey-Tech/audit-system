@@ -1,6 +1,7 @@
 export interface AuditLogResponseDto {
   id: string;
   userId: string | null;
+  userDisplayName: string | null;
   action: string;
   module: string;
   entityType: string | null;
@@ -22,6 +23,13 @@ export interface AuditLogSummaryDto {
   failureCount: number;
 }
 
+interface AuditLogUserRow {
+  display_name: string | null;
+  first_name: string;
+  last_name: string;
+  email: string;
+}
+
 interface AuditLogRow {
   id: string;
   user_id: string | null;
@@ -37,6 +45,7 @@ interface AuditLogRow {
   error_message: string | null;
   duration_ms: number | null;
   created_at: Date;
+  user?: AuditLogUserRow | null;
 }
 
 const parseJsonValue = (value: string | null): unknown => {
@@ -51,9 +60,18 @@ const parseJsonValue = (value: string | null): unknown => {
   }
 };
 
+const resolveDisplayName = (user: AuditLogUserRow | null | undefined): string | null => {
+  if (!user) return null;
+  if (user.display_name && user.display_name.trim()) return user.display_name.trim();
+  const full = `${user.first_name ?? ''} ${user.last_name ?? ''}`.trim();
+  if (full) return full;
+  return user.email ?? null;
+};
+
 export const mapAuditLogToResponse = (log: AuditLogRow): AuditLogResponseDto => ({
   id: log.id,
   userId: log.user_id,
+  userDisplayName: resolveDisplayName(log.user),
   action: log.action,
   module: log.module,
   entityType: log.entity_type,

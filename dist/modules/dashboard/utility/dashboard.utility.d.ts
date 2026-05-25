@@ -1,9 +1,5 @@
-export declare const DASHBOARD_ADMIN_ROLES: readonly string[];
-export declare const DASHBOARD_AUDITOR_ROLES: readonly string[];
-export declare const AUDITEE_ROLE = "auditee";
-export declare const hasAdminLevelRole: (roles: string[]) => boolean;
-export declare const isRestrictedAuditor: (roles: string[]) => boolean;
-export declare const isRestrictedAuditee: (roles: string[]) => boolean;
+export declare const isRestrictedAuditor: (permissions: string[]) => boolean;
+export declare const isRestrictedAuditee: (permissions: string[]) => boolean;
 export declare const startOfCurrentYear: (now?: Date) => Date;
 export declare const startOfCurrentMonth: (now?: Date) => Date;
 export declare const startOfNextMonth: (now?: Date) => Date;

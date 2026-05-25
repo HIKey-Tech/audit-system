@@ -22,7 +22,7 @@ class WorkingPaperService {
         this.approvalService = approvalService;
     }
     async createWorkingPaper(engagementId, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:create');
         await this._assertEngagementInProgress(engagementId);
         await this._assertOptionalImportReferences(dto.templateId, dto.sourceDocumentId);
         const paper = await prisma_client_1.prisma.audit_Working_Paper.create({
@@ -42,7 +42,7 @@ class WorkingPaperService {
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper);
     }
     async previewWorkingPaperImport(engagementId, file, dto, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:create');
         const engagement = await this._getEngagementForWorkingPaperImport(engagementId);
         const extracted = await (0, working_paper_import_utility_1.extractWorkingPaperText)(file.buffer, file.mimeType, file.originalName);
         const template = await this._resolveImportTemplate(dto.templateId, engagement.audit_type);
@@ -150,7 +150,7 @@ class WorkingPaperService {
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
     }
     async approveWorkingPaper(id, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:approve');
         const paper = await this._getPaper(id);
         if (paper.status !== audit_enum_1.WorkingPaperStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted working papers can be approved');
@@ -162,7 +162,7 @@ class WorkingPaperService {
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
     }
     async rejectWorkingPaper(id, reason, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_REVIEW_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:reject');
         const paper = await this._getPaper(id);
         if (paper.status !== audit_enum_1.WorkingPaperStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted working papers can be rejected');

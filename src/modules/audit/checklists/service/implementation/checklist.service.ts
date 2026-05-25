@@ -4,7 +4,7 @@ import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext, ChecklistProgress } from '../../../domain/entity/audit.entity';
 import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
-import { AUDIT_WORK_ROLES, assertHasRole, emptyChecklistProgress } from '../../../utility/audit.utility';
+import { AUDIT_WORK_ROLES, assertHasPermission, emptyChecklistProgress } from '../../../utility/audit.utility';
 import { getChecklistTemplateControls } from '../../../utility/audit-config.utility';
 import { UpdateChecklistItemRequestDto } from '../../dto/request/checklist.request.dto';
 import { ChecklistResponseDto, mapChecklistToResponse } from '../../dto/response/checklist.response.dto';
@@ -45,7 +45,7 @@ export class ChecklistService implements IChecklistService {
   }
 
   async updateChecklistItem(id: string, dto: UpdateChecklistItemRequestDto, actor: ActorContext): Promise<ChecklistResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'checklist:update');
     await this._assertChecklistExists(id);
 
     const item = await prisma.audit_Checklist.update({
@@ -71,7 +71,7 @@ export class ChecklistService implements IChecklistService {
   }
 
   async linkEvidenceToChecklistItem(checklistItemId: string, evidenceId: string, actor: ActorContext): Promise<ChecklistResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'checklist:update');
 
     const checklist = await prisma.audit_Checklist.findUnique({
       where: { id: checklistItemId },

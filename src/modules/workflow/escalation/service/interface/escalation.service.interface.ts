@@ -1,8 +1,5 @@
 import { WorkflowActorContext, WorkflowEscalationRunResult } from '../../../domain/entity/workflow.entity';
-import {
-  EscalationPolicyAuditType,
-  WorkflowEscalationEntityType,
-} from '../../../domain/enum/workflow.enum';
+import { WorkflowEscalationEntityType } from '../../../domain/enum/workflow.enum';
 import { UpsertEscalationPolicyRequestDto } from '../../dto/request/escalation.request.dto';
 import {
   EscalationPolicyResponseDto,
@@ -16,7 +13,7 @@ export interface IEscalationService {
     entityType: WorkflowEscalationEntityType,
     entityId: string,
   ): Promise<EscalationResponseDto[]>;
-  getEscalationPolicy(auditType: EscalationPolicyAuditType): Promise<EscalationPolicyResponseDto>;
+  listEscalationPolicies(): Promise<EscalationPolicyResponseDto[]>;
   createOrUpdateEscalationPolicy(
     dto: UpsertEscalationPolicyRequestDto,
     updatedBy: WorkflowActorContext,

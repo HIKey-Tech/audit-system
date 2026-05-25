@@ -20,6 +20,7 @@ export interface CreateUserDto {
   department?: string;
   jobTitle?: string;
   phone?: string;
+  skills?: string[];
   roleIds?: string[];
 }
 
@@ -30,7 +31,7 @@ export interface UpdateUserDto {
   department?: string;
   jobTitle?: string;
   phone?: string;
-  isActive?: boolean;
+  skills?: string[];
 }
 
 export const usersApi = {
@@ -40,6 +41,8 @@ export const usersApi = {
   me: () => api.get<UserDto>('/users/me'),
   create: (dto: CreateUserDto) => api.post<UserDto>('/users', dto),
   update: (id: string, dto: UpdateUserDto) => api.patch<UserDto>(`/users/${id}`, dto),
+  activate: (id: string) => api.post<UserDto>(`/users/${id}/activate`, {}),
+  deactivate: (id: string) => api.post<UserDto>(`/users/${id}/deactivate`, {}),
   remove: (id: string) => api.delete(`/users/${id}`),
   getRoles: () => api.get<RoleListDto[]>('/users/roles'),
   getPermissions: () => api.get<PermissionDto[]>('/users/permissions'),

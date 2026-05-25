@@ -1,11 +1,17 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FollowUpController = void 0;
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const auth_middleware_1 = require("../../../../shared/middleware/auth.middleware");
+const app_error_1 = require("../../../../shared/errors/app.error");
 const validate_middleware_1 = require("../../../../shared/middleware/validate.middleware");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const follow_up_request_dto_1 = require("../dto/request/follow-up.request.dto");
+const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage() });
 class FollowUpController {
     followUpService;
     router;
@@ -28,6 +34,12 @@ class FollowUpController {
          * @access Private - audit:write
          */
         this.router.post('/findings/:id/followup/evidence', (0, auth_middleware_1.requirePermission)('followup:evidence'), (0, validate_middleware_1.validate)(follow_up_request_dto_1.RemediationEvidenceRequestSchema), this._submitRemediationEvidence.bind(this));
+        /**
+         * @route  POST /audit/findings/:id/followup/evidence/upload
+         * @desc   Upload and submit remediation evidence
+         * @access Private - audit:write
+         */
+        this.router.post('/findings/:id/followup/evidence/upload', (0, auth_middleware_1.requirePermission)('followup:evidence'), upload.single('file'), this._uploadRemediationEvidence.bind(this));
         /**
          * @route  POST /audit/findings/:id/followup/verify
          * @desc   Verify remediation
@@ -60,6 +72,23 @@ class FollowUpController {
         try {
             const followUp = await this.followUpService.submitRemediationEvidence(req.params.id, req.body.evidenceId, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(followUp, 'Remediation evidence submitted'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _uploadRemediationEvidence(req, res, next) {
+        try {
+            if (!req.file) {
+                throw app_error_1.AppError.badRequest('File is required');
+            }
+            const followUp = await this.followUpService.uploadRemediationEvidence(req.params.id, {
+                originalName: req.file.originalname,
+                mimeType: req.file.mimetype,
+                fileSize: req.file.size,
+                buffer: req.file.buffer,
+            }, req.user);
+            res.status(201).json((0, api_response_type_1.buildResponse)(followUp, 'Remediation evidence uploaded'));
         }
         catch (err) {
             next(err);

@@ -6,7 +6,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { UniverseStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, assertHasRole } from '../../../utility/audit.utility';
+import { AUDIT_ADMIN_ROLES, assertHasPermission } from '../../../utility/audit.utility';
 import {
   CreateUniverseRequestDto,
   UpdateUniverseRequestDto,
@@ -20,7 +20,7 @@ export class UniverseService implements IUniverseService {
   constructor(private readonly riskRegisterService?: IRegisterService) {}
 
   async createEntity(dto: CreateUniverseRequestDto, actor: ActorContext): Promise<UniverseResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'universe:create');
 
     const entity = await prisma.audit_Universe.create({
       data: {
@@ -49,7 +49,7 @@ export class UniverseService implements IUniverseService {
   }
 
   async updateEntity(id: string, dto: UpdateUniverseRequestDto, actor: ActorContext): Promise<UniverseResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'universe:update');
     await this._assertEntityExists(id);
 
     const entity = await prisma.audit_Universe.update({
@@ -84,7 +84,7 @@ export class UniverseService implements IUniverseService {
   }
 
   async deactivateEntity(id: string, actor: ActorContext): Promise<void> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'universe:delete');
     await this._assertEntityExists(id);
 
     await prisma.audit_Universe.update({

@@ -12,7 +12,7 @@ import {
   WorkflowEscalationEntityType,
   WorkflowEscalationReason,
 } from '../../../domain/enum/workflow.enum';
-import { WORKFLOW_ADMIN_ROLES, assertHasRole, hasElapsed } from '../../../utility/workflow.utility';
+import { WORKFLOW_ADMIN_ROLES, assertHasPermission, hasElapsed } from '../../../utility/workflow.utility';
 import { UpsertEscalationPolicyRequestDto } from '../../dto/request/escalation.request.dto';
 import {
   EscalationPolicyResponseDto,
@@ -172,21 +172,19 @@ export class EscalationService implements IEscalationService {
     return escalations.map(mapEscalationToResponse);
   }
 
-  async getEscalationPolicy(auditType: EscalationPolicyAuditType): Promise<EscalationPolicyResponseDto> {
-    const policy = await prisma.escalation_Policy.findFirst({
-      where: { audit_type: auditType, is_active: true },
-    }) ?? await prisma.escalation_Policy.findFirst({
-      where: { audit_type: EscalationPolicyAuditType.All, is_active: true },
+  async listEscalationPolicies(): Promise<EscalationPolicyResponseDto[]> {
+    const policies = await prisma.escalation_Policy.findMany({
+      where: { is_active: true },
+      orderBy: { audit_type: 'asc' },
     });
-    if (!policy) throw AppError.notFound('Escalation policy');
-    return mapEscalationPolicyToResponse(policy);
+    return policies.map(mapEscalationPolicyToResponse);
   }
 
   async createOrUpdateEscalationPolicy(
     dto: UpsertEscalationPolicyRequestDto,
     updatedBy: WorkflowActorContext,
   ): Promise<EscalationPolicyResponseDto> {
-    assertHasRole(updatedBy.roles, WORKFLOW_ADMIN_ROLES);
+    assertHasPermission(updatedBy.permissions, 'escalation_policy:update');
 
     const policy = await prisma.escalation_Policy.upsert({
       where: { audit_type: dto.auditType },

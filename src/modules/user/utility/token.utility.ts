@@ -7,6 +7,23 @@ import { config } from '../../../shared/config/app.config';
 import { JwtPayload } from '../../../shared/middleware/auth.middleware';
 import { TokenPair } from '../domain/entity/token.entity';
 
+const TEMP_PASSWORD_LOWER = 'abcdefghijkmnopqrstuvwxyz';
+const TEMP_PASSWORD_UPPER = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+const TEMP_PASSWORD_DIGITS = '23456789';
+const TEMP_PASSWORD_SPECIAL = '@$!%*?&';
+const TEMP_PASSWORD_ALL =
+  TEMP_PASSWORD_LOWER + TEMP_PASSWORD_UPPER + TEMP_PASSWORD_DIGITS + TEMP_PASSWORD_SPECIAL;
+
+const randomChar = (chars: string): string => chars[crypto.randomInt(chars.length)];
+
+const shuffle = (chars: string[]): string[] => {
+  for (let i = chars.length - 1; i > 0; i -= 1) {
+    const j = crypto.randomInt(i + 1);
+    [chars[i], chars[j]] = [chars[j], chars[i]];
+  }
+  return chars;
+};
+
 export const generateAccessToken = (payload: {
   sub: string;
   email: string;
@@ -32,6 +49,25 @@ export const generateRefreshToken = (): {
   const expiresAt = new Date(Date.now() + expiresInMs);
 
   return { raw, hash, expiresAt };
+};
+
+export const generateTemporaryPassword = (length = 14): string => {
+  if (length < 8) {
+    throw new Error('Temporary password length must be at least 8 characters');
+  }
+
+  const chars = [
+    randomChar(TEMP_PASSWORD_LOWER),
+    randomChar(TEMP_PASSWORD_UPPER),
+    randomChar(TEMP_PASSWORD_DIGITS),
+    randomChar(TEMP_PASSWORD_SPECIAL),
+  ];
+
+  while (chars.length < length) {
+    chars.push(randomChar(TEMP_PASSWORD_ALL));
+  }
+
+  return shuffle(chars).join('');
 };
 
 export const hashPassword = async (password: string): Promise<string> => {

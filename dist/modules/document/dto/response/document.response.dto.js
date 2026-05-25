@@ -3,20 +3,29 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapTemplateToResponse = exports.mapCurrentDocumentToVersion = exports.mapVersionToResponse = exports.mapDocumentToResponse = void 0;
 // Mapper: Prisma Document → Response DTO
-const mapDocumentToResponse = (doc, downloadUrl) => ({
-    id: doc.id,
-    originalName: doc.original_name,
-    mimeType: doc.mime_type,
-    fileSize: doc.file_size,
-    storageProvider: doc.storage_provider,
-    module: doc.module,
-    entityType: doc.entity_type,
-    entityId: doc.entity_id,
-    uploadedById: doc.uploaded_by_id,
-    versionNumber: doc.version_number,
-    createdAt: doc.created_at.toISOString(),
-    downloadUrl,
-});
+const mapDocumentToResponse = (doc, downloadUrl) => {
+    const uploader = doc.uploaded_by;
+    const uploadedByName = uploader
+        ? uploader.display_name?.trim() || `${uploader.first_name} ${uploader.last_name}`.trim()
+        : '';
+    return {
+        id: doc.id,
+        originalName: doc.original_name,
+        fileName: doc.original_name,
+        mimeType: doc.mime_type,
+        fileType: doc.mime_type,
+        fileSize: doc.file_size,
+        storageProvider: doc.storage_provider,
+        module: doc.module,
+        entityType: doc.entity_type,
+        entityId: doc.entity_id,
+        uploadedById: doc.uploaded_by_id,
+        uploadedByName,
+        versionNumber: doc.version_number,
+        createdAt: doc.created_at.toISOString(),
+        downloadUrl,
+    };
+};
 exports.mapDocumentToResponse = mapDocumentToResponse;
 // Mapper: Prisma Document_Version → Response DTO
 const mapVersionToResponse = (version, isCurrent, downloadUrl) => ({

@@ -9,7 +9,7 @@ const risk_utility_1 = require("../../../utility/risk.utility");
 const category_response_dto_1 = require("../../dto/response/category.response.dto");
 class CategoryService {
     async createCategory(dto, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk_category:write');
         const existing = await prisma_client_1.prisma.risk_Category.findUnique({
             where: { name: dto.name },
             select: { id: true },
@@ -36,7 +36,7 @@ class CategoryService {
         return (0, category_response_dto_1.mapRiskCategoryToResponse)(category);
     }
     async updateCategory(id, dto, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk_category:write');
         await this._assertCategoryExists(id);
         const category = await prisma_client_1.prisma.risk_Category.update({
             where: { id },
@@ -58,7 +58,7 @@ class CategoryService {
         return (0, category_response_dto_1.mapRiskCategoryToResponse)(category);
     }
     async deactivateCategory(id, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk_category:delete');
         await this._assertCategoryExists(id);
         await prisma_client_1.prisma.risk_Category.update({
             where: { id },

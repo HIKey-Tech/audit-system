@@ -9,10 +9,6 @@ export const EscalationEntityParamsSchema = z.object({
   id: z.string().uuid(),
 });
 
-export const EscalationPolicyQuerySchema = z.object({
-  auditType: z.nativeEnum(EscalationPolicyAuditType).default(EscalationPolicyAuditType.All),
-});
-
 export const UpsertEscalationPolicyRequestSchema = z.object({
   auditType: z.nativeEnum(EscalationPolicyAuditType),
   level1Hours: z.coerce.number().int().positive().default(24),
@@ -22,5 +18,4 @@ export const UpsertEscalationPolicyRequestSchema = z.object({
   isActive: z.boolean().default(true),
 });
 
-export type EscalationPolicyQueryDto = z.infer<typeof EscalationPolicyQuerySchema>;
 export type UpsertEscalationPolicyRequestDto = z.infer<typeof UpsertEscalationPolicyRequestSchema>;

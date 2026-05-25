@@ -10,7 +10,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, WP_REVIEWABLE_STATUSES, assertHasRole } from '../../../utility/audit.utility';
+import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, WP_REVIEWABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
 import {
   CreateWorkingPaperRequestDto,
   ImportWorkingPaperMetadataDto,
@@ -41,7 +41,7 @@ export class WorkingPaperService implements IWorkingPaperService {
   ) {}
 
   async createWorkingPaper(engagementId: string, dto: CreateWorkingPaperRequestDto, actor: ActorContext): Promise<WorkingPaperResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'working_paper:create');
     await this._assertEngagementInProgress(engagementId);
     await this._assertOptionalImportReferences(dto.templateId, dto.sourceDocumentId);
 
@@ -69,7 +69,7 @@ export class WorkingPaperService implements IWorkingPaperService {
     dto: ImportWorkingPaperMetadataDto,
     actor: ActorContext,
   ): Promise<WorkingPaperImportPreviewResponseDto> {
-    assertHasRole(actor.roles, AUDIT_WORK_ROLES);
+    assertHasPermission(actor.permissions, 'working_paper:create');
     const engagement = await this._getEngagementForWorkingPaperImport(engagementId);
 
     const extracted = await extractWorkingPaperText(file.buffer, file.mimeType, file.originalName);
@@ -189,7 +189,7 @@ export class WorkingPaperService implements IWorkingPaperService {
   }
 
   async approveWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
-    assertHasRole(actor.roles, AUDIT_REVIEW_ROLES);
+    assertHasPermission(actor.permissions, 'working_paper:approve');
     const paper = await this._getPaper(id);
     if (paper.status !== WorkingPaperStatus.Submitted) throw AppError.badRequest('Only submitted working papers can be approved');
 
@@ -203,7 +203,7 @@ export class WorkingPaperService implements IWorkingPaperService {
   }
 
   async rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
-    assertHasRole(actor.roles, AUDIT_REVIEW_ROLES);
+    assertHasPermission(actor.permissions, 'working_paper:reject');
     const paper = await this._getPaper(id);
     if (paper.status !== WorkingPaperStatus.Submitted) throw AppError.badRequest('Only submitted working papers can be rejected');
 

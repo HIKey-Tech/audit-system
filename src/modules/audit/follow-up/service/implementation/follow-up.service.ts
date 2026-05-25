@@ -3,9 +3,10 @@ import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
+import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, VerificationStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_REVIEW_ROLES, assertHasRole } from '../../../utility/audit.utility';
+import { AUDIT_REVIEW_ROLES, assertHasPermission } from '../../../utility/audit.utility';
 import {
   ManagementResponseRequestDto,
   VerifyRemediationRequestDto,
@@ -14,6 +15,8 @@ import { FollowUpResponseDto, mapFollowUpToResponse } from '../../dto/response/f
 import { IFollowUpService } from '../interface/follow-up.service.interface';
 
 export class FollowUpService implements IFollowUpService {
+  constructor(private readonly documentService?: IDocumentService) {}
+
   async createFollowUp(findingId: string): Promise<FollowUpResponseDto> {
     const finding = await prisma.audit_Finding.findFirst({
       where: { id: findingId, deleted_at: null },
@@ -103,8 +106,53 @@ export class FollowUpService implements IFollowUpService {
     return mapFollowUpToResponse(followUp);
   }
 
+  async uploadRemediationEvidence(
+    findingId: string,
+    file: { originalName: string; mimeType: string; fileSize: number; buffer: Buffer },
+    actor: ActorContext,
+  ): Promise<FollowUpResponseDto> {
+    if (!this.documentService) throw AppError.internal('Document service is not configured for follow-up evidence upload');
+
+    const finding = await this._getFinding(findingId);
+    if (finding.auditee_id !== actor.id) throw AppError.forbidden('Only the assigned auditee can submit remediation evidence');
+
+    const document = await this.documentService.upload({
+      uploadedById: actor.id,
+      originalName: file.originalName,
+      mimeType: file.mimeType,
+      fileSize: file.fileSize,
+      buffer: file.buffer,
+      module: 'audit',
+      entityType: 'audit_follow_up_evidence',
+      entityId: findingId,
+    });
+
+    const evidence = await prisma.audit_Evidence.create({
+      data: {
+        engagement_id: finding.engagement_id,
+        finding_id: findingId,
+        document_id: document.id,
+        file_name: file.originalName,
+        file_type: file.mimeType,
+        uploaded_by_id: actor.id,
+      },
+    });
+
+    logger.info('Remediation evidence uploaded', { findingId, evidenceId: evidence.id, actorId: actor.id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.follow_up.evidence.upload',
+      module: 'audit',
+      entityType: 'audit_follow_up',
+      entityId: findingId,
+      newValues: { evidenceId: evidence.id, documentId: document.id },
+    });
+
+    return this.submitRemediationEvidence(findingId, evidence.id, actor);
+  }
+
   async verifyRemediation(findingId: string, dto: VerifyRemediationRequestDto, actor: ActorContext): Promise<FollowUpResponseDto> {
-    assertHasRole(actor.roles, AUDIT_REVIEW_ROLES);
+    assertHasPermission(actor.permissions, 'followup:verify');
     const finding = await this._getFinding(findingId);
 
     const followUp = await prisma.$transaction(async (tx) => {

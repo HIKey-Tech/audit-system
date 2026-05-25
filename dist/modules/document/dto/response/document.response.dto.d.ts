@@ -1,13 +1,16 @@
 export interface DocumentResponseDto {
     id: string;
     originalName: string;
+    fileName: string;
     mimeType: string;
+    fileType: string;
     fileSize: number;
     storageProvider: string;
     module: string;
     entityType: string | null;
     entityId: string | null;
     uploadedById: string;
+    uploadedByName: string;
     versionNumber: number;
     createdAt: string;
     downloadUrl?: string;
@@ -58,6 +61,11 @@ export declare const mapDocumentToResponse: (doc: {
     uploaded_by_id: string;
     version_number: number;
     created_at: Date;
+    uploaded_by?: {
+        display_name: string | null;
+        first_name: string;
+        last_name: string;
+    } | null;
 }, downloadUrl?: string) => DocumentResponseDto;
 export declare const mapVersionToResponse: (version: {
     id: string;

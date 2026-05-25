@@ -4,7 +4,6 @@ import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   EscalationEntityParamsSchema,
-  EscalationPolicyQuerySchema,
   UpsertEscalationPolicyRequestSchema,
 } from '../dto/request/escalation.request.dto';
 import { IEscalationService } from '../service/interface/escalation.service.interface';
@@ -36,10 +35,10 @@ export class EscalationController {
 
     /**
      * @route  GET /workflow/escalation-policy
-     * @desc   Get escalation policy
+     * @desc   List all active escalation policies
      * @access Private - audit:read
      */
-    this.router.get('/escalation-policy', requirePermission('escalation_policy:read'), validate(EscalationPolicyQuerySchema, 'query'), this._getEscalationPolicy.bind(this));
+    this.router.get('/escalation-policy', requirePermission('escalation_policy:read'), this._listEscalationPolicies.bind(this));
 
     /**
      * @route  POST /workflow/escalation-policy
@@ -67,10 +66,10 @@ export class EscalationController {
     }
   }
 
-  private async _getEscalationPolicy(req: Request, res: Response, next: NextFunction): Promise<void> {
+  private async _listEscalationPolicies(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const policy = await this.escalationService.getEscalationPolicy(req.query.auditType as never);
-      res.status(200).json(buildResponse(policy));
+      const policies = await this.escalationService.listEscalationPolicies();
+      res.status(200).json(buildResponse(policies));
     } catch (err) {
       next(err);
     }

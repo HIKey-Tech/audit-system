@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ExportReportQuerySchema = exports.RejectReportRequestSchema = exports.UpdateReportRequestSchema = void 0;
+exports.ReportQuerySchema = exports.ExportReportQuerySchema = exports.RejectReportRequestSchema = exports.UpdateReportRequestSchema = void 0;
 const zod_1 = require("zod");
 exports.UpdateReportRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
@@ -13,5 +13,13 @@ exports.RejectReportRequestSchema = zod_1.z.object({
 });
 exports.ExportReportQuerySchema = zod_1.z.object({
     format: zod_1.z.enum(['docx', 'pdf']).optional(),
+});
+exports.ReportQuerySchema = zod_1.z.object({
+    page: zod_1.z.coerce.number().int().positive().default(1),
+    pageSize: zod_1.z.coerce.number().int().positive().max(100).default(20),
+    status: zod_1.z.string().trim().optional(),
+    search: zod_1.z.string().trim().optional(),
+    sortBy: zod_1.z.enum(['created_at', 'updated_at', 'issued_at', 'status', 'title']).default('created_at'),
+    sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
 });
 //# sourceMappingURL=report.request.dto.js.map

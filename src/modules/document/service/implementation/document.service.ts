@@ -1,5 +1,5 @@
 // src/modules/document/service/implementation/document.service.ts
-import type { Document, Document_Version, Prisma } from '@prisma/client';
+import type { Document_Version, Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../shared/errors/app.error';
 import { logger } from '../../../../shared/utils/logger.util';
@@ -16,6 +16,7 @@ import {
   CreateTemplateRequestDto,
   UpdateTemplateRequestDto,
   TemplateQueryDto,
+  DocumentListQueryDto,
 } from '../../dto/request/document.request.dto';
 import {
   DocumentResponseDto,
@@ -29,6 +30,12 @@ import {
 } from '../../dto/response/document.response.dto';
 import { createStorageClient } from '../client/storage.client';
 import { renderDocxFromDocumentXml } from '../../utility/docx-template.utility';
+
+const uploaderInclude = {
+  uploaded_by: {
+    select: { display_name: true, first_name: true, last_name: true },
+  },
+} as const;
 
 export class DocumentService implements IDocumentService {
   async upload(dto: UploadDocumentDto): Promise<DocumentResponseDto> {
@@ -52,6 +59,7 @@ export class DocumentService implements IDocumentService {
           entity_type: dto.entityType,
           entity_id: dto.entityId,
         },
+        include: uploaderInclude,
       });
 
       logger.info('Document uploaded', { documentId: document.id, module: dto.module });
@@ -68,6 +76,7 @@ export class DocumentService implements IDocumentService {
   async getById(id: string): Promise<DocumentResponseDto> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },
+      include: uploaderInclude,
     });
     if (!doc) throw AppError.notFound('Document');
     const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
@@ -98,6 +107,40 @@ export class DocumentService implements IDocumentService {
     logger.info('Document deleted', { documentId: id, actorId });
   }
 
+  async list(
+    query: DocumentListQueryDto,
+  ): Promise<{ documents: DocumentResponseDto[]; meta: PaginationMeta }> {
+    const { skip, take, page, pageSize } = parsePagination(query);
+
+    const where: Prisma.DocumentWhereInput = {
+      deleted_at: null,
+      ...(query.entityType && { entity_type: query.entityType }),
+      ...(query.search && {
+        original_name: { contains: query.search },
+      }),
+    };
+
+    const [total, docs] = await prisma.$transaction([
+      prisma.document.count({ where }),
+      prisma.document.findMany({
+        where,
+        orderBy: { created_at: 'desc' },
+        skip,
+        take,
+        include: uploaderInclude,
+      }),
+    ]);
+
+    const documents = await Promise.all(
+      docs.map(async (doc) => {
+        const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
+        return mapDocumentToResponse(doc, url);
+      }),
+    );
+
+    return { documents, meta: buildPaginationMeta(total, page, pageSize) };
+  }
+
   async listByEntity(
     entityType: string,
     entityId: string,
@@ -105,14 +148,37 @@ export class DocumentService implements IDocumentService {
     const docs = await prisma.document.findMany({
       where: { entity_type: entityType, entity_id: entityId, deleted_at: null },
       orderBy: { created_at: 'desc' },
+      include: uploaderInclude,
     });
 
     return Promise.all(
-      docs.map(async (doc: Document) => {
+      docs.map(async (doc) => {
         const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
         return mapDocumentToResponse(doc, url);
       }),
     );
+  }
+
+  async getFileById(id: string): Promise<ServedFileDto> {
+    const doc = await prisma.document.findUnique({
+      where: { id, deleted_at: null },
+      select: {
+        mime_type: true,
+        original_name: true,
+        file_size: true,
+        storage_provider: true,
+        storage_path: true,
+      },
+    });
+    if (!doc) throw AppError.notFound('Document');
+
+    const buffer = await this._storageClient(doc.storage_provider).read(doc.storage_path);
+    return {
+      buffer,
+      mimeType: doc.mime_type,
+      originalName: doc.original_name,
+      fileSize: doc.file_size,
+    };
   }
 
   async serveFile(storedName: string): Promise<ServedFileDto> {
@@ -517,6 +583,82 @@ export class DocumentService implements IDocumentService {
     }
 
     return renderDocxFromDocumentXml(template.content, data);
+  }
+
+  async pruneOldVersions(): Promise<{ prunedCount: number; failedCount: number }> {
+    // Read retention config from system_config
+    const configRow = await prisma.system_Config.findUnique({
+      where: { key: 'version_retention' },
+      select: { value: true },
+    });
+
+    let retentionConfig = { enabled: false, keepLastVersions: 10 };
+    if (configRow?.value) {
+      try {
+        const parsed = JSON.parse(configRow.value);
+        retentionConfig = { ...retentionConfig, ...parsed };
+      } catch {
+        logger.warn('Invalid JSON in version_retention config, using defaults');
+      }
+    }
+
+    if (!retentionConfig.enabled) {
+      logger.info('Version retention is disabled, skipping prune');
+      return { prunedCount: 0, failedCount: 0 };
+    }
+
+    const keepN = Math.max(1, retentionConfig.keepLastVersions);
+    let prunedCount = 0;
+    let failedCount = 0;
+
+    // Find documents with versions to prune
+    const documentsWithVersions = await prisma.document.findMany({
+      where: { deleted_at: null },
+      select: {
+        id: true,
+        versions: {
+          orderBy: { version_number: 'desc' },
+          select: {
+            id: true,
+            version_number: true,
+            storage_path: true,
+            storage_provider: true,
+          },
+        },
+      },
+    });
+
+    for (const doc of documentsWithVersions) {
+      if (doc.versions.length <= keepN) continue;
+
+      // Keep the first N (most recent by version_number desc), prune the rest
+      const toPrune = doc.versions.slice(keepN);
+
+      for (const version of toPrune) {
+        try {
+          // Delete from storage first
+          await this._storageClient(version.storage_provider).delete(version.storage_path);
+
+          // Then delete the DB row
+          await prisma.document_Version.delete({
+            where: { id: version.id },
+          });
+
+          prunedCount++;
+        } catch (err) {
+          failedCount++;
+          logger.error('Failed to prune document version', {
+            versionId: version.id,
+            documentId: doc.id,
+            storagePath: version.storage_path,
+            err: String(err),
+          });
+        }
+      }
+    }
+
+    logger.info('Version retention prune completed', { prunedCount, failedCount });
+    return { prunedCount, failedCount };
   }
 
   private _storageClient(provider: string = config.storage.provider) {

@@ -1,7 +1,9 @@
 import { format } from 'date-fns';
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError, ErrorCode } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
+import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
@@ -10,9 +12,9 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, ReportStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, AUDIT_REVIEW_ROLES, REPORT_EDITABLE_STATUSES, assertHasRole } from '../../../utility/audit.utility';
+import { AUDIT_ADMIN_ROLES, AUDIT_REVIEW_ROLES, REPORT_EDITABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
-import { UpdateReportRequestDto } from '../../dto/request/report.request.dto';
+import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto, mapReportToResponse } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
@@ -37,7 +39,7 @@ export class ReportService implements IReportService {
   ) {}
 
   async generateReport(engagementId: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto> {
-    assertHasRole(actor.roles, AUDIT_REVIEW_ROLES);
+    assertHasPermission(actor.permissions, 'report:create');
 
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
@@ -134,7 +136,7 @@ export class ReportService implements IReportService {
   }
 
   async approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'report:approve');
     const report = await this._getReport(id);
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be approved');
 
@@ -152,7 +154,7 @@ export class ReportService implements IReportService {
   }
 
   async rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'report:reject');
     const report = await this._getReport(id);
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be rejected');
 
@@ -170,7 +172,7 @@ export class ReportService implements IReportService {
   }
 
   async issueReport(id: string, actor: ActorContext): Promise<ReportResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'report:issue');
     const report = await prisma.audit_Report.findFirst({
       where: { id, deleted_at: null },
       include: reportInclude,
@@ -288,6 +290,46 @@ export class ReportService implements IReportService {
     });
     if (!report) throw AppError.notFound('Audit report');
     return mapReportToResponse(report);
+  }
+
+  async getReportById(id: string): Promise<ReportResponseDto> {
+    const report = await prisma.audit_Report.findFirst({
+      where: { id, deleted_at: null },
+      include: reportInclude,
+    });
+    if (!report) throw AppError.notFound('Audit report');
+    return mapReportToResponse(report);
+  }
+
+  async listReports(query: ReportQueryDto): Promise<{ reports: ReportResponseDto[]; meta: PaginationMeta }> {
+    const { skip, take, page, pageSize } = parsePagination(query);
+    const where: Prisma.Audit_ReportWhereInput = {
+      deleted_at: null,
+      ...(query.status && { status: query.status }),
+      ...(query.search && {
+        OR: [
+          { title: { contains: query.search } },
+          { executive_summary: { contains: query.search } },
+          { engagement: { reference_number: { contains: query.search } } },
+        ],
+      }),
+    };
+
+    const [total, reports] = await prisma.$transaction([
+      prisma.audit_Report.count({ where }),
+      prisma.audit_Report.findMany({
+        where,
+        include: reportInclude,
+        orderBy: { [query.sortBy]: query.sortOrder },
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      reports: reports.map(mapReportToResponse),
+      meta: buildPaginationMeta(total, page, pageSize),
+    };
   }
 
   async exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile> {

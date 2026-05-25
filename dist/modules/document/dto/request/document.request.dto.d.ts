@@ -140,9 +140,26 @@ export declare const TemplateQuerySchema: z.ZodObject<{
     sortOrder?: "asc" | "desc" | undefined;
     isActive?: boolean | undefined;
 }>;
+export declare const DocumentListQuerySchema: z.ZodObject<{
+    page: z.ZodDefault<z.ZodNumber>;
+    pageSize: z.ZodDefault<z.ZodNumber>;
+    search: z.ZodOptional<z.ZodString>;
+    entityType: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    page: number;
+    pageSize: number;
+    search?: string | undefined;
+    entityType?: string | undefined;
+}, {
+    search?: string | undefined;
+    page?: number | undefined;
+    pageSize?: number | undefined;
+    entityType?: string | undefined;
+}>;
 export type UploadDocumentMetadataDto = z.infer<typeof UploadDocumentMetadataSchema>;
 export type UploadVersionMetadataDto = z.infer<typeof UploadVersionMetadataSchema>;
 export type CreateTemplateRequestDto = z.infer<typeof CreateTemplateRequestSchema>;
 export type UpdateTemplateRequestDto = z.infer<typeof UpdateTemplateRequestSchema>;
 export type TemplateQueryDto = z.infer<typeof TemplateQuerySchema>;
+export type DocumentListQueryDto = z.infer<typeof DocumentListQuerySchema>;
 //# sourceMappingURL=document.request.dto.d.ts.map

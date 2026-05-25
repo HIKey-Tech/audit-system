@@ -1,13 +1,18 @@
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 import { DocumentResponseDto, DocumentVersionResponseDto, DocumentTemplateResponseDto, ServedFileDto } from '../../dto/response/document.response.dto';
-import { UploadDocumentDto, UploadVersionDto, CreateTemplateRequestDto, UpdateTemplateRequestDto, TemplateQueryDto } from '../../dto/request/document.request.dto';
+import { UploadDocumentDto, UploadVersionDto, CreateTemplateRequestDto, UpdateTemplateRequestDto, TemplateQueryDto, DocumentListQueryDto } from '../../dto/request/document.request.dto';
 export interface IDocumentService {
     upload(dto: UploadDocumentDto): Promise<DocumentResponseDto>;
     getById(id: string): Promise<DocumentResponseDto>;
     getDownloadUrl(id: string): Promise<string>;
     delete(id: string, actorId: string): Promise<void>;
+    list(query: DocumentListQueryDto): Promise<{
+        documents: DocumentResponseDto[];
+        meta: PaginationMeta;
+    }>;
     listByEntity(entityType: string, entityId: string): Promise<DocumentResponseDto[]>;
     serveFile(storedName: string): Promise<ServedFileDto>;
+    getFileById(id: string): Promise<ServedFileDto>;
     uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;
     listVersions(documentId: string): Promise<DocumentVersionResponseDto[]>;
     getVersion(documentId: string, versionNumber: number): Promise<DocumentVersionResponseDto>;
@@ -26,5 +31,14 @@ export interface IDocumentService {
      * must be a `word/document.xml` body containing docxtemplater placeholders.
      */
     renderDocxTemplate(category: string, data: Record<string, unknown>): Promise<Buffer>;
+    /**
+     * Prune old document versions when version_retention is enabled in system config.
+     * Reads the `version_retention` config, keeps the N most recent versions per document,
+     * deletes older versions from storage and DB. No-op when disabled (default).
+     */
+    pruneOldVersions(): Promise<{
+        prunedCount: number;
+        failedCount: number;
+    }>;
 }
 //# sourceMappingURL=document.service.interface.d.ts.map

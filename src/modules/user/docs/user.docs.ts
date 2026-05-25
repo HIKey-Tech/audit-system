@@ -149,10 +149,30 @@ openApiRegistry.registerPath({
 });
 
 openApiRegistry.registerPath({
+  method: 'post',
+  path: '/users/{id}/deactivate',
+  tags: [tag],
+  summary: 'Deactivate user. Requires super_admin and `user:deactivate`.',
+  security: bearerAuth,
+  request: { params: UserIdParam },
+  responses: { 200: okResponse('User deactivated') },
+});
+
+openApiRegistry.registerPath({
+  method: 'post',
+  path: '/users/{id}/activate',
+  tags: [tag],
+  summary: 'Activate user. Requires super_admin and `user:deactivate`.',
+  security: bearerAuth,
+  request: { params: UserIdParam },
+  responses: { 200: okResponse('User activated') },
+});
+
+openApiRegistry.registerPath({
   method: 'delete',
   path: '/users/{id}',
   tags: [tag],
-  summary: 'Soft-delete user. Requires `user:delete`.',
+  summary: 'Soft-delete user. Requires super_admin and `user:delete`.',
   security: bearerAuth,
   request: { params: UserIdParam },
   responses: { 200: okResponse('User soft-deleted') },

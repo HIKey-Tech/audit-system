@@ -47,6 +47,7 @@ const mapUserToResponse = (user) => {
         phone: user.phone,
         department: user.department,
         jobTitle: user.job_title,
+        skills: parseSkills(user.skills),
         isActive: user.is_active,
         isSuperAdmin: user.is_super_admin,
         lastLoginAt: user.last_login_at?.toISOString() ?? null,
@@ -57,4 +58,17 @@ const mapUserToResponse = (user) => {
     };
 };
 exports.mapUserToResponse = mapUserToResponse;
+function parseSkills(raw) {
+    if (!raw)
+        return [];
+    try {
+        const parsed = JSON.parse(raw);
+        return Array.isArray(parsed)
+            ? parsed.filter((s) => typeof s === 'string' && s.length > 0)
+            : [];
+    }
+    catch {
+        return [];
+    }
+}
 //# sourceMappingURL=user.response.dto.js.map

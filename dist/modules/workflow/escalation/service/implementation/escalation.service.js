@@ -122,18 +122,15 @@ class EscalationService {
         });
         return escalations.map(escalation_response_dto_1.mapEscalationToResponse);
     }
-    async getEscalationPolicy(auditType) {
-        const policy = await prisma_client_1.prisma.escalation_Policy.findFirst({
-            where: { audit_type: auditType, is_active: true },
-        }) ?? await prisma_client_1.prisma.escalation_Policy.findFirst({
-            where: { audit_type: workflow_enum_1.EscalationPolicyAuditType.All, is_active: true },
+    async listEscalationPolicies() {
+        const policies = await prisma_client_1.prisma.escalation_Policy.findMany({
+            where: { is_active: true },
+            orderBy: { audit_type: 'asc' },
         });
-        if (!policy)
-            throw app_error_1.AppError.notFound('Escalation policy');
-        return (0, escalation_response_dto_1.mapEscalationPolicyToResponse)(policy);
+        return policies.map(escalation_response_dto_1.mapEscalationPolicyToResponse);
     }
     async createOrUpdateEscalationPolicy(dto, updatedBy) {
-        (0, workflow_utility_1.assertHasRole)(updatedBy.roles, workflow_utility_1.WORKFLOW_ADMIN_ROLES);
+        (0, workflow_utility_1.assertHasPermission)(updatedBy.permissions, 'escalation_policy:update');
         const policy = await prisma_client_1.prisma.escalation_Policy.upsert({
             where: { audit_type: dto.auditType },
             create: {

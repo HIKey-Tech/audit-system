@@ -4,6 +4,7 @@ import type {
   WorkflowAssignment,
   WorkflowEscalation,
   EscalationPolicy,
+  AssignmentCandidateDto,
 } from '../types/domain';
 
 type WorkflowAssignmentRole = 'lead_auditor' | 'supporting_auditor';
@@ -12,8 +13,8 @@ export const workflowApi = {
   // approvals
   listPending: () => api.get<WorkflowApproval[]>('/workflow/approvals/pending'),
   getApproval: (id: string) => api.get<WorkflowApproval>(`/workflow/approvals/${id}`),
-  getApprovalsByEntity: (entityType: string, entityId: string) =>
-    api.get<WorkflowApproval[]>(
+  getApprovalByEntity: (entityType: string, entityId: string) =>
+    api.get<WorkflowApproval>(
       `/workflow/approvals/entity/${entityType}/${entityId}`,
     ),
   approve: (id: string, comment?: string) =>
@@ -33,6 +34,10 @@ export const workflowApi = {
   workload: (userId: string) =>
     api.get<unknown>(`/workflow/assignments/workload/${userId}`),
   removeAssignment: (id: string) => api.delete(`/workflow/assignments/${id}`),
+  getCandidates: (engagementId: string) =>
+    api.get<AssignmentCandidateDto[]>(
+      `/workflow/assignments/candidates/${engagementId}`,
+    ),
 
   // escalations
   listByEntity: (entityType: string, entityId: string) =>

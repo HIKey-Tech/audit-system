@@ -9,11 +9,12 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { PlanStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, assertHasRole } from '../../../utility/audit.utility';
+import { AUDIT_ADMIN_ROLES, assertHasPermission } from '../../../utility/audit.utility';
 import {
   AddPlanItemRequestDto,
   CreatePlanRequestDto,
   PlanQueryDto,
+  UpdatePlanRequestDto,
 } from '../../dto/request/planning.request.dto';
 import { PlanResponseDto, mapPlanToResponse } from '../../dto/response/planning.response.dto';
 import { IPlanningService } from '../interface/planning.service.interface';
@@ -26,7 +27,7 @@ export class PlanningService implements IPlanningService {
   constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
 
   async createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'plan:create');
 
     const existingCount = await prisma.audit_Plan.count({
       where: { year: dto.year, deleted_at: null },
@@ -56,8 +57,69 @@ export class PlanningService implements IPlanningService {
     );
   }
 
+  async updatePlan(planId: string, dto: UpdatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
+    assertHasPermission(actor.permissions, 'plan:update');
+    if (dto.title === undefined && dto.year === undefined) {
+      throw AppError.badRequest('At least one field is required');
+    }
+    await this._assertDraftPlan(planId);
+
+    const updated = await prisma.audit_Plan.update({
+      where: { id: planId },
+      data: {
+        ...(dto.title !== undefined && { title: dto.title }),
+        ...(dto.year !== undefined && { year: dto.year }),
+      },
+      include: planInclude,
+    });
+
+    logger.info('Audit plan updated', { planId, actorId: actor.id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.plan.update',
+      module: 'audit',
+      entityType: 'audit_plan',
+      entityId: planId,
+      newValues: dto,
+    });
+
+    return mapPlanToResponse(updated);
+  }
+
+  async deletePlan(planId: string, actor: ActorContext): Promise<void> {
+    assertHasPermission(actor.permissions, 'plan:update');
+    await this._assertDraftPlan(planId);
+
+    const engagementCount = await prisma.audit_Engagement.count({
+      where: {
+        deleted_at: null,
+        plan_item: { plan_id: planId },
+      },
+    });
+    if (engagementCount > 0) {
+      throw AppError.badRequest('Cannot delete a plan after engagements have been created from it');
+    }
+
+    await prisma.$transaction([
+      prisma.audit_Plan_Item.deleteMany({ where: { plan_id: planId } }),
+      prisma.audit_Plan.update({
+        where: { id: planId },
+        data: { deleted_at: new Date() },
+      }),
+    ]);
+
+    logger.info('Audit plan deleted', { planId, actorId: actor.id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.plan.delete',
+      module: 'audit',
+      entityType: 'audit_plan',
+      entityId: planId,
+    });
+  }
+
   async addPlanItem(planId: string, dto: AddPlanItemRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'plan:add_item');
     await this._assertDraftPlan(planId);
     await this._assertUniverseExists(dto.universeId);
 
@@ -86,7 +148,7 @@ export class PlanningService implements IPlanningService {
   }
 
   async removePlanItem(planId: string, itemId: string, actor: ActorContext): Promise<void> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'plan:add_item');
     await this._assertDraftPlan(planId);
 
     const item = await prisma.audit_Plan_Item.findFirst({
@@ -110,7 +172,7 @@ export class PlanningService implements IPlanningService {
   }
 
   async submitPlanForApproval(planId: string, actor: ActorContext): Promise<PlanResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'plan:submit');
     const plan = await this._getPlanForMutation(planId);
     if (plan.status !== PlanStatus.Draft) throw AppError.badRequest('Only draft plans can be submitted');
     if (plan.items.length === 0) throw AppError.badRequest('Plan must have at least one item before submission');
@@ -136,7 +198,7 @@ export class PlanningService implements IPlanningService {
   }
 
   async approvePlan(planId: string, actor: ActorContext): Promise<PlanResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'plan:approve');
     const plan = await this._getPlanForMutation(planId);
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be approved');
 
@@ -150,7 +212,7 @@ export class PlanningService implements IPlanningService {
   }
 
   async rejectPlan(planId: string, reason: string, actor: ActorContext): Promise<PlanResponseDto> {
-    assertHasRole(actor.roles, AUDIT_ADMIN_ROLES);
+    assertHasPermission(actor.permissions, 'plan:reject');
     const plan = await this._getPlanForMutation(planId);
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be rejected');
 

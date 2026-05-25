@@ -1,6 +1,6 @@
 // src/modules/user/controller/user.controller.ts
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission, requireRole } from '../../../shared/middleware/auth.middleware';
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { IUserService } from '../service/interface/user.service.interface';
@@ -125,12 +125,37 @@ export class UserController {
     );
 
     /**
+     * @route  POST /users/:id/deactivate
+     * @desc   Deactivate user
+     * @access Private - super_admin + user:deactivate
+     */
+    this.router.post(
+      '/:id/deactivate',
+      requireRole('super_admin'),
+      requirePermission('user:deactivate'),
+      this._deactivateUser.bind(this),
+    );
+
+    /**
+     * @route  POST /users/:id/activate
+     * @desc   Activate user
+     * @access Private - super_admin + user:deactivate
+     */
+    this.router.post(
+      '/:id/activate',
+      requireRole('super_admin'),
+      requirePermission('user:deactivate'),
+      this._activateUser.bind(this),
+    );
+
+    /**
      * @route  DELETE /users/:id
      * @desc   Soft-delete user
      * @access Private — user:delete
      */
     this.router.delete(
       '/:id',
+      requireRole('super_admin'),
       requirePermission('user:delete'),
       this._deleteUser.bind(this),
     );
@@ -252,6 +277,32 @@ export class UserController {
     try {
       await this.userService.deleteUser(req.params.id, req.user!.id);
       res.status(200).json(buildResponse(null, 'User deleted'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _deactivateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await this.userService.setUserActiveStatus(
+        req.params.id,
+        false,
+        req.user!.id,
+      );
+      res.status(200).json(buildResponse(user, 'User deactivated'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _activateUser(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await this.userService.setUserActiveStatus(
+        req.params.id,
+        true,
+        req.user!.id,
+      );
+      res.status(200).json(buildResponse(user, 'User activated'));
     } catch (err) {
       next(err);
     }

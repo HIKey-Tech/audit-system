@@ -3,12 +3,34 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.UserService = void 0;
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
+const app_config_1 = require("../../../../shared/config/app.config");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
+const notification_service_1 = require("../../../messaging/service/implementation/notification.service");
 const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
+const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
+    switch (char) {
+        case '&':
+            return '&amp;';
+        case '<':
+            return '&lt;';
+        case '>':
+            return '&gt;';
+        case '"':
+            return '&quot;';
+        case "'":
+            return '&#39;';
+        default:
+            return char;
+    }
+});
 class UserService {
+    notifier;
+    constructor(notifier = notification_service_1.notificationService) {
+        this.notifier = notifier;
+    }
     async createUser(dto, actorId) {
         const existing = await prisma_client_1.prisma.user.findUnique({
             where: { email: dto.email },
@@ -22,9 +44,8 @@ class UserService {
         if (dto.roleIds?.length && assignedRoles.length !== dto.roleIds.length) {
             throw app_error_1.AppError.badRequest('One or more role IDs are invalid');
         }
-        const password_hash = dto.password
-            ? await (0, token_utility_1.hashPassword)(dto.password)
-            : null;
+        const initialPassword = dto.password ?? (0, token_utility_1.generateTemporaryPassword)();
+        const password_hash = await (0, token_utility_1.hashPassword)(initialPassword);
         const user = await prisma_client_1.prisma.user.create({
             data: {
                 email: dto.email,
@@ -34,6 +55,7 @@ class UserService {
                 phone: dto.phone,
                 department: dto.department,
                 job_title: dto.jobTitle,
+                ...(dto.skills && { skills: JSON.stringify(dto.skills) }),
                 password_hash,
                 is_super_admin: assignedRoles.some((role) => role.name === 'super_admin'),
                 ...(dto.roleIds?.length
@@ -50,6 +72,7 @@ class UserService {
             include: prisma_types_1.userWithRolesInclude,
         });
         logger_util_1.logger.info('User created', { userId: user.id, actorId });
+        await this._sendOnboardingEmail(user, initialPassword);
         return (0, user_response_dto_1.mapUserToResponse)(user);
     }
     async getUserById(id) {
@@ -273,15 +296,34 @@ class UserService {
                 ...(dto.phone !== undefined && { phone: dto.phone }),
                 ...(dto.department !== undefined && { department: dto.department }),
                 ...(dto.jobTitle !== undefined && { job_title: dto.jobTitle }),
-                ...(dto.isActive !== undefined && { is_active: dto.isActive }),
+                ...(dto.skills !== undefined && { skills: dto.skills ? JSON.stringify(dto.skills) : null }),
             },
             include: prisma_types_1.userWithRolesInclude,
         });
         logger_util_1.logger.info('User updated', { userId: id, actorId });
         return (0, user_response_dto_1.mapUserToResponse)(user);
     }
+    async setUserActiveStatus(id, isActive, actorId) {
+        await this._assertUserExists(id);
+        if (id === actorId && !isActive) {
+            throw app_error_1.AppError.badRequest('You cannot deactivate your own account');
+        }
+        const user = await prisma_client_1.prisma.user.update({
+            where: { id },
+            data: { is_active: isActive },
+            include: prisma_types_1.userWithRolesInclude,
+        });
+        logger_util_1.logger.info(isActive ? 'User activated' : 'User deactivated', {
+            userId: id,
+            actorId,
+        });
+        return (0, user_response_dto_1.mapUserToResponse)(user);
+    }
     async deleteUser(id, actorId) {
         await this._assertUserExists(id);
+        if (id === actorId) {
+            throw app_error_1.AppError.badRequest('You cannot delete your own account');
+        }
         await prisma_client_1.prisma.user.update({
             where: { id },
             data: { deleted_at: new Date(), is_active: false },
@@ -429,6 +471,38 @@ class UserService {
         await prisma_client_1.prisma.user.update({
             where: { id: userId },
             data: { is_super_admin: Boolean(superAdminRole) },
+        });
+    }
+    async _sendOnboardingEmail(user, temporaryPassword) {
+        const displayName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+        const loginUrl = `${app_config_1.config.app.url.replace(/\/$/, '')}/login`;
+        const appName = app_config_1.config.app.name;
+        await this.notifier.sendEmail({
+            to: user.email,
+            subject: `Welcome to ${appName}`,
+            template: 'user-onboarding',
+            text: [
+                `Hello ${displayName},`,
+                '',
+                `Your ${appName} account has been created.`,
+                '',
+                `Login URL: ${loginUrl}`,
+                `Email: ${user.email}`,
+                `Temporary password: ${temporaryPassword}`,
+                '',
+                'Please sign in and change your password immediately.',
+            ].join('\n'),
+            html: [
+                `<p>Hello ${escapeHtml(displayName)},</p>`,
+                `<p>Your ${escapeHtml(appName)} account has been created.</p>`,
+                '<p>Use the credentials below to sign in:</p>',
+                '<ul>',
+                `<li><strong>Login URL:</strong> <a href="${escapeHtml(loginUrl)}">${escapeHtml(loginUrl)}</a></li>`,
+                `<li><strong>Email:</strong> ${escapeHtml(user.email)}</li>`,
+                `<li><strong>Temporary password:</strong> ${escapeHtml(temporaryPassword)}</li>`,
+                '</ul>',
+                '<p>Please sign in and change your password immediately.</p>',
+            ].join(''),
         });
     }
 }

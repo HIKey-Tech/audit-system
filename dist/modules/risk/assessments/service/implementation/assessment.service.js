@@ -12,7 +12,7 @@ const risk_utility_1 = require("../../../utility/risk.utility");
 const assessment_response_dto_1 = require("../../dto/response/assessment.response.dto");
 class RiskAssessmentService {
     async createAssessment(riskId, dto, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ASSESSOR_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:assess');
         const score = (0, risk_utility_1.calculateRiskScore)(dto.likelihood, dto.impact);
         const assessedAt = dto.assessedAt ? new Date(dto.assessedAt) : new Date();
         const assessment = await prisma_client_1.prisma.$transaction(async (tx) => {
@@ -87,9 +87,10 @@ class RiskAssessmentService {
                 risk: { select: { owner_id: true, deleted_at: true } },
             },
         });
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         if (!assessment ||
             assessment.risk.deleted_at !== null ||
-            ((0, risk_utility_1.hasAuditeeRole)(actor.roles) && assessment.risk.owner_id !== actor.id)) {
+            (restrictToOwner && assessment.risk.owner_id !== actor.id)) {
             throw app_error_1.AppError.notFound('Risk assessment');
         }
         return (0, assessment_response_dto_1.mapRiskAssessmentToResponse)(assessment);
@@ -123,11 +124,12 @@ class RiskAssessmentService {
         return assessment ? (0, assessment_response_dto_1.mapRiskAssessmentToResponse)(assessment) : null;
     }
     async _assertRiskExists(riskId, actor) {
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const risk = await prisma_client_1.prisma.risk_Register.findFirst({
             where: {
                 id: riskId,
                 deleted_at: null,
-                ...((0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+                ...(restrictToOwner && { owner_id: actor.id }),
             },
             select: { id: true },
         });

@@ -1,6 +1,9 @@
 import type { Config } from 'tailwindcss';
 
 const config: Config = {
+  // Light-only theme. Explicitly opt into class-based dark mode so that
+  // `dark:` utilities never auto-activate from the OS `prefers-color-scheme`.
+  darkMode: 'class',
   content: [
     './app/**/*.{ts,tsx}',
     './components/**/*.{ts,tsx}',

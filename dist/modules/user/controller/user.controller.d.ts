@@ -15,6 +15,8 @@ export declare class UserController {
     private _getUserById;
     private _updateUser;
     private _deleteUser;
+    private _deactivateUser;
+    private _activateUser;
     private _assignRoles;
     private _removeRole;
 }

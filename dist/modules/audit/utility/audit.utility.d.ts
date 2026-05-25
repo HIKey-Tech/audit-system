@@ -6,6 +6,13 @@ export declare const AUDIT_WORK_ROLES: readonly string[];
 export declare const AUDITEE_ROLE = "auditee";
 export declare const hasAuditeeRole: (roles: string[]) => boolean;
 export declare const assertHasRole: (roles: string[], allowedRoles: readonly string[], message?: string) => void;
+/**
+ * Permission-based authorization gate. Prefer this over assertHasRole so that
+ * roles remain fully customizable in Settings — a user is authorized by the
+ * permissions their role(s) grant, never by a hardcoded role name. super_admin
+ * is seeded with every permission slug, so it continues to pass.
+ */
+export declare const assertHasPermission: (permissions: string[], required: string, message?: string) => void;
 export declare const assertTransition: <TStatus extends string>(current: TStatus, next: TStatus, transitions: Partial<Record<TStatus, readonly TStatus[]>>, entityName: string) => void;
 export declare const toIso: (value: Date | null) => string | null;
 export declare const decimalToNumber: (value: Prisma.Decimal | null) => number | null;

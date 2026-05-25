@@ -1,5 +1,7 @@
 import { Router, Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
+import { AppError } from '../../../../shared/errors/app.error';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
@@ -8,6 +10,8 @@ import {
   VerifyRemediationRequestSchema,
 } from '../dto/request/follow-up.request.dto';
 import { IFollowUpService } from '../service/interface/follow-up.service.interface';
+
+const upload = multer({ storage: multer.memoryStorage() });
 
 export class FollowUpController {
   public readonly router: Router;
@@ -33,6 +37,13 @@ export class FollowUpController {
      * @access Private - audit:write
      */
     this.router.post('/findings/:id/followup/evidence', requirePermission('followup:evidence'), validate(RemediationEvidenceRequestSchema), this._submitRemediationEvidence.bind(this));
+
+    /**
+     * @route  POST /audit/findings/:id/followup/evidence/upload
+     * @desc   Upload and submit remediation evidence
+     * @access Private - audit:write
+     */
+    this.router.post('/findings/:id/followup/evidence/upload', requirePermission('followup:evidence'), upload.single('file'), this._uploadRemediationEvidence.bind(this));
 
     /**
      * @route  POST /audit/findings/:id/followup/verify
@@ -69,6 +80,28 @@ export class FollowUpController {
     try {
       const followUp = await this.followUpService.submitRemediationEvidence(req.params.id, req.body.evidenceId, req.user!);
       res.status(200).json(buildResponse(followUp, 'Remediation evidence submitted'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _uploadRemediationEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.file) {
+        throw AppError.badRequest('File is required');
+      }
+
+      const followUp = await this.followUpService.uploadRemediationEvidence(
+        req.params.id,
+        {
+          originalName: req.file.originalname,
+          mimeType: req.file.mimetype,
+          fileSize: req.file.size,
+          buffer: req.file.buffer,
+        },
+        req.user!,
+      );
+      res.status(201).json(buildResponse(followUp, 'Remediation evidence uploaded'));
     } catch (err) {
       next(err);
     }

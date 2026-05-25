@@ -14,7 +14,7 @@ class EvidenceService {
         this.documentService = documentService;
     }
     async uploadEvidence(engagementId, file, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:upload');
         await this._assertEngagementInProgress(engagementId);
         if (file.workingPaperId) {
             await this._assertWorkingPaperInEngagement(file.workingPaperId, engagementId);
@@ -48,7 +48,7 @@ class EvidenceService {
         return (0, evidence_response_dto_1.mapEvidenceToResponse)(evidence);
     }
     async linkToWorkingPaper(evidenceId, workingPaperId, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:upload');
         const evidence = await this._getEvidence(evidenceId);
         const paper = await prisma_client_1.prisma.audit_Working_Paper.findFirst({
             where: { id: workingPaperId, deleted_at: null },
@@ -64,7 +64,7 @@ class EvidenceService {
         return (0, evidence_response_dto_1.mapEvidenceToResponse)(updated);
     }
     async linkToFinding(evidenceId, findingId, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_WORK_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:upload');
         const evidence = await this._getEvidence(evidenceId);
         const finding = await prisma_client_1.prisma.audit_Finding.findFirst({
             where: { id: findingId, deleted_at: null },
@@ -80,7 +80,7 @@ class EvidenceService {
         return (0, evidence_response_dto_1.mapEvidenceToResponse)(updated);
     }
     async disputeEvidence(evidenceId, reason, actor) {
-        (0, audit_utility_1.assertHasRole)(actor.roles, audit_utility_1.AUDIT_ADMIN_ROLES);
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:dispute');
         await this._getEvidence(evidenceId);
         const updated = await prisma_client_1.prisma.audit_Evidence.update({
             where: { id: evidenceId },

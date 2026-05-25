@@ -37,7 +37,7 @@ export const createAuditModule = (): Router => {
   const workingPaperService = new WorkingPaperService(documentService, workingPaperTemplateService);
   const evidenceService = new EvidenceService(documentService);
   const findingService = new FindingService();
-  const followUpService = new FollowUpService();
+  const followUpService = new FollowUpService(documentService);
   const reportGenerationService = new ReportGenerationService(
     reportTemplateService,
     systemConfigService,

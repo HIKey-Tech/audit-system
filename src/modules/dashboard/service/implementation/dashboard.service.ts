@@ -108,10 +108,15 @@ export class DashboardService {
     const yearStart = startOfCurrentYear(now);
     const sevenDaysFromNow = daysFromNow(7, now);
 
-    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const restrictToLead = isRestrictedAuditor(actor.permissions);
     const engagementWhereBase: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
-      ...(restrictToLead ? { lead_auditor_id: actor.id } : {}),
+      ...(restrictToLead ? {
+        OR: [
+          { lead_auditor_id: actor.id },
+          { workflow_assignments: { some: { user_id: actor.id } } },
+        ],
+      } : {}),
     };
 
     const [
@@ -200,7 +205,7 @@ export class DashboardService {
     const monthStart = startOfCurrentMonth(now);
     const monthEnd = startOfNextMonth(now);
 
-    const restrictToAuditee = isRestrictedAuditee(actor.roles);
+    const restrictToAuditee = isRestrictedAuditee(actor.permissions);
     const findingWhereBase: Prisma.Audit_FindingWhereInput = {
       deleted_at: null,
       ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
@@ -407,7 +412,7 @@ export class DashboardService {
 
     const where: Prisma.Audit_LogWhereInput = {
       module: { in: ACTIVITY_MODULES as unknown as string[] },
-      ...(isRestrictedAuditor(actor.roles) ? { user_id: actor.id } : {}),
+      ...(isRestrictedAuditor(actor.permissions) ? { user_id: actor.id } : {}),
       // Exclude raw HTTP request logs — only keep structured service audit logs.
       // A structured log either has a proper entityType or uses dot.notation for action.
       AND: [
@@ -535,7 +540,10 @@ export class DashboardService {
     const now = new Date();
     const myActiveEngagementWhere: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
-      lead_auditor_id: userId,
+      OR: [
+        { lead_auditor_id: userId },
+        { workflow_assignments: { some: { user_id: userId } } },
+      ],
       status: { notIn: ENGAGEMENT_CLOSED_LIKE_STATUSES as unknown as string[] },
     };
 
@@ -577,7 +585,13 @@ export class DashboardService {
         where: {
           deleted_at: null,
           status: 'in_remediation',
-          engagement: { lead_auditor_id: userId, deleted_at: null },
+          engagement: {
+            deleted_at: null,
+            OR: [
+              { lead_auditor_id: userId },
+              { workflow_assignments: { some: { user_id: userId } } },
+            ],
+          },
         },
         orderBy: { due_date: 'asc' },
         select: {
@@ -682,9 +696,9 @@ export class DashboardService {
   }
 
   private _activeEscalationCondition(actor: DashboardActorContext): Prisma.Sql {
-    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const restrictToLead = isRestrictedAuditor(actor.permissions);
     const engagementLeadFilter = restrictToLead
-      ? Prisma.sql`AND engagement.lead_auditor_id = ${actor.id}`
+      ? Prisma.sql`AND (engagement.lead_auditor_id = ${actor.id} OR EXISTS (SELECT 1 FROM workflow_assignments wa WHERE wa.engagement_id = engagement.id AND wa.user_id = ${actor.id}))`
       : Prisma.empty;
     const approvalLeadFilter = restrictToLead
       ? Prisma.sql`
@@ -699,7 +713,7 @@ export class DashboardService {
                 WHERE wp.id = approval.entity_id
                   AND wp.deleted_at IS NULL
                   AND engagement.deleted_at IS NULL
-                  AND engagement.lead_auditor_id = ${actor.id}
+                  AND (engagement.lead_auditor_id = ${actor.id} OR EXISTS (SELECT 1 FROM workflow_assignments wa WHERE wa.engagement_id = engagement.id AND wa.user_id = ${actor.id}))
               )
             )
             OR (
@@ -712,7 +726,7 @@ export class DashboardService {
                 WHERE report.id = approval.entity_id
                   AND report.deleted_at IS NULL
                   AND engagement.deleted_at IS NULL
-                  AND engagement.lead_auditor_id = ${actor.id}
+                  AND (engagement.lead_auditor_id = ${actor.id} OR EXISTS (SELECT 1 FROM workflow_assignments wa WHERE wa.engagement_id = engagement.id AND wa.user_id = ${actor.id}))
               )
             )
           )
@@ -773,7 +787,7 @@ export class DashboardService {
     actor: DashboardActorContext,
   ): Promise<AuditAnalyticsResponseDto['lifecycle']> {
     const summary = await this.getAuditSummary(actor);
-    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const restrictToLead = isRestrictedAuditor(actor.permissions);
     const where: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
       ...(restrictToLead ? { lead_auditor_id: actor.id } : {}),
@@ -813,7 +827,7 @@ export class DashboardService {
   private async _getWorkingPaperAnalytics(
     actor: DashboardActorContext,
   ): Promise<AuditAnalyticsResponseDto['workingPapers']> {
-    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const restrictToLead = isRestrictedAuditor(actor.permissions);
     const where: Prisma.Audit_Working_PaperWhereInput = {
       deleted_at: null,
       ...(restrictToLead ? { engagement: { lead_auditor_id: actor.id } } : {}),
@@ -843,7 +857,7 @@ export class DashboardService {
   private async _getReportingAnalytics(
     actor: DashboardActorContext,
   ): Promise<AuditAnalyticsResponseDto['reporting']> {
-    const restrictToLead = isRestrictedAuditor(actor.roles);
+    const restrictToLead = isRestrictedAuditor(actor.permissions);
     const where: Prisma.Audit_ReportWhereInput = {
       deleted_at: null,
       ...(restrictToLead ? { engagement: { lead_auditor_id: actor.id } } : {}),
@@ -874,7 +888,7 @@ export class DashboardService {
   private async _getFollowUpAnalytics(
     actor: DashboardActorContext,
   ): Promise<AuditAnalyticsResponseDto['followUp']> {
-    const restrictToAuditee = isRestrictedAuditee(actor.roles);
+    const restrictToAuditee = isRestrictedAuditee(actor.permissions);
     const where: Prisma.Audit_Follow_UpWhereInput = {
       ...(restrictToAuditee ? { finding: { auditee_id: actor.id } } : {}),
     };

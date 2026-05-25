@@ -11,7 +11,7 @@ const risk_utility_1 = require("../../../utility/risk.utility");
 const register_response_dto_1 = require("../../dto/response/register.response.dto");
 class RiskRegisterService {
     async createRisk(dto, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:create');
         const score = (0, risk_utility_1.calculateRiskScore)(dto.likelihood, dto.impact);
         const risk = await prisma_client_1.prisma.risk_Register.create({
             data: {
@@ -40,7 +40,7 @@ class RiskRegisterService {
         return (0, register_response_dto_1.mapRiskRegisterToResponse)(risk);
     }
     async updateRisk(id, dto, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:update');
         const existing = await this._getExistingRisk(id);
         const likelihood = dto.likelihood ?? existing.likelihood;
         const impact = dto.impact ?? existing.impact;
@@ -72,7 +72,7 @@ class RiskRegisterService {
         return (0, register_response_dto_1.mapRiskRegisterToResponse)(risk);
     }
     async updateRiskStatus(id, dto, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:update');
         await this._getExistingRisk(id);
         const risk = await prisma_client_1.prisma.risk_Register.update({
             where: { id },
@@ -91,7 +91,7 @@ class RiskRegisterService {
         return (0, register_response_dto_1.mapRiskRegisterToResponse)(risk);
     }
     async deleteRisk(id, actor) {
-        (0, risk_utility_1.assertHasRole)(actor.roles, risk_utility_1.RISK_ADMIN_ROLES);
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:delete');
         await this._getExistingRisk(id);
         await prisma_client_1.prisma.risk_Register.update({
             where: { id },
@@ -107,11 +107,12 @@ class RiskRegisterService {
         });
     }
     async getRiskById(id, actor) {
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const risk = await prisma_client_1.prisma.risk_Register.findFirst({
             where: {
                 id,
                 deleted_at: null,
-                ...((0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+                ...(restrictToOwner && { owner_id: actor.id }),
             },
             include: prisma_types_1.riskRegisterWithDetailsInclude,
         });
@@ -121,12 +122,13 @@ class RiskRegisterService {
     }
     async listRisks(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const where = {
             deleted_at: null,
             ...(query.categoryId && { category_id: query.categoryId }),
             ...(query.status && { status: query.status }),
             ...(query.ownerId && { owner_id: query.ownerId }),
-            ...((0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+            ...(restrictToOwner && { owner_id: actor.id }),
         };
         const [total, risks] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.risk_Register.count({ where }),
@@ -144,11 +146,12 @@ class RiskRegisterService {
         };
     }
     async getRisksByUniverseEntity(universeId, actor) {
+        const restrictToOwner = actor ? !actor.permissions.includes('risk:read_all') : false;
         const risks = await prisma_client_1.prisma.risk_Register.findMany({
             where: {
                 universe_id: universeId,
                 deleted_at: null,
-                ...(actor && (0, risk_utility_1.hasAuditeeRole)(actor.roles) && { owner_id: actor.id }),
+                ...(restrictToOwner && actor && { owner_id: actor.id }),
             },
             include: prisma_types_1.riskRegisterWithDetailsInclude,
             orderBy: { current_score: 'desc' },

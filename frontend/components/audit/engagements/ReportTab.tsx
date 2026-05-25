@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2 } from 'lucide-react';
+import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2, Eye, LayoutGrid, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -16,8 +16,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Textarea } from '@/components/ui/Input';
 import { reportsApi } from '@/lib/api/audit';
-import { formatRelative } from '@/lib/utils/format';
+import { workflowApi } from '@/lib/api/workflow';
+import { formatRelative, formatDate } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
+import { useSession } from '@/components/providers/AuthProvider';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 const GenSchema = z.object({
@@ -30,9 +32,11 @@ type GenValues = z.infer<typeof GenSchema>;
 
 export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
+  const session = useSession();
   const canGenerateReport = usePermission('report:create');
   const canSubmitReport = usePermission('report:submit');
-  const canApproveReport = usePermission('report:approve');
+  const canApproveApproval = usePermission('approval:approve');
+  const canRejectApproval = usePermission('approval:reject');
   const canIssueReport = usePermission('report:issue');
   const canExportReport = usePermission('report:export');
 
@@ -45,7 +49,15 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'report'] });
+    qc.invalidateQueries({ queryKey: ['workflow'] });
   };
+
+  const approval = useQuery({
+    queryKey: ['workflow', 'approval', 'audit_report', report.data?.id],
+    queryFn: () => workflowApi.getApprovalByEntity('audit_report', report.data!.id).catch(() => null),
+    enabled: Boolean(report.data?.id),
+    retry: false,
+  });
 
   const generate = useMutation({
     mutationFn: (v: GenValues) =>
@@ -68,12 +80,12 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
   const approveMut = useMutation({
-    mutationFn: () => reportsApi.approve(report.data!.id),
+    mutationFn: () => workflowApi.approve(approval.data!.id),
     onSuccess: () => { toast.success('Approved'); refresh(); },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
   const rejectMut = useMutation({
-    mutationFn: (reason: string) => reportsApi.reject(report.data!.id, reason),
+    mutationFn: (reason: string) => workflowApi.reject(approval.data!.id, reason),
     onSuccess: () => { toast.success('Rejected'); refresh(); },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
@@ -86,6 +98,9 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
   const [showExportMenu, setShowExportMenu] = useState(false);
   const exportMenuRef = useRef<HTMLDivElement>(null);
+  const [activeView, setActiveView] = useState<'cards' | 'preview'>('cards');
+  const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [rejectReasonText, setRejectReasonText] = useState('');
 
   useEffect(() => {
     if (!showExportMenu) return;
@@ -179,6 +194,10 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   }
 
   const r = report.data;
+  const currentStep = approval.data?.steps?.find((step) => step.level === approval.data?.currentLevel);
+  const canActOnCurrentApproval =
+    approval.data?.status === 'pending' &&
+    currentStep?.approverId === session.id;
 
   return (
     <div className="space-y-6">
@@ -194,7 +213,34 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
               {r.issuedAt ? `Issued ${formatRelative(r.issuedAt)} by ${r.issuedByName ?? '—'}` : 'Not yet issued'}
             </p>
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1 rounded-md border border-border bg-slate-100/80 p-0.5 mr-2">
+              <button
+                type="button"
+                onClick={() => setActiveView('cards')}
+                className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
+                  activeView === 'cards'
+                    ? 'bg-white text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+                Cards
+              </button>
+              <button
+                type="button"
+                onClick={() => setActiveView('preview')}
+                className={`flex items-center gap-1.5 rounded px-2.5 py-1 text-xs font-medium transition-all ${
+                  activeView === 'preview'
+                    ? 'bg-white text-text-primary shadow-sm'
+                    : 'text-text-secondary hover:text-text-primary'
+                }`}
+              >
+                <Eye className="h-3.5 w-3.5" />
+                Preview
+              </button>
+            </div>
+
             {canExportReport && (
               <div ref={exportMenuRef} className="relative flex">
                 <Button
@@ -241,17 +287,21 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                 Submit for approval
               </Button>
             )}
-            {canApproveReport && r.status === 'submitted' && (
+            {r.status === 'submitted' && canActOnCurrentApproval && (
               <>
+                {canApproveApproval && (
                 <Button variant="success" size="sm" leftIcon={<Check className="h-4 w-4" />} onClick={() => approveMut.mutate()} isLoading={approveMut.isPending}>
                   Approve
                 </Button>
+                )}
+                {canRejectApproval && (
                 <Button variant="danger" size="sm" leftIcon={<X className="h-4 w-4" />} onClick={() => {
-                  const reason = window.prompt('Rejection reason') ?? '';
-                  if (reason.trim()) rejectMut.mutate(reason.trim());
+                  setRejectReasonText('');
+                  setIsRejectModalOpen(true);
                 }}>
                   Reject
                 </Button>
+                )}
               </>
             )}
             {canIssueReport && r.status === 'approved' && (
@@ -270,50 +320,182 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
         )}
       </Card>
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <Card>
-          <CardHeader title="Executive summary" />
-          <p className="text-sm text-text-primary whitespace-pre-wrap">
-            {r.executiveSummary || '—'}
-          </p>
-        </Card>
-        <Card>
-          <CardHeader title="Scope" />
-          <p className="text-sm text-text-primary whitespace-pre-wrap">{r.scope || '—'}</p>
-        </Card>
-        <Card>
-          <CardHeader title="Methodology" />
-          <p className="text-sm text-text-primary whitespace-pre-wrap">{r.methodology || '—'}</p>
-        </Card>
-        <Card>
-          <CardHeader title="Findings summary" />
-          {(engagement.findings ?? []).length === 0 ? (
-            <p className="text-xs text-text-muted">No findings.</p>
-          ) : (
-            <ul className="space-y-2">
-              {(engagement.findings ?? []).map((f) => (
-                <li key={f.id} className="flex items-center justify-between gap-2 text-xs">
-                  <span className="truncate text-text-primary">{f.title}</span>
-                  <StatusBadge status={f.severity} size="xs" />
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
-      </div>
+      {activeView === 'cards' ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <Card>
+            <CardHeader title="Executive summary" />
+            <p className="text-sm text-text-primary whitespace-pre-wrap">
+              {r.executiveSummary || '—'}
+            </p>
+          </Card>
+          <Card>
+            <CardHeader title="Scope" />
+            <p className="text-sm text-text-primary whitespace-pre-wrap">{r.scope || '—'}</p>
+          </Card>
+          <Card>
+            <CardHeader title="Methodology" />
+            <p className="text-sm text-text-primary whitespace-pre-wrap">{r.methodology || '—'}</p>
+          </Card>
+          <Card>
+            <CardHeader title="Findings summary" />
+            {(engagement.findings ?? []).length === 0 ? (
+              <p className="text-xs text-text-muted">No findings.</p>
+            ) : (
+              <ul className="space-y-2">
+                {(engagement.findings ?? []).map((f) => (
+                  <li key={f.id} className="flex items-center justify-between gap-2 text-xs">
+                    <span className="truncate text-text-primary">{f.title}</span>
+                    <StatusBadge status={f.severity} size="xs" />
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Card>
+        </div>
+      ) : (
+        <div className="w-full max-w-[816px] mx-auto bg-white border border-border shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-lg p-10 md:p-14 text-slate-800 space-y-6 select-none font-sans transition-all duration-300">
+          {/* A4 simulated print header */}
+          <div className="text-center pb-5 border-b-2 border-slate-200 space-y-2">
+            <div className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Galaxy Backbone Limited</div>
+            <h1 className="text-xl font-bold tracking-tight text-text-primary uppercase">{r.title}</h1>
+            <div className="text-[10px] text-text-secondary">Corporate Headquarters, Abuja</div>
+          </div>
 
-      {r.approvalChain && r.approvalChain.length > 0 && (
+          {/* Metadata Block */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-100 rounded-md p-4 text-xs">
+            <div className="space-y-2">
+              <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                <span className="font-medium text-slate-500">Report Reference:</span>
+                <span className="text-text-primary font-semibold">{engagement.referenceNumber}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                <span className="font-medium text-slate-500">Audit Type:</span>
+                <span className="text-text-primary uppercase font-semibold">{engagement.auditType} Audit</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-1.5 md:border-none md:pb-0">
+                <span className="font-medium text-slate-500">Audited Entity:</span>
+                <span className="text-text-primary font-semibold">{engagement.universeName || '—'}</span>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                <span className="font-medium text-slate-500">Audit Period:</span>
+                <span className="text-text-primary font-semibold">
+                  {engagement.plannedStartDate ? new Date(engagement.plannedStartDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} to {engagement.plannedEndDate ? new Date(engagement.plannedEndDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+                </span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-1.5">
+                <span className="font-medium text-slate-500">Report Date:</span>
+                <span className="text-text-primary font-semibold">{r.issuedAt ? new Date(r.issuedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : 'Draft'}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="font-medium text-slate-500">Classification:</span>
+                <span className="text-text-primary font-bold tracking-wider uppercase text-danger">Confidential</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Section 1: Executive Summary */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">1. Executive Summary</h2>
+            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
+              {r.executiveSummary || 'No executive summary provided.'}
+            </p>
+          </div>
+
+          {/* Section 2: Scope */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">2. Audit Scope</h2>
+            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
+              {r.scope || 'No scope details specified.'}
+            </p>
+          </div>
+
+          {/* Section 3: Methodology */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">3. Methodology</h2>
+            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
+              {r.methodology || 'No methodology notes entered.'}
+            </p>
+          </div>
+
+          {/* Section 4: Findings Summary */}
+          <div className="space-y-2">
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">4. Findings Summary Table</h2>
+            {(engagement.findings ?? []).length === 0 ? (
+              <p className="text-xs text-slate-500 italic pl-1">No findings were identified during the course of this engagement.</p>
+            ) : (
+              <div className="overflow-hidden border border-slate-200 rounded-md">
+                <table className="min-w-full divide-y divide-slate-200 text-xs">
+                  <thead className="bg-slate-50 text-text-secondary border-b border-slate-200">
+                    <tr>
+                      <th scope="col" className="px-4 py-2 text-left font-semibold">Ref</th>
+                      <th scope="col" className="px-4 py-2 text-left font-semibold">Finding Title</th>
+                      <th scope="col" className="px-4 py-2 text-center font-semibold">Severity</th>
+                      <th scope="col" className="px-4 py-2 text-center font-semibold">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {(engagement.findings ?? []).map((f, idx) => (
+                      <tr key={f.id} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-2 font-medium text-slate-500">{idx + 1}</td>
+                        <td className="px-4 py-2 text-slate-900 font-medium">{f.title}</td>
+                        <td className="px-4 py-2 text-center">
+                          <StatusBadge status={f.severity} size="xs" />
+                        </td>
+                        <td className="px-4 py-2 text-center capitalize text-slate-500">{f.status?.replace('_', ' ')}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Section 5: Signature Blocks */}
+          <div className="pt-6 border-t border-slate-200">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-700">
+              <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
+                <div className="font-bold text-slate-500">Prepared by:</div>
+                <div className="font-medium text-slate-900">{engagement.leadAuditorName || 'Lead Auditor'}</div>
+                <div className="text-[10px] text-slate-400">Date: {engagement.actualStartDate ? formatDate(engagement.actualStartDate) : '—'}</div>
+              </div>
+              <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
+                <div className="font-bold text-slate-500">Reviewed by:</div>
+                <div className="font-medium text-slate-900">{engagement.auditManagerName ?? '—'}</div>
+              </div>
+              <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
+                <div className="font-bold text-slate-500">Approved by:</div>
+                <div className="font-medium text-slate-900">
+                  {(() => {
+                    if (approval.data?.steps) {
+                      const approvedSteps = approval.data.steps.filter((s) => s.status === 'approved');
+                      const highest = approvedSteps.length > 0
+                        ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
+                        : undefined;
+                      return highest?.approverName || 'Chief Audit Executive';
+                    }
+                    return 'Chief Audit Executive';
+                  })()}
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {approval.data?.steps && approval.data.steps.length > 0 && (
         <Card>
           <CardHeader title="Approval chain" />
           <ol className="space-y-2 text-xs">
-            {r.approvalChain.map((step) => (
+            {approval.data.steps.map((step) => (
               <li key={step.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
                 <div>
                   <p className="font-medium text-text-primary">
                     Level {step.level} · {step.approverName}
                   </p>
-                  {(step.comment || step.rejectionReason) && (
-                    <p className="text-text-secondary mt-0.5">{step.rejectionReason || step.comment}</p>
+                  {step.comment && (
+                    <p className="text-text-secondary mt-0.5">{step.comment}</p>
                   )}
                 </div>
                 <StatusBadge status={step.status} />
@@ -321,6 +503,61 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             ))}
           </ol>
         </Card>
+      )}
+
+      {/* Custom Rejection Dialog Modal */}
+      {isRejectModalOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in" role="dialog" aria-modal="true">
+          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-all" onClick={() => setIsRejectModalOpen(false)} aria-hidden />
+          <div className="relative w-full max-w-md rounded-lg border border-border bg-white p-5 shadow-2xl transition-all scale-100 animate-scale-in">
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-danger">
+                <AlertTriangle className="h-5 w-5" aria-hidden />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2 className="text-sm font-semibold text-text-primary">Reject Audit Report</h2>
+                <p className="mt-1 text-xs text-text-secondary">
+                  Please provide a detailed reason for rejecting this report. This feedback will be visible in the approval chain logs.
+                </p>
+                <div className="mt-3">
+                  <textarea
+                    rows={4}
+                    value={rejectReasonText}
+                    onChange={(e) => setRejectReasonText(e.target.value)}
+                    placeholder="Enter reason for rejection..."
+                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary focus:ring-primary/40 focus:ring-offset-0 disabled:cursor-not-allowed"
+                    disabled={rejectMut.isPending}
+                  />
+                </div>
+              </div>
+            </div>
+            <div className="mt-5 flex justify-end gap-2">
+              <Button variant="secondary" size="sm" onClick={() => setIsRejectModalOpen(false)} disabled={rejectMut.isPending}>
+                Cancel
+              </Button>
+              <Button
+                variant="danger"
+                size="sm"
+                onClick={() => {
+                  if (rejectReasonText.trim()) {
+                    rejectMut.mutate(rejectReasonText.trim(), {
+                      onSuccess: () => {
+                        setIsRejectModalOpen(false);
+                        setRejectReasonText('');
+                      }
+                    });
+                  } else {
+                    toast.error('Rejection reason cannot be empty');
+                  }
+                }}
+                isLoading={rejectMut.isPending}
+                disabled={!rejectReasonText.trim()}
+              >
+                Confirm Rejection
+              </Button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
