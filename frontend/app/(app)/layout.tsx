@@ -4,6 +4,8 @@ import { LayoutProvider } from '@/components/providers/LayoutProvider';
 import { AppLayoutContainer } from '@/components/layout/AppLayoutContainer';
 import { readSessionUserFromCookies } from '@/lib/session';
 
+export const dynamic = 'force-dynamic';
+
 export default function AppLayout({
   children,
 }: {
