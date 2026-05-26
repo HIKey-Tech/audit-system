@@ -29,6 +29,7 @@ import type { AuditPlanItem, AuditPlanApprovalStep } from '@/lib/types/domain';
 
 export default function PlanDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
+  const id = params?.id ?? '';
   const qc = useQueryClient();
   const { canManageAuditProgramme: canWrite, hasAnyRole } = usePermissions();
   const isAdmin = hasAnyRole(['super_admin', 'audit_admin', 'director', 'cae']);
@@ -39,34 +40,34 @@ export default function PlanDetailPage(): JSX.Element {
   const [rejectReason, setRejectReason] = useState('');
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['plans', params.id],
-    queryFn: () => plansApi.get(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['plans', id],
+    queryFn: () => plansApi.get(id),
+    enabled: Boolean(id),
   });
 
   const submitMut = useMutation({
-    mutationFn: () => plansApi.submit(params.id),
+    mutationFn: () => plansApi.submit(id),
     onSuccess: () => {
       toast.success('Plan submitted for approval');
-      qc.invalidateQueries({ queryKey: ['plans', params.id] });
+      qc.invalidateQueries({ queryKey: ['plans', id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
   const approveMut = useMutation({
-    mutationFn: () => plansApi.approve(params.id),
+    mutationFn: () => plansApi.approve(id),
     onSuccess: () => {
       toast.success('Plan approved');
-      qc.invalidateQueries({ queryKey: ['plans', params.id] });
+      qc.invalidateQueries({ queryKey: ['plans', id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
   const rejectMut = useMutation({
-    mutationFn: (reason: string) => plansApi.reject(params.id, reason),
+    mutationFn: (reason: string) => plansApi.reject(id, reason),
     onSuccess: () => {
       toast.success('Plan rejected');
-      qc.invalidateQueries({ queryKey: ['plans', params.id] });
+      qc.invalidateQueries({ queryKey: ['plans', id] });
       setRejectOpen(false);
       setRejectReason('');
     },

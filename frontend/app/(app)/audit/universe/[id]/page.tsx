@@ -26,14 +26,15 @@ import type {
 
 export default function UniverseDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
+  const id = params?.id ?? '';
   const router = useRouter();
   const { canManageAuditProgramme: canWrite } = usePermissions();
   const [editOpen, setEditOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['universe', params.id],
-    queryFn: () => universeApi.get(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['universe', id],
+    queryFn: () => universeApi.get(id),
+    enabled: Boolean(id),
   });
 
   if (isError) {

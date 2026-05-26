@@ -23,25 +23,26 @@ import { NewAssessmentSlideOver } from '@/components/risk/NewAssessmentSlideOver
 
 export default function RiskDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
+  const id = params?.id ?? '';
   const { canManageAuditProgramme: canWrite } = usePermissions();
   const [open, setOpen] = useState(false);
 
   const risk = useQuery({
-    queryKey: ['risk', params.id],
-    queryFn: () => riskApi.get(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['risk', id],
+    queryFn: () => riskApi.get(id),
+    enabled: Boolean(id),
   });
 
   const assessments = useQuery({
-    queryKey: ['risk', params.id, 'assessments'],
-    queryFn: () => riskApi.listAssessments(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['risk', id, 'assessments'],
+    queryFn: () => riskApi.listAssessments(id),
+    enabled: Boolean(id),
   });
 
   const trend = useQuery({
-    queryKey: ['risk', params.id, 'trend'],
-    queryFn: () => riskApi.getTrend(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['risk', id, 'trend'],
+    queryFn: () => riskApi.getTrend(id),
+    enabled: Boolean(id),
   });
 
   if (risk.isError) {

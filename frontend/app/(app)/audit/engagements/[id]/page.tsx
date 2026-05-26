@@ -48,9 +48,9 @@ export default function EngagementDetailPage(): JSX.Element {
   const [tab, setTab] = useState<TabKey>('overview');
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['engagements', params.id],
-    queryFn: () => engagementsApi.get(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['engagements', params?.id],
+    queryFn: () => engagementsApi.get(params!.id),
+    enabled: Boolean(params?.id),
   });
 
   if (isError) {

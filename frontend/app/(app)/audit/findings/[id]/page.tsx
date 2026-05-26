@@ -28,23 +28,23 @@ export default function FindingDetailPage(): JSX.Element {
   const canChangeStatus = hasAnyRole(['super_admin', 'audit_admin', 'audit_lead', 'cae']);
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['findings', params.id],
-    queryFn: () => findingsApi.get(params.id),
-    enabled: Boolean(params.id),
+    queryKey: ['findings', params?.id],
+    queryFn: () => findingsApi.get(params!.id),
+    enabled: Boolean(params?.id),
   });
 
   const followUp = useQuery({
-    queryKey: ['findings', params.id, 'follow-up'],
-    queryFn: () => followUpApi.getByFinding(params.id).catch(() => null),
-    enabled: Boolean(params.id),
+    queryKey: ['findings', params?.id, 'follow-up'],
+    queryFn: () => followUpApi.getByFinding(params!.id).catch(() => null),
+    enabled: Boolean(params?.id),
     retry: false,
   });
 
   const updateStatus = useMutation({
-    mutationFn: (status: string) => findingsApi.updateStatus(params.id, status),
+    mutationFn: (status: string) => findingsApi.updateStatus(params!.id, status),
     onSuccess: () => {
       toast.success('Status updated');
-      qc.invalidateQueries({ queryKey: ['findings', params.id] });
+      qc.invalidateQueries({ queryKey: ['findings', params!.id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });

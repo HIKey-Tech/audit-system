@@ -21,7 +21,7 @@ type LoginInput = z.infer<typeof LoginSchema>;
 const LoginInner = (): JSX.Element => {
   const router = useRouter();
   const params = useSearchParams();
-  const next = params.get('next') ?? '/dashboard';
+  const next = params?.get('next') ?? '/dashboard';
   const [showPassword, setShowPassword] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
 
