@@ -5,8 +5,8 @@ import { AppError } from '../../../../shared/errors/app.error';
 import { config } from '../../../../shared/config/app.config';
 import { logger } from '../../../../shared/utils/logger.util';
 import { PaginationMeta, parsePagination, buildPaginationMeta } from '../../../../shared/types/api-response.type';
-import { INotificationService } from '../../../messaging/service/interface/notification.service.interface';
-import { notificationService } from '../../../messaging/service/implementation/notification.service';
+import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
+import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
 import {
   IUserService,
   AzureAdProfile,
@@ -53,7 +53,9 @@ const escapeHtml = (value: string): string =>
   });
 
 export class UserService implements IUserService {
-  constructor(private readonly notifier: INotificationService = notificationService) {}
+  constructor(
+    private readonly notificationQueue: INotificationQueueService = notificationQueueService,
+  ) {}
 
   async createUser(
     dto: CreateUserRequestDto,
@@ -622,7 +624,7 @@ export class UserService implements IUserService {
     const loginUrl = `${config.app.url.replace(/\/$/, '')}/login`;
     const appName = config.app.name;
 
-    await this.notifier.sendEmail({
+    await this.notificationQueue.enqueue('email', {
       to: user.email,
       subject: `Welcome to ${appName}`,
       template: 'user-onboarding',

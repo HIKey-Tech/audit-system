@@ -31,6 +31,9 @@ export class NotificationService implements INotificationService {
       auth: config.email.user
         ? { user: config.email.user, pass: config.email.password }
         : undefined,
+      connectionTimeout: 10_000,
+      greetingTimeout: 10_000,
+      socketTimeout: 15_000,
     });
   }
 
