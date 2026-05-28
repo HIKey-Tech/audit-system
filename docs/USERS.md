@@ -17,7 +17,7 @@ Total active users: **7**
 
 > Sourced from `prisma/seed.ts`. These are the **initial** passwords applied at seed time; if a user has changed theirs since, the value below is stale. **Do not commit or share outside dev.**
 
-
+IamsR0ck#2026
 | Email | Password |
 |-------|----------|
 | admin@example.com | `Bello@123456!` |
