@@ -151,10 +151,6 @@ const LoginInner = (): JSX.Element => {
             </Button>
           </form>
         </div>
-
-        <p className="mt-6 text-center text-[11px] uppercase tracking-widest text-text-muted">
-          Powered by Plustive Heritage Engineering
-        </p>
       </div>
     </div>
   );
