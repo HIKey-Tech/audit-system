@@ -16,6 +16,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Textarea } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { reportTemplatesApi } from '@/lib/api/settings';
 import { reportsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { formatRelative, formatDate } from '@/lib/utils/format';
@@ -25,6 +28,7 @@ import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 const GenSchema = z.object({
   title: z.string().min(2).max(300),
+  templateId: z.string().optional().or(z.literal('')),
   executiveSummary: z.string().optional().or(z.literal('')),
   scope: z.string().optional().or(z.literal('')),
   methodology: z.string().optional().or(z.literal('')),
@@ -47,6 +51,11 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     retry: false,
   });
 
+  const reportTemplates = useQuery({
+    queryKey: ['settings', 'report-templates', 'list'],
+    queryFn: () => reportTemplatesApi.list(),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'report'] });
@@ -64,6 +73,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     mutationFn: (v: GenValues) =>
       reportsApi.generate(engagement.id, {
         title: v.title,
+        templateId: v.templateId || undefined,
         executiveSummary: v.executiveSummary || undefined,
         scope: v.scope || undefined,
         methodology: v.methodology || undefined,
@@ -140,16 +150,25 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<GenValues>({
     resolver: zodResolver(GenSchema),
     defaultValues: {
       title: `${engagement.title} — Audit Report`,
+      templateId: '',
       executiveSummary: '',
       scope: '',
       methodology: '',
     },
   });
+
+  useEffect(() => {
+    const list = reportTemplates.data;
+    if (!list || list.length === 0) return;
+    const def = list.find((t) => t.isDefault) ?? list[0];
+    setValue('templateId', def.id);
+  }, [reportTemplates.data, setValue]);
 
   if (report.isLoading) {
     return (
@@ -172,6 +191,23 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           />
         ) : (
           <form onSubmit={handleSubmit((v) => generate.mutate(v))} className="space-y-4" noValidate>
+            <FormField
+              label={
+                <span className="inline-flex items-center gap-1">
+                  Report template
+                  <InfoHint content="Controls the report's branding, classification, and section layout for the on-screen preview and the exported PDF/DOCX." />
+                </span>
+              }
+            >
+              <Select {...register('templateId')}>
+                {(reportTemplates.data ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.isDefault ? ' (default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
             <FormField label="Title" required error={errors.title?.message}>
               <Input error={errors.title?.message} {...register('title')} />
             </FormField>
