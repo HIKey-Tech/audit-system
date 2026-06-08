@@ -73,6 +73,7 @@ interface ReportData {
     versionNumber: number;
     issuedAt: Date | null;
     createdById: string;
+    templateId: string | null;
   };
   engagement: {
     id: string;
@@ -246,6 +247,7 @@ export class ReportGenerationService implements IReportGenerationService {
         versionNumber: report.version_number,
         issuedAt: report.issued_at,
         createdById: report.created_by_id,
+        templateId: report.template_id ?? null,
       },
       engagement: {
         id: report.engagement.id,
@@ -318,8 +320,17 @@ export class ReportGenerationService implements IReportGenerationService {
     };
   }
 
-  async fetchTemplateAndConfig(): Promise<TemplateConfig> {
-    const template = await this.reportTemplateService.getDefaultTemplate();
+  async fetchTemplateAndConfig(templateId?: string | null): Promise<TemplateConfig> {
+    let template;
+    if (templateId) {
+      try {
+        template = await this.reportTemplateService.getTemplateById(templateId);
+      } catch {
+        template = await this.reportTemplateService.getDefaultTemplate();
+      }
+    } else {
+      template = await this.reportTemplateService.getDefaultTemplate();
+    }
     const configs = await this.systemConfigService.getAllConfig(false);
     const configMap = new Map(configs.map((c) => [c.key, c.value]));
     return {
@@ -334,7 +345,7 @@ export class ReportGenerationService implements IReportGenerationService {
 
   async generateDocx(reportId: string): Promise<Buffer> {
     const data = await this.fetchReportData(reportId);
-    const config = await this.fetchTemplateAndConfig();
+    const config = await this.fetchTemplateAndConfig(data.report.templateId);
     let approval: ApprovalResponseDto | null = null;
     try {
       approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditReport, reportId);
@@ -957,7 +968,7 @@ export class ReportGenerationService implements IReportGenerationService {
 
   async generatePdf(reportId: string): Promise<Buffer> {
     const data = await this.fetchReportData(reportId);
-    const config = await this.fetchTemplateAndConfig();
+    const config = await this.fetchTemplateAndConfig(data.report.templateId);
     let approval: ApprovalResponseDto | null = null;
     try {
       approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditReport, reportId);
