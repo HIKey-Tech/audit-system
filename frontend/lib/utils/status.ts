@@ -162,3 +162,71 @@ export const riskScoreLabel = (score: number): string => {
   if (score >= 6) return 'Medium';
   return 'Low';
 };
+
+export type StatusEntity =
+  | 'engagement'
+  | 'finding'
+  | 'report'
+  | 'plan'
+  | 'working_paper'
+  | 'approval';
+
+export interface StatusMeaning {
+  label: string;   // humanized status
+  meaning: string; // what this status means, plain English
+  next?: string;   // what advances it to the next state
+}
+
+// entity -> normalized status key -> meaning. Keys are lower_snake_case.
+const STATUS_MEANINGS: Record<StatusEntity, Record<string, Omit<StatusMeaning, 'label'>>> = {
+  engagement: {
+    planned: { meaning: 'Scheduled but fieldwork has not started.', next: 'Assign the team and mark it in progress to begin.' },
+    in_progress: { meaning: 'Fieldwork is underway; working papers and evidence are being captured.', next: 'Complete checklists and get working papers approved to move to review.' },
+    under_review: { meaning: 'Fieldwork is done and the work is being reviewed.', next: 'Generate and issue the report to move to reported.' },
+    reported: { meaning: 'The audit report has been issued to stakeholders.', next: 'Verify and close all findings to close the engagement.' },
+    closed: { meaning: 'The engagement is complete and all findings are resolved.' },
+  },
+  finding: {
+    open: { meaning: 'Raised and awaiting a management response.', next: 'Record the management response.' },
+    management_response_received: { meaning: 'Management has responded with a remediation plan.', next: 'Begin remediation.' },
+    in_remediation: { meaning: 'Corrective action is in progress.', next: 'Submit remediation evidence for verification.' },
+    verified: { meaning: 'Remediation evidence has been verified by audit.', next: 'Close the finding.' },
+    closed: { meaning: 'The finding is fully resolved and closed.' },
+  },
+  report: {
+    draft: { meaning: 'Being prepared; not yet submitted.', next: 'Submit for approval.' },
+    submitted: { meaning: 'Submitted and awaiting approval.', next: 'Approver acts on the current level.' },
+    approved: { meaning: 'Approved through all levels but not yet issued.', next: 'Issue the report.' },
+    rejected: { meaning: 'Sent back by an approver with a reason.', next: 'Address the reason and resubmit.' },
+    issued: { meaning: 'Finalised and distributed to stakeholders.' },
+  },
+  plan: {
+    draft: { meaning: 'Being assembled; items can still be added.', next: 'Submit for approval.' },
+    submitted: { meaning: 'Submitted and awaiting approval.', next: 'Approver reviews the plan.' },
+    approved: { meaning: 'Approved; engagements can be created from its items.', next: 'Create engagements from plan items.' },
+    rejected: { meaning: 'Returned by an approver with a reason.', next: 'Revise and resubmit.' },
+  },
+  working_paper: {
+    draft: { meaning: 'Editable; not yet submitted for review.', next: 'Submit for review.' },
+    submitted: { meaning: 'Awaiting reviewer approval.', next: 'Reviewer approves or rejects.' },
+    approved: { meaning: 'Reviewed and locked.' },
+    rejected: { meaning: 'Returned by the reviewer with a comment.', next: 'Address the comment and resubmit.' },
+  },
+  approval: {
+    pending: { meaning: 'Awaiting a decision at the current level.', next: 'The current-level approver acts.' },
+    approved: { meaning: 'Approved at this level / overall.' },
+    rejected: { meaning: 'Rejected with a reason.' },
+    cancelled: { meaning: 'The approval request was cancelled.' },
+  },
+};
+
+export const statusMeaning = (
+  entity: StatusEntity,
+  status: string | null | undefined,
+): StatusMeaning => {
+  const label = humanizeStatus(status);
+  if (!status) return { label, meaning: 'No status set.' };
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  const found = STATUS_MEANINGS[entity]?.[key];
+  return found ? { label, ...found } : { label, meaning: label };
+};

@@ -9,12 +9,13 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { evidenceApi } from '@/lib/api/audit';
 import { documentsApi } from '@/lib/api/documents';
 import { formatDate, formatFileSize } from '@/lib/utils/format';
 import { useSession, hasAnyRole } from '@/components/providers/AuthProvider';
 import { cn } from '@/lib/utils/cn';
-import type { AuditEngagementDetail } from '@/lib/types/domain';
+import type { AuditEngagementDetail, AuditEvidence } from '@/lib/types/domain';
 
 export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
@@ -22,6 +23,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
   const isAdmin = hasAnyRole(session, ['super_admin', 'audit_admin']);
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
+  const [disputing, setDisputing] = useState<AuditEvidence | null>(null);
 
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'evidence'],
@@ -132,12 +134,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
                       size="sm"
                       variant="ghost"
                       leftIcon={<AlertOctagon className="h-3.5 w-3.5" />}
-                      onClick={() => {
-                        const reason = window.prompt('Reason for disputing this evidence');
-                        if (reason && reason.trim()) {
-                          dispute.mutate({ id: ev.id, reason: reason.trim() });
-                        }
-                      }}
+                      onClick={() => setDisputing(ev)}
                     >
                       Dispute
                     </Button>
@@ -148,6 +145,21 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
           </ul>
         )}
       </Card>
+
+      <ReasonDialog
+        open={Boolean(disputing)}
+        onClose={() => setDisputing(null)}
+        onConfirm={async (reason) => {
+          await dispute.mutateAsync({ id: disputing!.id, reason });
+          setDisputing(null);
+        }}
+        title="Dispute evidence"
+        description="Explain why this evidence is being disputed. The reason is recorded against the evidence record."
+        placeholder="Reason for dispute…"
+        confirmLabel="Dispute"
+        tone="danger"
+        isLoading={dispute.isPending}
+      />
     </div>
   );
 };

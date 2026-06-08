@@ -32,6 +32,7 @@ import { authApi } from '@/lib/api/auth';
 import { notificationsApi } from '@/lib/api/notifications';
 import { useSession } from '@/components/providers/AuthProvider';
 import { Avatar } from '@/components/ui/Avatar';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { usePermissions, type NavVisibility } from '@/lib/hooks/usePermissions';
 import { useLayout } from '@/components/providers/LayoutProvider';
 
@@ -45,6 +46,7 @@ interface NavLink {
   matchPrefix?: string;
   /** Key into NavVisibility — if set the item is hidden when the value is false. */
   visKey?: keyof NavVisibility;
+  description?: string;
 }
 
 interface NavDivider {
@@ -58,25 +60,25 @@ type NavItem = NavLink | NavDivider;
 
 const NAV: NavItem[] = [
   // Workspace — what you act on day to day, in priority order.
-  { type: 'link', label: 'Home', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard' },
-  { type: 'link', label: 'Approvals', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow' },
-  { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests' },
-  { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements' },
-  { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings' },
-  { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications' },
+  { type: 'link', label: 'Home', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard', description: 'Your personalized overview and to-dos.' },
+  { type: 'link', label: 'Approvals', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow', description: 'Items awaiting your approval, plus assignments and escalations.' },
+  { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests', description: 'Information and evidence requests to and from auditees.' },
+  { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
+  { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
+  { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
 
   { type: 'divider', label: 'Audit Library', sectionKeys: ['auditPlans', 'auditUniverse', 'reports', 'riskRegister', 'documents'] },
-  { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans' },
-  { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse' },
-  { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports' },
-  { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister' },
-  { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents' },
+  { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit plans and their approval status.' },
+  { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse', description: 'Registry of auditable entities and their risk scores.' },
+  { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
+  { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister', description: 'Enterprise risks with likelihood × impact scoring.' },
+  { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents', description: 'Files and evidence attached to audit records.' },
 
   { type: 'divider', label: 'Administration', sectionKeys: ['analytics', 'auditLogs', 'users', 'settings'] },
-  { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics' },
-  { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs' },
-  { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users' },
-  { type: 'link', label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings', visKey: 'settings' },
+  { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics', description: 'Dashboards and metrics on the audit programme.' },
+  { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs', description: 'Tamper-evident trail of every action in the system.' },
+  { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users', description: 'User accounts, roles, and permissions.' },
+  { type: 'link', label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings', visKey: 'settings', description: 'Templates, roles, and system configuration.' },
 ];
 
 export const Sidebar = (): JSX.Element => {
@@ -199,43 +201,45 @@ export const Sidebar = (): JSX.Element => {
 
               return (
                 <li key={item.href}>
-                  <Link
-                    href={item.href}
-                    className={cn(
-                      'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                      active
-                        ? 'bg-white text-primary'
-                        : 'text-white/85 hover:bg-white/10 hover:text-white',
-                      isCollapsed && 'lg:justify-center lg:px-0',
-                    )}
-                    title={isCollapsed ? item.label : undefined}
-                  >
-                    {active && !isCollapsed && (
-                      <span
-                        className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent lg:block hidden"
+                  <Tooltip content={item.description} side="right">
+                    <Link
+                      href={item.href}
+                      className={cn(
+                        'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                        active
+                          ? 'bg-white text-primary'
+                          : 'text-white/85 hover:bg-white/10 hover:text-white',
+                        isCollapsed && 'lg:justify-center lg:px-0',
+                      )}
+                      title={isCollapsed ? item.label : undefined}
+                    >
+                      {active && !isCollapsed && (
+                        <span
+                          className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent lg:block hidden"
+                          aria-hidden
+                        />
+                      )}
+                      <Icon
+                        className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-white')}
                         aria-hidden
                       />
-                    )}
-                    <Icon
-                      className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-white')}
-                      aria-hidden
-                    />
-                    {/* Always show text on mobile, hide only on desktop collapsed */}
-                    <span className={cn('flex-1 truncate', isCollapsed && 'lg:hidden')}>{item.label}</span>
-                    {item.comingSoon && (
-                      <span className={cn('text-[9px] font-semibold uppercase tracking-wide text-white/50', isCollapsed && 'lg:hidden')}>
-                        Soon
-                      </span>
-                    )}
-                    {!item.comingSoon && unreadCount > 0 && (
-                      <span className={cn('inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold', isCollapsed && 'lg:hidden')}>
-                        {unreadCount > 99 ? '99+' : unreadCount}
-                      </span>
-                    )}
-                    {isCollapsed && unreadCount > 0 && (
-                      <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
-                    )}
-                  </Link>
+                      {/* Always show text on mobile, hide only on desktop collapsed */}
+                      <span className={cn('flex-1 truncate', isCollapsed && 'lg:hidden')}>{item.label}</span>
+                      {item.comingSoon && (
+                        <span className={cn('text-[9px] font-semibold uppercase tracking-wide text-white/50', isCollapsed && 'lg:hidden')}>
+                          Soon
+                        </span>
+                      )}
+                      {!item.comingSoon && unreadCount > 0 && (
+                        <span className={cn('inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold', isCollapsed && 'lg:hidden')}>
+                          {unreadCount > 99 ? '99+' : unreadCount}
+                        </span>
+                      )}
+                      {isCollapsed && unreadCount > 0 && (
+                        <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
+                      )}
+                    </Link>
+                  </Tooltip>
                 </li>
               );
             })}

@@ -243,7 +243,12 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
               </Select>
             </FormField>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <FormField label="Audit type" required error={errors.auditType?.message}>
+              <FormField
+                label="Audit type"
+                required
+                error={errors.auditType?.message}
+                tooltip="IT: infrastructure & cybersecurity (ISO 27001/22301). Financial: transactions & controls. Compliance: ISO/NDPR adherence. Systems: configuration, change & continuity."
+              >
                 <Select {...register('auditType')}>
                   <option value="it">IT</option>
                   <option value="financial">Financial</option>
@@ -251,7 +256,12 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
                   <option value="systems">Systems</option>
                 </Select>
               </FormField>
-              <FormField label="Priority" required error={errors.priority?.message}>
+              <FormField
+                label="Priority"
+                required
+                error={errors.priority?.message}
+                tooltip="Drives scheduling and SLA expectations. Critical/High engagements escalate faster when overdue."
+              >
                 <Select {...register('priority')}>
                   <option value="critical">Critical</option>
                   <option value="high">High</option>
@@ -260,7 +270,12 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
                 </Select>
               </FormField>
             </div>
-            <FormField label="Ad-hoc reason" required error={errors.adhocReason?.message}>
+            <FormField
+              label="Ad-hoc reason"
+              required
+              error={errors.adhocReason?.message}
+              description="Required for audits outside the approved annual plan — explains the trigger (e.g. incident, management request)."
+            >
               <Textarea rows={3} placeholder="Why outside the approved plan?" {...register('adhocReason')} />
             </FormField>
           </>
@@ -271,14 +286,29 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
         </FormField>
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <FormField label="Lead auditor" required error={errors.leadAuditorId?.message}>
+          <FormField
+            label="Lead auditor"
+            required
+            error={errors.leadAuditorId?.message}
+            tooltip="Owns fieldwork and day-to-day execution of the engagement."
+          >
             <UserSelect value={lead} onChange={(v) => setValue('leadAuditorId', v, { shouldValidate: true })} />
           </FormField>
-          <FormField label="Audit manager" required error={errors.auditManagerId?.message}>
+          <FormField
+            label="Audit manager"
+            required
+            error={errors.auditManagerId?.message}
+            tooltip="Reviews and signs off the lead auditor's work."
+          >
             <UserSelect value={manager} onChange={(v) => setValue('auditManagerId', v, { shouldValidate: true })} />
           </FormField>
         </div>
-        <FormField label="Auditee" required error={errors.auditeeId?.message}>
+        <FormField
+          label="Auditee"
+          required
+          error={errors.auditeeId?.message}
+          tooltip="Primary contact in the audited area who provides evidence and management responses."
+        >
           <UserSelect value={auditee} onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })} />
         </FormField>
 
@@ -289,7 +319,12 @@ export const NewEngagementSlideOver = ({ open, onClose }: Props): JSX.Element =>
           <FormField label="End" required error={errors.plannedEndDate?.message}>
             <Input type="date" {...register('plannedEndDate')} />
           </FormField>
-          <FormField label="SLA deadline" required error={errors.slaDeadline?.message}>
+          <FormField
+            label="SLA deadline"
+            required
+            error={errors.slaDeadline?.message}
+            tooltip="Target completion date. Breaching it triggers the escalation workflow."
+          >
             <Input type="date" {...register('slaDeadline')} />
           </FormField>
         </div>

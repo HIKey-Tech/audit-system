@@ -1,6 +1,7 @@
 import { ReactNode } from 'react';
 import { cn } from '@/lib/utils/cn';
-import { statusTone, humanizeStatus } from '@/lib/utils/status';
+import { statusTone, humanizeStatus, statusMeaning, type StatusEntity } from '@/lib/utils/status';
+import { Tooltip } from './Tooltip';
 
 interface BadgeProps {
   status?: string | null;
@@ -46,7 +47,7 @@ export const Badge = ({
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full font-medium ring-1 whitespace-nowrap',
-        size === 'xs' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs',
+        size === 'xs' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',
         classes,
         className,
       )}
@@ -64,11 +65,41 @@ export const StatusBadge = ({
   size,
   withDot,
   className,
+  tooltip,
+  explain,
 }: {
   status: string | null | undefined;
   size?: 'xs' | 'sm';
   withDot?: boolean;
   className?: string;
-}): JSX.Element => (
-  <Badge status={status ?? undefined} size={size} withDot={withDot} className={className} />
-);
+  /** Explicit tooltip content. Takes precedence over `explain`. */
+  tooltip?: ReactNode;
+  /** Auto-generate a meaning + next-step tooltip for this entity's status. */
+  explain?: StatusEntity;
+}): JSX.Element => {
+  const badge = (
+    <Badge status={status ?? undefined} size={size} withDot={withDot} className={className} />
+  );
+
+  let content: ReactNode = tooltip ?? null;
+  if (!content && explain && status) {
+    const m = statusMeaning(explain, status);
+    content = (
+      <span className="block">
+        <span className="font-semibold">{m.label}</span>
+        <span className="mt-0.5 block font-normal text-white/90">{m.meaning}</span>
+        {m.next && (
+          <span className="mt-1 block font-normal text-white/70">Next: {m.next}</span>
+        )}
+      </span>
+    );
+  }
+
+  if (!content) return badge;
+
+  return (
+    <Tooltip content={content}>
+      <span className="inline-flex cursor-help">{badge}</span>
+    </Tooltip>
+  );
+};
