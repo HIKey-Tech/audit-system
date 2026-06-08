@@ -17,7 +17,7 @@ import { usePermissions } from '@/lib/hooks/usePermissions';
 import { engagementsApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
-import { NewEngagementSlideOver } from '@/components/audit/engagements/NewEngagementSlideOver';
+import { StartAuditWizard } from '@/components/audit/engagements/StartAuditWizard';
 import type { AuditEngagement } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
 
@@ -132,7 +132,7 @@ export default function EngagementsListPage(): JSX.Element {
         actions={
           canWrite ? (
             <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
-              New Engagement
+              Start audit
             </Button>
           ) : null
         }
@@ -225,7 +225,7 @@ export default function EngagementsListPage(): JSX.Element {
             action={
               canWrite && tab === 'all' ? (
                 <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setOpen(true)}>
-                  New Engagement
+                  Start audit
                 </Button>
               ) : undefined
             }
@@ -243,7 +243,7 @@ export default function EngagementsListPage(): JSX.Element {
         }
       />
 
-      <NewEngagementSlideOver open={open} onClose={() => setOpen(false)} />
+      <StartAuditWizard open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }
