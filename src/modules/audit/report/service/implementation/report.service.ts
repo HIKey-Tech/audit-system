@@ -14,6 +14,8 @@ import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.en
 import { EngagementStatus, ReportStatus } from '../../../domain/enum/audit.enum';
 import { AUDIT_ADMIN_ROLES, AUDIT_REVIEW_ROLES, REPORT_EDITABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
+import { IReportTemplateService } from '../../../../settings/service/interface/report-template.service.interface';
+import { GenerateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto, mapReportToResponse } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
@@ -35,10 +37,11 @@ export class ReportService implements IReportService {
     private readonly followUpService: IFollowUpService,
     private readonly documentService: IDocumentService,
     private readonly reportGenerationService: IReportGenerationService,
+    private readonly reportTemplateService: IReportTemplateService,
     private readonly approvalService: IApprovalService = workflowApprovalService,
   ) {}
 
-  async generateReport(engagementId: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto> {
+  async generateReport(engagementId: string, dto: GenerateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto> {
     assertHasPermission(actor.permissions, 'report:create');
 
     const engagement = await prisma.audit_Engagement.findFirst({
@@ -54,6 +57,11 @@ export class ReportService implements IReportService {
     });
     if (existing) throw AppError.conflict('A report already exists for this engagement');
 
+    if (dto.templateId) {
+      // Throws notFound (→ 404) if the template id is invalid.
+      await this.reportTemplateService.getTemplateById(dto.templateId);
+    }
+
     const defaultExecutiveSummary = `Generated draft report for ${engagement.title}. Findings count: ${engagement.findings.length}.`;
     const defaultScope = `Scope based on engagement ${engagement.reference_number}.`;
     const defaultMethodology = 'Internal audit procedures performed using working papers, evidence, checklist testing, and finding validation.';
@@ -66,6 +74,7 @@ export class ReportService implements IReportService {
         scope: dto.scope ?? defaultScope,
         methodology: dto.methodology ?? defaultMethodology,
         created_by_id: actor.id,
+        template_id: dto.templateId ?? null,
       },
       include: reportInclude,
     });
@@ -88,6 +97,7 @@ export class ReportService implements IReportService {
         ...(dto.executiveSummary !== undefined && { executive_summary: dto.executiveSummary }),
         ...(dto.scope !== undefined && { scope: dto.scope }),
         ...(dto.methodology !== undefined && { methodology: dto.methodology }),
+        ...(dto.templateId !== undefined && { template_id: dto.templateId }),
         version_number: { increment: 1 },
         status: ReportStatus.Draft,
       },

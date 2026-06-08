@@ -43,7 +43,7 @@ export const createAuditModule = (): Router => {
     systemConfigService,
     workflowApprovalService,
   );
-  const reportService = new ReportService(followUpService, documentService, reportGenerationService);
+  const reportService = new ReportService(followUpService, documentService, reportGenerationService, reportTemplateService);
 
   const universeController = new UniverseController(universeService);
   const planningController = new PlanningController(planningService);

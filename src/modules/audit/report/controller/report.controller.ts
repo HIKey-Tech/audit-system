@@ -4,6 +4,7 @@ import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   ExportReportQuerySchema,
+  GenerateReportRequestSchema,
   ReportQuerySchema,
   RejectReportRequestSchema,
   UpdateReportRequestSchema,
@@ -26,7 +27,7 @@ export class ReportController {
      * @desc   Generate audit report
      * @access Private - audit:write
      */
-    this.router.post('/engagements/:id/report/generate', requirePermission('report:create'), this._generateReport.bind(this));
+    this.router.post('/engagements/:id/report/generate', requirePermission('report:create'), validate(GenerateReportRequestSchema), this._generateReport.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/report
