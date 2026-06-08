@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2, Eye, LayoutGrid, AlertTriangle } from 'lucide-react';
+import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2, Eye, LayoutGrid } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card, CardHeader } from '@/components/ui/Card';
