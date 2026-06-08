@@ -14,6 +14,7 @@ import { engagementsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { formatDate, initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
+import { statusMeaning } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 import { ManageAssignmentsSlideOver } from './ManageAssignmentsSlideOver';
@@ -65,6 +66,21 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {(() => {
+        const m = statusMeaning('engagement', engagement.status);
+        return (
+          <div className="lg:col-span-3 rounded-lg border border-primary/20 bg-primary/5 px-4 py-3">
+            <p className="text-sm text-text-primary">
+              <span className="font-semibold">{m.label}.</span> {m.meaning}
+            </p>
+            {m.next && (
+              <p className="mt-1 text-xs text-text-secondary">
+                <span className="font-semibold text-primary">Next:</span> {m.next}
+              </p>
+            )}
+          </div>
+        );
+      })()}
       <Card className="lg:col-span-2">
         <CardHeader
           title="Engagement details"

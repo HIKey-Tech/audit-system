@@ -12,6 +12,8 @@ export { Avatar } from './Avatar';
 export { PageHeader } from './PageHeader';
 export { EmptyState } from './EmptyState';
 export { ErrorState } from './ErrorState';
+export { Combobox } from './Combobox';
+export type { ComboboxOption } from './Combobox';
 export { Input, Select, Textarea } from './Input';
 export { FormField } from './FormField';
 export { SlideOver } from './SlideOver';

@@ -13,6 +13,7 @@ import { workflowApi } from '@/lib/api/workflow';
 import { initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
+import { getMatchScore, isRelevantSkill } from './assignment-matching';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 interface Props {
@@ -20,13 +21,6 @@ interface Props {
   onClose: () => void;
   engagement: AuditEngagementDetail;
 }
-
-const AUDIT_TYPE_KEYWORDS: Record<string, string[]> = {
-  it: ['it', 'cyber', 'security', 'iso 27001', 'iso27001', 'network', 'system', 'vulnerability', 'firewall', 'cloud', 'itgc', 'sast'],
-  financial: ['financial', 'finance', 'ap', 'ledger', 'reconciliation', 'maker', 'checker', 'asset', 'audit', 'tax'],
-  compliance: ['compliance', 'regulation', 'standard', 'iso 9001', 'iso9001', 'iso 22301', 'iso22301', 'ndpr', 'privacy', 'dpo', 'policy', 'gdpr'],
-  systems: ['systems', 'infrastructure', 'configuration', 'change', 'cab', 'disaster', 'dr', 'replication', 'capacity', 'performance']
-};
 
 export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props): JSX.Element => {
   const qc = useQueryClient();
@@ -83,32 +77,10 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to remove assignment'),
   });
 
-  // Scoring function to match user skills against audit type
-  const getMatchScore = (skills: string[]) => {
-    const type = engagement.auditType.toLowerCase();
-    const matchWords = AUDIT_TYPE_KEYWORDS[type] || [];
-    let score = 0;
-    skills.forEach((skill) => {
-      const s = skill.toLowerCase();
-      if (matchWords.some((w) => s.includes(w))) {
-        score += 2;
-      }
-    });
-    return score;
-  };
-
-  // Check if a specific skill is relevant to the audit type
-  const isRelevantSkill = (skill: string) => {
-    const type = engagement.auditType.toLowerCase();
-    const matchWords = AUDIT_TYPE_KEYWORDS[type] || [];
-    const s = skill.toLowerCase();
-    return matchWords.some((w) => s.includes(w));
-  };
-
   // Sort candidates by match score descending, then active workload ascending
   const sortedCandidates = [...(candidates.data ?? [])].sort((a, b) => {
-    const scoreA = getMatchScore(a.skills);
-    const scoreB = getMatchScore(b.skills);
+    const scoreA = getMatchScore(a.skills, engagement.auditType);
+    const scoreB = getMatchScore(b.skills, engagement.auditType);
     if (scoreA !== scoreB) return scoreB - scoreA;
     return a.activeEngagementCount - b.activeEngagementCount;
   });
@@ -188,7 +160,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
           ) : (
             <div className="space-y-3">
               {sortedCandidates.map((c) => {
-                const matchScore = getMatchScore(c.skills);
+                const matchScore = getMatchScore(c.skills, engagement.auditType);
                 const assignedRole = roleToAssign[c.id] ?? 'supporting_auditor';
                 
                 // Color workloads
@@ -247,7 +219,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                       {c.skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {c.skills.map((s) => {
-                            const isMatch = isRelevantSkill(s);
+                            const isMatch = isRelevantSkill(s, engagement.auditType);
                             return (
                               <span
                                 key={s}
