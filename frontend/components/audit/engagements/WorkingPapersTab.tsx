@@ -11,6 +11,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { FormField } from '@/components/ui/FormField';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { workingPapersApi } from '@/lib/api/audit';
@@ -39,6 +40,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<AuditWorkingPaper | null>(null);
+  const [rejecting, setRejecting] = useState<AuditWorkingPaper | null>(null);
 
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'working-papers'],
@@ -172,10 +174,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                             size="sm"
                             variant="danger"
                             leftIcon={<X className="h-3.5 w-3.5" />}
-                            onClick={() => {
-                              const reason = window.prompt('Rejection reason') ?? '';
-                              if (reason.trim()) rejectMut.mutate({ id: wp.id, reason: reason.trim() });
-                            }}
+                            onClick={() => setRejecting(wp)}
                           >
                             Reject
                           </Button>
@@ -208,6 +207,21 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
         canEdit={canUpdateWP}
         onClose={() => setEditing(null)}
         onSaved={refresh}
+      />
+      <ReasonDialog
+        open={Boolean(rejecting)}
+        onClose={() => setRejecting(null)}
+        onConfirm={async (reason) => {
+          if (!rejecting) return;
+          await rejectMut.mutateAsync({ id: rejecting.id, reason });
+          setRejecting(null);
+        }}
+        title="Reject working paper"
+        description="Provide a reason. It is recorded on the working paper and visible to the preparer."
+        placeholder="Reason for rejection…"
+        confirmLabel="Reject"
+        tone="danger"
+        isLoading={rejectMut.isPending}
       />
     </div>
   );
