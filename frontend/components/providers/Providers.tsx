@@ -3,6 +3,7 @@
 import { ReactNode, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
+import * as RadixTooltip from '@radix-ui/react-tooltip';
 
 export const Providers = ({ children }: { children: ReactNode }): JSX.Element => {
   const [client] = useState(
@@ -26,7 +27,9 @@ export const Providers = ({ children }: { children: ReactNode }): JSX.Element =>
 
   return (
     <QueryClientProvider client={client}>
-      {children}
+      <RadixTooltip.Provider delayDuration={200} skipDelayDuration={300}>
+        {children}
+      </RadixTooltip.Provider>
       <Toaster
         position="top-right"
         richColors
