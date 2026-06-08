@@ -660,6 +660,34 @@ const ImportPaperSlideOver = ({
   );
 };
 
+interface PaperSection {
+  title: string;
+  content: string;
+}
+
+const parsePaperSections = (raw: string | null | undefined): PaperSection[] | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      Array.isArray(parsed.sections) &&
+      parsed.sections.every(
+        (s: unknown) =>
+          typeof s === 'object' && s !== null && typeof (s as PaperSection).title === 'string',
+      )
+    ) {
+      return (parsed.sections as PaperSection[]).map((s) => ({
+        title: s.title,
+        content: typeof s.content === 'string' ? s.content : '',
+      }));
+    }
+  } catch {
+    /* not JSON — treat as free text */
+  }
+  return null;
+};
+
 const ViewPaperSlideOver = ({
   paper,
   canEdit,
@@ -673,32 +701,63 @@ const ViewPaperSlideOver = ({
 }): JSX.Element => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [sections, setSections] = useState<PaperSection[]>([]);
+  const [isStructured, setIsStructured] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const editable =
-    canEdit && paper && (paper.status === 'draft' || paper.status === 'rejected');
+  const editable = canEdit && Boolean(paper) && (paper?.status === 'draft' || paper?.status === 'rejected');
 
-  // Sync state when paper changes
-  if (paper && paper.id && (title === '' && content === '' && paper.title)) {
+  // Sync local state whenever the viewed paper changes.
+  useEffect(() => {
+    if (!paper) return;
+    const parsed = parsePaperSections(paper.content);
     setTitle(paper.title);
-    setContent(paper.content ?? '');
-  }
+    if (parsed) {
+      setIsStructured(true);
+      setSections(parsed);
+      setContent('');
+    } else {
+      setIsStructured(false);
+      setContent(paper.content ?? '');
+      setSections([]);
+    }
+  }, [paper]);
+
+  const updateSection = (index: number, value: string) => {
+    setSections((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], content: value };
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     if (!paper) return;
     const trimmedTitle = title.trim();
-
     if (!trimmedTitle) {
       toast.error('Title required');
       return;
     }
-    if (!content.trim()) {
-      toast.error('Content required');
-      return;
+
+    let payloadContent: string;
+    if (isStructured) {
+      const missing = sections.find((s) => !s.content.trim());
+      if (missing) {
+        toast.error(`${missing.title} is empty`);
+        return;
+      }
+      payloadContent = JSON.stringify({ sections });
+    } else {
+      if (!content.trim()) {
+        toast.error('Content required');
+        return;
+      }
+      payloadContent = content;
     }
+
     setSaving(true);
     try {
-      await workingPapersApi.update(paper.id, { title: trimmedTitle, content });
+      await workingPapersApi.update(paper.id, { title: trimmedTitle, content: payloadContent });
       toast.success('Saved');
       onSaved();
     } catch (e) {
@@ -711,11 +770,7 @@ const ViewPaperSlideOver = ({
   return (
     <SlideOver
       open={Boolean(paper)}
-      onClose={() => {
-        setTitle('');
-        setContent('');
-        onClose();
-      }}
+      onClose={onClose}
       title={paper?.title ?? 'Working paper'}
       description={paper ? `Version ${paper.version} · ${paper.status}` : undefined}
       width="xl"
@@ -743,15 +798,30 @@ const ViewPaperSlideOver = ({
           <FormField label="Title">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} />
           </FormField>
-          <FormField label="Content">
-            <Textarea
-              rows={20}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-xs"
-              disabled={!editable}
-            />
-          </FormField>
+
+          {isStructured ? (
+            sections.map((section, index) => (
+              <FormField key={`${section.title}-${index}`} label={section.title}>
+                <Textarea
+                  rows={4}
+                  value={section.content}
+                  onChange={(e) => updateSection(index, e.target.value)}
+                  disabled={!editable}
+                />
+              </FormField>
+            ))
+          ) : (
+            <FormField label="Content">
+              <Textarea
+                rows={20}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="font-mono text-xs"
+                disabled={!editable}
+              />
+            </FormField>
+          )}
+
           {paper.reviewComment && (
             <FormField label="Reviewer comment">
               <p className="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-text-secondary whitespace-pre-wrap">
