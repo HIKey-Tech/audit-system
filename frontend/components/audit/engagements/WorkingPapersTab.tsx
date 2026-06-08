@@ -22,7 +22,6 @@ import type {
   AuditEngagementDetail,
   AuditWorkingPaper,
   WorkingPaperImportPreview,
-  WorkingPaperTemplateSection,
 } from '@/lib/types/domain';
 
 interface Props {
