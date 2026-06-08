@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
+import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Textarea } from '@/components/ui/Input';
 import { reportsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
@@ -100,7 +101,6 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<'cards' | 'preview'>('cards');
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
-  const [rejectReasonText, setRejectReasonText] = useState('');
 
   useEffect(() => {
     if (!showExportMenu) return;
@@ -295,12 +295,9 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                 </Button>
                 )}
                 {canRejectApproval && (
-                <Button variant="danger" size="sm" leftIcon={<X className="h-4 w-4" />} onClick={() => {
-                  setRejectReasonText('');
-                  setIsRejectModalOpen(true);
-                }}>
-                  Reject
-                </Button>
+                  <Button variant="danger" size="sm" leftIcon={<X className="h-4 w-4" />} onClick={() => setIsRejectModalOpen(true)}>
+                    Reject
+                  </Button>
                 )}
               </>
             )}
@@ -505,60 +502,20 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
         </Card>
       )}
 
-      {/* Custom Rejection Dialog Modal */}
-      {isRejectModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center px-4 animate-fade-in" role="dialog" aria-modal="true">
-          <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm transition-all" onClick={() => setIsRejectModalOpen(false)} aria-hidden />
-          <div className="relative w-full max-w-md rounded-lg border border-border bg-white p-5 shadow-2xl transition-all scale-100 animate-scale-in">
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-danger">
-                <AlertTriangle className="h-5 w-5" aria-hidden />
-              </div>
-              <div className="min-w-0 flex-1">
-                <h2 className="text-sm font-semibold text-text-primary">Reject Audit Report</h2>
-                <p className="mt-1 text-xs text-text-secondary">
-                  Please provide a detailed reason for rejecting this report. This feedback will be visible in the approval chain logs.
-                </p>
-                <div className="mt-3">
-                  <textarea
-                    rows={4}
-                    value={rejectReasonText}
-                    onChange={(e) => setRejectReasonText(e.target.value)}
-                    placeholder="Enter reason for rejection..."
-                    className="w-full rounded-md border border-border bg-white px-3 py-2 text-xs text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary focus:ring-primary/40 focus:ring-offset-0 disabled:cursor-not-allowed"
-                    disabled={rejectMut.isPending}
-                  />
-                </div>
-              </div>
-            </div>
-            <div className="mt-5 flex justify-end gap-2">
-              <Button variant="secondary" size="sm" onClick={() => setIsRejectModalOpen(false)} disabled={rejectMut.isPending}>
-                Cancel
-              </Button>
-              <Button
-                variant="danger"
-                size="sm"
-                onClick={() => {
-                  if (rejectReasonText.trim()) {
-                    rejectMut.mutate(rejectReasonText.trim(), {
-                      onSuccess: () => {
-                        setIsRejectModalOpen(false);
-                        setRejectReasonText('');
-                      }
-                    });
-                  } else {
-                    toast.error('Rejection reason cannot be empty');
-                  }
-                }}
-                isLoading={rejectMut.isPending}
-                disabled={!rejectReasonText.trim()}
-              >
-                Confirm Rejection
-              </Button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ReasonDialog
+        open={isRejectModalOpen}
+        onClose={() => setIsRejectModalOpen(false)}
+        onConfirm={async (reason) => {
+          await rejectMut.mutateAsync(reason);
+          setIsRejectModalOpen(false);
+        }}
+        title="Reject audit report"
+        description="Provide a detailed reason for rejecting this report. This feedback is visible in the approval chain logs."
+        placeholder="Enter reason for rejection…"
+        confirmLabel="Confirm rejection"
+        tone="danger"
+        isLoading={rejectMut.isPending}
+      />
     </div>
   );
 };
