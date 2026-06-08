@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, ShieldAlert, Clock } from 'lucide-react';
 
@@ -29,7 +29,15 @@ const TABS: TabItem[] = [
 export default function RiskPage(): JSX.Element {
   const router = useRouter();
   const { canManageAuditProgramme: canWrite } = usePermissions();
-  const [tab, setTab] = useState<'register' | 'monitoring'>('register');
+  const searchParams = useSearchParams();
+  const tabParam = searchParams?.get('tab');
+  const initialTab: 'register' | 'monitoring' = tabParam === 'monitoring' ? 'monitoring' : 'register';
+  const [tab, setTab] = useState<'register' | 'monitoring'>(initialTab);
+
+  const changeTab = (k: 'register' | 'monitoring'): void => {
+    setTab(k);
+    router.replace(`?tab=${k}`, { scroll: false });
+  };
   const [open, setOpen] = useState(false);
 
   return (
@@ -47,7 +55,7 @@ export default function RiskPage(): JSX.Element {
       />
 
       <Card padded className="mb-4">
-        <Tabs tabs={TABS} active={tab} onChange={(k) => setTab(k as 'register' | 'monitoring')} />
+        <Tabs tabs={TABS} active={tab} onChange={(k) => changeTab(k as 'register' | 'monitoring')} />
       </Card>
 
       {tab === 'register' ? <RegisterTab onOpenNew={() => setOpen(true)} canWrite={canWrite} /> : <MonitoringTab />}
