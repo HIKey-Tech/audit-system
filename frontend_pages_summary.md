@@ -2,6 +2,8 @@
 
 This document lists every page inside the Next.js frontend directory (`app`), its route, functionality status, details on what works/what does not, and the API endpoints it calls.
 
+_Reflects the post-SP1–SP4 state of the app as of 2026-06-08._
+
 ## 1. Root Redirect
 - **Route:** `/`
 - **Status:** Fully functional.
@@ -25,14 +27,14 @@ This document lists every page inside the Next.js frontend directory (`app`), it
 ## 4. Audit Engagements List
 - **Route:** `/audit/engagements`
 - **Status:** Fully functional.
-- **Details:** Displays a paginated data table of all audit engagements. It supports rich filtering (by search term, status, audit type, priority), tabbed filtering (All, My Engagements, Overdue), and navigating to a detailed view. Authorized users can trigger a slide-over to create a new engagement.
+- **Details:** Displays a paginated data table of all audit engagements. It supports rich filtering (by search term, status, audit type, priority), tabbed filtering (All, My Engagements, Overdue), and navigating to a detailed view. Engagement creation now runs through the **Start-Audit wizard** (create + staff the engagement in one flow), reachable from this list and from the dashboard "Start audit" CTA.
 - **API Endpoints:** 
   - `GET /api/v1/engagements` (and variants with query params, e.g., `?overdue=true`).
 
 ## 5. Audit Engagement Detail
 - **Route:** `/audit/engagements/[id]`
 - **Status:** Fully functional.
-- **Details:** Renders comprehensive details of a specific audit engagement broken down into tabs: Overview, Working Papers, Evidence, Findings, Checklists, Report, and Follow-up. The header displays the status and a back button.
+- **Details:** Renders comprehensive details of a specific audit engagement broken down into tabs: Overview, Working Papers, Evidence, Findings, Checklists, Report, and Follow-up. The header displays the status and a back button. **Template selection (SP2):** the Working Papers tab offers a working-paper template picker, and the Report tab offers a report template selector with a template-driven preview/export.
 - **API Endpoints:** 
   - `GET /api/v1/engagements/{id}`.
 
@@ -132,7 +134,7 @@ This document lists every page inside the Next.js frontend directory (`app`), it
 ## 18. Risk Register
 - **Route:** `/risk`
 - **Status:** Fully functional.
-- **Details:** Features two main tabs: 
+- **Details:** Features two main tabs, which are **deep-linkable via `?tab=`** (`?tab=register` / `?tab=monitoring`):
   - **Register:** Lists enterprise risks with filtering by category, status, search string, and score band. Allows creating new risks.
   - **Monitoring:** Presents high-level risk metrics (Critical+High totals, stale risk count, organisation summary) and a table of the top 5 highest risks.
 - **API Endpoints:** 
@@ -153,14 +155,14 @@ This document lists every page inside the Next.js frontend directory (`app`), it
 
 ## 20. Settings
 - **Route:** `/settings`
-- **Status:** Just a shell.
-- **Details:** Displays a "Coming Soon" placeholder UI. Configuration and user management capabilities are not yet built out here.
-- **API Endpoints:** None.
+- **Status:** Fully functional.
+- **Details:** Built out as a tabbed administration area covering role administration, working-paper templates, report templates, and system configuration. (Supersedes the earlier "Coming Soon" shell.)
+- **API Endpoints:** Role, template, and system-configuration endpoints backing the respective tabs.
 
 ## 21. Workflow
 - **Route:** `/workflow`
 - **Status:** Fully functional.
-- **Details:** Central hub for managing operational workflows. It comprises four functional tabs:
+- **Details:** Central hub for managing operational workflows. The sidebar nav label for this route is now **"Workflow"** (previously "Approvals"). It comprises four functional tabs, which are **deep-linkable via `?tab=`** (`inbox` / `assignments` / `escalations` / `policies`):
   - **Approval Inbox:** Lists pending items waiting for the user's approval. Users can approve or reject (with a required reason).
   - **Assignments:** Lists the staff assignments for the current user and allows admins/leads to assign staff to engagements via a slide-over.
   - **Escalations:** Notes that detailed escalation tracking is handled per-entity on their respective detail views.
@@ -174,3 +176,26 @@ This document lists every page inside the Next.js frontend directory (`app`), it
   - `GET /api/v1/workflow/policies`
   - `POST /api/v1/workflow/policies` (upsert action)
   - `POST /api/v1/workflow/escalations/{id}/acknowledge` (used elsewhere or as a fallback)
+
+## 22. Requests
+- **Route:** `/requests` and `/requests/[id]`
+- **Status:** Fully functional.
+- **Details:** Ad-hoc information and evidence requests exchanged between auditors and auditees. The list view (`/requests`) separates requests the user **initiated** from those **received**, and supports creating a new request with file attachments and an ordered chain of recipients. The detail view (`/requests/[id]`) shows the description, attachments, recipient chain, and an activity timeline; recipients can approve, **sign** (recorded with an identity affirmation and a content hash for tamper-evident sign-off), reject, or comment, and initiators can cancel a pending request. The detail page includes a "Requests" breadcrumb back to the list.
+- **API Endpoints:**
+  - `GET /api/v1/workflow/requests` (initiated list)
+  - `GET /api/v1/workflow/requests/inbox` (received list)
+  - `POST /api/v1/workflow/requests`
+  - `POST /api/v1/workflow/requests/{id}/attachments`
+  - `GET /api/v1/workflow/requests/{id}`
+  - `POST /api/v1/workflow/requests/{id}/approve`
+  - `POST /api/v1/workflow/requests/{id}/reject`
+  - `POST /api/v1/workflow/requests/{id}/sign`
+  - `POST /api/v1/workflow/requests/{id}/comment`
+  - `POST /api/v1/workflow/requests/{id}/cancel`
+  - `GET /api/v1/workflow/requests/{id}/verify-signatures` (signature verification)
+
+## 23. Analytics
+- **Route:** `/analytics`
+- **Status:** Fully functional.
+- **Details:** Dashboards and metrics on the audit programme, surfacing programme-level performance and trend data.
+- **API Endpoints:** Analytics/metrics endpoints backing the dashboard widgets.
