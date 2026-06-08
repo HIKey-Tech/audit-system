@@ -132,6 +132,7 @@ export default function RequestDetailPage(): JSX.Element {
 
       <PageHeader
         title={req.title}
+        breadcrumbs={[{ label: 'Requests', href: '/requests' }]}
         subtitle={`${req.referenceNumber} · from ${req.initiator?.displayName ?? 'someone'} · ${formatRelative(req.createdAt)}`}
         actions={
           isInitiator && req.status === 'pending' ? (
