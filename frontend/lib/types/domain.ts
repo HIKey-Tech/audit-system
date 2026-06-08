@@ -458,6 +458,7 @@ export interface AuditReport {
   id: string;
   engagementId: string;
   engagementReference?: string;
+  templateId: string | null;
   title: string;
   status: string;
   version: number;
