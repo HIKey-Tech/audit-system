@@ -663,7 +663,21 @@ export class DashboardService {
       ? Math.max(0, daysBetween(summary.oldest_created_at, new Date()))
       : 0;
 
-    return { pendingCount, oldestPendingDays };
+    const requestRows = await prisma.$queryRaw<Array<{ pending_count: bigint | number | null }>>(
+      Prisma.sql`
+        SELECT COUNT_BIG(1) AS pending_count
+        FROM workflow_request_steps step
+        INNER JOIN workflow_requests request ON request.id = step.request_id
+        WHERE step.recipient_id = ${userId}
+          AND step.status = 'pending'
+          AND request.status = 'pending'
+          AND request.deleted_at IS NULL
+          AND step.level = request.current_level
+      `,
+    );
+    const requestPendingCount = normalizeCount(requestRows[0]?.pending_count ?? null);
+
+    return { pendingCount, oldestPendingDays, requestPendingCount };
   }
 
   // =============================================================

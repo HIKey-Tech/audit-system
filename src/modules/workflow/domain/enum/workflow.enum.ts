@@ -25,6 +25,7 @@ export enum WorkflowAssignmentRole {
 export enum WorkflowEscalationEntityType {
   AuditEngagement = 'audit_engagement',
   WorkflowApproval = 'workflow_approval',
+  WorkflowRequest = 'workflow_request',
 }
 
 export enum WorkflowEscalationReason {

@@ -127,6 +127,7 @@ export interface MyWorkResponseDto {
 export interface ApprovalInboxSummaryResponseDto {
     pendingCount: number;
     oldestPendingDays: number;
+    requestPendingCount: number;
 }
 export interface AnalyticsCountBreakdown {
     [key: string]: number;

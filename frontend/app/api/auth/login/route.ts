@@ -7,6 +7,7 @@ import {
   accessCookieOptions,
   refreshCookieOptions,
   userCookieOptions,
+  encodeUserCookie,
 } from '@/lib/utils/auth-cookies';
 
 interface BackendAuthData {
@@ -81,6 +82,10 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const { accessToken, refreshToken, expiresIn, user } = backendJson.data;
 
+  // Display-only profile. Roles/permissions are NOT stored here — they are read
+  // from the access JWT at request time (see lib/session.ts). This keeps the
+  // iams_user cookie small and bounded regardless of how many permissions exist,
+  // preventing the >4KB cookie-drop that caused the /dashboard <-> /login loop.
   const profile = {
     id: user.id,
     email: user.email,
@@ -90,13 +95,11 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     avatarUrl: user.avatarUrl,
     department: user.department,
     jobTitle: user.jobTitle,
-    roles: user.roles.map((r) => r.name),
-    permissions: user.permissions,
   };
 
   const res = NextResponse.json({ success: true, message: 'Login successful', data: { user } });
   res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions(expiresIn || 60 * 60));
   res.cookies.set(REFRESH_COOKIE, refreshToken, refreshCookieOptions());
-  res.cookies.set(USER_COOKIE, encodeURIComponent(JSON.stringify(profile)), userCookieOptions());
+  res.cookies.set(USER_COOKIE, encodeUserCookie(profile), userCookieOptions());
   return res;
 }

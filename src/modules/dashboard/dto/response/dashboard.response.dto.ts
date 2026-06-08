@@ -172,6 +172,7 @@ export interface MyWorkResponseDto {
 export interface ApprovalInboxSummaryResponseDto {
   pendingCount: number;
   oldestPendingDays: number;
+  requestPendingCount: number;
 }
 
 // =============================================================

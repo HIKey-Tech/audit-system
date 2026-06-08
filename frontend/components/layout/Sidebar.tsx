@@ -22,6 +22,7 @@ import {
   ChevronsLeft,
   ChevronsRight,
   Users,
+  Send,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -59,6 +60,7 @@ const NAV: NavItem[] = [
   // Workspace — what you act on day to day, in priority order.
   { type: 'link', label: 'Home', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard' },
   { type: 'link', label: 'Approvals', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow' },
+  { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests' },
   { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements' },
   { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings' },
   { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications' },

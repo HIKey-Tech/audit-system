@@ -284,6 +284,106 @@ const NOTIFICATION_TEMPLATES: Array<{
     description:
       'In-app variant of SLA reminder. Variables: engagementTitle, engagementReference, daysRemaining.',
   },
+
+  // workflow.request.created (also reused when a chain advances to the next recipient)
+  {
+    eventKey: 'workflow.request.created',
+    channel: 'email',
+    name: 'Request Awaiting Action — Email',
+    subject: 'Action Required: Request {{requestReference}}',
+    body: 'Dear {{recipientName}},\n\n{{initiatorName}} has sent you a request that needs your action.\n\nTitle: {{requestTitle}}\nReference: {{requestReference}}\n\nPlease log in to IAMS to approve, sign, reject, or comment.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the current recipient when a request is created or advances to them. Variables: recipientName, initiatorName, requestTitle, requestReference.',
+  },
+  {
+    eventKey: 'workflow.request.created',
+    channel: 'in_app',
+    name: 'Request Awaiting Action — In-App',
+    subject: null,
+    body: '{{initiatorName}} sent you a request "{{requestTitle}}" ({{requestReference}}) that needs your action.',
+    description:
+      'In-app variant of request-awaiting-action. Variables: initiatorName, requestTitle, requestReference.',
+  },
+
+  // workflow.request.completed
+  {
+    eventKey: 'workflow.request.completed',
+    channel: 'email',
+    name: 'Request Completed — Email',
+    subject: 'Completed: Request {{requestReference}}',
+    body: 'Dear {{recipientName}},\n\nYour request "{{requestTitle}}" ({{requestReference}}) has completed all steps.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the initiator when all recipients have acted. Variables: recipientName, requestTitle, requestReference.',
+  },
+  {
+    eventKey: 'workflow.request.completed',
+    channel: 'in_app',
+    name: 'Request Completed — In-App',
+    subject: null,
+    body: 'Your request "{{requestTitle}}" ({{requestReference}}) has completed all steps.',
+    description:
+      'In-app variant of request-completed. Variables: requestTitle, requestReference.',
+  },
+
+  // workflow.request.rejected
+  {
+    eventKey: 'workflow.request.rejected',
+    channel: 'email',
+    name: 'Request Rejected — Email',
+    subject: 'Rejected: Request {{requestReference}}',
+    body: 'Dear {{recipientName}},\n\nYour request "{{requestTitle}}" ({{requestReference}}) was rejected by {{actorName}}.\n\nReason: {{rejectionReason}}\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the initiator when a recipient rejects. Variables: recipientName, requestTitle, requestReference, actorName, rejectionReason.',
+  },
+  {
+    eventKey: 'workflow.request.rejected',
+    channel: 'in_app',
+    name: 'Request Rejected — In-App',
+    subject: null,
+    body: 'Your request "{{requestTitle}}" ({{requestReference}}) was rejected by {{actorName}}. Reason: {{rejectionReason}}',
+    description:
+      'In-app variant of request-rejected. Variables: requestTitle, requestReference, actorName, rejectionReason.',
+  },
+
+  // workflow.request.commented
+  {
+    eventKey: 'workflow.request.commented',
+    channel: 'email',
+    name: 'Request Comment — Email',
+    subject: 'New comment on Request {{requestReference}}',
+    body: 'Dear {{recipientName}},\n\n{{actorName}} commented on the request "{{requestTitle}}" ({{requestReference}}).\n\nPlease log in to IAMS to view the comment.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the initiator and current recipient when a comment is added. Variables: recipientName, actorName, requestTitle, requestReference.',
+  },
+  {
+    eventKey: 'workflow.request.commented',
+    channel: 'in_app',
+    name: 'Request Comment — In-App',
+    subject: null,
+    body: '{{actorName}} commented on the request "{{requestTitle}}" ({{requestReference}}).',
+    description:
+      'In-app variant of request-comment. Variables: actorName, requestTitle, requestReference.',
+  },
+
+  // workflow.request.cancelled
+  {
+    eventKey: 'workflow.request.cancelled',
+    channel: 'email',
+    name: 'Request Cancelled — Email',
+    subject: 'Cancelled: Request {{requestReference}}',
+    body: 'Dear {{recipientName}},\n\nThe request "{{requestTitle}}" ({{requestReference}}) has been cancelled.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the current recipient when the initiator cancels. Variables: recipientName, requestTitle, requestReference.',
+  },
+  {
+    eventKey: 'workflow.request.cancelled',
+    channel: 'in_app',
+    name: 'Request Cancelled — In-App',
+    subject: null,
+    body: 'The request "{{requestTitle}}" ({{requestReference}}) has been cancelled.',
+    description:
+      'In-app variant of request-cancelled. Variables: requestTitle, requestReference.',
+  },
 ];
 
 // ─────────────────────────────────────────────────────────────
@@ -368,6 +468,11 @@ const PERMISSIONS: PermissionSeed[] = [
   permission('escalation:acknowledge', 'Acknowledge escalations', 'workflow'),
   permission('escalation_policy:read', 'View escalation policies', 'workflow'),
   permission('escalation_policy:update', 'Update escalation policies', 'workflow'),
+  permission('request:create', 'Initiate ad-hoc workflow requests', 'workflow'),
+  permission('request:read', 'View ad-hoc workflow requests', 'workflow'),
+  permission('request:receive', 'Be eligible as a request recipient', 'workflow'),
+  permission('request:act', 'Approve, sign, reject, or comment on requests', 'workflow'),
+  permission('request:admin', 'Administer and cancel any request', 'workflow'),
 
   permission('universe:read', 'View audit universe entities', 'audit'),
   permission('universe:create', 'Create audit universe entities', 'audit'),
@@ -481,6 +586,7 @@ const ROLES: Array<{
       'log:read',
       'job:read',
       'settings:read',
+      'request:create', 'request:read', 'request:receive', 'request:act', 'request:admin',
     ],
   },
   {
@@ -506,6 +612,7 @@ const ROLES: Array<{
       'dashboard:read',
       'notification:read', 'notification:update',
       'log:read',
+      'request:create', 'request:read', 'request:receive', 'request:act',
     ],
   },
   {
@@ -525,6 +632,7 @@ const ROLES: Array<{
       'document:read', 'document:write',
       'dashboard:read',
       'notification:read', 'notification:update',
+      'request:create', 'request:read', 'request:receive', 'request:act',
     ],
   },
   {
@@ -537,6 +645,7 @@ const ROLES: Array<{
       'followup:read', 'followup:respond', 'followup:evidence',
       'notification:read', 'notification:update',
       'dashboard:read',
+      'request:create', 'request:read', 'request:receive', 'request:act',
     ],
   },
   {
@@ -557,6 +666,7 @@ const ROLES: Array<{
       'dashboard:read',
       'notification:read', 'notification:update',
       'log:read',
+      'request:create', 'request:read', 'request:receive', 'request:act',
     ],
   },
   {
@@ -577,6 +687,7 @@ const ROLES: Array<{
       'dashboard:read',
       'notification:read', 'notification:update',
       'log:read', 'log:summary',
+      'request:create', 'request:read', 'request:receive', 'request:act',
     ],
   },
   {

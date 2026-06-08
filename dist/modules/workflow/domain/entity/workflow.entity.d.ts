@@ -15,6 +15,7 @@ export interface WorkflowUserBrief {
 export interface WorkflowEscalationRunResult {
     checkedEngagements: number;
     checkedApprovals: number;
+    checkedRequests: number;
     escalationsFired: number;
     failures: number;
 }

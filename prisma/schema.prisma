@@ -72,6 +72,9 @@ model User {
   workflow_assignments_made       Workflow_Assignment[]    @relation("WorkflowAssignmentAssignedBy")
   workflow_escalations            Workflow_Escalation[]    @relation("WorkflowEscalationEscalatedTo")
   escalation_policies_created     Escalation_Policy[]      @relation("EscalationPolicyCreatedBy")
+  requests_initiated              Workflow_Request[]        @relation("WorkflowRequestInitiator")
+  request_steps                   Workflow_Request_Step[]   @relation("WorkflowRequestStepRecipient")
+  request_actions                 Workflow_Request_Action[] @relation("WorkflowRequestActionActor")
   notification_templates_created  Notification_Template[]  @relation("NotificationTemplateCreatedBy")
   notification_templates_updated  Notification_Template[]  @relation("NotificationTemplateUpdatedBy")
   working_paper_templates_created Working_Paper_Template[] @relation("WorkingPaperTemplateCreatedBy")
@@ -895,6 +898,85 @@ model Escalation_Policy {
   @@index([audit_type])
   @@index([is_active])
   @@map("escalation_policies")
+}
+
+// ============================================================
+// WORKFLOW — AD-HOC REQUESTS
+//
+// User-initiated, general-purpose sequential approval/sign-off.
+// Decoupled from the audit-specific Workflow_Approval engine.
+//
+//   request_status      : pending | completed | rejected | cancelled
+//   request_step_status : pending | approved | signed | rejected
+//   request_action_type : approve | reject | sign | comment
+//
+// Attachments reuse the Document model
+// (module='workflow', entity_type='workflow_request', entity_id=request.id).
+// ============================================================
+
+model Workflow_Request {
+  id               String    @id @default(uuid())
+  reference_number String    @unique // REQ-<year>-<seq>
+  title            String
+  description      String?   @db.NVarChar(Max)
+  initiator_id     String
+  current_level    Int       @default(1)
+  status           String    @default("pending") // pending | completed | rejected | cancelled
+  locked_at        DateTime? // set on first recipient action; content frozen thereafter
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  initiator User                      @relation("WorkflowRequestInitiator", fields: [initiator_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  steps     Workflow_Request_Step[]
+  actions   Workflow_Request_Action[]
+
+  @@index([initiator_id])
+  @@index([status])
+  @@index([reference_number])
+  @@map("workflow_requests")
+}
+
+model Workflow_Request_Step {
+  id           String    @id @default(uuid())
+  request_id   String
+  level        Int
+  recipient_id String
+  status       String    @default("pending") // pending | approved | signed | rejected
+  acted_at     DateTime?
+  created_at   DateTime  @default(now())
+
+  request   Workflow_Request          @relation(fields: [request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  recipient User                      @relation("WorkflowRequestStepRecipient", fields: [recipient_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actions   Workflow_Request_Action[]
+
+  @@unique([request_id, level])
+  @@index([request_id])
+  @@index([recipient_id])
+  @@index([status])
+  @@map("workflow_request_steps")
+}
+
+model Workflow_Request_Action {
+  id                 String   @id @default(uuid())
+  request_id         String
+  step_id            String?
+  actor_id           String
+  action_type        String // approve | reject | sign | comment
+  comment            String?  @db.NVarChar(Max)
+  signature_hash     String? // SHA-256 hex, set only when action_type = sign
+  signature_manifest String?  @db.NVarChar(Max) // canonical JSON that was hashed
+  created_at         DateTime @default(now())
+
+  request Workflow_Request       @relation(fields: [request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  step    Workflow_Request_Step? @relation(fields: [step_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor   User                   @relation("WorkflowRequestActionActor", fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([request_id])
+  @@index([step_id])
+  @@index([actor_id])
+  @@index([action_type])
+  @@map("workflow_request_actions")
 }
 
 // ============================================================

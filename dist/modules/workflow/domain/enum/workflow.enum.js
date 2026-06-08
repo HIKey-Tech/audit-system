@@ -29,6 +29,7 @@ var WorkflowEscalationEntityType;
 (function (WorkflowEscalationEntityType) {
     WorkflowEscalationEntityType["AuditEngagement"] = "audit_engagement";
     WorkflowEscalationEntityType["WorkflowApproval"] = "workflow_approval";
+    WorkflowEscalationEntityType["WorkflowRequest"] = "workflow_request";
 })(WorkflowEscalationEntityType || (exports.WorkflowEscalationEntityType = WorkflowEscalationEntityType = {}));
 var WorkflowEscalationReason;
 (function (WorkflowEscalationReason) {

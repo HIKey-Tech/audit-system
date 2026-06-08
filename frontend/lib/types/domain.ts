@@ -176,6 +176,7 @@ export interface MyWork {
 export interface ApprovalInboxSummary {
   pendingCount: number;
   oldestPendingDays: number;
+  requestPendingCount: number;
 }
 
 export interface AuditAnalytics {
@@ -607,6 +608,88 @@ export interface EscalationPolicy {
   isActive: boolean;
   createdAt: string;
   updatedAt: string;
+}
+
+// ============================================================
+// Workflow — Ad-hoc Requests
+// ============================================================
+export type RequestStatus = 'pending' | 'completed' | 'rejected' | 'cancelled';
+export type RequestStepStatus = 'pending' | 'approved' | 'signed' | 'rejected';
+export type RequestActionType = 'approve' | 'reject' | 'sign' | 'comment';
+
+export interface WorkflowUserBrief {
+  id: string;
+  email: string;
+  displayName: string;
+  firstName: string;
+  lastName: string;
+  department: string | null;
+  jobTitle: string | null;
+}
+
+export interface RequestStep {
+  id: string;
+  requestId: string;
+  level: number;
+  recipientId: string;
+  status: RequestStepStatus;
+  actedAt: string | null;
+  createdAt: string;
+  recipient?: WorkflowUserBrief;
+}
+
+export interface RequestAction {
+  id: string;
+  requestId: string;
+  stepId: string | null;
+  actorId: string;
+  actionType: RequestActionType;
+  comment: string | null;
+  signatureHash: string | null;
+  createdAt: string;
+  actor?: WorkflowUserBrief;
+}
+
+export interface RequestAttachment {
+  documentId: string;
+  originalName: string;
+  mimeType: string;
+  fileSize: number;
+  downloadUrl: string;
+}
+
+export interface WorkflowRequest {
+  id: string;
+  referenceNumber: string;
+  title: string;
+  description: string | null;
+  initiatorId: string;
+  currentLevel: number;
+  status: RequestStatus;
+  lockedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  initiator?: WorkflowUserBrief;
+  steps?: RequestStep[];
+  actions?: RequestAction[];
+  attachments?: RequestAttachment[];
+}
+
+export interface RequestCandidate {
+  id: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  jobTitle: string | null;
+}
+
+export interface SignatureVerification {
+  actionId: string;
+  signerId: string;
+  signedAt: string;
+  valid: boolean;
+  storedHash: string;
+  recomputedHash: string;
 }
 
 // ============================================================

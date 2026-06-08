@@ -20,6 +20,9 @@ class NotificationService {
             auth: app_config_1.config.email.user
                 ? { user: app_config_1.config.email.user, pass: app_config_1.config.email.password }
                 : undefined,
+            connectionTimeout: 10_000,
+            greetingTimeout: 10_000,
+            socketTimeout: 15_000,
         });
     }
     async sendEmail(dto) {

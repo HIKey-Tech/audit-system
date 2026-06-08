@@ -57,16 +57,16 @@ export declare const TemplateQuerySchema: z.ZodObject<{
     sortBy: "name" | "created_at" | "updated_at" | "channel" | "event_key";
     sortOrder: "asc" | "desc";
     channel?: "email" | "in_app" | undefined;
-    isActive?: boolean | undefined;
     eventKey?: string | undefined;
+    isActive?: boolean | undefined;
 }, {
     channel?: "email" | "in_app" | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
     sortBy?: "name" | "created_at" | "updated_at" | "channel" | "event_key" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
-    isActive?: boolean | undefined;
     eventKey?: string | undefined;
+    isActive?: boolean | undefined;
 }>;
 export type CreateTemplateRequestDto = z.infer<typeof CreateTemplateRequestSchema>;
 export type UpdateTemplateRequestDto = z.infer<typeof UpdateTemplateRequestSchema>;

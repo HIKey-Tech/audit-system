@@ -6,7 +6,7 @@ const app_error_1 = require("../../../../shared/errors/app.error");
 const app_config_1 = require("../../../../shared/config/app.config");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
-const notification_service_1 = require("../../../messaging/service/implementation/notification.service");
+const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
 const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
@@ -27,9 +27,9 @@ const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     }
 });
 class UserService {
-    notifier;
-    constructor(notifier = notification_service_1.notificationService) {
-        this.notifier = notifier;
+    notificationQueue;
+    constructor(notificationQueue = notification_queue_service_1.notificationQueueService) {
+        this.notificationQueue = notificationQueue;
     }
     async createUser(dto, actorId) {
         const existing = await prisma_client_1.prisma.user.findUnique({
@@ -477,7 +477,7 @@ class UserService {
         const displayName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
         const loginUrl = `${app_config_1.config.app.url.replace(/\/$/, '')}/login`;
         const appName = app_config_1.config.app.name;
-        await this.notifier.sendEmail({
+        await this.notificationQueue.enqueue('email', {
             to: user.email,
             subject: `Welcome to ${appName}`,
             template: 'user-onboarding',

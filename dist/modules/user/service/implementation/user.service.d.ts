@@ -1,11 +1,11 @@
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
-import { INotificationService } from '../../../messaging/service/interface/notification.service.interface';
+import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { IUserService, AzureAdProfile } from '../interface/user.service.interface';
 import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
 import { UserResponseDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 export declare class UserService implements IUserService {
-    private readonly notifier;
-    constructor(notifier?: INotificationService);
+    private readonly notificationQueue;
+    constructor(notificationQueue?: INotificationQueueService);
     createUser(dto: CreateUserRequestDto, actorId: string): Promise<UserResponseDto>;
     getUserById(id: string): Promise<UserResponseDto>;
     getUserByEmail(email: string): Promise<UserResponseDto>;

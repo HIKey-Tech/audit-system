@@ -20,7 +20,8 @@ export declare enum WorkflowAssignmentRole {
 }
 export declare enum WorkflowEscalationEntityType {
     AuditEngagement = "audit_engagement",
-    WorkflowApproval = "workflow_approval"
+    WorkflowApproval = "workflow_approval",
+    WorkflowRequest = "workflow_request"
 }
 export declare enum WorkflowEscalationReason {
     SlaBreach = "sla_breach",

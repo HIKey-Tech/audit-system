@@ -27,6 +27,7 @@ class EscalationService {
         const result = {
             checkedEngagements: 0,
             checkedApprovals: 0,
+            checkedRequests: 0,
             escalationsFired: 0,
             failures: 0,
         };
@@ -83,6 +84,30 @@ class EscalationService {
             catch (err) {
                 result.failures += 1;
                 logger_util_1.logger.error('Workflow approval escalation failed', { err, approvalId: approval.id });
+            }
+        }
+        // Ad-hoc requests: remind the current recipient (L1), then notify the
+        // initiator (L2). No role chain beyond that since recipients are user-picked.
+        const pendingRequests = await prisma_client_1.prisma.workflow_Request.findMany({
+            where: { status: 'pending', deleted_at: null },
+            select: { id: true, created_at: true },
+        });
+        result.checkedRequests = pendingRequests.length;
+        for (const request of pendingRequests) {
+            try {
+                const latest = await this._getLatestEscalation(workflow_enum_1.WorkflowEscalationEntityType.WorkflowRequest, request.id);
+                const level = latest ? latest.escalation_level + 1 : 1;
+                if (level > 2)
+                    continue;
+                const basis = latest?.notified_at ?? request.created_at;
+                if (!(0, workflow_utility_1.hasElapsed)(basis, this._thresholdForLevel(approvalThresholds, level), now))
+                    continue;
+                const fired = await this._fireEscalation(workflow_enum_1.WorkflowEscalationEntityType.WorkflowRequest, request.id, level, workflow_enum_1.WorkflowEscalationReason.ApprovalInaction);
+                result.escalationsFired += fired;
+            }
+            catch (err) {
+                result.failures += 1;
+                logger_util_1.logger.error('Workflow request escalation failed', { err, requestId: request.id });
             }
         }
         logger_util_1.logger.info('Workflow escalation check completed', result);
@@ -219,6 +244,23 @@ class EscalationService {
             if (level === 3)
                 return this._getUsersByRole('director');
             return this._getUsersByRole('cae');
+        }
+        if (entityType === workflow_enum_1.WorkflowEscalationEntityType.WorkflowRequest) {
+            const request = await prisma_client_1.prisma.workflow_Request.findFirst({
+                where: { id: entityId, deleted_at: null },
+                select: {
+                    initiator: { select: targetSelect },
+                    current_level: true,
+                    steps: { select: { level: true, recipient: { select: targetSelect } } },
+                },
+            });
+            if (!request)
+                throw app_error_1.AppError.notFound('Workflow request');
+            if (level === 1) {
+                const currentStep = request.steps.find((step) => step.level === request.current_level);
+                return currentStep ? [currentStep.recipient] : [];
+            }
+            return [request.initiator];
         }
         const approval = await prisma_client_1.prisma.workflow_Approval.findUnique({
             where: { id: entityId },

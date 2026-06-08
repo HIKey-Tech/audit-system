@@ -5,7 +5,13 @@ import type {
   WorkflowEscalation,
   EscalationPolicy,
   AssignmentCandidateDto,
+  WorkflowRequest,
+  RequestAttachment,
+  RequestCandidate,
+  SignatureVerification,
+  RequestStatus,
 } from '../types/domain';
+import type { PaginatedResult } from '../types/api';
 
 type WorkflowAssignmentRole = 'lead_auditor' | 'supporting_auditor';
 
@@ -57,3 +63,33 @@ export const workflowApi = {
     level4Hours: number;
   }) => api.post<EscalationPolicy>('/workflow/escalation-policy', dto),
 };
+
+// ── Ad-hoc requests ──────────────────────────────────────────
+export const requestsApi = {
+  list: (query?: { status?: RequestStatus; role?: 'initiated' | 'received'; page?: number; pageSize?: number }) =>
+    api.getPaginated<WorkflowRequest>('/workflow/requests', query),
+  inbox: (query?: { page?: number; pageSize?: number }) =>
+    api.getPaginated<WorkflowRequest>('/workflow/requests/inbox', query),
+  candidates: () => api.get<RequestCandidate[]>('/workflow/requests/candidates'),
+  get: (id: string) => api.get<WorkflowRequest>(`/workflow/requests/${id}`),
+  create: (dto: { title: string; description?: string; recipientIds: string[] }) =>
+    api.post<WorkflowRequest>('/workflow/requests', dto),
+  addAttachment: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.upload<RequestAttachment>(`/workflow/requests/${id}/attachments`, fd);
+  },
+  approve: (id: string, comment?: string) =>
+    api.post<WorkflowRequest>(`/workflow/requests/${id}/approve`, { comment }),
+  sign: (id: string, affirmation: string, comment?: string) =>
+    api.post<WorkflowRequest>(`/workflow/requests/${id}/sign`, { affirmation, comment }),
+  reject: (id: string, reason: string) =>
+    api.post<WorkflowRequest>(`/workflow/requests/${id}/reject`, { reason }),
+  comment: (id: string, comment: string) =>
+    api.post<WorkflowRequest>(`/workflow/requests/${id}/comment`, { comment }),
+  cancel: (id: string) => api.post<WorkflowRequest>(`/workflow/requests/${id}/cancel`),
+  verifySignatures: (id: string) =>
+    api.get<SignatureVerification[]>(`/workflow/requests/${id}/verify-signatures`),
+};
+
+export type RequestListResult = PaginatedResult<WorkflowRequest>;
