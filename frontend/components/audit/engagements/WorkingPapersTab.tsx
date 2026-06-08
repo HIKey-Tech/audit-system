@@ -12,17 +12,16 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { FormField } from '@/components/ui/FormField';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { workingPapersApi } from '@/lib/api/audit';
-import { workingPaperTemplatesApi } from '@/lib/api/settings';
+import { wpTemplatesApi } from '@/lib/api/settings';
 import { formatRelative } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
 import type {
   AuditEngagementDetail,
   AuditWorkingPaper,
   WorkingPaperImportPreview,
-  WorkingPaperTemplateSection,
 } from '@/lib/types/domain';
 
 interface Props {
@@ -243,32 +242,40 @@ const CreateOrEditPaperSlideOver = ({
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [sectionContents, setSectionContents] = useState<string[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const templateQuery = useQuery({
-    queryKey: ['settings', 'working-paper-templates', 'default', auditType],
-    queryFn: () => workingPaperTemplatesApi.getDefault(auditType),
-    enabled: open && Boolean(auditType),
+  const templatesQuery = useQuery({
+    queryKey: ['settings', 'working-paper-templates', 'list'],
+    queryFn: () => wpTemplatesApi.list(),
+    enabled: open,
     retry: false,
   });
 
-  const template =
-    templateQuery.data && templateQuery.data.sections.length > 0
-      ? templateQuery.data
-      : null;
+  const templates = templatesQuery.data ?? [];
+  const defaultTemplate =
+    templates.find((t) => t.isDefault && t.auditType === auditType) ?? null;
 
+  // Preselect the audit-type default once templates load (unless the user already chose).
   useEffect(() => {
-    if (!open || !template) return;
+    if (!open || touched || templatesQuery.isLoading) return;
+    setSelectedTemplateId(defaultTemplate ? defaultTemplate.id : '');
+  }, [open, touched, templatesQuery.isLoading, defaultTemplate]);
 
-    setSectionContents((current) =>
-      template.sections.map((_: WorkingPaperTemplateSection, index: number) => current[index] ?? ''),
-    );
-  }, [open, template]);
+  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+
+  // Reset section inputs when the chosen template changes.
+  useEffect(() => {
+    setSectionContents(selectedTemplate ? selectedTemplate.sections.map(() => '') : []);
+  }, [selectedTemplate]);
 
   const reset = () => {
     setTitle('');
     setContent('');
     setSectionContents([]);
+    setSelectedTemplateId('');
+    setTouched(false);
   };
 
   const handleClose = () => {
@@ -286,33 +293,32 @@ const CreateOrEditPaperSlideOver = ({
 
   const submit = async (alsoSubmit: boolean) => {
     const trimmedTitle = title.trim();
-
     if (!trimmedTitle) {
       toast.error('Title required');
       return;
     }
 
-    let payloadContent = content;
-
-    if (template) {
-      const missingRequired = template.sections.find(
-        (section: WorkingPaperTemplateSection, index: number) => section.required && !sectionContents[index]?.trim(),
+    let payloadContent: string;
+    if (selectedTemplate) {
+      const missing = selectedTemplate.sections.find(
+        (section, index) => section.required && !sectionContents[index]?.trim(),
       );
-
-      if (missingRequired) {
-        toast.error(`${missingRequired.title} required`);
+      if (missing) {
+        toast.error(`${missing.title} required`);
         return;
       }
-
       payloadContent = JSON.stringify({
-        sections: template.sections.map((section: WorkingPaperTemplateSection, index: number) => ({
+        sections: selectedTemplate.sections.map((section, index) => ({
           title: section.title,
           content: sectionContents[index] ?? '',
         })),
       });
-    } else if (!content.trim()) {
-      toast.error('Content required');
-      return;
+    } else {
+      if (!content.trim()) {
+        toast.error('Content required');
+        return;
+      }
+      payloadContent = content;
     }
 
     setSaving(true);
@@ -320,6 +326,7 @@ const CreateOrEditPaperSlideOver = ({
       const created = await workingPapersApi.create(engagementId, {
         title: trimmedTitle,
         content: payloadContent,
+        templateId: selectedTemplate?.id,
       });
       if (alsoSubmit) {
         await workingPapersApi.submit(created.id);
@@ -346,70 +353,59 @@ const CreateOrEditPaperSlideOver = ({
           <Button variant="secondary" size="sm" onClick={handleClose}>
             Cancel
           </Button>
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={() => submit(false)}
-            isLoading={saving}
-            disabled={templateQuery.isLoading}
-          >
+          <Button variant="secondary" size="sm" onClick={() => submit(false)} isLoading={saving} disabled={templatesQuery.isLoading}>
             Save as draft
           </Button>
-          <Button
-            size="sm"
-            onClick={() => submit(true)}
-            isLoading={saving}
-            disabled={templateQuery.isLoading}
-          >
+          <Button size="sm" onClick={() => submit(true)} isLoading={saving} disabled={templatesQuery.isLoading}>
             Submit for review
           </Button>
         </div>
       }
     >
-      {templateQuery.isLoading ? (
+      {templatesQuery.isLoading ? (
         <div className="space-y-5">
-          <div className="space-y-2">
-            <Skeleton className="h-3 w-16" />
-            <Skeleton className="h-10 w-full" />
-          </div>
-          <Skeleton className="h-4 w-56" />
-          {Array.from({ length: 4 }).map((_, index) => (
-            <div key={index} className="space-y-2">
-              <Skeleton className="h-3 w-36" />
-              <Skeleton className="h-3 w-3/4" />
-              <Skeleton className="h-28 w-full" />
-            </div>
-          ))}
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-10 w-full" />
+          <Skeleton className="h-28 w-full" />
         </div>
       ) : (
         <div className="space-y-4">
-        <FormField label="Title" required>
-          <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. WP-01 Sample Selection" />
-        </FormField>
-        {template && (
-          <>
-            <div className="border-b border-border pb-2">
-              <p className="text-xs font-semibold uppercase tracking-wide text-text-muted">
-                Template
-              </p>
-              <p className="mt-1 text-sm font-medium text-text-primary">
-                {template.name}
-              </p>
-            </div>
+          <FormField
+            label="Template"
+            tooltip="Pick a structured template for this audit type, or Blank to write free-form notes. Templates standardize what every working paper captures."
+          >
+            <Select
+              value={selectedTemplateId}
+              onChange={(e) => {
+                setTouched(true);
+                setSelectedTemplateId(e.target.value);
+              }}
+            >
+              <option value="">Blank (free text)</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.isDefault && t.auditType === auditType ? ' (default)' : ''}
+                </option>
+              ))}
+            </Select>
+          </FormField>
 
-            {template.sections.map((section: WorkingPaperTemplateSection, index: number) => {
+          <FormField label="Title" required>
+            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. WP-01 Sample Selection" />
+          </FormField>
+
+          {selectedTemplate ? (
+            selectedTemplate.sections.map((section, index) => {
               const fieldId = `working-paper-section-${index}`;
-
               return (
-                <div key={`${section.title}-${index}`} className="space-y-1.5">
-                  <label
-                    htmlFor={fieldId}
-                    className="block text-xs font-semibold text-text-primary"
-                  >
-                    {section.title}
-                    {section.required && <span className="ml-0.5 text-danger">*</span>}
-                  </label>
-                  <p className="text-xs text-text-muted">{section.description}</p>
+                <FormField
+                  key={`${section.title}-${index}`}
+                  label={section.title}
+                  required={section.required}
+                  htmlFor={fieldId}
+                  description={section.description}
+                >
                   <Textarea
                     id={fieldId}
                     rows={4}
@@ -417,21 +413,14 @@ const CreateOrEditPaperSlideOver = ({
                     placeholder={section.placeholder}
                     onChange={(e) => updateSectionContent(index, e.target.value)}
                   />
-                </div>
+                </FormField>
               );
-            })}
-          </>
-        )}
-        {!template && (
-        <FormField label="Content" hint="Plain text or markdown — exported into the DOCX template.">
-          <Textarea
-            rows={14}
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            className="font-mono text-xs"
-          />
-        </FormField>
-        )}
+            })
+          ) : (
+            <FormField label="Content" hint="Plain text or markdown — exported into the DOCX template.">
+              <Textarea rows={14} value={content} onChange={(e) => setContent(e.target.value)} className="font-mono text-xs" />
+            </FormField>
+          )}
         </div>
       )}
     </SlideOver>
@@ -670,6 +659,34 @@ const ImportPaperSlideOver = ({
   );
 };
 
+interface PaperSection {
+  title: string;
+  content: string;
+}
+
+const parsePaperSections = (raw: string | null | undefined): PaperSection[] | null => {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw);
+    if (
+      parsed &&
+      Array.isArray(parsed.sections) &&
+      parsed.sections.every(
+        (s: unknown) =>
+          typeof s === 'object' && s !== null && typeof (s as PaperSection).title === 'string',
+      )
+    ) {
+      return (parsed.sections as PaperSection[]).map((s) => ({
+        title: s.title,
+        content: typeof s.content === 'string' ? s.content : '',
+      }));
+    }
+  } catch {
+    /* not JSON — treat as free text */
+  }
+  return null;
+};
+
 const ViewPaperSlideOver = ({
   paper,
   canEdit,
@@ -683,32 +700,63 @@ const ViewPaperSlideOver = ({
 }): JSX.Element => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
+  const [sections, setSections] = useState<PaperSection[]>([]);
+  const [isStructured, setIsStructured] = useState(false);
   const [saving, setSaving] = useState(false);
 
-  const editable =
-    canEdit && paper && (paper.status === 'draft' || paper.status === 'rejected');
+  const editable = canEdit && Boolean(paper) && (paper?.status === 'draft' || paper?.status === 'rejected');
 
-  // Sync state when paper changes
-  if (paper && paper.id && (title === '' && content === '' && paper.title)) {
+  // Sync local state whenever the viewed paper changes.
+  useEffect(() => {
+    if (!paper) return;
+    const parsed = parsePaperSections(paper.content);
     setTitle(paper.title);
-    setContent(paper.content ?? '');
-  }
+    if (parsed) {
+      setIsStructured(true);
+      setSections(parsed);
+      setContent('');
+    } else {
+      setIsStructured(false);
+      setContent(paper.content ?? '');
+      setSections([]);
+    }
+  }, [paper]);
+
+  const updateSection = (index: number, value: string) => {
+    setSections((current) => {
+      const next = [...current];
+      next[index] = { ...next[index], content: value };
+      return next;
+    });
+  };
 
   const handleSave = async () => {
     if (!paper) return;
     const trimmedTitle = title.trim();
-
     if (!trimmedTitle) {
       toast.error('Title required');
       return;
     }
-    if (!content.trim()) {
-      toast.error('Content required');
-      return;
+
+    let payloadContent: string;
+    if (isStructured) {
+      const missing = sections.find((s) => !s.content.trim());
+      if (missing) {
+        toast.error(`${missing.title} is empty`);
+        return;
+      }
+      payloadContent = JSON.stringify({ sections });
+    } else {
+      if (!content.trim()) {
+        toast.error('Content required');
+        return;
+      }
+      payloadContent = content;
     }
+
     setSaving(true);
     try {
-      await workingPapersApi.update(paper.id, { title: trimmedTitle, content });
+      await workingPapersApi.update(paper.id, { title: trimmedTitle, content: payloadContent });
       toast.success('Saved');
       onSaved();
     } catch (e) {
@@ -721,11 +769,7 @@ const ViewPaperSlideOver = ({
   return (
     <SlideOver
       open={Boolean(paper)}
-      onClose={() => {
-        setTitle('');
-        setContent('');
-        onClose();
-      }}
+      onClose={onClose}
       title={paper?.title ?? 'Working paper'}
       description={paper ? `Version ${paper.version} · ${paper.status}` : undefined}
       width="xl"
@@ -753,15 +797,30 @@ const ViewPaperSlideOver = ({
           <FormField label="Title">
             <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} />
           </FormField>
-          <FormField label="Content">
-            <Textarea
-              rows={20}
-              value={content}
-              onChange={(e) => setContent(e.target.value)}
-              className="font-mono text-xs"
-              disabled={!editable}
-            />
-          </FormField>
+
+          {isStructured ? (
+            sections.map((section, index) => (
+              <FormField key={`${section.title}-${index}`} label={section.title}>
+                <Textarea
+                  rows={4}
+                  value={section.content}
+                  onChange={(e) => updateSection(index, e.target.value)}
+                  disabled={!editable}
+                />
+              </FormField>
+            ))
+          ) : (
+            <FormField label="Content">
+              <Textarea
+                rows={20}
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                className="font-mono text-xs"
+                disabled={!editable}
+              />
+            </FormField>
+          )}
+
           {paper.reviewComment && (
             <FormField label="Reviewer comment">
               <p className="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-text-secondary whitespace-pre-wrap">

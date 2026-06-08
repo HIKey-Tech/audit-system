@@ -12,6 +12,7 @@ export interface ReportResponseDto {
   version: number;
   versionNumber: number;
   documentId: string | null;
+  templateId: string | null;
   issuedAt: string | null;
   rejectionReason: string | null;
   createdById: string;
@@ -35,6 +36,7 @@ export const mapReportToResponse = (
     status: string;
     version_number: number;
     document_id: string | null;
+    template_id: string | null;
     issued_at: Date | null;
     rejection_reason: string | null;
     created_by_id: string;
@@ -53,6 +55,7 @@ export const mapReportToResponse = (
   version: report.version_number,
   versionNumber: report.version_number,
   documentId: report.document_id,
+  templateId: report.template_id ?? null,
   issuedAt: report.issued_at?.toISOString() ?? null,
   rejectionReason: report.rejection_reason,
   createdById: report.created_by_id,

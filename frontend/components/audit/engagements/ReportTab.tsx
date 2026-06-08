@@ -16,6 +16,9 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { FormField } from '@/components/ui/FormField';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Textarea } from '@/components/ui/Input';
+import { Select } from '@/components/ui/Input';
+import { InfoHint } from '@/components/ui/InfoHint';
+import { reportTemplatesApi } from '@/lib/api/settings';
 import { reportsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { formatRelative, formatDate } from '@/lib/utils/format';
@@ -25,6 +28,7 @@ import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 const GenSchema = z.object({
   title: z.string().min(2).max(300),
+  templateId: z.string().optional().or(z.literal('')),
   executiveSummary: z.string().optional().or(z.literal('')),
   scope: z.string().optional().or(z.literal('')),
   methodology: z.string().optional().or(z.literal('')),
@@ -47,6 +51,11 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     retry: false,
   });
 
+  const reportTemplates = useQuery({
+    queryKey: ['settings', 'report-templates', 'list'],
+    queryFn: () => reportTemplatesApi.list(),
+  });
+
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'report'] });
@@ -64,6 +73,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     mutationFn: (v: GenValues) =>
       reportsApi.generate(engagement.id, {
         title: v.title,
+        templateId: v.templateId || undefined,
         executiveSummary: v.executiveSummary || undefined,
         scope: v.scope || undefined,
         methodology: v.methodology || undefined,
@@ -140,16 +150,25 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const {
     register,
     handleSubmit,
+    setValue,
     formState: { errors },
   } = useForm<GenValues>({
     resolver: zodResolver(GenSchema),
     defaultValues: {
       title: `${engagement.title} — Audit Report`,
+      templateId: '',
       executiveSummary: '',
       scope: '',
       methodology: '',
     },
   });
+
+  useEffect(() => {
+    const list = reportTemplates.data;
+    if (!list || list.length === 0) return;
+    const def = list.find((t) => t.isDefault) ?? list[0];
+    setValue('templateId', def.id);
+  }, [reportTemplates.data, setValue]);
 
   if (report.isLoading) {
     return (
@@ -172,6 +191,23 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           />
         ) : (
           <form onSubmit={handleSubmit((v) => generate.mutate(v))} className="space-y-4" noValidate>
+            <FormField
+              label={
+                <span className="inline-flex items-center gap-1">
+                  Report template
+                  <InfoHint content="Controls the report's branding, classification, and section layout for the on-screen preview and the exported PDF/DOCX." />
+                </span>
+              }
+            >
+              <Select {...register('templateId')}>
+                {(reportTemplates.data ?? []).map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.isDefault ? ' (default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
             <FormField label="Title" required error={errors.title?.message}>
               <Input error={errors.title?.message} {...register('title')} />
             </FormField>
@@ -194,6 +230,37 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   }
 
   const r = report.data;
+
+  const appliedTemplate =
+    (reportTemplates.data ?? []).find((t) => t.id === r.templateId) ??
+    (reportTemplates.data ?? []).find((t) => t.isDefault) ??
+    null;
+
+  const readStr = (cfg: unknown, key: string, fallback: string): string => {
+    if (cfg && typeof cfg === 'object' && !Array.isArray(cfg)) {
+      const v = (cfg as Record<string, unknown>)[key];
+      if (typeof v === 'string' && v.trim()) return v.trim();
+    }
+    return fallback;
+  };
+  const normalizeHex = (value: string, fallback: string): string => {
+    const v = value.replace(/^#/, '').trim();
+    return /^[0-9a-fA-F]{6}$/.test(v) ? `#${v}` : fallback;
+  };
+
+  const tplHeader = appliedTemplate?.headerConfig ?? null;
+  const tplFooter = appliedTemplate?.footerConfig ?? null;
+  const previewOrgName = readStr(tplHeader, 'orgName', 'Galaxy Backbone Limited');
+  const previewOrgAddress = readStr(tplHeader, 'address', 'Corporate Headquarters, Abuja');
+  const previewClassification = readStr(tplHeader, 'classification', 'Confidential');
+  const previewPrimary = normalizeHex(readStr(tplHeader, 'primaryColor', '#003087'), '#003087');
+  const previewFooter = readStr(tplFooter, 'confidentialityNotice', '');
+
+  const sectionTitle = (index: number, fallback: string): string => {
+    const s = appliedTemplate?.sections?.[index];
+    return s ? `${index + 1}. ${s.title}` : fallback;
+  };
+
   const currentStep = approval.data?.steps?.find((step) => step.level === approval.data?.currentLevel);
   const canActOnCurrentApproval =
     approval.data?.status === 'pending' &&
@@ -353,9 +420,9 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
         <div className="w-full max-w-[816px] mx-auto bg-white border border-border shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-lg p-10 md:p-14 text-slate-800 space-y-6 select-none font-sans transition-all duration-300">
           {/* A4 simulated print header */}
           <div className="text-center pb-5 border-b-2 border-slate-200 space-y-2">
-            <div className="text-xs font-semibold tracking-wider text-slate-500 uppercase">Galaxy Backbone Limited</div>
-            <h1 className="text-xl font-bold tracking-tight text-text-primary uppercase">{r.title}</h1>
-            <div className="text-[10px] text-text-secondary">Corporate Headquarters, Abuja</div>
+            <div className="text-xs font-semibold tracking-wider text-slate-500 uppercase">{previewOrgName}</div>
+            <h1 className="text-xl font-bold tracking-tight text-text-primary uppercase" style={{ color: previewPrimary }}>{r.title}</h1>
+            <div className="text-[10px] text-text-secondary">{previewOrgAddress}</div>
           </div>
 
           {/* Metadata Block */}
@@ -387,14 +454,14 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
               </div>
               <div className="flex justify-between">
                 <span className="font-medium text-slate-500">Classification:</span>
-                <span className="text-text-primary font-bold tracking-wider uppercase text-danger">Confidential</span>
+                <span className="text-text-primary font-bold tracking-wider uppercase text-danger">{previewClassification}</span>
               </div>
             </div>
           </div>
 
           {/* Section 1: Executive Summary */}
           <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">1. Executive Summary</h2>
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(0, '1. Executive Summary')}</h2>
             <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
               {r.executiveSummary || 'No executive summary provided.'}
             </p>
@@ -402,7 +469,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
 
           {/* Section 2: Scope */}
           <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">2. Audit Scope</h2>
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(1, '2. Audit Scope')}</h2>
             <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
               {r.scope || 'No scope details specified.'}
             </p>
@@ -410,7 +477,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
 
           {/* Section 3: Methodology */}
           <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">3. Methodology</h2>
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(2, '3. Methodology')}</h2>
             <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
               {r.methodology || 'No methodology notes entered.'}
             </p>
@@ -418,7 +485,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
 
           {/* Section 4: Findings Summary */}
           <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">4. Findings Summary Table</h2>
+            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(3, '4. Findings Summary Table')}</h2>
             {(engagement.findings ?? []).length === 0 ? (
               <p className="text-xs text-slate-500 italic pl-1">No findings were identified during the course of this engagement.</p>
             ) : (
@@ -478,6 +545,12 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
               </div>
             </div>
           </div>
+
+          {previewFooter && (
+            <div className="pt-4 mt-6 border-t border-slate-200 text-center text-[11px] text-slate-400">
+              {previewFooter}
+            </div>
+          )}
         </div>
       )}
 

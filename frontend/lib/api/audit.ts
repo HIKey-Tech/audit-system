@@ -315,6 +315,7 @@ export interface CreateReportDto {
   executiveSummary?: string;
   scope?: string;
   methodology?: string;
+  templateId?: string;
 }
 
 export const reportsApi = {
