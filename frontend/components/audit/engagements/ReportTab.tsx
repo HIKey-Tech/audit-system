@@ -206,7 +206,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-base font-semibold text-text-primary">{r.title}</h3>
-              <StatusBadge status={r.status} />
+              <StatusBadge status={r.status} explain="report" />
               <Badge tone="gray">v{r.version}</Badge>
             </div>
             <p className="mt-1 text-xs text-text-secondary">

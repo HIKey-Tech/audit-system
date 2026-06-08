@@ -133,7 +133,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-text-primary">{wp.title}</h3>
                       <Badge tone="gray">v{wp.version ?? wp.versionNumber ?? 1}</Badge>
-                      <StatusBadge status={wp.status} />
+                      <StatusBadge status={wp.status} explain="working_paper" />
                       {wp.sourceDocumentId && <Badge tone="blue">Imported</Badge>}
                     </div>
                     <p className="mt-1 text-xs text-text-secondary">
