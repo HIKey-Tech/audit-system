@@ -1,5 +1,9 @@
 'use client';
 
+import { useState } from 'react';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/Button';
+import { StartAuditWizard } from '@/components/audit/engagements/StartAuditWizard';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { StatCards } from '@/components/dashboard/StatCards';
 import { RecentActivity } from '@/components/dashboard/RecentActivity';
@@ -10,7 +14,8 @@ import { EscalationsCard } from '@/components/dashboard/EscalationsCard';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 
 export default function DashboardPage(): JSX.Element {
-  const { dashboard, isAuditee } = usePermissions();
+  const { dashboard, isAuditee, canManageAuditProgramme } = usePermissions();
+  const [wizardOpen, setWizardOpen] = useState(false);
 
   const subtitle = isAuditee
     ? 'Your assigned findings and follow-up items.'
@@ -18,7 +23,17 @@ export default function DashboardPage(): JSX.Element {
 
   return (
     <div>
-      <PageHeader title="Home" subtitle={subtitle} />
+      <PageHeader
+        title="Home"
+        subtitle={subtitle}
+        actions={
+          canManageAuditProgramme ? (
+            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setWizardOpen(true)}>
+              Start audit
+            </Button>
+          ) : null
+        }
+      />
 
       <section className="space-y-6">
         {/* Task-first: what needs you right now */}
@@ -53,6 +68,8 @@ export default function DashboardPage(): JSX.Element {
 
         {dashboard.recentActivity && <RecentActivity />}
       </section>
+
+      <StartAuditWizard open={wizardOpen} onClose={() => setWizardOpen(false)} />
     </div>
   );
 }
