@@ -1,10 +1,19 @@
 import { z } from 'zod';
 
+export const GenerateReportRequestSchema = z.object({
+  title: z.string().min(1).max(200).optional(),
+  executiveSummary: z.string().min(1).optional(),
+  scope: z.string().min(1).optional(),
+  methodology: z.string().min(1).optional(),
+  templateId: z.string().uuid().optional(),
+});
+
 export const UpdateReportRequestSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   executiveSummary: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   methodology: z.string().min(1).optional(),
+  templateId: z.string().uuid().optional(),
 });
 
 export const RejectReportRequestSchema = z.object({
@@ -24,6 +33,7 @@ export const ReportQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+export type GenerateReportRequestDto = z.infer<typeof GenerateReportRequestSchema>;
 export type UpdateReportRequestDto = z.infer<typeof UpdateReportRequestSchema>;
 export type RejectReportRequestDto = z.infer<typeof RejectReportRequestSchema>;
 export type ExportReportQueryDto = z.infer<typeof ExportReportQuerySchema>;
