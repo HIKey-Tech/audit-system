@@ -59,9 +59,10 @@ interface NavDivider {
 type NavItem = NavLink | NavDivider;
 
 const NAV: NavItem[] = [
+  { type: 'divider', label: 'Workspace' },
   // Workspace — what you act on day to day, in priority order.
   { type: 'link', label: 'Home', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard', description: 'Your personalized overview and to-dos.' },
-  { type: 'link', label: 'Approvals', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow', description: 'Items awaiting your approval, plus assignments and escalations.' },
+  { type: 'link', label: 'Workflow', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow', description: 'Your approval inbox, staff assignments, and escalation tracking.' },
   { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests', description: 'Information and evidence requests to and from auditees.' },
   { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
   { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
