@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Inbox, Users, AlertOctagon, SlidersHorizontal, Plus } from 'lucide-react';
 import { toast } from 'sonner';
@@ -36,7 +37,17 @@ export default function WorkflowPage(): JSX.Element {
   const isAdmin = hasAnyRole(['super_admin', 'audit_admin']);
   const canAssign = isAdminLevel || isAuditLead;
 
-  const [tab, setTab] = useState<TabKey>('inbox');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const VALID_TABS: TabKey[] = ['inbox', 'assignments', 'escalations', 'policies'];
+  const tabParam = searchParams?.get('tab');
+  const initialTab: TabKey = VALID_TABS.includes(tabParam as TabKey) ? (tabParam as TabKey) : 'inbox';
+  const [tab, setTab] = useState<TabKey>(initialTab);
+
+  const changeTab = (k: TabKey): void => {
+    setTab(k);
+    router.replace(`?tab=${k}`, { scroll: false });
+  };
 
   const pending = useQuery({
     queryKey: ['workflow', 'pending'],
@@ -55,7 +66,7 @@ export default function WorkflowPage(): JSX.Element {
       <PageHeader title="Workflow" subtitle="Approvals, staff assignment, and escalation tracking." />
 
       <Card padded className="mb-4">
-        <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
+        <Tabs tabs={tabs} active={tab} onChange={(k) => changeTab(k as TabKey)} />
       </Card>
 
       {tab === 'inbox' && <InboxTab approvals={pending.data} isLoading={pending.isLoading} onRefetch={() => pending.refetch()} />}
