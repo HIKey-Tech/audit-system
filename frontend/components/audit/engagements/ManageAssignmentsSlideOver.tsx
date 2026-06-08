@@ -146,7 +146,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                       />
                       <div>
                         <p className="text-xs font-semibold text-text-primary">{a.userName}</p>
-                        <p className="text-[10px] text-text-secondary font-medium">
+                        <p className="text-[11px] text-text-secondary font-medium">
                           Role: <span className="font-semibold text-primary">{humanizeStatus(a.role)}</span>
                         </p>
                       </div>
@@ -175,7 +175,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
           <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wider mb-1">
             Available Candidates (Skill-Based Recommender)
           </h3>
-          <p className="text-[10px] text-text-secondary mb-3">
+          <p className="text-[11px] text-text-secondary mb-3">
             Candidates are ranked by expertise matching the audit type: <strong className="text-primary uppercase">{engagement.auditType}</strong>.
           </p>
 
@@ -213,13 +213,13 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                           {c.displayName}
                         </h4>
                         {c.jobTitle && (
-                          <p className="text-[10px] text-text-secondary flex items-center gap-1 mt-0.5">
+                          <p className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5">
                             <Briefcase className="h-3 w-3 shrink-0" />
                             <span className="truncate">{c.jobTitle}</span>
                           </p>
                         )}
                         {c.department && (
-                          <p className="text-[10px] text-text-secondary flex items-center gap-1 mt-0.5">
+                          <p className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5">
                             <Activity className="h-3 w-3 shrink-0" />
                             <span className="truncate">{c.department}</span>
                           </p>
@@ -251,7 +251,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                             return (
                               <span
                                 key={s}
-                                className={`px-1.5 py-0.5 rounded text-[9px] font-semibold ${isMatch ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 text-slate-500'}`}
+                                className={`px-1.5 py-0.5 rounded text-[11px] font-semibold ${isMatch ? 'bg-primary/10 text-primary border border-primary/20' : 'bg-slate-100 text-slate-500'}`}
                               >
                                 {s}
                               </span>
@@ -259,7 +259,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                           })}
                         </div>
                       ) : (
-                        <p className="text-[9px] italic text-text-muted">No skills listed</p>
+                        <p className="text-[11px] italic text-text-muted">No skills listed</p>
                       )}
                     </div>
 
@@ -268,9 +268,9 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                       {canCreate ? (
                         <>
                           <div className="flex items-center gap-1">
-                            <label className="text-[9px] font-bold text-text-secondary uppercase">Role:</label>
+                            <label className="text-[11px] font-bold text-text-secondary uppercase">Role:</label>
                             <Select
-                              className="py-0.5 text-[11px] h-7"
+                              className="py-0.5 text-xs h-7"
                               value={assignedRole}
                               onChange={(e) =>
                                 setRoleToAssign((prev) => ({
@@ -299,7 +299,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                           </Button>
                         </>
                       ) : (
-                        <p className="text-[10px] italic text-text-muted text-center py-2">
+                        <p className="text-[11px] italic text-text-muted text-center py-2">
                           No assignment permission
                         </p>
                       )}

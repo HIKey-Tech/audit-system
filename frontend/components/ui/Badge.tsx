@@ -47,7 +47,7 @@ export const Badge = ({
     <span
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full font-medium ring-1 whitespace-nowrap',
-        size === 'xs' ? 'px-2 py-0.5 text-[11px]' : 'px-2.5 py-1 text-xs',
+        size === 'xs' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',
         classes,
         className,
       )}
