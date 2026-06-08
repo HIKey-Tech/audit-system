@@ -639,6 +639,7 @@ model Audit_Report {
   document_id       String?
   issued_at         DateTime?
   rejection_reason  String?   @db.NVarChar(Max)
+  template_id       String?
   created_by_id     String
   deleted_at        DateTime?
   created_at        DateTime  @default(now())
@@ -651,6 +652,7 @@ model Audit_Report {
   @@index([engagement_id])
   @@index([status])
   @@index([created_by_id])
+  @@index([template_id])
   @@map("audit_reports")
 }
 
