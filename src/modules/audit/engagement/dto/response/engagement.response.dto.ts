@@ -7,6 +7,7 @@ export interface EngagementResponseDto {
   title: string;
   universeId: string;
   planItemId: string | null;
+  planTitle: string | null;
   auditType: string;
   status: string;
   priority: string;
@@ -53,6 +54,7 @@ export const mapEngagementToResponse = (
     created_at: Date;
     updated_at: Date;
     universe?: Parameters<typeof mapUniverseToResponse>[0];
+    plan_item?: { plan?: { title: string } | null } | null;
   },
   extras?: {
     findingCounts?: FindingSeverityCount[];
@@ -65,6 +67,7 @@ export const mapEngagementToResponse = (
   title: engagement.title,
   universeId: engagement.universe_id,
   planItemId: engagement.plan_item_id,
+  planTitle: engagement.plan_item?.plan?.title ?? null,
   auditType: engagement.audit_type,
   status: engagement.status,
   priority: engagement.priority,

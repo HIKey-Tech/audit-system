@@ -25,7 +25,10 @@ import {
 import { EngagementResponseDto, mapEngagementToResponse } from '../../dto/response/engagement.response.dto';
 import { IEngagementService } from '../interface/engagement.service.interface';
 
-const engagementInclude = { universe: true };
+const engagementInclude = {
+  universe: true,
+  plan_item: { include: { plan: { select: { id: true, title: true } } } },
+};
 
 export class EngagementService implements IEngagementService {
   constructor(private readonly checklistService: IChecklistService) {}
