@@ -9,8 +9,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { dashboardApi } from '@/lib/api/dashboard';
+import { workflowApi } from '@/lib/api/workflow';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
+import type { WorkflowAssignment } from '@/lib/types/domain';
 
 const ENTITY_LABEL: Record<string, string> = {
   audit_plan: 'Plan',
@@ -23,6 +25,16 @@ export const MyWorkPanel = (): JSX.Element => {
     queryKey: ['dashboard', 'my-work'],
     queryFn: () => dashboardApi.getMyWork(),
   });
+
+  const { data: assignmentsData, isLoading: assignmentsLoading } = useQuery({
+    queryKey: ['workflow', 'assignments', 'mine'],
+    queryFn: () => workflowApi.listMine(),
+  });
+
+  const leadEngagementIds = new Set((data?.myActiveEngagements ?? []).map((e) => e.id));
+  const myAssignments: WorkflowAssignment[] = (assignmentsData ?? []).filter(
+    (a) => !leadEngagementIds.has(a.engagementId),
+  );
 
   return (
     <Card>
@@ -43,6 +55,7 @@ export const MyWorkPanel = (): JSX.Element => {
         <ErrorState compact onRetry={() => refetch()} />
       ) : (
         <div className="space-y-5">
+          {/* ── Section A: Active Engagements (Lead / Manager / Auditee) ── */}
           <section>
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
               Active Engagements
@@ -75,6 +88,38 @@ export const MyWorkPanel = (): JSX.Element => {
             )}
           </section>
 
+          {/* ── Section B: My Assignments (Supporting Auditor) ── */}
+          <section>
+            <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
+              My Assignments
+            </h4>
+            {assignmentsLoading ? (
+              <p className="text-xs text-text-muted">Loading…</p>
+            ) : myAssignments.length === 0 ? (
+              <p className="text-xs text-text-muted">No supporting roles assigned.</p>
+            ) : (
+              <ul className="space-y-2">
+                {myAssignments.slice(0, 5).map((a) => (
+                  <li key={a.id}>
+                    <Link
+                      href={`/audit/engagements/${a.engagementId}`}
+                      className="flex items-start justify-between gap-2 rounded-md border border-border bg-white px-2.5 py-2 transition-colors hover:bg-surface-alt"
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate text-xs font-medium text-text-primary">{a.engagementTitle}</p>
+                        <p className="text-[10px] text-text-muted">{a.engagementReference}</p>
+                      </div>
+                      <span className="shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                        {a.role === 'lead_auditor' ? 'Lead' : 'Supporting'}
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* ── Section C: Pending Approvals ── */}
           <section>
             <h4 className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
               Pending Approvals
