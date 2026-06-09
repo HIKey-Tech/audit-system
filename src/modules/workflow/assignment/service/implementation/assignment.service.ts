@@ -11,7 +11,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { WorkflowAssignmentRole } from '../../../domain/enum/workflow.enum';
-import { WORKFLOW_ADMIN_ROLES, assertHasPermission } from '../../../utility/workflow.utility';
+import { assertHasPermission } from '../../../utility/workflow.utility';
 import { AssignStaffRequestDto, MyAssignmentsQueryDto } from '../../dto/request/assignment.request.dto';
 import {
   AssignmentResponseDto,

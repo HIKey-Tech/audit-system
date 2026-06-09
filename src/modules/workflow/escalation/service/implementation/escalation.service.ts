@@ -12,7 +12,7 @@ import {
   WorkflowEscalationEntityType,
   WorkflowEscalationReason,
 } from '../../../domain/enum/workflow.enum';
-import { WORKFLOW_ADMIN_ROLES, assertHasPermission, hasElapsed } from '../../../utility/workflow.utility';
+import { assertHasPermission, hasElapsed } from '../../../utility/workflow.utility';
 import { UpsertEscalationPolicyRequestDto } from '../../dto/request/escalation.request.dto';
 import {
   EscalationPolicyResponseDto,
@@ -360,7 +360,7 @@ export class EscalationService implements IEscalationService {
     }
     if (level === 3) return this._getUsersByRole('director');
     if (level === 4) return this._getUsersByRole('cae');
-    return this._getUsersByRole('audit_admin');
+    return this._getUsersByRole('audit_manager');
   }
 
   private async _getUsersByRole(roleName: string): Promise<NotificationTarget[]> {

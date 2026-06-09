@@ -1,18 +1,5 @@
 import { AppError } from '../../../shared/errors/app.error';
 
-export const WORKFLOW_ADMIN_ROLES: readonly string[] = ['super_admin', 'audit_admin'];
-export const WORKFLOW_APPROVER_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_lead'];
-
-export const assertHasRole = (
-  roles: string[],
-  allowedRoles: readonly string[],
-  message = 'Insufficient role for this workflow action',
-): void => {
-  if (!roles.some((role) => allowedRoles.includes(role))) {
-    throw AppError.forbidden(message);
-  }
-};
-
 /** Permission-based authorization gate (see audit.utility for rationale). */
 export const assertHasPermission = (
   permissions: string[],

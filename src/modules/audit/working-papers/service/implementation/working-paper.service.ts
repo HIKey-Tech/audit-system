@@ -10,7 +10,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, WP_REVIEWABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
+import { WP_REVIEWABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
 import {
   CreateWorkingPaperRequestDto,
   ImportWorkingPaperMetadataDto,

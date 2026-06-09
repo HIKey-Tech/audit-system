@@ -5,7 +5,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, AUDIT_WORK_ROLES, assertHasPermission } from '../../../utility/audit.utility';
+import { assertHasPermission } from '../../../utility/audit.utility';
 import { EvidenceQueryDto, UploadEvidenceDto } from '../../dto/request/evidence.request.dto';
 import { EvidenceResponseDto, mapEvidenceToResponse } from '../../dto/response/evidence.response.dto';
 import { IEvidenceService } from '../interface/evidence.service.interface';

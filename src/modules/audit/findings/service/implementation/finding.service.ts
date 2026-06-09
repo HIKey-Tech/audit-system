@@ -6,7 +6,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_REVIEW_ROLES, AUDIT_WORK_ROLES, FINDING_TRANSITIONS, assertHasPermission, assertTransition } from '../../../utility/audit.utility';
+import { FINDING_TRANSITIONS, assertHasPermission, assertTransition } from '../../../utility/audit.utility';
 import {
   CreateFindingRequestDto,
   FindingQueryDto,
@@ -53,8 +53,8 @@ export class FindingService implements IFindingService {
 
   async updateFinding(id: string, dto: UpdateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto> {
     const finding = await this._getFinding(id);
-    const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
-    if (finding.created_by_id !== actor.id && !isAdmin) throw AppError.forbidden('Only the creator or audit admin can update this finding');
+    const canOverrideOwnership = actor.permissions.includes('finding:read_all');
+    if (finding.created_by_id !== actor.id && !canOverrideOwnership) throw AppError.forbidden('Only the creator or an audit manager can update this finding');
     if (finding.status === FindingStatus.Closed) throw AppError.badRequest('Closed findings cannot be updated');
     if (dto.workingPaperId) {
       await this._assertWorkingPaperInEngagement(dto.workingPaperId, finding.engagement_id);

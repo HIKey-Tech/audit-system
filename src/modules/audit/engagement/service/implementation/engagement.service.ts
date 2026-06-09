@@ -7,7 +7,6 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { ActorContext, ChecklistProgress, FindingSeverityCount } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus, PlanStatus } from '../../../domain/enum/audit.enum';
 import {
-  AUDIT_ADMIN_ROLES,
   ENGAGEMENT_TRANSITIONS,
   assertHasPermission,
   assertTransition,

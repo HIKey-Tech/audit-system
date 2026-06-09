@@ -12,7 +12,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, ReportStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, AUDIT_REVIEW_ROLES, REPORT_EDITABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
+import { REPORT_EDITABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
 import { IReportTemplateService } from '../../../../settings/service/interface/report-template.service.interface';
 import { GenerateReportRequestDto } from '../../dto/request/report.request.dto';
@@ -86,8 +86,8 @@ export class ReportService implements IReportService {
 
   async updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto> {
     const report = await this._getReport(id);
-    const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
-    if (report.created_by_id !== actor.id && !isAdmin) throw AppError.forbidden('Only the creator or audit admin can update this report');
+    const canOverrideOwnership = actor.permissions.includes('report:approve');
+    if (report.created_by_id !== actor.id && !canOverrideOwnership) throw AppError.forbidden('Only the creator or a report approver can update this report');
     if (!REPORT_EDITABLE_STATUSES.includes(report.status as ReportStatus)) throw AppError.badRequest('Only draft or rejected reports can be updated');
 
     const updated = await prisma.audit_Report.update({
@@ -111,8 +111,8 @@ export class ReportService implements IReportService {
 
   async submitReportForApproval(id: string, actor: ActorContext): Promise<ReportResponseDto> {
     const report = await this._getReport(id);
-    const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
-    if (report.created_by_id !== actor.id && !isAdmin) throw AppError.forbidden('Only the creator or audit admin can submit this report');
+    const canOverrideOwnership = actor.permissions.includes('report:approve');
+    if (report.created_by_id !== actor.id && !canOverrideOwnership) throw AppError.forbidden('Only the creator or a report approver can submit this report');
 
     if (report.status === ReportStatus.Submitted) {
       await this._assertSubmittedReportHasNoApproval(id);

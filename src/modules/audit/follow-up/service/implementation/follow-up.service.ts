@@ -6,7 +6,7 @@ import { notificationQueueService } from '../../../../messaging/service/implemen
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, VerificationStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_REVIEW_ROLES, assertHasPermission } from '../../../utility/audit.utility';
+import { assertHasPermission } from '../../../utility/audit.utility';
 import {
   ManagementResponseRequestDto,
   VerifyRemediationRequestDto,

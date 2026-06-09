@@ -6,7 +6,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { UniverseStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, assertHasPermission } from '../../../utility/audit.utility';
+import { assertHasPermission } from '../../../utility/audit.utility';
 import {
   CreateUniverseRequestDto,
   UpdateUniverseRequestDto,

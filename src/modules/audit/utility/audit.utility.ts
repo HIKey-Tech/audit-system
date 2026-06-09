@@ -10,30 +10,11 @@ import {
   WorkingPaperStatus,
 } from '../domain/enum/audit.enum';
 
-export const AUDIT_ADMIN_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_manager', 'cae'];
-export const AUDIT_REVIEW_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_manager', 'audit_lead'];
-export const AUDIT_WORK_ROLES: readonly string[] = ['super_admin', 'audit_admin', 'audit_manager', 'audit_lead', 'auditor'];
 export const AUDITEE_ROLE = 'auditee';
 
 export const hasAuditeeRole = (roles: string[]): boolean =>
   roles.includes(AUDITEE_ROLE);
 
-export const assertHasRole = (
-  roles: string[],
-  allowedRoles: readonly string[],
-  message = 'Insufficient role for this audit action',
-): void => {
-  if (!roles.some((role) => allowedRoles.includes(role))) {
-    throw AppError.forbidden(message);
-  }
-};
-
-/**
- * Permission-based authorization gate. Prefer this over assertHasRole so that
- * roles remain fully customizable in Settings — a user is authorized by the
- * permissions their role(s) grant, never by a hardcoded role name. super_admin
- * is seeded with every permission slug, so it continues to pass.
- */
 export const assertHasPermission = (
   permissions: string[],
   required: string,

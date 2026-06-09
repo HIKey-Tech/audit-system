@@ -7,7 +7,7 @@ export enum UserStatus {
 
 export enum SystemRole {
   SUPER_ADMIN = 'super_admin',
-  AUDIT_ADMIN = 'audit_admin',
+  AUDIT_MANAGER = 'audit_manager',
   AUDIT_LEAD = 'audit_lead',
   AUDITOR = 'auditor',
   AUDITEE = 'auditee',

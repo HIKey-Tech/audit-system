@@ -9,7 +9,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { PlanStatus } from '../../../domain/enum/audit.enum';
-import { AUDIT_ADMIN_ROLES, assertHasPermission } from '../../../utility/audit.utility';
+import { assertHasPermission } from '../../../utility/audit.utility';
 import {
   AddPlanItemRequestDto,
   CreatePlanRequestDto,

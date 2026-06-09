@@ -22,7 +22,7 @@ import {
   WorkflowApprovalStepStatus,
   WorkflowEntityType,
 } from '../../../domain/enum/workflow.enum';
-import { WORKFLOW_ADMIN_ROLES, assertHasPermission } from '../../../utility/workflow.utility';
+import { assertHasPermission } from '../../../utility/workflow.utility';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
 import { ApprovalResponseDto, mapApprovalToResponse } from '../../dto/response/approval.response.dto';
 import { IApprovalService } from '../interface/approval.service.interface';

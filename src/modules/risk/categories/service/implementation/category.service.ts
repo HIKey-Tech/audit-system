@@ -4,7 +4,7 @@ import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
-import { assertHasPermission, RISK_ADMIN_ROLES } from '../../../utility/risk.utility';
+import { assertHasPermission } from '../../../utility/risk.utility';
 import {
   CreateRiskCategoryRequestDto,
   RiskCategoryQueryDto,
