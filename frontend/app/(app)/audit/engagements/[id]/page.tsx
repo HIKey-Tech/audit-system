@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { ArrowLeft } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -15,6 +16,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 
 import { engagementsApi } from '@/lib/api/audit';
+import { usePermissions } from '@/lib/hooks/usePermissions';
 import { OverviewTab } from '@/components/audit/engagements/OverviewTab';
 import { WorkingPapersTab } from '@/components/audit/engagements/WorkingPapersTab';
 import { EvidenceTab } from '@/components/audit/engagements/EvidenceTab';
@@ -52,6 +54,28 @@ export default function EngagementDetailPage(): JSX.Element {
     queryFn: () => engagementsApi.get(params!.id),
     enabled: Boolean(params?.id),
   });
+
+  const qc = useQueryClient();
+  const { canManageAuditProgramme } = usePermissions();
+
+  const NEXT_STATUS: Record<string, string | null> = {
+    planned: 'in_progress',
+    in_progress: 'under_review',
+    under_review: 'reported',
+    reported: 'closed',
+    closed: null,
+  };
+
+  const advanceMutation = useMutation({
+    mutationFn: (status: string) => engagementsApi.updateStatus(params!.id, status),
+    onSuccess: () => {
+      toast.success('Status updated');
+      qc.invalidateQueries({ queryKey: ['engagements', params?.id] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const nextStatus = data ? (NEXT_STATUS[data.status] ?? null) : null;
 
   if (isError) {
     return (
@@ -111,7 +135,12 @@ export default function EngagementDetailPage(): JSX.Element {
         }
       />
 
-      <StatusStepper engagement={data} />
+      <StatusStepper
+        engagement={data}
+        onAdvance={nextStatus ? () => advanceMutation.mutate(nextStatus) : undefined}
+        isAdvancing={advanceMutation.isPending}
+        canAdvance={canManageAuditProgramme && Boolean(nextStatus)}
+      />
 
       <div className="mb-6">
         <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
