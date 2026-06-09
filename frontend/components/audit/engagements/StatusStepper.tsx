@@ -16,6 +16,7 @@ import {
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Button } from '@/components/ui/Button';
 import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
@@ -61,7 +62,26 @@ const STAGES: StageConfig[] = [
   }
 ];
 
-export const StatusStepper = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
+const NEXT_STATUS: Record<string, string> = {
+  planned: 'in_progress',
+  in_progress: 'under_review',
+  under_review: 'reported',
+  reported: 'closed',
+};
+
+interface StatusStepperProps {
+  engagement: AuditEngagementDetail;
+  onAdvance?: () => void;
+  isAdvancing?: boolean;
+  canAdvance?: boolean;
+}
+
+export const StatusStepper = ({
+  engagement,
+  onAdvance,
+  isAdvancing = false,
+  canAdvance = false,
+}: StatusStepperProps): JSX.Element => {
   const [isOpen, setIsOpen] = useState(true);
   const activeIndex = STAGES.findIndex((s) => s.key === engagement.status);
 
@@ -181,6 +201,8 @@ export const StatusStepper = ({ engagement }: { engagement: AuditEngagementDetai
   };
 
   const tasks = getActiveTasks();
+  const allTasksDone = tasks.length > 0 && tasks.every((t) => t.done);
+  const nextStatus = NEXT_STATUS[engagement.status] ?? null;
   const progressPercent = Math.round((activeIndex / (STAGES.length - 1)) * 100);
 
   return (
@@ -320,6 +342,30 @@ export const StatusStepper = ({ engagement }: { engagement: AuditEngagementDetai
                   )}
                 </div>
               </div>
+
+              {/* Lifecycle Transition Button */}
+              {canAdvance && nextStatus && onAdvance && (
+                <div className="mt-4">
+                  <Button
+                    className="w-full"
+                    onClick={onAdvance}
+                    isLoading={isAdvancing}
+                    disabled={!allTasksDone && !isAdvancing}
+                    title={
+                      !allTasksDone
+                        ? 'Complete all tasks above before advancing'
+                        : undefined
+                    }
+                  >
+                    Move to {humanizeStatus(nextStatus)}
+                  </Button>
+                  {!allTasksDone && (
+                    <p className="mt-1.5 text-center text-[11px] text-text-muted">
+                      Complete all tasks above to unlock this action.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           )}
         </div>
