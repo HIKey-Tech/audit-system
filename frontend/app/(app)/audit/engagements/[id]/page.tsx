@@ -17,6 +17,7 @@ import { ErrorState } from '@/components/ui/ErrorState';
 
 import { engagementsApi } from '@/lib/api/audit';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { nextEngagementStatus } from '@/lib/utils/status';
 import { OverviewTab } from '@/components/audit/engagements/OverviewTab';
 import { WorkingPapersTab } from '@/components/audit/engagements/WorkingPapersTab';
 import { EvidenceTab } from '@/components/audit/engagements/EvidenceTab';
@@ -47,35 +48,29 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
 
 export default function EngagementDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
+  const id = params?.id ?? '';
   const [tab, setTab] = useState<TabKey>('overview');
 
   const { data, isLoading, isError, refetch } = useQuery({
-    queryKey: ['engagements', params?.id],
-    queryFn: () => engagementsApi.get(params!.id),
-    enabled: Boolean(params?.id),
+    queryKey: ['engagements', id],
+    queryFn: () => engagementsApi.get(id),
+    enabled: Boolean(id),
   });
 
   const qc = useQueryClient();
-  const { canManageAuditProgramme } = usePermissions();
-
-  const NEXT_STATUS: Record<string, string | null> = {
-    planned: 'in_progress',
-    in_progress: 'under_review',
-    under_review: 'reported',
-    reported: 'closed',
-    closed: null,
-  };
+  const { hasPermission } = usePermissions();
+  const canAdvanceEngagement = hasPermission('engagement:update');
 
   const advanceMutation = useMutation({
-    mutationFn: (status: string) => engagementsApi.updateStatus(params!.id, status),
+    mutationFn: (status: string) => engagementsApi.updateStatus(id, status),
     onSuccess: () => {
       toast.success('Status updated');
-      qc.invalidateQueries({ queryKey: ['engagements', params?.id] });
+      qc.invalidateQueries({ queryKey: ['engagements', id] });
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : 'Failed'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const nextStatus = data ? (NEXT_STATUS[data.status] ?? null) : null;
+  const nextStatus = data ? nextEngagementStatus(data.status) : null;
 
   if (isError) {
     return (
@@ -139,7 +134,7 @@ export default function EngagementDetailPage(): JSX.Element {
         engagement={data}
         onAdvance={nextStatus ? () => advanceMutation.mutate(nextStatus) : undefined}
         isAdvancing={advanceMutation.isPending}
-        canAdvance={canManageAuditProgramme && Boolean(nextStatus)}
+        canAdvance={canAdvanceEngagement && Boolean(nextStatus)}
       />
 
       <div className="mb-6">

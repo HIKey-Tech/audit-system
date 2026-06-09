@@ -17,7 +17,7 @@ import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
-import { humanizeStatus } from '@/lib/utils/status';
+import { humanizeStatus, nextEngagementStatus } from '@/lib/utils/status';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 type StageKey = 'planned' | 'in_progress' | 'under_review' | 'reported' | 'closed';
@@ -62,12 +62,6 @@ const STAGES: StageConfig[] = [
   }
 ];
 
-const NEXT_STATUS: Record<string, string> = {
-  planned: 'in_progress',
-  in_progress: 'under_review',
-  under_review: 'reported',
-  reported: 'closed',
-};
 
 interface StatusStepperProps {
   engagement: AuditEngagementDetail;
@@ -202,7 +196,7 @@ export const StatusStepper = ({
 
   const tasks = getActiveTasks();
   const allTasksDone = tasks.length > 0 && tasks.every((t) => t.done);
-  const nextStatus = NEXT_STATUS[engagement.status] ?? null;
+  const nextStatus = nextEngagementStatus(engagement.status);
   const progressPercent = Math.round((activeIndex / (STAGES.length - 1)) * 100);
 
   return (

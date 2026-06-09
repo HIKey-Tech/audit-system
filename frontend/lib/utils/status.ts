@@ -220,6 +220,17 @@ const STATUS_MEANINGS: Record<StatusEntity, Record<string, Omit<StatusMeaning, '
   },
 };
 
+/** Returns the next engagement status in the lifecycle, or null if already closed. */
+export function nextEngagementStatus(status: string): string | null {
+  const transitions: Record<string, string> = {
+    planned: 'in_progress',
+    in_progress: 'under_review',
+    under_review: 'reported',
+    reported: 'closed',
+  };
+  return transitions[status] ?? null;
+}
+
 export const statusMeaning = (
   entity: StatusEntity,
   status: string | null | undefined,
