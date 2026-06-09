@@ -12,6 +12,7 @@ import { dashboardApi } from '@/lib/api/dashboard';
 import { workflowApi } from '@/lib/api/workflow';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
+import { usePermissions } from '@/lib/hooks/usePermissions';
 import type { WorkflowAssignment } from '@/lib/types/domain';
 
 const ENTITY_LABEL: Record<string, string> = {
@@ -26,15 +27,16 @@ export const MyWorkPanel = (): JSX.Element => {
     queryFn: () => dashboardApi.getMyWork(),
   });
 
-  const { data: assignmentsData, isLoading: assignmentsLoading } = useQuery({
+  const { hasPermission } = usePermissions();
+  const canReadAssignments = hasPermission('assignment:read');
+
+  const { data: assignmentsData, isLoading: assignmentsLoading, isError: assignmentsError } = useQuery({
     queryKey: ['workflow', 'assignments', 'mine'],
     queryFn: () => workflowApi.listMine(),
+    enabled: canReadAssignments,
   });
 
-  const leadEngagementIds = new Set((data?.myActiveEngagements ?? []).map((e) => e.id));
-  const myAssignments: WorkflowAssignment[] = (assignmentsData ?? []).filter(
-    (a) => !leadEngagementIds.has(a.engagementId),
-  );
+  const myAssignments: WorkflowAssignment[] = assignmentsData ?? [];
 
   return (
     <Card>
@@ -95,6 +97,8 @@ export const MyWorkPanel = (): JSX.Element => {
             </h4>
             {assignmentsLoading ? (
               <p className="text-xs text-text-muted">Loading…</p>
+            ) : assignmentsError ? (
+              <p className="text-xs text-danger">Could not load assignments.</p>
             ) : myAssignments.length === 0 ? (
               <p className="text-xs text-text-muted">No supporting roles assigned.</p>
             ) : (
@@ -110,7 +114,7 @@ export const MyWorkPanel = (): JSX.Element => {
                         <p className="text-[10px] text-text-muted">{a.engagementReference}</p>
                       </div>
                       <span className="shrink-0 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                        {a.role === 'lead_auditor' ? 'Lead' : 'Supporting'}
+                        {humanizeStatus(a.role)}
                       </span>
                     </Link>
                   </li>
