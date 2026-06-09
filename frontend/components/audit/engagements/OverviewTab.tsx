@@ -1,35 +1,25 @@
 'use client';
 
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { ArrowRight, Users } from 'lucide-react';
-import { toast } from 'sonner';
+import { Users } from 'lucide-react';
 
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Avatar } from '@/components/ui/Avatar';
-import { engagementsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { formatDate, initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { statusMeaning } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
+import { usePermissions } from '@/lib/hooks/usePermissions';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 import { ManageAssignmentsSlideOver } from './ManageAssignmentsSlideOver';
 
-const NEXT_STATUS: Record<string, string | null> = {
-  planned: 'in_progress',
-  in_progress: 'under_review',
-  under_review: 'reported',
-  reported: 'closed',
-  closed: null,
-};
-
 export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
-  const qc = useQueryClient();
-  const canUpdateEngagement = usePermission('engagement:update');
+  const { user } = usePermissions();
   const canManageAssignments = usePermission('assignment:create') || usePermission('assignment:delete');
   const [showAssignments, setShowAssignments] = useState(false);
 
@@ -38,16 +28,12 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
     queryFn: () => workflowApi.listByEngagement(engagement.id),
   });
 
-  const next = NEXT_STATUS[engagement.status];
-
-  const update = useMutation({
-    mutationFn: (status: string) => engagementsApi.updateStatus(engagement.id, status),
-    onSuccess: () => {
-      toast.success('Status updated');
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
+  const myAssignment = assignments.data?.find((a) => a.userId === user.id);
+  const isOnlyAssigned =
+    myAssignment != null &&
+    engagement.leadAuditorId !== user.id &&
+    engagement.auditManagerId !== user.id &&
+    engagement.auditeeId !== user.id;
 
   const findingsBySeverity = (engagement.findings ?? []).reduce(
     (acc, f) => {
@@ -66,6 +52,18 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+      {isOnlyAssigned && myAssignment && (
+        <div className="col-span-full rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 px-4 py-3 flex items-center gap-2">
+          <Users className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
+          <p className="text-sm text-blue-800 dark:text-blue-300">
+            You are assigned as{' '}
+            <span className="font-semibold">
+              {humanizeStatus(myAssignment.role)}
+            </span>{' '}
+            on this engagement.
+          </p>
+        </div>
+      )}
       {(() => {
         const m = statusMeaning('engagement', engagement.status);
         return (
@@ -85,18 +83,6 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
         <CardHeader
           title="Engagement details"
           subtitle={`Reference ${engagement.referenceNumber}`}
-          action={
-            canUpdateEngagement && next ? (
-              <Button
-                size="sm"
-                leftIcon={<ArrowRight className="h-3.5 w-3.5" />}
-                onClick={() => update.mutate(next)}
-                isLoading={update.isPending}
-              >
-                Move to {humanizeStatus(next)}
-              </Button>
-            ) : null
-          }
         />
         <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
           {engagement.description && (
