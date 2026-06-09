@@ -130,6 +130,28 @@ export default function EngagementDetailPage(): JSX.Element {
         }
       />
 
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-text-secondary">
+        {data.planTitle ? (
+          <span>
+            From plan:{' '}
+            <span className="font-medium text-text-primary">{data.planTitle}</span>
+          </span>
+        ) : (
+          <span className="rounded bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+            Ad-hoc
+          </span>
+        )}
+        {data.universeName && (
+          <>
+            <span className="text-border">·</span>
+            <span>
+              Auditing:{' '}
+              <span className="font-medium text-text-primary">{data.universeName}</span>
+            </span>
+          </>
+        )}
+      </div>
+
       <StatusStepper
         engagement={data}
         onAdvance={nextStatus ? () => advanceMutation.mutate(nextStatus) : undefined}
