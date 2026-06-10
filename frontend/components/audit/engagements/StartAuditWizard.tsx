@@ -245,14 +245,19 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
               </Button>
             )}
             {step === 4 && (
-              <>
-                <Button variant="secondary" size="sm" onClick={finish}>
-                  Finish
-                </Button>
-                <Button size="sm" onClick={() => startNow.mutate()} isLoading={startNow.isPending}>
-                  Start audit now
-                </Button>
-              </>
+              <div className="flex flex-col items-end gap-2 w-full">
+                <div className="flex gap-2">
+                  <Button variant="ghost" size="sm" onClick={finish}>
+                    Save &amp; review later
+                  </Button>
+                  <Button size="sm" onClick={() => startNow.mutate()} isLoading={startNow.isPending}>
+                    Start fieldwork
+                  </Button>
+                </div>
+                <p className="text-[11px] text-text-muted text-right max-w-xs">
+                  &quot;Save &amp; review later&quot; leaves the engagement in Planning status. Start fieldwork when your team is ready.
+                </p>
+              </div>
             )}
           </div>
         </div>
