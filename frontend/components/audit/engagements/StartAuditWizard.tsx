@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
 import { UserPlus, Award, Check } from 'lucide-react';
@@ -327,15 +328,15 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
               </div>
               {planId && !planDetail.isLoading && (planDetail.data?.items ?? []).filter((i) => !i.engagementCreated).length === 0 && (
                 <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
-                  This plan has no items yet.{' '}
-                  <a
+                  No available items on this plan.{' '}
+                  <Link
                     href={`/audit/plans/${planId}`}
                     target="_blank"
                     rel="noreferrer"
                     className="underline font-medium"
                   >
                     Open the plan
-                  </a>
+                  </Link>
                   {' '}to add auditable entities, then come back here.
                 </p>
               )}
