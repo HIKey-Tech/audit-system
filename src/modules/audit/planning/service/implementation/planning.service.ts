@@ -37,6 +37,7 @@ export class PlanningService implements IPlanningService {
       data: {
         title: dto.title,
         year: dto.year,
+        description: dto.description ?? null,
         created_by_id: actor.id,
       },
       include: planInclude,
@@ -59,7 +60,7 @@ export class PlanningService implements IPlanningService {
 
   async updatePlan(planId: string, dto: UpdatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:update');
-    if (dto.title === undefined && dto.year === undefined) {
+    if (dto.title === undefined && dto.year === undefined && dto.description === undefined) {
       throw AppError.badRequest('At least one field is required');
     }
     await this._assertDraftPlan(planId);
@@ -69,6 +70,7 @@ export class PlanningService implements IPlanningService {
       data: {
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.year !== undefined && { year: dto.year }),
+        ...(dto.description !== undefined && { description: dto.description }),
       },
       include: planInclude,
     });

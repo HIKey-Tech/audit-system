@@ -4,11 +4,13 @@ import { AuditPriority, AuditType, PlanStatus } from '../../../domain/enum/audit
 export const CreatePlanRequestSchema = z.object({
   title: z.string().min(1).max(200),
   year: z.coerce.number().int().min(2000).max(2100),
+  description: z.string().max(2000).optional(),
 });
 
 export const UpdatePlanRequestSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
+  description: z.string().max(2000).optional(),
 });
 
 export const AddPlanItemRequestSchema = z.object({

@@ -436,6 +436,7 @@ model Audit_Plan {
   id               String    @id @default(uuid())
   title            String
   year             Int
+  description      String?   @db.NVarChar(Max)
   status           String    @default("draft") // draft | submitted | approved | rejected
   created_by_id    String
   approved_by_id   String?

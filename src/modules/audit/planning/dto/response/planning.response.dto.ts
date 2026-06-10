@@ -18,6 +18,7 @@ export interface PlanResponseDto {
   id: string;
   title: string;
   year: number;
+  description: string | null;
   status: string;
   createdById: string;
   approvedById: string | null;
@@ -60,6 +61,7 @@ export const mapPlanToResponse = (
     id: string;
     title: string;
     year: number;
+    description: string | null;
     status: string;
     created_by_id: string;
     approved_by_id: string | null;
@@ -74,6 +76,7 @@ export const mapPlanToResponse = (
   id: plan.id,
   title: plan.title,
   year: plan.year,
+  description: plan.description,
   status: plan.status,
   createdById: plan.created_by_id,
   approvedById: plan.approved_by_id,
