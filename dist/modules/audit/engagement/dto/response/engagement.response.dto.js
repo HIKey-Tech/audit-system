@@ -8,6 +8,7 @@ const mapEngagementToResponse = (engagement, extras) => ({
     title: engagement.title,
     universeId: engagement.universe_id,
     planItemId: engagement.plan_item_id,
+    planTitle: engagement.plan_item?.plan?.title ?? null,
     auditType: engagement.audit_type,
     status: engagement.status,
     priority: engagement.priority,

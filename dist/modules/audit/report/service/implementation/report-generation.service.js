@@ -124,6 +124,7 @@ class ReportGenerationService {
                 versionNumber: report.version_number,
                 issuedAt: report.issued_at,
                 createdById: report.created_by_id,
+                templateId: report.template_id ?? null,
             },
             engagement: {
                 id: report.engagement.id,
@@ -195,8 +196,19 @@ class ReportGenerationService {
             })),
         };
     }
-    async fetchTemplateAndConfig() {
-        const template = await this.reportTemplateService.getDefaultTemplate();
+    async fetchTemplateAndConfig(templateId) {
+        let template;
+        if (templateId) {
+            try {
+                template = await this.reportTemplateService.getTemplateById(templateId);
+            }
+            catch {
+                template = await this.reportTemplateService.getDefaultTemplate();
+            }
+        }
+        else {
+            template = await this.reportTemplateService.getDefaultTemplate();
+        }
         const configs = await this.systemConfigService.getAllConfig(false);
         const configMap = new Map(configs.map((c) => [c.key, c.value]));
         return {
@@ -209,7 +221,7 @@ class ReportGenerationService {
     // ─────────── DOCX generation ───────────
     async generateDocx(reportId) {
         const data = await this.fetchReportData(reportId);
-        const config = await this.fetchTemplateAndConfig();
+        const config = await this.fetchTemplateAndConfig(data.report.templateId);
         let approval = null;
         try {
             approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, reportId);
@@ -759,7 +771,7 @@ class ReportGenerationService {
     // ─────────── PDF generation ───────────
     async generatePdf(reportId) {
         const data = await this.fetchReportData(reportId);
-        const config = await this.fetchTemplateAndConfig();
+        const config = await this.fetchTemplateAndConfig(data.report.templateId);
         let approval = null;
         try {
             approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, reportId);

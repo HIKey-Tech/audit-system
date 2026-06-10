@@ -3,6 +3,8 @@ import { IDocumentService } from '../../../../document/service/interface/documen
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
+import { IReportTemplateService } from '../../../../settings/service/interface/report-template.service.interface';
+import { GenerateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
 import { ReportResponseDto } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
@@ -11,9 +13,10 @@ export declare class ReportService implements IReportService {
     private readonly followUpService;
     private readonly documentService;
     private readonly reportGenerationService;
+    private readonly reportTemplateService;
     private readonly approvalService;
-    constructor(followUpService: IFollowUpService, documentService: IDocumentService, reportGenerationService: IReportGenerationService, approvalService?: IApprovalService);
-    generateReport(engagementId: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
+    constructor(followUpService: IFollowUpService, documentService: IDocumentService, reportGenerationService: IReportGenerationService, reportTemplateService: IReportTemplateService, approvalService?: IApprovalService);
+    generateReport(engagementId: string, dto: GenerateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
     updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
     submitReportForApproval(id: string, actor: ActorContext): Promise<ReportResponseDto>;
     approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;

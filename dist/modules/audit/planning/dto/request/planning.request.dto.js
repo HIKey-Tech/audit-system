@@ -6,10 +6,12 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 exports.CreatePlanRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200),
     year: zod_1.z.coerce.number().int().min(2000).max(2100),
+    description: zod_1.z.string().max(2000).optional(),
 });
 exports.UpdatePlanRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
     year: zod_1.z.coerce.number().int().min(2000).max(2100).optional(),
+    description: zod_1.z.string().max(2000).optional(),
 });
 exports.AddPlanItemRequestSchema = zod_1.z.object({
     universeId: zod_1.z.string().uuid(),

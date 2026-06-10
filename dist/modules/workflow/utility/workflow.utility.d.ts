@@ -1,6 +1,3 @@
-export declare const WORKFLOW_ADMIN_ROLES: readonly string[];
-export declare const WORKFLOW_APPROVER_ROLES: readonly string[];
-export declare const assertHasRole: (roles: string[], allowedRoles: readonly string[], message?: string) => void;
 /** Permission-based authorization gate (see audit.utility for rationale). */
 export declare const assertHasPermission: (permissions: string[], required: string, message?: string) => void;
 export declare const hoursAgo: (hours: number) => Date;

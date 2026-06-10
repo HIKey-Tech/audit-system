@@ -6,6 +6,7 @@ export interface EngagementResponseDto {
     title: string;
     universeId: string;
     planItemId: string | null;
+    planTitle: string | null;
     auditType: string;
     status: string;
     priority: string;
@@ -50,6 +51,11 @@ export declare const mapEngagementToResponse: (engagement: {
     created_at: Date;
     updated_at: Date;
     universe?: Parameters<typeof mapUniverseToResponse>[0];
+    plan_item?: {
+        plan?: {
+            title: string;
+        } | null;
+    } | null;
 }, extras?: {
     findingCounts?: FindingSeverityCount[];
     workingPaperCount?: number;

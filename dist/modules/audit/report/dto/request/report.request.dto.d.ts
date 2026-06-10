@@ -1,18 +1,40 @@
 import { z } from 'zod';
-export declare const UpdateReportRequestSchema: z.ZodObject<{
+export declare const GenerateReportRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
     executiveSummary: z.ZodOptional<z.ZodString>;
     scope: z.ZodOptional<z.ZodString>;
     methodology: z.ZodOptional<z.ZodString>;
+    templateId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
+    templateId?: string | undefined;
     executiveSummary?: string | undefined;
 }, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
+    templateId?: string | undefined;
+    executiveSummary?: string | undefined;
+}>;
+export declare const UpdateReportRequestSchema: z.ZodObject<{
+    title: z.ZodOptional<z.ZodString>;
+    executiveSummary: z.ZodOptional<z.ZodString>;
+    scope: z.ZodOptional<z.ZodString>;
+    methodology: z.ZodOptional<z.ZodString>;
+    templateId: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    title?: string | undefined;
+    scope?: string | undefined;
+    methodology?: string | undefined;
+    templateId?: string | undefined;
+    executiveSummary?: string | undefined;
+}, {
+    title?: string | undefined;
+    scope?: string | undefined;
+    methodology?: string | undefined;
+    templateId?: string | undefined;
     executiveSummary?: string | undefined;
 }>;
 export declare const RejectReportRequestSchema: z.ZodObject<{
@@ -51,6 +73,7 @@ export declare const ReportQuerySchema: z.ZodObject<{
     sortBy?: "created_at" | "updated_at" | "status" | "title" | "issued_at" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
 }>;
+export type GenerateReportRequestDto = z.infer<typeof GenerateReportRequestSchema>;
 export type UpdateReportRequestDto = z.infer<typeof UpdateReportRequestSchema>;
 export type RejectReportRequestDto = z.infer<typeof RejectReportRequestSchema>;
 export type ExportReportQueryDto = z.infer<typeof ExportReportQuerySchema>;

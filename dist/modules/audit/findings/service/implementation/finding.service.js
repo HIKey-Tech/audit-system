@@ -43,9 +43,9 @@ class FindingService {
     }
     async updateFinding(id, dto, actor) {
         const finding = await this._getFinding(id);
-        const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
-        if (finding.created_by_id !== actor.id && !isAdmin)
-            throw app_error_1.AppError.forbidden('Only the creator or audit admin can update this finding');
+        const canOverrideOwnership = actor.permissions.includes('finding:read_all');
+        if (finding.created_by_id !== actor.id && !canOverrideOwnership)
+            throw app_error_1.AppError.forbidden('Only the creator or an audit manager can update this finding');
         if (finding.status === audit_enum_1.FindingStatus.Closed)
             throw app_error_1.AppError.badRequest('Closed findings cannot be updated');
         if (dto.workingPaperId) {

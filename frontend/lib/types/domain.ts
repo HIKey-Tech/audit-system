@@ -315,6 +315,7 @@ export interface AuditEngagement {
   title: string;
   universeId: string;
   planItemId: string | null;
+  planTitle: string | null;
   auditType: string;
   status: string;
   priority: string;

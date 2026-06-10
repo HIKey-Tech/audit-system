@@ -54,6 +54,7 @@ interface ReportData {
         versionNumber: number;
         issuedAt: Date | null;
         createdById: string;
+        templateId: string | null;
     };
     engagement: {
         id: string;
@@ -84,7 +85,7 @@ export declare class ReportGenerationService implements IReportGenerationService
     private readonly approvalService;
     constructor(reportTemplateService: IReportTemplateService, systemConfigService: ISystemConfigService, approvalService: IApprovalService);
     fetchReportData(reportId: string): Promise<ReportData>;
-    fetchTemplateAndConfig(): Promise<TemplateConfig>;
+    fetchTemplateAndConfig(templateId?: string | null): Promise<TemplateConfig>;
     generateDocx(reportId: string): Promise<Buffer>;
     private _buildDocxDocument;
     private _buildDocxHeader;

@@ -2,7 +2,8 @@
   "permissions": {
     "allow": [
       "Bash(npx prisma *)",
-      "Read(//tmp/**)"
+      "Read(//tmp/**)",
+      "Bash(dir C:\\\\Users\\\\david\\\\audit\\\\audit-system *)"
     ]
   }
 }

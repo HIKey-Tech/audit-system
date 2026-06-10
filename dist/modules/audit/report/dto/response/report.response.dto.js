@@ -14,6 +14,7 @@ const mapReportToResponse = (report) => ({
     version: report.version_number,
     versionNumber: report.version_number,
     documentId: report.document_id,
+    templateId: report.template_id ?? null,
     issuedAt: report.issued_at?.toISOString() ?? null,
     rejectionReason: report.rejection_reason,
     createdById: report.created_by_id,

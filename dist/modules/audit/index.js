@@ -40,7 +40,7 @@ const createAuditModule = () => {
     const findingService = new finding_service_1.FindingService();
     const followUpService = new follow_up_service_1.FollowUpService(documentService);
     const reportGenerationService = new report_generation_service_1.ReportGenerationService(report_template_service_1.reportTemplateService, system_config_service_1.systemConfigService, approval_service_1.workflowApprovalService);
-    const reportService = new report_service_1.ReportService(followUpService, documentService, reportGenerationService);
+    const reportService = new report_service_1.ReportService(followUpService, documentService, reportGenerationService, report_template_service_1.reportTemplateService);
     const universeController = new universe_controller_1.UniverseController(universeService);
     const planningController = new planning_controller_1.PlanningController(planningService);
     const engagementController = new engagement_controller_1.EngagementController(engagementService);

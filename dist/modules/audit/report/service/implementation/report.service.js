@@ -27,11 +27,13 @@ class ReportService {
     followUpService;
     documentService;
     reportGenerationService;
+    reportTemplateService;
     approvalService;
-    constructor(followUpService, documentService, reportGenerationService, approvalService = approval_service_1.workflowApprovalService) {
+    constructor(followUpService, documentService, reportGenerationService, reportTemplateService, approvalService = approval_service_1.workflowApprovalService) {
         this.followUpService = followUpService;
         this.documentService = documentService;
         this.reportGenerationService = reportGenerationService;
+        this.reportTemplateService = reportTemplateService;
         this.approvalService = approvalService;
     }
     async generateReport(engagementId, dto, actor) {
@@ -50,6 +52,10 @@ class ReportService {
         });
         if (existing)
             throw app_error_1.AppError.conflict('A report already exists for this engagement');
+        if (dto.templateId) {
+            // Throws notFound (→ 404) if the template id is invalid.
+            await this.reportTemplateService.getTemplateById(dto.templateId);
+        }
         const defaultExecutiveSummary = `Generated draft report for ${engagement.title}. Findings count: ${engagement.findings.length}.`;
         const defaultScope = `Scope based on engagement ${engagement.reference_number}.`;
         const defaultMethodology = 'Internal audit procedures performed using working papers, evidence, checklist testing, and finding validation.';
@@ -61,6 +67,7 @@ class ReportService {
                 scope: dto.scope ?? defaultScope,
                 methodology: dto.methodology ?? defaultMethodology,
                 created_by_id: actor.id,
+                template_id: dto.templateId ?? null,
             },
             include: reportInclude,
         });
@@ -70,9 +77,9 @@ class ReportService {
     }
     async updateReport(id, dto, actor) {
         const report = await this._getReport(id);
-        const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
-        if (report.created_by_id !== actor.id && !isAdmin)
-            throw app_error_1.AppError.forbidden('Only the creator or audit admin can update this report');
+        const canOverrideOwnership = actor.permissions.includes('report:approve');
+        if (report.created_by_id !== actor.id && !canOverrideOwnership)
+            throw app_error_1.AppError.forbidden('Only the creator or a report approver can update this report');
         if (!audit_utility_1.REPORT_EDITABLE_STATUSES.includes(report.status))
             throw app_error_1.AppError.badRequest('Only draft or rejected reports can be updated');
         const updated = await prisma_client_1.prisma.audit_Report.update({
@@ -82,6 +89,7 @@ class ReportService {
                 ...(dto.executiveSummary !== undefined && { executive_summary: dto.executiveSummary }),
                 ...(dto.scope !== undefined && { scope: dto.scope }),
                 ...(dto.methodology !== undefined && { methodology: dto.methodology }),
+                ...(dto.templateId !== undefined && { template_id: dto.templateId }),
                 version_number: { increment: 1 },
                 status: audit_enum_1.ReportStatus.Draft,
             },
@@ -93,9 +101,9 @@ class ReportService {
     }
     async submitReportForApproval(id, actor) {
         const report = await this._getReport(id);
-        const isAdmin = actor.roles.some((role) => role === 'super_admin' || role === 'audit_admin');
-        if (report.created_by_id !== actor.id && !isAdmin)
-            throw app_error_1.AppError.forbidden('Only the creator or audit admin can submit this report');
+        const canOverrideOwnership = actor.permissions.includes('report:approve');
+        if (report.created_by_id !== actor.id && !canOverrideOwnership)
+            throw app_error_1.AppError.forbidden('Only the creator or a report approver can submit this report');
         if (report.status === audit_enum_1.ReportStatus.Submitted) {
             await this._assertSubmittedReportHasNoApproval(id);
         }

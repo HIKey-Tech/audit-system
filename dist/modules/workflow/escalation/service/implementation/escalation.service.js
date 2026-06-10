@@ -285,7 +285,7 @@ class EscalationService {
             return this._getUsersByRole('director');
         if (level === 4)
             return this._getUsersByRole('cae');
-        return this._getUsersByRole('audit_admin');
+        return this._getUsersByRole('audit_manager');
     }
     async _getUsersByRole(roleName) {
         return prisma_client_1.prisma.user.findMany({

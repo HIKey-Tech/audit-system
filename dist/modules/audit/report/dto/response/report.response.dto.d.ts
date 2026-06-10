@@ -11,6 +11,7 @@ export interface ReportResponseDto {
     version: number;
     versionNumber: number;
     documentId: string | null;
+    templateId: string | null;
     issuedAt: string | null;
     rejectionReason: string | null;
     createdById: string;
@@ -32,6 +33,7 @@ export declare const mapReportToResponse: (report: {
     status: string;
     version_number: number;
     document_id: string | null;
+    template_id: string | null;
     issued_at: Date | null;
     rejection_reason: string | null;
     created_by_id: string;

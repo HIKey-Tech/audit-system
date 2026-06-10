@@ -11,7 +11,7 @@ var UserStatus;
 var SystemRole;
 (function (SystemRole) {
     SystemRole["SUPER_ADMIN"] = "super_admin";
-    SystemRole["AUDIT_ADMIN"] = "audit_admin";
+    SystemRole["AUDIT_MANAGER"] = "audit_manager";
     SystemRole["AUDIT_LEAD"] = "audit_lead";
     SystemRole["AUDITOR"] = "auditor";
     SystemRole["AUDITEE"] = "auditee";

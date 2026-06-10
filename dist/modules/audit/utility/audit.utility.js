@@ -1,26 +1,11 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.assertHasPermission = exports.assertHasRole = exports.hasAuditeeRole = exports.AUDITEE_ROLE = exports.AUDIT_WORK_ROLES = exports.AUDIT_REVIEW_ROLES = exports.AUDIT_ADMIN_ROLES = void 0;
+exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.assertHasPermission = exports.hasAuditeeRole = exports.AUDITEE_ROLE = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const audit_enum_1 = require("../domain/enum/audit.enum");
-exports.AUDIT_ADMIN_ROLES = ['super_admin', 'audit_admin', 'audit_manager', 'cae'];
-exports.AUDIT_REVIEW_ROLES = ['super_admin', 'audit_admin', 'audit_manager', 'audit_lead'];
-exports.AUDIT_WORK_ROLES = ['super_admin', 'audit_admin', 'audit_manager', 'audit_lead', 'auditor'];
 exports.AUDITEE_ROLE = 'auditee';
 const hasAuditeeRole = (roles) => roles.includes(exports.AUDITEE_ROLE);
 exports.hasAuditeeRole = hasAuditeeRole;
-const assertHasRole = (roles, allowedRoles, message = 'Insufficient role for this audit action') => {
-    if (!roles.some((role) => allowedRoles.includes(role))) {
-        throw app_error_1.AppError.forbidden(message);
-    }
-};
-exports.assertHasRole = assertHasRole;
-/**
- * Permission-based authorization gate. Prefer this over assertHasRole so that
- * roles remain fully customizable in Settings — a user is authorized by the
- * permissions their role(s) grant, never by a hardcoded role name. super_admin
- * is seeded with every permission slug, so it continues to pass.
- */
 const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
     if (!permissions.includes(required)) {
         throw app_error_1.AppError.forbidden(message);

@@ -20,6 +20,7 @@ const mapPlanToResponse = (plan, warnings) => ({
     id: plan.id,
     title: plan.title,
     year: plan.year,
+    description: plan.description,
     status: plan.status,
     createdById: plan.created_by_id,
     approvedById: plan.approved_by_id,

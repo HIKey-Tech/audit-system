@@ -10,7 +10,10 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const engagement_response_dto_1 = require("../../dto/response/engagement.response.dto");
-const engagementInclude = { universe: true };
+const engagementInclude = {
+    universe: true,
+    plan_item: { include: { plan: { select: { id: true, title: true } } } },
+};
 class EngagementService {
     checklistService;
     constructor(checklistService) {

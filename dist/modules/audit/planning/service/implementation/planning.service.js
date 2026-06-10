@@ -28,6 +28,7 @@ class PlanningService {
             data: {
                 title: dto.title,
                 year: dto.year,
+                description: dto.description ?? null,
                 created_by_id: actor.id,
             },
             include: planInclude,
@@ -44,7 +45,7 @@ class PlanningService {
     }
     async updatePlan(planId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:update');
-        if (dto.title === undefined && dto.year === undefined) {
+        if (dto.title === undefined && dto.year === undefined && dto.description === undefined) {
             throw app_error_1.AppError.badRequest('At least one field is required');
         }
         await this._assertDraftPlan(planId);
@@ -53,6 +54,7 @@ class PlanningService {
             data: {
                 ...(dto.title !== undefined && { title: dto.title }),
                 ...(dto.year !== undefined && { year: dto.year }),
+                ...(dto.description !== undefined && { description: dto.description }),
             },
             include: planInclude,
         });

@@ -3,21 +3,27 @@ import { AuditPriority, AuditType, PlanStatus } from '../../../domain/enum/audit
 export declare const CreatePlanRequestSchema: z.ZodObject<{
     title: z.ZodString;
     year: z.ZodNumber;
+    description: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title: string;
     year: number;
+    description?: string | undefined;
 }, {
     title: string;
     year: number;
+    description?: string | undefined;
 }>;
 export declare const UpdatePlanRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
     year: z.ZodOptional<z.ZodNumber>;
+    description: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
+    description?: string | undefined;
     year?: number | undefined;
 }, {
     title?: string | undefined;
+    description?: string | undefined;
     year?: number | undefined;
 }>;
 export declare const AddPlanItemRequestSchema: z.ZodObject<{

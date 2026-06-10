@@ -21,7 +21,7 @@ class ReportController {
          * @desc   Generate audit report
          * @access Private - audit:write
          */
-        this.router.post('/engagements/:id/report/generate', (0, auth_middleware_1.requirePermission)('report:create'), this._generateReport.bind(this));
+        this.router.post('/engagements/:id/report/generate', (0, auth_middleware_1.requirePermission)('report:create'), (0, validate_middleware_1.validate)(report_request_dto_1.GenerateReportRequestSchema), this._generateReport.bind(this));
         /**
          * @route  GET /audit/engagements/:id/report
          * @desc   Get audit report for engagement
