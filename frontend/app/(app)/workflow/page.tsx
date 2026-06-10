@@ -218,6 +218,7 @@ const InboxTab = ({
 // Assignments tab
 // ============================================================
 const AssignmentsTab = (): JSX.Element => {
+  const router = useRouter();
   const qc = useQueryClient();
   const { isAdminLevel, isAuditLead } = usePermissions();
   const canAssign = isAdminLevel || isAuditLead;
@@ -263,6 +264,7 @@ const AssignmentsTab = (): JSX.Element => {
         rowKey={(a) => a.id}
         isLoading={mine.isLoading}
         emptyState={<EmptyState icon={<Users className="h-4 w-4" />} title="No assignments yet" />}
+        onRowClick={(a) => router.push(`/audit/engagements/${a.engagementId}`)}
       />
       <NewAssignmentSlideOver open={open} onClose={() => setOpen(false)} onSaved={() => qc.invalidateQueries({ queryKey: ['workflow', 'assignments'] })} />
     </>
