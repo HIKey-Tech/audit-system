@@ -64,6 +64,7 @@ export interface PlansListQuery {
 export interface CreatePlanDto {
   title: string;
   year: number;
+  description?: string;
 }
 
 export interface AddPlanItemDto {
