@@ -118,11 +118,6 @@ export const StatusStepper = ({
             done: !!(engagement.plannedStartDate && engagement.plannedEndDate && engagement.slaDeadline),
             hint: `Start: ${engagement.plannedStartDate ? new Date(engagement.plannedStartDate).toLocaleDateString() : 'None'}, SLA: ${engagement.slaDeadline ? new Date(engagement.slaDeadline).toLocaleDateString() : 'None'}`
           },
-          {
-            label: 'Transition status to "In Progress" to begin fieldwork',
-            done: false,
-            hint: 'Use the "Move to In Progress" button in the Overview tab to initiate testing.'
-          }
         ];
       case 'in_progress':
         return [
@@ -182,11 +177,6 @@ export const StatusStepper = ({
               ? 'Auditee must upload remediation evidence, and auditor must verify and close the findings.' 
               : 'All findings resolved.'
           },
-          {
-            label: 'Verify and transition status to "Closed" to archive',
-            done: false,
-            hint: 'Once all findings are verified, close the engagement to finalize operations.'
-          }
         ];
       case 'closed':
       default:
