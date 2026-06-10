@@ -306,24 +306,40 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
           </div>
 
           {mode === 'plan' ? (
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <FormField label="Plan" required>
-                <Select value={planId} onChange={(e) => { setPlanId(e.target.value); setPlanItemId(''); }}>
-                  <option value="">Select plan…</option>
-                  {plans.data?.items.map((p) => (
-                    <option key={p.id} value={p.id}>{p.title} ({p.year})</option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="Plan item" required>
-                <Select value={planItemId} onChange={(e) => setPlanItemId(e.target.value)} disabled={!planId || planDetail.isLoading}>
-                  <option value="">Select item…</option>
-                  {(planDetail.data?.items ?? []).filter((i) => !i.engagementCreated).map((it) => (
-                    <option key={it.id} value={it.id}>{it.universeName} ({it.auditType})</option>
-                  ))}
-                </Select>
-              </FormField>
-            </div>
+            <>
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <FormField label="Plan" required>
+                  <Select value={planId} onChange={(e) => { setPlanId(e.target.value); setPlanItemId(''); }}>
+                    <option value="">Select plan…</option>
+                    {plans.data?.items.map((p) => (
+                      <option key={p.id} value={p.id}>{p.title} ({p.year})</option>
+                    ))}
+                  </Select>
+                </FormField>
+                <FormField label="Plan item" required>
+                  <Select value={planItemId} onChange={(e) => setPlanItemId(e.target.value)} disabled={!planId || planDetail.isLoading}>
+                    <option value="">Select item…</option>
+                    {(planDetail.data?.items ?? []).filter((i) => !i.engagementCreated).map((it) => (
+                      <option key={it.id} value={it.id}>{it.universeName} ({it.auditType})</option>
+                    ))}
+                  </Select>
+                </FormField>
+              </div>
+              {planId && !planDetail.isLoading && (planDetail.data?.items ?? []).filter((i) => !i.engagementCreated).length === 0 && (
+                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                  This plan has no items yet.{' '}
+                  <a
+                    href={`/audit/plans/${planId}`}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="underline font-medium"
+                  >
+                    Open the plan
+                  </a>
+                  {' '}to add auditable entities, then come back here.
+                </p>
+              )}
+            </>
           ) : (
             <>
               <FormField label="Auditable entity" required>
