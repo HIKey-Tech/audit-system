@@ -27,6 +27,19 @@ export const authApi = {
     });
   },
 
+  async logoutAll(): Promise<void> {
+    await api.post<void>('/auth/logout-all', {});
+    await this.logout();
+  },
+
+  async regenerateBackupCodes(): Promise<string[]> {
+    const result = await api.post<{ backupCodes: string[] }>(
+      '/auth/2fa/backup-codes/regenerate',
+      {},
+    );
+    return result.backupCodes;
+  },
+
   async me(): Promise<UserDto> {
     return api.get<UserDto>('/users/me');
   },

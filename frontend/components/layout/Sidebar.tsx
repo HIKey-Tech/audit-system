@@ -331,15 +331,20 @@ export const Sidebar = (): JSX.Element => {
         {/* User block */}
         <div className="border-t border-white/10 px-3 py-3">
           <div className={cn('flex items-center gap-3', isCollapsed && 'lg:hidden')}>
-            <Avatar initials={initials} tone="green" size="sm" />
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-xs font-semibold">
-                {session.displayName || `${session.firstName} ${session.lastName}`}
-              </p>
-              <p className="truncate text-[10px] uppercase tracking-wider text-white/60">
-                {primaryRole.replace(/_/g, ' ')}
-              </p>
-            </div>
+            <Link
+              href="/profile"
+              className="flex min-w-0 flex-1 items-center gap-3 rounded-md py-1 pr-2 hover:bg-white/10"
+            >
+              <Avatar initials={initials} tone="green" size="sm" />
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-xs font-semibold">
+                  {session.displayName || `${session.firstName} ${session.lastName}`}
+                </p>
+                <p className="truncate text-[10px] uppercase tracking-wider text-white/60">
+                  {primaryRole.replace(/_/g, ' ')}
+                </p>
+              </div>
+            </Link>
             <button
               type="button"
               onClick={onLogout}
@@ -353,7 +358,9 @@ export const Sidebar = (): JSX.Element => {
 
           {isCollapsed && (
             <div className="flex-col items-center gap-2 lg:flex hidden">
-              <Avatar initials={initials} tone="green" size="sm" />
+              <Link href="/profile" aria-label="Profile" className="rounded-full hover:ring-2 hover:ring-white/20">
+                <Avatar initials={initials} tone="green" size="sm" />
+              </Link>
               <button
                 type="button"
                 onClick={onLogout}

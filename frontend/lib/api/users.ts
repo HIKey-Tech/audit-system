@@ -34,11 +34,19 @@ export interface UpdateUserDto {
   skills?: string[];
 }
 
+export interface ChangePasswordDto {
+  currentPassword: string;
+  newPassword: string;
+}
+
 export const usersApi = {
   list: (query?: UsersListQuery) =>
     api.getPaginated<UserDto>('/users', query as Record<string, string | number | boolean | undefined>),
   get: (id: string) => api.get<UserDto>(`/users/${id}`),
   me: () => api.get<UserDto>('/users/me'),
+  updateMe: (dto: UpdateUserDto) => api.patch<UserDto>('/users/me', dto),
+  changePassword: (dto: ChangePasswordDto) =>
+    api.post<void>('/users/me/change-password', dto),
   create: (dto: CreateUserDto) => api.post<UserDto>('/users', dto),
   update: (id: string, dto: UpdateUserDto) => api.patch<UserDto>(`/users/${id}`, dto),
   activate: (id: string) => api.post<UserDto>(`/users/${id}/activate`, {}),

@@ -29,6 +29,7 @@ const TITLE_MAP: { match: RegExp; title: string }[] = [
   { match: /^\/predictive/, title: 'Predictive' },
   { match: /^\/settings/, title: 'Settings' },
   { match: /^\/users/, title: 'Users' },
+  { match: /^\/profile/, title: 'Profile' },
 ];
 
 const titleFor = (pathname: string | null): string => {
@@ -164,14 +165,14 @@ export const Header = (): JSX.Element => {
           )}
         </div>
 
-        <div className="hidden sm:block text-right">
+        <Link href="/profile" className="hidden rounded-md px-2 py-1 text-right transition-colors hover:bg-surface-alt sm:block">
           <p className="text-xs font-semibold text-text-primary">
             {session.displayName || `${session.firstName} ${session.lastName}`}
           </p>
           <p className="text-[10px] uppercase tracking-wider text-text-muted">
             {(session.roles[0] ?? 'viewer').replace(/_/g, ' ')}
           </p>
-        </div>
+        </Link>
       </div>
     </header>
   );
