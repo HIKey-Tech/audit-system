@@ -62,7 +62,7 @@ export default function RequestsPage(): JSX.Element {
     <div>
       <PageHeader
         title="Requests"
-        subtitle="Send a request to colleagues for approval, sign-off, or review."
+        subtitle="Ad-hoc approval, sign-off, or review requests between colleagues. For approving audit records, see Audit Approvals."
         actions={
           canCreate ? (
             <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setCreateOpen(true)}>

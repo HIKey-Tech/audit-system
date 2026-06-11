@@ -87,6 +87,7 @@ export interface NavVisibility {
   reports: boolean;
   riskRegister: boolean;
   workflow: boolean;
+  escalationPolicies: boolean;
   requests: boolean;
   documents: boolean;
   notifications: boolean;
@@ -109,6 +110,7 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
       reports: false,
       riskRegister: false,
       workflow: false,
+      escalationPolicies: false,
       requests: false,
       documents: false,
       notifications: false,
@@ -130,6 +132,7 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
     reports: userHasPermission(user, 'report:read'),
     riskRegister: userHasPermission(user, 'risk:read'),
     workflow: userHasPermission(user, 'approval:read') || userHasPermission(user, 'assignment:read'),
+    escalationPolicies: userHasPermission(user, 'escalation_policy:read'),
     requests: userHasPermission(user, 'request:read'),
     documents: userHasPermission(user, 'document:read'),
     notifications: true,

@@ -10,6 +10,8 @@ import {
   Globe,
   ClipboardList,
   Briefcase,
+  Inbox,
+  AlertOctagon,
   AlertTriangle,
   FileText,
   ShieldAlert,
@@ -21,6 +23,8 @@ import {
   LogOut,
   ChevronsLeft,
   ChevronsRight,
+  ChevronDown,
+  SlidersHorizontal,
   Users,
   Send,
 } from 'lucide-react';
@@ -49,33 +53,53 @@ interface NavLink {
   description?: string;
 }
 
-interface NavDivider {
-  type: 'divider';
-  label?: string;
-  /** If provided, hide this divider when ALL listed visKeys are false. */
-  sectionKeys?: (keyof NavVisibility)[];
+interface NavGroup {
+  type: 'group';
+  label: string;
+  icon: typeof LayoutDashboard;
+  description?: string;
+  children: NavLink[];
 }
 
-type NavItem = NavLink | NavDivider;
+type NavItem = NavLink | NavGroup;
 
 const NAV: NavItem[] = [
-  { type: 'divider', label: 'Workspace' },
-  // Workspace — what you act on day to day, in priority order.
   { type: 'link', label: 'Home', href: '/dashboard', icon: LayoutDashboard, visKey: 'dashboard', description: 'Your personalized overview and to-dos.' },
-  { type: 'link', label: 'Workflow', href: '/workflow', icon: CheckSquare, matchPrefix: '/workflow', visKey: 'workflow', description: 'Your approval inbox, staff assignments, and escalation tracking.' },
-  { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests', description: 'Information and evidence requests to and from auditees.' },
-  { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
-  { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
-  { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
 
-  { type: 'divider', label: 'Audit Library', sectionKeys: ['auditPlans', 'auditUniverse', 'reports', 'riskRegister', 'documents'] },
-  { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit plans and their approval status.' },
-  { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse', description: 'Registry of auditable entities and their risk scores.' },
-  { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
+  {
+    type: 'group',
+    label: 'Workflow',
+    icon: CheckSquare,
+    description: 'Approvals, assignments, escalations, and auditee requests.',
+    children: [
+      // Each is its own route under /workflow; all are sub-features of the backend workflow module.
+      { type: 'link', label: 'Audit Approvals', href: '/workflow/approvals', icon: Inbox, matchPrefix: '/workflow/approvals', visKey: 'workflow', description: 'Approve audit records — plans, engagements, and reports — awaiting your sign-off.' },
+      { type: 'link', label: 'Assignments', href: '/workflow/assignments', icon: Users, matchPrefix: '/workflow/assignments', visKey: 'workflow', description: 'Staff assigned to engagements.' },
+      { type: 'link', label: 'Escalations', href: '/workflow/escalations', icon: AlertOctagon, matchPrefix: '/workflow/escalations', visKey: 'workflow', description: 'Overdue items that have been escalated.' },
+      { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests', description: 'Ad-hoc approval & sign-off requests you send to or receive from colleagues.' },
+      { type: 'link', label: 'Escalation Policies', href: '/workflow/policies', icon: SlidersHorizontal, matchPrefix: '/workflow/policies', visKey: 'escalationPolicies', description: 'Configure wait times before escalation per audit type.' },
+    ],
+  },
+
+  {
+    type: 'group',
+    label: 'Audit',
+    icon: Briefcase,
+    description: 'Engagements, findings, plans, universe, and reports.',
+    children: [
+      // Ordered to follow the audit lifecycle: scope the universe → plan → execute
+      // engagements → raise findings → issue reports.
+      { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse', description: 'Registry of auditable entities and their risk scores.' },
+      { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit plans and their approval status.' },
+      { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
+      { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
+      { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
+    ],
+  },
+
+  { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
   { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister', description: 'Enterprise risks with likelihood × impact scoring.' },
   { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents', description: 'Files and evidence attached to audit records.' },
-
-  { type: 'divider', label: 'Administration', sectionKeys: ['analytics', 'auditLogs', 'users', 'settings'] },
   { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics', description: 'Dashboards and metrics on the audit programme.' },
   { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs', description: 'Tamper-evident trail of every action in the system.' },
   { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users', description: 'User accounts, roles, and permissions.' },
@@ -87,8 +111,9 @@ export const Sidebar = (): JSX.Element => {
   const router = useRouter();
   const session = useSession();
   const { nav } = usePermissions();
-  const { isOpen, setIsOpen, isCollapsed, toggleCollapse } = useLayout();
+  const { isOpen, setIsOpen, isCollapsed, setIsCollapsed, toggleCollapse } = useLayout();
   const [signingOut, setSigningOut] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Set<string>>(new Set());
 
   const { data: unread } = useQuery({
     queryKey: ['notifications', 'unread-count'],
@@ -97,26 +122,31 @@ export const Sidebar = (): JSX.Element => {
     staleTime: 30_000,
   });
 
-  // Filter nav items based on role visibility
+  // Filter nav items based on role visibility. For groups, drop hidden children
+  // and remove the whole group if nothing remains visible.
   const visibleNav = useMemo(() => {
-    return NAV.filter((item) => {
-      if (item.type === 'link') {
-        // If no visKey, always show
-        if (!item.visKey) return true;
-        return nav[item.visKey];
+    return NAV.map((item) => {
+      if (item.type === 'group') {
+        const children = item.children.filter((c) => !c.visKey || nav[c.visKey]);
+        return children.length ? { ...item, children } : null;
       }
-      // Divider: show if at least one child section key is visible
-      if (item.sectionKeys) {
-        return item.sectionKeys.some((k) => nav[k]);
-      }
-      // Dividers without section keys — show
-      return true;
-    });
+      if (!item.visKey || nav[item.visKey]) return item;
+      return null;
+    }).filter((item): item is NavItem => item !== null);
   }, [nav]);
 
-  const isActive = (item: NavLink) => {
+  const isActive = (item: NavLink): boolean => {
     if (item.matchPrefix) return pathname?.startsWith(item.matchPrefix) ?? false;
     return pathname === item.href;
+  };
+
+  const toggleGroup = (label: string) => {
+    setOpenGroups((prev) => {
+      const next = new Set(prev);
+      if (next.has(label)) next.delete(label);
+      else next.add(label);
+      return next;
+    });
   };
 
   const onLogout = async () => {
@@ -133,6 +163,119 @@ export const Sidebar = (): JSX.Element => {
 
   const initials = initialsFromName(session.firstName, session.lastName, session.displayName);
   const primaryRole = session.roles[0] ?? 'viewer';
+
+  const renderLink = (item: NavLink, indented = false): JSX.Element => {
+    const Icon = item.icon;
+    const active = isActive(item);
+    const unreadCount = item.badgeKey === 'notifications' ? (unread?.unread ?? 0) : 0;
+
+    return (
+      <li key={item.href}>
+        <Tooltip content={item.description} side="right">
+          <Link
+            href={item.href}
+            className={cn(
+              'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              active
+                ? 'bg-white text-primary'
+                : 'text-white/85 hover:bg-white/10 hover:text-white',
+              indented && 'pl-9',
+              isCollapsed && 'lg:justify-center lg:px-0',
+            )}
+            title={isCollapsed ? item.label : undefined}
+          >
+            {active && !isCollapsed && (
+              <span
+                className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent lg:block hidden"
+                aria-hidden
+              />
+            )}
+            <Icon
+              className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-white')}
+              aria-hidden
+            />
+            {/* Always show text on mobile, hide only on desktop collapsed */}
+            <span className={cn('flex-1 truncate', isCollapsed && 'lg:hidden')}>{item.label}</span>
+            {item.comingSoon && (
+              <span className={cn('text-[9px] font-semibold uppercase tracking-wide text-white/50', isCollapsed && 'lg:hidden')}>
+                Soon
+              </span>
+            )}
+            {!item.comingSoon && unreadCount > 0 && (
+              <span className={cn('inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold', isCollapsed && 'lg:hidden')}>
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
+            )}
+            {isCollapsed && unreadCount > 0 && (
+              <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
+            )}
+          </Link>
+        </Tooltip>
+      </li>
+    );
+  };
+
+  const renderGroup = (item: NavGroup): JSX.Element => {
+    const Icon = item.icon;
+    const hasActiveChild = item.children.some((child) => isActive(child));
+    const expanded = openGroups.has(item.label) || hasActiveChild;
+
+    const onParentClick = () => {
+      // When the sidebar is icon-collapsed, expand it first so the children are usable.
+      if (isCollapsed) {
+        setIsCollapsed(false);
+        if (!openGroups.has(item.label)) toggleGroup(item.label);
+        return;
+      }
+      toggleGroup(item.label);
+    };
+
+    return (
+      <li key={`group-${item.label}`}>
+        <Tooltip content={item.description} side="right">
+          <button
+            type="button"
+            onClick={onParentClick}
+            aria-expanded={expanded}
+            className={cn(
+              'group relative flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+              hasActiveChild ? 'text-white' : 'text-white/85 hover:bg-white/10 hover:text-white',
+              isCollapsed && 'lg:justify-center lg:px-0',
+            )}
+            title={isCollapsed ? item.label : undefined}
+          >
+            {hasActiveChild && !isCollapsed && (
+              <span
+                className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent lg:block hidden"
+                aria-hidden
+              />
+            )}
+            <Icon
+              className={cn('h-4 w-4 shrink-0', hasActiveChild ? 'text-accent' : 'text-white')}
+              aria-hidden
+            />
+            <span className={cn('flex-1 truncate text-left', isCollapsed && 'lg:hidden')}>{item.label}</span>
+            <ChevronDown
+              className={cn(
+                'h-4 w-4 shrink-0 transition-transform duration-200',
+                expanded && 'rotate-180',
+                isCollapsed && 'lg:hidden',
+              )}
+              aria-hidden
+            />
+            {isCollapsed && hasActiveChild && (
+              <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
+            )}
+          </button>
+        </Tooltip>
+        {expanded && (
+          <ul className={cn('mt-0.5 space-y-0.5', isCollapsed && 'lg:hidden')}>
+            {item.children.map((child) => renderLink(child, true))}
+          </ul>
+        )}
+      </li>
+    );
+  };
 
   return (
     <>
@@ -179,71 +322,9 @@ export const Sidebar = (): JSX.Element => {
         {/* Nav */}
         <nav className="flex-1 overflow-y-auto py-3 scrollbar-thin">
           <ul className="space-y-0.5 px-2">
-            {visibleNav.map((item, i) => {
-              if (item.type === 'divider') {
-                return (
-                  <li key={`div-${i}`} className="px-2 pt-4 pb-1">
-                    {!isCollapsed && item.label && (
-                      <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
-                        {item.label}
-                      </span>
-                    )}
-                    {((isCollapsed && !item.label) || (!item.label)) && (
-                      <div className="border-t border-white/10" />
-                    )}
-                  </li>
-                );
-              }
-
-              const Icon = item.icon;
-              const active = isActive(item);
-              const unreadCount =
-                item.badgeKey === 'notifications' ? (unread?.unread ?? 0) : 0;
-
-              return (
-                <li key={item.href}>
-                  <Tooltip content={item.description} side="right">
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        'group relative flex items-center gap-3 rounded-md px-3 py-2 text-sm font-medium transition-colors',
-                        active
-                          ? 'bg-white text-primary'
-                          : 'text-white/85 hover:bg-white/10 hover:text-white',
-                        isCollapsed && 'lg:justify-center lg:px-0',
-                      )}
-                      title={isCollapsed ? item.label : undefined}
-                    >
-                      {active && !isCollapsed && (
-                        <span
-                          className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-accent lg:block hidden"
-                          aria-hidden
-                        />
-                      )}
-                      <Icon
-                        className={cn('h-4 w-4 shrink-0', active ? 'text-primary' : 'text-white')}
-                        aria-hidden
-                      />
-                      {/* Always show text on mobile, hide only on desktop collapsed */}
-                      <span className={cn('flex-1 truncate', isCollapsed && 'lg:hidden')}>{item.label}</span>
-                      {item.comingSoon && (
-                        <span className={cn('text-[9px] font-semibold uppercase tracking-wide text-white/50', isCollapsed && 'lg:hidden')}>
-                          Soon
-                        </span>
-                      )}
-                      {!item.comingSoon && unreadCount > 0 && (
-                        <span className={cn('inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold', isCollapsed && 'lg:hidden')}>
-                          {unreadCount > 99 ? '99+' : unreadCount}
-                        </span>
-                      )}
-                      {isCollapsed && unreadCount > 0 && (
-                        <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
-                      )}
-                    </Link>
-                  </Tooltip>
-                </li>
-              );
-            })}
+            {visibleNav.map((item) =>
+              item.type === 'group' ? renderGroup(item) : renderLink(item),
+            )}
           </ul>
         </nav>
 

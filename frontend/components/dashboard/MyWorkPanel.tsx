@@ -150,7 +150,7 @@ export const MyWorkPanel = (): JSX.Element => {
                       </p>
                     </div>
                     <Link
-                      href="/workflow"
+                      href="/workflow/approvals"
                       className="text-[10px] font-medium text-primary hover:underline"
                     >
                       Review

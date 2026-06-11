@@ -159,7 +159,7 @@ export const StatCards = (): JSX.Element => {
             <span className="text-text-secondary">Inbox is clear</span>
           )
         }
-        href="/workflow"
+        href="/workflow/approvals"
       />
     </div>
   );
