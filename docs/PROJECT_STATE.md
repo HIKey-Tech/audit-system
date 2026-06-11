@@ -2,7 +2,9 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-06-11 (rev 24)
+> Last updated: 2026-06-11 (rev 25)
+
+> **rev 25 changelog:** Added frontend self-service profile area at `/profile`. Users can view account details, edit display name/phone/skills, change password, start 2FA setup, regenerate backup codes, log out everywhere, and review roles/effective permissions. Header/sidebar user identity now links to the profile page; a small `/api/auth/session-user` route refreshes the display cookie after profile edits.
 
 > **rev 24 changelog:** Password-reset email links now target the Next.js frontend instead of the Express API: local `.env` sets `FRONTEND_URL=http://localhost:3001`, `.env.example` documents the same, and `config.app.frontendUrl` falls back to `http://localhost:3001` to match the frontend dev/start port.
 
