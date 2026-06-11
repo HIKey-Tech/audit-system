@@ -5,6 +5,8 @@
 // Shutdown order: stop accepting connections → stop scheduler → disconnect DB → exit.
 
 import http from 'http';
+import net from 'net';
+import dns from 'dns/promises';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
 import cors from 'cors';
@@ -82,6 +84,48 @@ const buildApp = (): Application => {
       service: config.app.name,
       env: config.app.env,
       timestamp: new Date().toISOString(),
+    });
+  });
+
+  // TEMPORARY DIAGNOSTIC — remove after SMTP egress is confirmed.
+  // Runs a raw TCP connect from INSIDE this container so we can see whether the
+  // SMTP timeout is a Railway egress block, a host-side firewall, or IPv6.
+  app.get('/debug/smtp-probe', async (_req: Request, res: Response) => {
+    const tcpProbe = (host: string, port: number): Promise<string> =>
+      new Promise((resolve) => {
+        const start = Date.now();
+        const socket = net.connect({ host, port });
+        socket.setTimeout(10_000);
+        socket.once('connect', () => {
+          resolve(`OK (${Date.now() - start}ms)`);
+          socket.destroy();
+        });
+        socket.once('timeout', () => {
+          resolve('TIMEOUT (blackholed — egress/firewall block)');
+          socket.destroy();
+        });
+        socket.once('error', (e: NodeJS.ErrnoException) =>
+          resolve(`ERROR ${e.code ?? e.message}`),
+        );
+      });
+
+    const host = config.email.host;
+    const port = config.email.port;
+
+    let resolvedIps: unknown;
+    try {
+      resolvedIps = await dns.lookup(host, { all: true });
+    } catch (e) {
+      resolvedIps = `lookup failed: ${String(e)}`;
+    }
+
+    res.status(200).json({
+      configured: { host, port, secure: config.email.secure, userSet: Boolean(config.email.user) },
+      dns: resolvedIps,
+      probes: {
+        configuredHost: await tcpProbe(host, port),
+        gmailControl: await tcpProbe('smtp.gmail.com', 587),
+      },
     });
   });
 
