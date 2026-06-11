@@ -8,13 +8,16 @@ const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_config_1 = require("../../../../shared/config/app.config");
 const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
+const mfa_utility_1 = require("../../utility/mfa.utility");
 const oidc_client_1 = require("../client/oidc.client");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
 class AuthService {
     userService;
+    mfaService;
     oidcClient;
-    constructor(userService) {
+    constructor(userService, mfaService) {
         this.userService = userService;
+        this.mfaService = mfaService;
         this.oidcClient = (0, oidc_client_1.createOidcClient)();
     }
     async login(dto, ipAddress, userAgent) {
@@ -32,12 +35,75 @@ class AuthService {
         if (!passwordValid) {
             throw app_error_1.AppError.unauthorized('Invalid credentials');
         }
+        // ── 2FA gate ──────────────────────────────────────────────
+        if (user.mfa_enabled) {
+            const method = (user.mfa_method ?? 'totp');
+            if (method === 'email') {
+                await this.mfaService.startEmailChallenge(user.id, user.email);
+            }
+            const challengeToken = (0, mfa_utility_1.generateScopedToken)(user.id, user.email, 'mfa_challenge', app_config_1.config.mfa.challengeTtl);
+            logger_util_1.logger.info('Password OK — 2FA challenge issued', { userId: user.id, method });
+            return { status: 'MFA_REQUIRED', method, challengeToken };
+        }
+        if (app_config_1.config.mfa.mandatory) {
+            const now = new Date();
+            // Grace deadline starts on the first login (lazy init), so existing
+            // users get a full window from the moment this ships — never blocked
+            // immediately. Once the deadline passes, enrolment is forced.
+            const graceUntil = user.mfa_grace_until ??
+                new Date(now.getTime() + app_config_1.config.mfa.gracePeriodDays * 86_400_000);
+            if (graceUntil <= now) {
+                const enrollmentToken = (0, mfa_utility_1.generateScopedToken)(user.id, user.email, 'mfa_enroll', app_config_1.config.mfa.enrollTtl);
+                logger_util_1.logger.info('Password OK — 2FA grace expired, enrolment required', {
+                    userId: user.id,
+                });
+                return { status: 'MFA_ENROLLMENT_REQUIRED', enrollmentToken };
+            }
+            // Within grace: log in normally, but flag that setup is still pending.
+            const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
+            await prisma_client_1.prisma.user.update({
+                where: { id: user.id },
+                data: {
+                    last_login_at: now,
+                    // Persist the deadline the first time we compute it.
+                    ...(user.mfa_grace_until ? {} : { mfa_grace_until: graceUntil }),
+                },
+            });
+            logger_util_1.logger.info('User logged in via password (2FA grace active)', { userId: user.id });
+            return {
+                status: 'OK',
+                mfaSetupRequired: true,
+                ...tokens,
+                user: (0, user_response_dto_1.mapUserToResponse)(user),
+            };
+        }
+        // No 2FA required (mandatory disabled) — issue tokens directly.
         const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
         await prisma_client_1.prisma.user.update({
             where: { id: user.id },
             data: { last_login_at: new Date() },
         });
         logger_util_1.logger.info('User logged in via password', { userId: user.id });
+        return {
+            status: 'OK',
+            ...tokens,
+            user: (0, user_response_dto_1.mapUserToResponse)(user),
+        };
+    }
+    async completeMfaLogin(userId, ipAddress, userAgent) {
+        const user = (await prisma_client_1.prisma.user.findUniqueOrThrow({
+            where: { id: userId },
+            include: prisma_types_1.userWithRolesInclude,
+        }));
+        if (!user.is_active) {
+            throw app_error_1.AppError.unauthorized('Account is deactivated');
+        }
+        const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
+        await prisma_client_1.prisma.user.update({
+            where: { id: user.id },
+            data: { last_login_at: new Date() },
+        });
+        logger_util_1.logger.info('User completed 2FA login', { userId: user.id });
         return {
             ...tokens,
             user: (0, user_response_dto_1.mapUserToResponse)(user),

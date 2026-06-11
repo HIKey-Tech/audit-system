@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { ACCESS_COOKIE } from '@/lib/utils/auth-cookies';
 
-const PUBLIC_PATHS = ['/login'];
+const PUBLIC_PATHS = [
+  '/login',
+  '/login/2fa',
+  '/login/2fa/enroll',
+  '/forgot-password',
+  '/reset-password',
+];
 
 const isPublic = (pathname: string): boolean => {
   if (PUBLIC_PATHS.includes(pathname)) return true;

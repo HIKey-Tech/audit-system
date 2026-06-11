@@ -43,6 +43,30 @@ export const config = {
     apiVersion: optionalEnv('API_VERSION', 'v1'),
     isDev: optionalEnv('NODE_ENV', 'development') === 'development',
     isProd: optionalEnv('NODE_ENV', 'development') === 'production',
+    // Public base URL of the Next.js frontend — used to build email links
+    // (password-reset, etc.) that land on user-facing pages, not the API.
+    frontendUrl: optionalEnv('FRONTEND_URL', 'http://localhost:3001'),
+  },
+
+  passwordReset: {
+    tokenTtl: requireDurationEnv('PASSWORD_RESET_TOKEN_TTL', '30m'),
+  },
+
+  mfa: {
+    // When true, local-password users must enrol in 2FA before gaining access.
+    mandatory: optionalEnv('MFA_MANDATORY', 'true') === 'true',
+    // Days a not-yet-enrolled user may keep logging in (with a setup prompt)
+    // before the mandatory gate hard-blocks them. Starts on their first login.
+    gracePeriodDays: parseInt(optionalEnv('MFA_GRACE_PERIOD_DAYS', '7'), 10),
+    issuer: optionalEnv('MFA_ISSUER', optionalEnv('APP_NAME', 'IAMS')),
+    challengeTtl: requireDurationEnv('MFA_CHALLENGE_TTL', '5m'),
+    enrollTtl: requireDurationEnv('MFA_ENROLL_TTL', '15m'),
+    emailOtpTtl: requireDurationEnv('MFA_EMAIL_OTP_TTL', '10m'),
+    emailOtpMaxAttempts: parseInt(optionalEnv('MFA_EMAIL_OTP_MAX_ATTEMPTS', '5'), 10),
+    backupCodeCount: parseInt(optionalEnv('MFA_BACKUP_CODE_COUNT', '10'), 10),
+    // 32-byte key (hex or base64) for AES-256-GCM at-rest encryption of TOTP
+    // secrets. Falls back to a key derived from JWT_SECRET when unset (dev only).
+    encryptionKey: optionalEnv('MFA_ENCRYPTION_KEY'),
   },
 
   database: {

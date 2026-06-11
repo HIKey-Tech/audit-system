@@ -9,9 +9,11 @@ const api_response_type_1 = require("../../../shared/types/api-response.type");
 const auth_request_dto_1 = require("../dto/request/auth.request.dto");
 class AuthController {
     authService;
+    passwordResetService;
     router;
-    constructor(authService) {
+    constructor(authService, passwordResetService) {
         this.authService = authService;
+        this.passwordResetService = passwordResetService;
         this.router = (0, express_1.Router)();
         this._registerRoutes();
     }
@@ -35,6 +37,18 @@ class AuthController {
          */
         this.router.get('/callback', (0, validate_middleware_1.validate)(auth_request_dto_1.OidcCallbackRequestSchema, 'query'), this._ssoCallback.bind(this));
         /**
+         * @route  POST /auth/forgot-password
+         * @desc   Request a password-reset link for an active local account
+         * @access Public
+         */
+        this.router.post('/forgot-password', (0, validate_middleware_1.validate)(auth_request_dto_1.ForgotPasswordRequestSchema), this._forgotPassword.bind(this));
+        /**
+         * @route  POST /auth/reset-password
+         * @desc   Set a new password using a reset token
+         * @access Public
+         */
+        this.router.post('/reset-password', (0, validate_middleware_1.validate)(auth_request_dto_1.ResetPasswordRequestSchema), this._resetPassword.bind(this));
+        /**
          * @route  POST /auth/refresh
          * @desc   Refresh access token
          * @access Public
@@ -56,7 +70,12 @@ class AuthController {
     async _login(req, res, next) {
         try {
             const result = await this.authService.login(req.body, req.ip, req.headers['user-agent']);
-            res.status(200).json((0, api_response_type_1.buildResponse)(result, 'Login successful'));
+            const message = result.status === 'MFA_REQUIRED'
+                ? 'Two-factor verification required'
+                : result.status === 'MFA_ENROLLMENT_REQUIRED'
+                    ? 'Two-factor enrolment required'
+                    : 'Login successful';
+            res.status(200).json((0, api_response_type_1.buildResponse)(result, message));
         }
         catch (err) {
             next(err);
@@ -76,6 +95,24 @@ class AuthController {
             const { code, state } = req.query;
             const result = await this.authService.handleOidcCallback(code, state, req.ip, req.headers['user-agent']);
             res.status(200).json((0, api_response_type_1.buildResponse)(result, 'SSO authentication successful'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _forgotPassword(req, res, next) {
+        try {
+            await this.passwordResetService.requestReset(req.body.email, req.ip);
+            res.status(200).json((0, api_response_type_1.buildResponse)(null, 'A password reset link has been sent to that email address.'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _resetPassword(req, res, next) {
+        try {
+            await this.passwordResetService.resetPassword(req.body.token, req.body.newPassword, req.ip);
+            res.status(200).json((0, api_response_type_1.buildResponse)(null, 'Password has been reset successfully'));
         }
         catch (err) {
             next(err);

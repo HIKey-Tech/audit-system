@@ -61,6 +61,31 @@ export interface SsoRedirectResponseDto {
     authorizationUrl: string;
     state: string;
 }
+/**
+ * Result of a password login. Either fully authenticated, or one of the two
+ * intermediate 2FA states that require a follow-up call to /auth/2fa/*.
+ */
+export type LoginResultDto = ({
+    status: 'OK';
+    mfaSetupRequired?: boolean;
+} & AuthResponseDto) | {
+    status: 'MFA_REQUIRED';
+    method: 'totp' | 'email';
+    challengeToken: string;
+} | {
+    status: 'MFA_ENROLLMENT_REQUIRED';
+    enrollmentToken: string;
+};
+export interface MfaSetupResponseDto {
+    method: 'totp' | 'email';
+    secret?: string;
+    otpauthUrl?: string;
+    qrDataUrl?: string;
+}
+export interface MfaEnrollResultDto {
+    backupCodes: string[];
+    auth: AuthResponseDto;
+}
 export declare const mapPermissionToResponse: (permission: {
     id: string;
     slug: string;

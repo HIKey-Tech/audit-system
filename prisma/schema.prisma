@@ -30,12 +30,20 @@ model User {
   is_super_admin Boolean   @default(false)
   last_login_at  DateTime?
   password_hash  String? // null for SSO-only users
+  mfa_enabled     Boolean   @default(false)
+  mfa_method      String? // 'totp' | 'email'
+  mfa_totp_secret String? // AES-256-GCM encrypted base32 secret; null until TOTP enrolled
+  mfa_enrolled_at DateTime?
+  mfa_grace_until DateTime? // grace deadline; after this, mandatory 2FA hard-blocks login
   created_at     DateTime  @default(now())
   updated_at     DateTime  @updatedAt
   deleted_at     DateTime?
 
   user_roles        User_Role[]
   refresh_tokens    Refresh_Token[]
+  password_reset_tokens Password_Reset_Token[]
+  mfa_backup_codes  Mfa_Backup_Code[]
+  mfa_email_otps    Mfa_Email_Otp[]
   audit_logs        Audit_Log[]
   notifications     Notification[]
   documents         Document[]
@@ -155,6 +163,49 @@ model Refresh_Token {
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
 
   @@map("refresh_tokens")
+}
+
+model Password_Reset_Token {
+  id         String    @id @default(uuid())
+  user_id    String
+  token_hash String    @unique // sha256 of the raw token emailed to the user
+  expires_at DateTime
+  used_at    DateTime?
+  ip_address String?
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("password_reset_tokens")
+}
+
+model Mfa_Backup_Code {
+  id         String    @id @default(uuid())
+  user_id    String
+  code_hash  String // bcrypt hash of a single-use recovery code
+  used_at    DateTime?
+  created_at DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("mfa_backup_codes")
+}
+
+model Mfa_Email_Otp {
+  id          String    @id @default(uuid())
+  user_id     String
+  code_hash   String // sha256 of the 6-digit code
+  expires_at  DateTime
+  consumed_at DateTime?
+  attempts    Int       @default(0)
+  created_at  DateTime  @default(now())
+
+  user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@index([user_id])
+  @@map("mfa_email_otps")
 }
 
 // ============================================================

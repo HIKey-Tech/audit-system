@@ -2,7 +2,17 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-05-25 (rev 19)
+> Last updated: 2026-06-11 (rev 24)
+
+> **rev 24 changelog:** Password-reset email links now target the Next.js frontend instead of the Express API: local `.env` sets `FRONTEND_URL=http://localhost:3001`, `.env.example` documents the same, and `config.app.frontendUrl` falls back to `http://localhost:3001` to match the frontend dev/start port.
+
+> **rev 23 changelog:** Forgot-password behavior changed per product requirement: unknown emails now return an explicit account-not-found error instead of the prior generic no-enumeration 200 response. Inactive accounts and SSO-only accounts also return actionable errors; successful local-account requests now say a reset link was sent.
+
+> **rev 22 changelog:** Azure-hosted development database brought up to date with migration history via `prisma migrate deploy`; applied `20260611120000_add_audit_plan_description` and `20260611120533_add_password_reset_and_mfa`. `prisma migrate status` against the active Azure `DATABASE_URL` reports the database schema is up to date.
+
+> **rev 21 changelog:** Migration drift repaired without resetting data: added `20260611120000_add_audit_plan_description` to record the existing `audit_plans.description` column in migration history, marked it applied locally, then generated/applied `20260611120533_add_password_reset_and_mfa`. `prisma migrate status` now reports the database schema is up to date.
+
+> **rev 20 changelog:** User-module auth hardening (full-stack). **Forgot password:** new `password_reset_tokens` table; `PasswordResetService`; public `POST /auth/forgot-password` + `POST /auth/reset-password` (single-use sha256-hashed token, 30-min TTL, revokes all refresh tokens on reset); reset email via the notification queue; frontend `/forgot-password` + `/reset-password` pages and a "Forgot password?" link on login. **Mandatory 2FA (TOTP + email OTP):** `User` gains `mfa_enabled` / `mfa_method` / `mfa_totp_secret` (AES-256-GCM encrypted at rest) / `mfa_enrolled_at`; new `mfa_backup_codes` (bcrypt, single-use) + `mfa_email_otps` (sha256, attempt-capped) tables; `MfaService` (TOTP via `otplib` v13, email OTP, hashed backup codes); `AuthService.login` now returns a discriminated union (`OK` / `MFA_REQUIRED` / `MFA_ENROLLMENT_REQUIRED`) and `completeMfaLogin` issues tokens after a passed challenge/enrolment; new `MfaController` mounted at `/auth/2fa` (`setup`, `enroll`, `verify`, `backup-codes/regenerate`, super-admin `admin-reset` lockout escape hatch); scope-restricted `requireMfaToken` guard, and `authenticate` now rejects scoped tokens. Frontend: login routes to `/login/2fa` (challenge) or `/login/2fa/enroll`; intermediate tokens carried in short-lived httpOnly cookies (`iams_mfa` / `iams_enroll`). New deps: `otplib`, `qrcode`. **Grace period:** `users.mfa_grace_until` + `MFA_GRACE_PERIOD_DAYS` (default 7) — not-yet-enrolled users (incl. all existing users) log in normally with a skippable "set up 2FA" prompt (`/login/2fa/enroll?optional=1`); the hard block only kicks in after the deadline. The deadline is lazily set on first login, so existing users are never blocked immediately. `setup`/`enroll` accept an access token too (`requireEnrollmentContext`) so voluntary setup works from an authenticated session. DB migration now applied; backend + frontend `tsc` both pass.
 
 > **rev 19 changelog:** Two features added. **C2 — Skill-based staff assignment:** `User` model gains a `skills` column (`NVARCHAR(max)` JSON array of free-text tags, up to 30 × 100 chars each); user create/update DTOs accept `skills`; response DTOs parse/return `skills: string[]`; new `GET /workflow/assignments/candidates/:engagementId` endpoint returns un-assigned active users with parsed skills, department, job title, and active-engagement workload count (permission-gated by `assignment:read`). **E3 — Configurable version retention:** `version_retention` system config seed added (opt-in, disabled by default, `keepLastVersions: 10`); `DocumentService.pruneOldVersions()` reads the config, respects the enabled flag, iterates all documents with > N versions, deletes excess from storage then DB, returns `{ prunedCount, failedCount }`; `BG:DOCUMENT:VERSION:PRUNE:WEEKLY` cron job registered at Sunday 03:00, no-op when retention is disabled.
 
@@ -41,6 +51,8 @@ Folder: `src/modules/user/`
 | SSO — Generic OIDC (Okta / Auth0 / Keycloak) | Done | `service/client/oidc.client.ts` (`GenericOidcClient`) |
 | Refresh tokens with rotation + reuse detection | Done | `auth.service.ts` — old token revoked on use; reuse of a revoked token revokes all tokens for that user |
 | Logout / logout-all | Done | `auth.service.ts` |
+| Forgot / reset password (local accounts) | Done | `service/implementation/password-reset.service.ts` — single-use hashed token (30-min TTL), no user enumeration, revokes all sessions on reset |
+| Mandatory 2FA — TOTP + email OTP + backup codes | Done | `service/implementation/mfa.service.ts`, `controller/mfa.controller.ts`, `utility/mfa.utility.ts` — TOTP secrets AES-256-GCM encrypted at rest; super-admin reset escape hatch |
 | JIT provisioning on first SSO login | Done | `user.service.ts#syncFromAzureAd` — creates user with default `viewer` role |
 | User CRUD + soft-delete | Done | `controller/user.controller.ts`, `service/implementation/user.service.ts` |
 | Self-service profile (`/users/me`, `/users/me/change-password`) | Done | `user.controller.ts` |
@@ -53,12 +65,19 @@ Folder: `src/modules/user/`
 **Routes mounted by the module:**
 
 ```
-/auth/login          POST   public
+/auth/login          POST   public   — returns tokens OR an MFA_REQUIRED / MFA_ENROLLMENT_REQUIRED state
 /auth/sso            GET    public   — returns Azure/OIDC authorization URL
 /auth/callback       GET    public   — OIDC code exchange
 /auth/refresh        POST   public
 /auth/logout         POST   private
 /auth/logout-all     POST   private
+/auth/forgot-password           POST   public        — always 200 (no user enumeration)
+/auth/reset-password            POST   public        — single-use token
+/auth/2fa/setup                 POST   mfa_enroll    — begin enrolment (TOTP QR / email OTP)
+/auth/2fa/enroll                POST   mfa_enroll    — verify, enable 2FA, return backup codes + tokens
+/auth/2fa/verify                POST   mfa_challenge — verify login code, issue tokens
+/auth/2fa/backup-codes/regenerate  POST  private     — regenerate backup codes
+/auth/2fa/admin-reset           POST   super_admin   — reset a user's 2FA (lockout recovery)
 
 /users/me                     GET     private
 /users/me                     PATCH   private
@@ -420,7 +439,10 @@ Folder: `src/modules/settings/`
 
 | Table | Purpose |
 |---|---|
-| `users` | Core user record. Supports SSO-only (`password_hash` nullable) + local. Soft-delete via `deleted_at`. |
+| `users` | Core user record. Supports SSO-only (`password_hash` nullable) + local. Soft-delete via `deleted_at`. 2FA columns: `mfa_enabled`, `mfa_method`, `mfa_totp_secret` (AES-256-GCM encrypted), `mfa_enrolled_at`. |
+| `password_reset_tokens` | Single-use sha256-hashed reset tokens with `expires_at` / `used_at` / `ip_address`. Indexed on `user_id`. |
+| `mfa_backup_codes` | Single-use 2FA recovery codes (bcrypt-hashed), `used_at`. Indexed on `user_id`. |
+| `mfa_email_otps` | Email 2FA one-time codes (sha256-hashed), `expires_at` / `consumed_at` / `attempts` (capped). Indexed on `user_id`. |
 | `roles` | Named roles. `is_system` flag for seeded roles. |
 | `permissions` | `<module>:<action>` granular permissions. |
 | `user_roles` | Join. Supports optional `expires_at` for time-bound role assignments. |
@@ -505,7 +527,7 @@ Workflow schema includes:
 - Notification templates table added via `prisma/migrations/20260501191923_add_notification_templates/`.
 - Settings tables added via `prisma/migrations/20260511083936_add_settings_module_tables/`.
 - Soft-delete via `deleted_at` on `users`, `documents`, `document_templates` (other mutable tables will follow the same pattern). No module uses an `is_deleted` boolean.
-- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`.
+- Migrations baselined at `prisma/migrations/20260421000000_init/` (14 base tables) and marked applied via `prisma migrate resolve`. Audit-module tables added via `prisma/migrations/20260427083830_add_audit_module_tables/` (10 tables, 35 FKs, all `NO ACTION`). Risk-module tables added via `prisma/migrations/20260427141955_add_risk_module_tables/` (3 tables, 7 FKs, all `NO ACTION`). Workflow-module tables added via `prisma/migrations/20260427170000_add_workflow_module_tables/` (5 tables, 8 FKs, all `NO ACTION`). `audit_reports.rejection_reason` added via `prisma/migrations/20260428085630_add_rejection_reason_to_audit_reports/`. `migration_lock.toml` pins `provider = "mssql"`. All future schema changes go through `prisma migrate dev` — no more `db push`. Drift for the pre-existing `audit_plans.description` column is recorded by `prisma/migrations/20260611120000_add_audit_plan_description/`. Password reset and MFA tables/columns are migrated by `prisma/migrations/20260611120533_add_password_reset_and_mfa/`.
 
 ---
 

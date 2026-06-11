@@ -3,6 +3,9 @@
 export const ACCESS_COOKIE = 'iams_access';
 export const REFRESH_COOKIE = 'iams_refresh';
 export const USER_COOKIE = 'iams_user';
+// Short-lived, httpOnly carriers for the two intermediate 2FA login states.
+export const MFA_CHALLENGE_COOKIE = 'iams_mfa';
+export const MFA_ENROLL_COOKIE = 'iams_enroll';
 
 export interface CookieOptions {
   httpOnly?: boolean;
@@ -23,6 +26,15 @@ export const accessCookieOptions = (maxAgeSeconds = 60 * 60): CookieOptions => (
 export const refreshCookieOptions = (
   maxAgeSeconds = 60 * 60 * 24 * 7,
 ): CookieOptions => ({
+  httpOnly: true,
+  secure: process.env.NODE_ENV === 'production',
+  sameSite: 'lax',
+  path: '/',
+  maxAge: maxAgeSeconds,
+});
+
+// Intermediate 2FA tokens: httpOnly, short maxAge (matches backend token TTLs).
+export const mfaCookieOptions = (maxAgeSeconds: number): CookieOptions => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',

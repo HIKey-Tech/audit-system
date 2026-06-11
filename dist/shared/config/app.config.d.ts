@@ -7,6 +7,21 @@ export declare const config: {
         readonly apiVersion: string;
         readonly isDev: boolean;
         readonly isProd: boolean;
+        readonly frontendUrl: string;
+    };
+    readonly passwordReset: {
+        readonly tokenTtl: string;
+    };
+    readonly mfa: {
+        readonly mandatory: boolean;
+        readonly gracePeriodDays: number;
+        readonly issuer: string;
+        readonly challengeTtl: string;
+        readonly enrollTtl: string;
+        readonly emailOtpTtl: string;
+        readonly emailOtpMaxAttempts: number;
+        readonly backupCodeCount: number;
+        readonly encryptionKey: string;
     };
     readonly database: {
         readonly url: string;

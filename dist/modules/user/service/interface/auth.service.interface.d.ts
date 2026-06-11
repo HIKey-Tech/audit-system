@@ -1,11 +1,16 @@
 import { TokenPair } from '../../domain/entity/token.entity';
 import { LoginRequestDto, RefreshTokenRequestDto } from '../../dto/request/auth.request.dto';
-import { AuthResponseDto, SsoRedirectResponseDto } from '../../dto/response/user.response.dto';
+import { AuthResponseDto, SsoRedirectResponseDto, LoginResultDto } from '../../dto/response/user.response.dto';
 export interface IAuthService {
     /**
-     * Authenticate user with email/password (local accounts only)
+     * Authenticate user with email/password (local accounts only). Returns either
+     * a full token pair or an intermediate 2FA state.
      */
-    login(dto: LoginRequestDto, ipAddress?: string, userAgent?: string): Promise<AuthResponseDto>;
+    login(dto: LoginRequestDto, ipAddress?: string, userAgent?: string): Promise<LoginResultDto>;
+    /**
+     * Issue the real token pair after a 2FA challenge or enrolment succeeds.
+     */
+    completeMfaLogin(userId: string, ipAddress?: string, userAgent?: string): Promise<AuthResponseDto>;
     /**
      * Generate the SSO authorization URL to redirect the client to
      */

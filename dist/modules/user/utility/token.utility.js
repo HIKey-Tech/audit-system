@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyRefreshToken = exports.buildTokenPair = exports.hashToken = exports.comparePassword = exports.hashPassword = exports.generateTemporaryPassword = exports.generateRefreshToken = exports.generateAccessToken = void 0;
+exports.verifyRefreshToken = exports.buildTokenPair = exports.generatePasswordResetToken = exports.hashToken = exports.comparePassword = exports.hashPassword = exports.generateTemporaryPassword = exports.generateRefreshToken = exports.generateAccessToken = void 0;
 // src/modules/user/utility/token.utility.ts
 const jwt = __importStar(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -98,6 +98,13 @@ const hashToken = (token) => {
     return crypto_1.default.createHash('sha256').update(token).digest('hex');
 };
 exports.hashToken = hashToken;
+const generatePasswordResetToken = () => {
+    const raw = crypto_1.default.randomBytes(32).toString('hex');
+    const hash = crypto_1.default.createHash('sha256').update(raw).digest('hex');
+    const expiresAt = new Date(Date.now() + (0, ms_1.default)(app_config_1.config.passwordReset.tokenTtl));
+    return { raw, hash, expiresAt };
+};
+exports.generatePasswordResetToken = generatePasswordResetToken;
 const buildTokenPair = (accessToken, refreshToken) => ({
     accessToken,
     refreshToken,

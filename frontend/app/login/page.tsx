@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, Suspense } from 'react';
+import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -46,12 +47,34 @@ const LoginInner = (): JSX.Element => {
       const json = (await res.json().catch(() => ({}))) as {
         success?: boolean;
         message?: string;
+        data?: { status?: string; method?: 'totp' | 'email'; mfaSetupRequired?: boolean };
       };
       if (!res.ok || !json.success) {
         setServerError(json.message || 'Sign in failed');
         return;
       }
-      router.push(next.startsWith('/') ? next : '/dashboard');
+
+      const safeNext = next.startsWith('/') ? next : '/dashboard';
+      const status = json.data?.status;
+
+      if (status === 'MFA_REQUIRED') {
+        const method = json.data?.method ?? 'totp';
+        router.push(
+          `/login/2fa?method=${method}&next=${encodeURIComponent(safeNext)}`,
+        );
+        return;
+      }
+      if (status === 'MFA_ENROLLMENT_REQUIRED') {
+        router.push(`/login/2fa/enroll?next=${encodeURIComponent(safeNext)}`);
+        return;
+      }
+      // Logged in, but still within the grace window — offer optional setup.
+      if (json.data?.mfaSetupRequired) {
+        router.push(`/login/2fa/enroll?optional=1&next=${encodeURIComponent(safeNext)}`);
+        return;
+      }
+
+      router.push(safeNext);
       router.refresh();
     } catch (err) {
       setServerError(
@@ -135,6 +158,15 @@ const LoginInner = (): JSX.Element => {
                 </button>
               </div>
             </FormField>
+
+            <div className="flex justify-end">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-medium text-primary hover:underline"
+              >
+                Forgot password?
+              </Link>
+            </div>
 
             {serverError && (
               <div

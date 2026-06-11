@@ -5,6 +5,7 @@ import { logger } from '../../../../shared/utils/logger.util';
 import { config } from '../../../../shared/config/app.config';
 import { IAuthService } from '../interface/auth.service.interface';
 import { IUserService } from '../interface/user.service.interface';
+import { IMfaService } from '../interface/mfa.service.interface';
 import {
   LoginRequestDto,
   RefreshTokenRequestDto,
@@ -12,6 +13,7 @@ import {
 import {
   AuthResponseDto,
   SsoRedirectResponseDto,
+  LoginResultDto,
   mapUserToResponse,
 } from '../../dto/response/user.response.dto';
 import { TokenPair } from '../../domain/entity/token.entity';
@@ -22,6 +24,7 @@ import {
   hashToken,
   buildTokenPair,
 } from '../../utility/token.utility';
+import { generateScopedToken } from '../../utility/mfa.utility';
 import { createOidcClient, IOidcClient } from '../client/oidc.client';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
 
@@ -29,7 +32,10 @@ import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/p
 export class AuthService implements IAuthService {
   private readonly oidcClient: IOidcClient;
 
-  constructor(private readonly userService: IUserService) {
+  constructor(
+    private readonly userService: IUserService,
+    private readonly mfaService: IMfaService,
+  ) {
     this.oidcClient = createOidcClient();
   }
 
@@ -37,7 +43,7 @@ export class AuthService implements IAuthService {
     dto: LoginRequestDto,
     ipAddress?: string,
     userAgent?: string,
-  ): Promise<AuthResponseDto> {
+  ): Promise<LoginResultDto> {
     const user = await prisma.user.findUnique({
       where: { email: dto.email, deleted_at: null },
       include: userWithRolesInclude,
@@ -56,6 +62,64 @@ export class AuthService implements IAuthService {
       throw AppError.unauthorized('Invalid credentials');
     }
 
+    // ── 2FA gate ──────────────────────────────────────────────
+    if (user.mfa_enabled) {
+      const method = (user.mfa_method ?? 'totp') as 'totp' | 'email';
+      if (method === 'email') {
+        await this.mfaService.startEmailChallenge(user.id, user.email);
+      }
+      const challengeToken = generateScopedToken(
+        user.id,
+        user.email,
+        'mfa_challenge',
+        config.mfa.challengeTtl,
+      );
+      logger.info('Password OK — 2FA challenge issued', { userId: user.id, method });
+      return { status: 'MFA_REQUIRED', method, challengeToken };
+    }
+
+    if (config.mfa.mandatory) {
+      const now = new Date();
+      // Grace deadline starts on the first login (lazy init), so existing
+      // users get a full window from the moment this ships — never blocked
+      // immediately. Once the deadline passes, enrolment is forced.
+      const graceUntil =
+        user.mfa_grace_until ??
+        new Date(now.getTime() + config.mfa.gracePeriodDays * 86_400_000);
+
+      if (graceUntil <= now) {
+        const enrollmentToken = generateScopedToken(
+          user.id,
+          user.email,
+          'mfa_enroll',
+          config.mfa.enrollTtl,
+        );
+        logger.info('Password OK — 2FA grace expired, enrolment required', {
+          userId: user.id,
+        });
+        return { status: 'MFA_ENROLLMENT_REQUIRED', enrollmentToken };
+      }
+
+      // Within grace: log in normally, but flag that setup is still pending.
+      const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
+      await prisma.user.update({
+        where: { id: user.id },
+        data: {
+          last_login_at: now,
+          // Persist the deadline the first time we compute it.
+          ...(user.mfa_grace_until ? {} : { mfa_grace_until: graceUntil }),
+        },
+      });
+      logger.info('User logged in via password (2FA grace active)', { userId: user.id });
+      return {
+        status: 'OK',
+        mfaSetupRequired: true,
+        ...tokens,
+        user: mapUserToResponse(user),
+      };
+    }
+
+    // No 2FA required (mandatory disabled) — issue tokens directly.
     const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
 
     await prisma.user.update({
@@ -64,6 +128,36 @@ export class AuthService implements IAuthService {
     });
 
     logger.info('User logged in via password', { userId: user.id });
+
+    return {
+      status: 'OK',
+      ...tokens,
+      user: mapUserToResponse(user),
+    };
+  }
+
+  async completeMfaLogin(
+    userId: string,
+    ipAddress?: string,
+    userAgent?: string,
+  ): Promise<AuthResponseDto> {
+    const user = (await prisma.user.findUniqueOrThrow({
+      where: { id: userId },
+      include: userWithRolesInclude,
+    })) as UserWithRoles;
+
+    if (!user.is_active) {
+      throw AppError.unauthorized('Account is deactivated');
+    }
+
+    const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
+
+    await prisma.user.update({
+      where: { id: user.id },
+      data: { last_login_at: new Date() },
+    });
+
+    logger.info('User completed 2FA login', { userId: user.id });
 
     return {
       ...tokens,

@@ -4,16 +4,22 @@ import { validate } from '../../../shared/middleware/validate.middleware';
 import { authenticate } from '../../../shared/middleware/auth.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { IAuthService } from '../service/interface/auth.service.interface';
+import { IPasswordResetService } from '../service/interface/password-reset.service.interface';
 import {
   LoginRequestSchema,
   RefreshTokenRequestSchema,
   OidcCallbackRequestSchema,
+  ForgotPasswordRequestSchema,
+  ResetPasswordRequestSchema,
 } from '../dto/request/auth.request.dto';
 
 export class AuthController {
   public readonly router: Router;
 
-  constructor(private readonly authService: IAuthService) {
+  constructor(
+    private readonly authService: IAuthService,
+    private readonly passwordResetService: IPasswordResetService,
+  ) {
     this.router = Router();
     this._registerRoutes();
   }
@@ -46,6 +52,28 @@ export class AuthController {
       '/callback',
       validate(OidcCallbackRequestSchema, 'query'),
       this._ssoCallback.bind(this),
+    );
+
+    /**
+     * @route  POST /auth/forgot-password
+     * @desc   Request a password-reset link for an active local account
+     * @access Public
+     */
+    this.router.post(
+      '/forgot-password',
+      validate(ForgotPasswordRequestSchema),
+      this._forgotPassword.bind(this),
+    );
+
+    /**
+     * @route  POST /auth/reset-password
+     * @desc   Set a new password using a reset token
+     * @access Public
+     */
+    this.router.post(
+      '/reset-password',
+      validate(ResetPasswordRequestSchema),
+      this._resetPassword.bind(this),
     );
 
     /**
@@ -90,7 +118,13 @@ export class AuthController {
         req.ip,
         req.headers['user-agent'],
       );
-      res.status(200).json(buildResponse(result, 'Login successful'));
+      const message =
+        result.status === 'MFA_REQUIRED'
+          ? 'Two-factor verification required'
+          : result.status === 'MFA_ENROLLMENT_REQUIRED'
+            ? 'Two-factor enrolment required'
+            : 'Login successful';
+      res.status(200).json(buildResponse(result, message));
     } catch (err) {
       next(err);
     }
@@ -115,6 +149,33 @@ export class AuthController {
         req.headers['user-agent'],
       );
       res.status(200).json(buildResponse(result, 'SSO authentication successful'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _forgotPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await this.passwordResetService.requestReset(req.body.email, req.ip);
+      res.status(200).json(
+        buildResponse(
+          null,
+          'A password reset link has been sent to that email address.',
+        ),
+      );
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _resetPassword(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await this.passwordResetService.resetPassword(
+        req.body.token,
+        req.body.newPassword,
+        req.ip,
+      );
+      res.status(200).json(buildResponse(null, 'Password has been reset successfully'));
     } catch (err) {
       next(err);
     }

@@ -2,8 +2,12 @@
 import { Router } from 'express';
 import { UserService } from './service/implementation/user.service';
 import { AuthService } from './service/implementation/auth.service';
+import { PasswordResetService } from './service/implementation/password-reset.service';
+import { MfaService } from './service/implementation/mfa.service';
 import { AuthController } from './controller/auth.controller';
+import { MfaController } from './controller/mfa.controller';
 import { UserController } from './controller/user.controller';
+import { notificationQueueService } from '../messaging/service/implementation/notification-queue.service';
 
 // Side-effect imports — register OpenAPI paths with the shared registry.
 import './docs/auth.docs';
@@ -14,13 +18,17 @@ export const createUserModule = (): Router => {
 
   // Dependency wiring
   const userService = new UserService();
-  const authService = new AuthService(userService);
+  const mfaService = new MfaService(notificationQueueService);
+  const authService = new AuthService(userService, mfaService);
+  const passwordResetService = new PasswordResetService(notificationQueueService);
 
   // Controllers
-  const authController = new AuthController(authService);
+  const authController = new AuthController(authService, passwordResetService);
+  const mfaController = new MfaController(mfaService, authService);
   const userController = new UserController(userService);
 
-  // Mount
+  // Mount — /auth/2fa must precede /auth so its routes resolve first.
+  router.use('/auth/2fa', mfaController.router);
   router.use('/auth', authController.router);
   router.use('/users', userController.router);
 

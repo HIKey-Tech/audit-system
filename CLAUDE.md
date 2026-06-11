@@ -28,8 +28,8 @@
 | Jobs | node-cron (persisted via `scheduled_jobs` table) |
 | Email | nodemailer |
 | Cache/session store | Redis (configured; currently uses in-memory maps for OIDC state) |
-| Frontend | Next.js — **not started yet**. Built only after backend is complete |
-| Repo | Monorepo — backend currently lives in `audit-system/`; frontend will sit alongside it |
+| Frontend | Next.js (App Router) — **in active development** under `audit-system/frontend/`. Uses a BFF auth proxy (`app/api/auth/*`) that stores tokens in httpOnly cookies; the browser never holds JWTs |
+| Repo | Monorepo — backend in `audit-system/`; frontend in `audit-system/frontend/` |
 
 ---
 
@@ -40,16 +40,17 @@ All modules share **one database** and **one process**. Modules are logically se
 ```
 src/
 ├── modules/              ← one folder per business module
-│   ├── user/             ← built
-│   ├── logging/          ← built (service-only)
-│   ├── messaging/        ← built (service-only)
-│   ├── document/         ← built (service-only)
-│   ├── background/       ← built (service-only)
-│   ├── audit/            ← not built
-│   ├── risk/             ← not built
-│   ├── workflow/         ← not built
+│   ├── user/             ← built (incl. forgot-password + mandatory 2FA)
+│   ├── logging/          ← built (service + read-only HTTP)
+│   ├── messaging/        ← built
+│   ├── document/         ← built
+│   ├── background/       ← built
+│   ├── audit/            ← built
+│   ├── risk/             ← built
+│   ├── workflow/         ← built
+│   ├── dashboard/        ← built (read-only HTTP)
+│   ├── settings/         ← built
 │   ├── integration/      ← not built
-│   ├── dashboard/        ← not built
 │   └── predictive/       ← not built
 │
 └── shared/               ← cross-cutting infrastructure

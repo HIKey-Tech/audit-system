@@ -85,6 +85,17 @@ export const hashToken = (token: string): string => {
   return crypto.createHash('sha256').update(token).digest('hex');
 };
 
+export const generatePasswordResetToken = (): {
+  raw: string;
+  hash: string;
+  expiresAt: Date;
+} => {
+  const raw = crypto.randomBytes(32).toString('hex');
+  const hash = crypto.createHash('sha256').update(raw).digest('hex');
+  const expiresAt = new Date(Date.now() + ms(config.passwordReset.tokenTtl));
+  return { raw, hash, expiresAt };
+};
+
 export const buildTokenPair = (
   accessToken: string,
   refreshToken: string,
