@@ -25,6 +25,7 @@ import { requestAuditLogger } from './modules/logging/utility/request-logger.mid
 import { createLoggingModule } from './modules/logging';
 import { createUserModule } from './modules/user';
 import { createDocumentModule } from './modules/document';
+import { createAssetModule } from './modules/asset';
 import { createAuditModule } from './modules/audit';
 import { createRiskModule } from './modules/risk';
 import { createWorkflowModule } from './modules/workflow';
@@ -101,6 +102,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, apiLimiter);
   app.use(apiPrefix, createUserModule());
   app.use(apiPrefix, createDocumentModule());
+  app.use(apiPrefix, createAssetModule());
   app.use(apiPrefix, createAuditModule());
   app.use(apiPrefix, createRiskModule());
   app.use(apiPrefix, createWorkflowModule());

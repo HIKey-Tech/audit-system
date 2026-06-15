@@ -77,19 +77,19 @@ class UserController {
          * @desc   Deactivate user
          * @access Private - super_admin + user:deactivate
          */
-        this.router.post('/:id/deactivate', (0, auth_middleware_1.requireRole)('super_admin'), (0, auth_middleware_1.requirePermission)('user:deactivate'), this._deactivateUser.bind(this));
+        this.router.post('/:id/deactivate', (0, auth_middleware_1.requirePermission)('user:deactivate'), this._deactivateUser.bind(this));
         /**
          * @route  POST /users/:id/activate
          * @desc   Activate user
          * @access Private - super_admin + user:deactivate
          */
-        this.router.post('/:id/activate', (0, auth_middleware_1.requireRole)('super_admin'), (0, auth_middleware_1.requirePermission)('user:deactivate'), this._activateUser.bind(this));
+        this.router.post('/:id/activate', (0, auth_middleware_1.requirePermission)('user:deactivate'), this._activateUser.bind(this));
         /**
          * @route  DELETE /users/:id
          * @desc   Soft-delete user
          * @access Private — user:delete
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requireRole)('super_admin'), (0, auth_middleware_1.requirePermission)('user:delete'), this._deleteUser.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('user:delete'), this._deleteUser.bind(this));
         /**
          * @route  PUT /users/:id/roles
          * @desc   Assign roles to user

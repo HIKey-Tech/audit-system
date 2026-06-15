@@ -1,7 +1,5 @@
 import { Prisma } from '@prisma/client';
 import { AuditType, ChecklistResult, EngagementStatus, FindingStatus, PlanStatus, ReportStatus, WorkingPaperStatus } from '../domain/enum/audit.enum';
-export declare const AUDITEE_ROLE = "auditee";
-export declare const hasAuditeeRole: (roles: string[]) => boolean;
 export declare const assertHasPermission: (permissions: string[], required: string, message?: string) => void;
 export declare const assertTransition: <TStatus extends string>(current: TStatus, next: TStatus, transitions: Partial<Record<TStatus, readonly TStatus[]>>, entityName: string) => void;
 export declare const toIso: (value: Date | null) => string | null;

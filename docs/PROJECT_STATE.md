@@ -2,7 +2,11 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-06-11 (rev 25)
+> Last updated: 2026-06-15 (rev 27)
+
+> **rev 27 changelog:** Added the frontend Asset Registry module. The Next.js app now includes a permission-gated `/assets` registry, `/assets/:id` detail workspace, asset create/edit/delete flows, relationship management, attestations, source/provenance records, and audit-context display. Sidebar visibility and UI actions are driven by `asset:*` permissions. Audit engagement detail now includes an Assets tab for linking/unlinking assets in engagement scope. Frontend production build passes.
+
+> **rev 26 changelog:** Added the backend Asset module. The new `src/modules/asset/` module exposes permission-gated asset registry CRUD, relationships, owner/custodian attestations, source/provenance records, and audit-context link APIs. Prisma migration `20260612120000_add_asset_module` adds `assets`, `asset_relationships`, `asset_attestations`, `asset_sources`, and link tables for audit universe, engagements, findings, risks, and evidence. Seed now includes granular `asset:*` permissions. The module is mounted under `/api/v1/assets` plus asset-scoped audit routes under `/api/v1/audit/.../assets`. Frontend screens for the asset registry are not built yet.
 
 > **rev 25 changelog:** Added frontend self-service profile area at `/profile`. Users can view account details, edit display name/phone/skills, change password, start 2FA setup, regenerate backup codes, log out everywhere, and review roles/effective permissions. Header/sidebar user identity now links to the profile page; a small `/api/auth/session-user` route refreshes the display cookie after profile edits.
 
@@ -22,7 +26,7 @@
 
 ## 1. One-line status
 
-Foundation, User module, Document module, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), Settings module (role admin, working paper templates, report templates, system config), and app entry point (`server.ts`) are complete and production-shaped. The Next.js frontend is now in active implementation for audit/settings workflows. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, and automated Jest coverage are **not started**.
+Foundation, User module, Document module, Asset module backend + frontend, Audit module HTTP/services, Risk module HTTP/services, Workflow module HTTP/services, Messaging module (in-app notification HTTP/services + reliable notification queue), Background module HTTP/services, Logging module (services + read-only HTTP routes), Dashboard module (services + read-only HTTP routes), Settings module (role admin, working paper templates, report templates, system config), and app entry point (`server.ts`) are complete and production-shaped. The Next.js frontend is active for the existing workflows, including the asset registry and engagement asset scope. A full backend smoke test completed on 2026-05-01 against the local SQL Server database. Integration, Predictive, and automated Jest coverage are **not started**.
 
 ---
 
@@ -219,7 +223,66 @@ Folder: `src/modules/document/`
 - AWS S3 adapter (`service/client/storage.client.ts` has only `LocalStorageClient` + `AzureBlobStorageClient` stub).
 - ~~File deletion of old versions~~ — now implemented via opt-in `version_retention` system config + `DocumentService.pruneOldVersions()` + weekly background job `BG:DOCUMENT:VERSION:PRUNE:WEEKLY`.
 
-### 2.6 Background module — COMPLETE HTTP/control plane, PARTIAL job catalogue
+### 2.6 Asset module — COMPLETE (backend + frontend)
+
+Folder: `src/modules/asset/`
+
+- `AssetService` implements the first-class asset registry backend: create, update, soft-delete, detail, paginated listing, relationships, owner/custodian attestations, source/provenance records, and audit-context links.
+- Permission-based access only. Routes use granular `asset:*` permissions; roles remain seed-time permission bundles.
+- Asset records support owner/custodian accountability, classification/criticality, lifecycle state, CIA ratings, source system/source ID, last-seen and last-attested dates, and flexible `metadata` stored as validated JSON string (`NVARCHAR(MAX)`).
+- Attestation enforces both `asset:attest` and business ownership: the actor must be owner, custodian, or hold `asset:admin`.
+- Sensitive fields (`criticality`, CIA ratings, data classification, lifecycle state, source fields) require `asset:admin` when updating.
+- Asset relationships support dependency/hosting/data-flow style links (`depends_on`, `runs_on`, `stores_data_in`, `protected_by`, etc.).
+- Asset source/provenance records prepare for future read-only integrations with Dynafin, IMOC, Active Directory, Project Plus, Shared Drive, or a GBB CMDB.
+- Audit integration is implemented through link tables, not by replacing `audit_universe`: assets can link to audit universe entities, audit engagements, findings, risk-register records, and evidence.
+- Every mutation logs through Winston and `auditLogService.logAsync(...)`.
+- Frontend registry is implemented at `/assets` with search, filters, pagination, create/edit/delete actions, and permission-aware controls.
+- Frontend detail workspace is implemented at `/assets/:id` with overview, relationships, attestations, sources, and audit-context tabs.
+- Audit engagement detail includes an Assets tab that lists linked assets and supports engagement-scope link/unlink actions when the user has `asset:link`.
+
+**Routes mounted by the module:**
+
+```
+/assets                                      GET     asset:read
+/assets                                      POST    asset:create
+/assets/:id                                  GET     asset:read
+/assets/:id                                  PATCH   asset:update
+/assets/:id                                  DELETE  asset:delete
+
+/assets/:id/relationships                    GET     asset:read
+/assets/:id/relationships                    POST    asset:update
+/assets/:id/relationships/:relationshipId    DELETE  asset:update
+
+/assets/:id/attestations                     GET     asset:read
+/assets/:id/attest                           POST    asset:attest
+
+/assets/:id/sources                          GET     asset:read
+/assets/:id/sources                          POST    asset:admin
+
+/assets/:id/audit-context                    GET     asset:read
+/assets/:id/universe/:universeId             POST    asset:link
+/assets/:id/universe/:universeId             DELETE  asset:link
+/assets/:id/findings/:findingId              POST    asset:link
+/assets/:id/findings/:findingId              DELETE  asset:link
+/assets/:id/risks/:riskId                    POST    asset:link
+/assets/:id/risks/:riskId                    DELETE  asset:link
+/assets/:id/evidence/:evidenceId             POST    asset:link
+/assets/:id/evidence/:evidenceId             DELETE  asset:link
+
+/audit/universe/:id/assets                   GET     asset:read
+/audit/engagements/:id/assets                GET     asset:read
+/audit/engagements/:id/assets                POST    asset:link
+/audit/engagements/:id/assets/:assetId       DELETE  asset:link
+```
+
+**Seeded asset permissions:** `asset:read`, `asset:create`, `asset:update`, `asset:delete`, `asset:admin`, `asset:attest`, `asset:import`, `asset:link`, `asset:export`.
+
+**Not yet built:**
+- CSV/import workflow and external read-only adapter implementations.
+- Dashboard asset analytics cards.
+- Report-generation inclusion of "Assets in Scope".
+
+### 2.7 Background module — COMPLETE HTTP/control plane, PARTIAL job catalogue
 
 Folder: `src/modules/background/`
 
@@ -249,7 +312,7 @@ Folder: `src/modules/background/`
 - Migration sub-module (bulk import of legacy audit spreadsheets).
 - Jobs sub-module (bulk processing + report generation).
 
-### 2.7 Audit module — COMPLETE (services + HTTP routes)
+### 2.8 Audit module — COMPLETE (services + HTTP routes)
 
 Folder: `src/modules/audit/`
 
@@ -264,6 +327,7 @@ Folder: `src/modules/audit/`
 - Workflow owns approval notifications for plan/report submissions, rejections, and working-paper review. Audit queues report-issue and remediation-verification notifications through Messaging.
 - Evidence upload and working-paper snapshots delegate file storage to `DocumentService.upload(...)`.
 - Working-paper/report export returns a `.docx`-typed buffer using template content plus populated data, rendered via the shared `docx-template.utility.ts`. Two default DOCX templates (`Working Paper - GBB Default`, `Audit Report - GBB Default`) are seeded into `document_templates` from `prisma/templates/`.
+- Working-paper export (`GET /audit/working-papers/:id/export?format=docx|pdf`) lets any user with `working_paper:read` download an **approved** working paper as DOCX (default, via the seeded template) or PDF (rendered from working-paper sections via puppeteer in `working-paper.utility.ts`). Non-approved papers return `400`; an unknown `format` returns `400`.
 - Working-paper import preview accepts uploaded DOCX, XLS/XLSX, PDF, TXT/CSV, and Markdown files, stores the source file through DocumentService, maps extracted content into the selected/default working-paper template, and returns a reviewable draft preview before creating the working paper.
 - Working papers now persist optional template linkage, source document linkage, working-paper type, and import metadata for traceability.
 - Engagement status transitions now enforce configurable lifecycle gates from `system_config.audit_lifecycle_rules`: checklist completion and approved working papers before review, issued reports before reported status, and verified/closed findings before closure.
@@ -280,7 +344,7 @@ Folder: `src/modules/audit/`
 - Smoke-test data currently includes 1 audit universe item, 2 audit plans, 2 plan items, 1 engagement, 1 working paper, 1 finding, 1 issued report, 1 follow-up, 3 checklist rows, 1 risk category, 1 risk, 1 risk assessment, 3 workflow approvals, 5 approval steps, 1 assignment, 15 in-app notifications, 13 email logs, 18 sent queue rows, 5 scheduled jobs, 303 scheduled job runs, and 145 audit-log rows.
 - Smoke-test bug fixes completed: nullable `users.azure_oid` is no longer unique so multiple local users can exist without Azure IDs; role/permission listing endpoints were added for RBAC setup; plan-derived engagements now take `universeId`, `auditType`, and `priority` from the plan item instead of requiring duplicate request fields; report generation now accepts the request body; plan/report approval creation is transactional with the parent status update; approval-required notifications are queued after transaction commit; submitted reports without an approval can be resubmitted once to repair the missing approval; all audit/workflow/background notification send paths now enqueue work instead of blocking on SMTP; Director and CAE seeded roles can approve reports via `audit:write`; Prisma seed command is registered in `prisma.config.ts`; document template content is widened to `NVARCHAR(max)` so seeded DOCX XML templates fit.
 
-### 2.8 Risk module — COMPLETE (services + HTTP routes)
+### 2.9 Risk module — COMPLETE (services + HTTP routes)
 
 Folder: `src/modules/risk/`
 
@@ -320,7 +384,7 @@ Folder: `src/modules/risk/`
 /risk/monitoring/summary                          GET     audit:read
 ```
 
-### 2.9 Workflow module — COMPLETE (services + HTTP routes)
+### 2.10 Workflow module — COMPLETE (services + HTTP routes)
 
 Folder: `src/modules/workflow/`
 
@@ -359,7 +423,7 @@ Folder: `src/modules/workflow/`
 - Audit report rejection reason is stored on both `audit_reports.rejection_reason` and `workflow_approvals.rejection_reason` for audit-side and workflow-side reads respectively.
 - Local smoke-test approvals as of 2026-05-01: audit plan approved, audit working paper approved, and audit report approved through all three levels (audit manager -> director -> CAE).
 
-### 2.10 Dashboard module — COMPLETE (services + HTTP routes)
+### 2.11 Dashboard module — COMPLETE (services + HTTP routes)
 
 Folder: `src/modules/dashboard/`
 
@@ -386,7 +450,7 @@ Folder: `src/modules/dashboard/`
 /dashboard/approval-inbox        GET     audit:read     — caller's approval inbox summary
 ```
 
-### 2.11 Settings module - COMPLETE
+### 2.12 Settings module - COMPLETE
 
 Folder: `src/modules/settings/`
 
@@ -433,7 +497,7 @@ Folder: `src/modules/settings/`
 /settings/config/bulk-update                         POST    settings:manage
 ```
 
-### 2.12 Database schema
+### 2.13 Database schema
 
 `prisma/schema.prisma` — targets SQL Server.
 
@@ -458,6 +522,15 @@ Folder: `src/modules/settings/`
 | `documents` | File metadata. `storage_path` points to the provider-specific key. Soft-delete via `deleted_at`. Indexed on `(entity_type, entity_id)`. |
 | `document_versions` | Historical version snapshots. Unique on `(document_id, version_number)`. Current version lives on `documents`, not here. |
 | `document_templates` | Named reusable templates (working paper / audit report / finding / etc.). Soft-delete via `deleted_at`. Unique `name`. |
+| `assets` | Asset registry records with ownership, classification, lifecycle, CIA ratings, source/provenance, last-seen/last-attested dates, and soft-delete. |
+| `asset_relationships` | Directed asset dependency/relationship records, unique by source + target + relationship type. |
+| `asset_attestations` | Owner/custodian/admin attestations with immutable JSON snapshots of the confirmed asset state. |
+| `asset_sources` | Source-system provenance records for future read-only imports/syncs. |
+| `audit_universe_assets` | Many-to-many links between asset registry records and auditable universe entities. |
+| `audit_engagement_assets` | Asset scope records for audit engagements, with scope role/reason. |
+| `audit_finding_assets` | Affected-asset links for audit findings, with optional impact summary. |
+| `risk_asset_links` | Links between enterprise risks and affected/supporting assets. |
+| `audit_evidence_assets` | Links between audit evidence and assets. |
 | `scheduled_jobs` | Background job catalogue + last-run status. |
 | `scheduled_job_runs` | Per-execution history. |
 | `working_paper_templates` | Settings-managed working paper section templates. JSON sections stored as `NVARCHAR(MAX)`. One default enforced per audit type by service transaction. |
@@ -533,7 +606,7 @@ Workflow schema includes:
 
 ---
 
-### 2.13 Application entry point — COMPLETE
+### 2.14 Application entry point — COMPLETE
 
 `src/server.ts` is wired up. Boot order: validate config → `connectDatabase()` → build Express app → listen → `registerAllJobs()` + `schedulerService.startAll()`. Shutdown order (SIGTERM/SIGINT/uncaughtException/unhandledRejection): stop accepting connections → `schedulerService.stopAll()` → `disconnectDatabase()`, with a 10s force-exit timeout.
 
@@ -581,7 +654,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 
 ### 4.4 Frontend
 
-- Next.js frontend is scaffolded and active for dashboard, audit, risk, workflow, documents, logs, notifications, users, and settings workflows. Integration and predictive pages remain placeholders.
+- Next.js frontend is scaffolded and active for dashboard, audit, risk, workflow, documents, logs, notifications, users, and settings workflows. Asset registry screens are not built yet. Integration and predictive pages remain placeholders.
 
 ---
 

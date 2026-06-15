@@ -15,16 +15,16 @@ export declare const CreateRiskRequestSchema: z.ZodObject<{
     description: string;
     likelihood: number;
     impact: number;
-    categoryId: string;
     ownerId: string;
+    categoryId: string;
     universeId?: string | null | undefined;
 }, {
     title: string;
     description: string;
     likelihood: number;
     impact: number;
-    categoryId: string;
     ownerId: string;
+    categoryId: string;
     status?: RiskStatus | undefined;
     universeId?: string | null | undefined;
 }>;
@@ -41,17 +41,17 @@ export declare const UpdateRiskRequestSchema: z.ZodObject<{
     description?: string | undefined;
     likelihood?: number | undefined;
     impact?: number | undefined;
-    categoryId?: string | undefined;
     ownerId?: string | undefined;
     universeId?: string | null | undefined;
+    categoryId?: string | undefined;
 }, {
     title?: string | undefined;
     description?: string | undefined;
     likelihood?: number | undefined;
     impact?: number | undefined;
-    categoryId?: string | undefined;
     ownerId?: string | undefined;
     universeId?: string | null | undefined;
+    categoryId?: string | undefined;
 }>;
 export declare const UpdateRiskStatusRequestSchema: z.ZodObject<{
     status: z.ZodNativeEnum<typeof RiskStatus>;
@@ -74,16 +74,16 @@ export declare const RiskRegisterQuerySchema: z.ZodObject<{
     sortBy: "created_at" | "updated_at" | "title" | "current_score";
     sortOrder: "asc" | "desc";
     status?: RiskStatus | undefined;
-    categoryId?: string | undefined;
     ownerId?: string | undefined;
+    categoryId?: string | undefined;
 }, {
     status?: RiskStatus | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
     sortBy?: "created_at" | "updated_at" | "title" | "current_score" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
-    categoryId?: string | undefined;
     ownerId?: string | undefined;
+    categoryId?: string | undefined;
 }>;
 export type CreateRiskRequestDto = z.infer<typeof CreateRiskRequestSchema>;
 export type UpdateRiskRequestDto = z.infer<typeof UpdateRiskRequestSchema>;

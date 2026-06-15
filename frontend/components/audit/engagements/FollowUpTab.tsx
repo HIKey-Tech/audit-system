@@ -12,13 +12,13 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Select, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { evidenceApi, findingsApi, followUpApi } from '@/lib/api/audit';
-import { useSession, hasAnyRole } from '@/components/providers/AuthProvider';
+import { useSession, hasPermission } from '@/components/providers/AuthProvider';
 import type { AuditEngagementDetail, AuditEvidence, AuditFinding } from '@/lib/types/domain';
 
 export const FollowUpTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
   const session = useSession();
-  const isAuditor = hasAnyRole(session, ['audit_lead', 'auditor', 'audit_admin', 'super_admin']);
+  const canVerify = hasPermission(session, 'followup:verify');
 
   const findings = useQuery({
     queryKey: ['engagements', engagement.id, 'findings'],
@@ -51,7 +51,7 @@ export const FollowUpTab = ({ engagement }: { engagement: AuditEngagementDetail 
           finding={f}
           evidence={evidence.data ?? []}
           isAuditee={f.auditeeId === session.id}
-          isAuditor={isAuditor}
+          canVerify={canVerify}
           onChange={() => {
             qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
             qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'findings'] });
@@ -66,13 +66,13 @@ const FollowUpRow = ({
   finding,
   evidence,
   isAuditee,
-  isAuditor,
+  canVerify,
   onChange,
 }: {
   finding: AuditFinding;
   evidence: AuditEvidence[];
   isAuditee: boolean;
-  isAuditor: boolean;
+  canVerify: boolean;
   onChange: () => void;
 }): JSX.Element => {
   const [responseOpen, setResponseOpen] = useState(false);
@@ -155,7 +155,7 @@ const FollowUpRow = ({
               </Button>
             </>
           )}
-          {isAuditor && (
+          {canVerify && (
             <Button size="sm" onClick={() => setVerifyOpen((o) => !o)}>
               Verify
             </Button>

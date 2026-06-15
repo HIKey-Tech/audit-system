@@ -55,7 +55,7 @@ class ApprovalController {
     }
     async _getPendingApprovals(req, res, next) {
         try {
-            const { approvals, meta } = await this.approvalService.getPendingApprovalsForUser(req.user.id, req.query);
+            const { approvals, meta } = await this.approvalService.getPendingApprovalsForUser(req.user, req.query);
             res.status(200).json((0, api_response_type_1.buildResponse)(approvals, 'Pending approvals retrieved', meta));
         }
         catch (err) {
@@ -82,7 +82,7 @@ class ApprovalController {
     }
     async _approve(req, res, next) {
         try {
-            const approval = await this.approvalService.approve(req.params.id, req.user.id, req.body.comment);
+            const approval = await this.approvalService.approve(req.params.id, req.user, req.body.comment);
             res.status(200).json((0, api_response_type_1.buildResponse)(approval, 'Approval step approved'));
         }
         catch (err) {
@@ -91,7 +91,7 @@ class ApprovalController {
     }
     async _reject(req, res, next) {
         try {
-            const approval = await this.approvalService.reject(req.params.id, req.user.id, req.body.reason);
+            const approval = await this.approvalService.reject(req.params.id, req.user, req.body.reason);
             res.status(200).json((0, api_response_type_1.buildResponse)(approval, 'Approval rejected'));
         }
         catch (err) {

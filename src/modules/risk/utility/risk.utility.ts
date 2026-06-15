@@ -1,11 +1,6 @@
 import { AppError } from '../../../shared/errors/app.error';
 import { RiskScoreBand } from '../domain/enum/risk.enum';
 
-export const AUDITEE_ROLE = 'auditee';
-
-export const hasAuditeeRole = (roles: string[]): boolean =>
-  roles.includes(AUDITEE_ROLE);
-
 /** Permission-based authorization gate (see audit.utility for rationale). */
 export const assertHasPermission = (
   permissions: string[],

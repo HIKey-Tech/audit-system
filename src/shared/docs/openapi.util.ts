@@ -76,6 +76,7 @@ export const buildOpenApiDocument = (): ReturnType<OpenApiGeneratorV3['generateD
       { name: 'Auth', description: 'Authentication, SSO, refresh tokens' },
       { name: 'Users', description: 'User CRUD, profile, role assignment' },
       { name: 'Documents', description: 'Document upload, versioning, templates, file serving' },
+      { name: 'Assets', description: 'Asset registry, attestations, provenance, and audit links' },
     ],
   });
 };

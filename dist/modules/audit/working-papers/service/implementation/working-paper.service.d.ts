@@ -4,7 +4,7 @@ import { IApprovalService } from '../../../../workflow/approval/service/interfac
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { CreateWorkingPaperRequestDto, ImportWorkingPaperMetadataDto, UpdateWorkingPaperRequestDto } from '../../dto/request/working-paper.request.dto';
 import { WorkingPaperImportPreviewResponseDto, WorkingPaperResponseDto } from '../../dto/response/working-paper.response.dto';
-import { IWorkingPaperService, WorkingPaperImportFileDto } from '../interface/working-paper.service.interface';
+import { IWorkingPaperService, WorkingPaperExportFormat, WorkingPaperImportFileDto } from '../interface/working-paper.service.interface';
 export declare class WorkingPaperService implements IWorkingPaperService {
     private readonly documentService;
     private readonly templateService;
@@ -18,7 +18,8 @@ export declare class WorkingPaperService implements IWorkingPaperService {
     rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     getWorkingPaperById(id: string): Promise<WorkingPaperResponseDto>;
     listWorkingPapers(engagementId: string): Promise<WorkingPaperResponseDto[]>;
-    exportWorkingPaper(id: string): Promise<ExportedAuditFile>;
+    exportWorkingPaper(id: string, format: WorkingPaperExportFormat): Promise<ExportedAuditFile>;
+    private _renderWorkingPaperPdf;
     private _assertEngagementInProgress;
     private _getEngagementForWorkingPaperImport;
     private _resolveImportTemplate;

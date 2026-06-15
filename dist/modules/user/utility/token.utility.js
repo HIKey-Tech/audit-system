@@ -36,7 +36,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.verifyRefreshToken = exports.buildTokenPair = exports.generatePasswordResetToken = exports.hashToken = exports.comparePassword = exports.hashPassword = exports.generateTemporaryPassword = exports.generateRefreshToken = exports.generateAccessToken = void 0;
+exports.buildTokenPair = exports.generatePasswordResetToken = exports.hashToken = exports.comparePassword = exports.hashPassword = exports.generateTemporaryPassword = exports.generateRefreshToken = exports.generateAccessToken = void 0;
 // src/modules/user/utility/token.utility.ts
 const jwt = __importStar(require("jsonwebtoken"));
 const crypto_1 = __importDefault(require("crypto"));
@@ -112,8 +112,4 @@ const buildTokenPair = (accessToken, refreshToken) => ({
     tokenType: 'Bearer',
 });
 exports.buildTokenPair = buildTokenPair;
-const verifyRefreshToken = (token) => {
-    return jwt.verify(token, app_config_1.config.jwt.refreshSecret);
-};
-exports.verifyRefreshToken = verifyRefreshToken;
 //# sourceMappingURL=token.utility.js.map

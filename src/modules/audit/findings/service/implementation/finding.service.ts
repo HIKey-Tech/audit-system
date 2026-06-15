@@ -17,6 +17,8 @@ import { IFindingService } from '../interface/finding.service.interface';
 
 const findingInclude = {
   engagement: { select: { reference_number: true } },
+  checklist: { select: { control_reference: true, control_description: true } },
+  risk: { select: { title: true } },
   auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
   created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
 };
@@ -28,11 +30,19 @@ export class FindingService implements IFindingService {
     if (dto.workingPaperId) {
       await this._assertWorkingPaperInEngagement(dto.workingPaperId, engagementId);
     }
+    if (dto.checklistId) {
+      await this._assertChecklistInEngagement(dto.checklistId, engagementId);
+    }
+    if (dto.riskId) {
+      await this._assertRiskExists(dto.riskId);
+    }
 
     const finding = await prisma.audit_Finding.create({
       data: {
         engagement_id: engagementId,
         working_paper_id: dto.workingPaperId,
+        checklist_id: dto.checklistId,
+        risk_id: dto.riskId,
         title: dto.title,
         description: dto.description,
         category: dto.category,
@@ -44,6 +54,7 @@ export class FindingService implements IFindingService {
         due_date: new Date(dto.dueDate),
         created_by_id: actor.id,
       },
+      include: findingInclude,
     });
 
     logger.info('Audit finding created', { findingId: finding.id, engagementId, actorId: actor.id });
@@ -59,11 +70,19 @@ export class FindingService implements IFindingService {
     if (dto.workingPaperId) {
       await this._assertWorkingPaperInEngagement(dto.workingPaperId, finding.engagement_id);
     }
+    if (dto.checklistId) {
+      await this._assertChecklistInEngagement(dto.checklistId, finding.engagement_id);
+    }
+    if (dto.riskId) {
+      await this._assertRiskExists(dto.riskId);
+    }
 
     const updated = await prisma.audit_Finding.update({
       where: { id },
       data: {
         ...(dto.workingPaperId !== undefined && { working_paper_id: dto.workingPaperId }),
+        ...(dto.checklistId !== undefined && { checklist_id: dto.checklistId }),
+        ...(dto.riskId !== undefined && { risk_id: dto.riskId }),
         ...(dto.title !== undefined && { title: dto.title }),
         ...(dto.description !== undefined && { description: dto.description }),
         ...(dto.category !== undefined && { category: dto.category }),
@@ -74,6 +93,7 @@ export class FindingService implements IFindingService {
         ...(dto.auditeeId !== undefined && { auditee_id: dto.auditeeId }),
         ...(dto.dueDate !== undefined && { due_date: new Date(dto.dueDate) }),
       },
+      include: findingInclude,
     });
 
     logger.info('Audit finding updated', { findingId: id, actorId: actor.id });
@@ -171,6 +191,9 @@ export class FindingService implements IFindingService {
       ...(query.severity && { severity: query.severity }),
       ...(query.status && { status: query.status }),
       ...(query.category && { category: query.category }),
+      ...(query.controlReference && {
+        checklist: { control_reference: { contains: query.controlReference } },
+      }),
       ...(query.auditeeId && { auditee_id: query.auditeeId }),
       ...(query.search && {
         OR: [
@@ -208,6 +231,22 @@ export class FindingService implements IFindingService {
       select: { id: true },
     });
     if (!paper) throw AppError.badRequest('Working paper does not belong to this engagement');
+  }
+
+  private async _assertChecklistInEngagement(checklistId: string, engagementId: string): Promise<void> {
+    const checklist = await prisma.audit_Checklist.findFirst({
+      where: { id: checklistId, engagement_id: engagementId },
+      select: { id: true },
+    });
+    if (!checklist) throw AppError.badRequest('Checklist item does not belong to this engagement');
+  }
+
+  private async _assertRiskExists(riskId: string): Promise<void> {
+    const risk = await prisma.risk_Register.findFirst({
+      where: { id: riskId, deleted_at: null },
+      select: { id: true },
+    });
+    if (!risk) throw AppError.badRequest('Risk does not exist');
   }
 
   private async _getFinding(id: string) {

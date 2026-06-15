@@ -44,12 +44,3 @@ export const hasPermission = (
   return user.permissions.includes(permission);
 };
 
-export const hasRole = (user: SessionUser | null, role: string): boolean => {
-  if (!user) return false;
-  return user.roles.includes(role);
-};
-
-export const hasAnyRole = (user: SessionUser | null, roles: string[]): boolean => {
-  if (!user) return false;
-  return roles.some((r) => user.roles.includes(r));
-};

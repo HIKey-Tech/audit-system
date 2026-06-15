@@ -16,6 +16,8 @@ export interface WorkingPaperImportFileDto {
   buffer: Buffer;
 }
 
+export type WorkingPaperExportFormat = 'docx' | 'pdf';
+
 export interface IWorkingPaperService {
   createWorkingPaper(engagementId: string, dto: CreateWorkingPaperRequestDto, actor: ActorContext): Promise<WorkingPaperResponseDto>;
   previewWorkingPaperImport(engagementId: string, file: WorkingPaperImportFileDto, dto: ImportWorkingPaperMetadataDto, actor: ActorContext): Promise<WorkingPaperImportPreviewResponseDto>;
@@ -25,5 +27,5 @@ export interface IWorkingPaperService {
   rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
   getWorkingPaperById(id: string): Promise<WorkingPaperResponseDto>;
   listWorkingPapers(engagementId: string): Promise<WorkingPaperResponseDto[]>;
-  exportWorkingPaper(id: string): Promise<ExportedAuditFile>;
+  exportWorkingPaper(id: string, format: WorkingPaperExportFormat): Promise<ExportedAuditFile>;
 }

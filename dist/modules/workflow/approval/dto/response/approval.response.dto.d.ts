@@ -12,7 +12,8 @@ export interface ApprovalStepResponseDto {
     id: string;
     approvalId: string;
     level: number;
-    approverId: string;
+    approverId: string | null;
+    requiredPermission: string | null;
     status: string;
     comment: string | null;
     actedAt: string | null;
@@ -38,12 +39,13 @@ export declare const mapApprovalStepToResponse: (step: {
     id: string;
     approval_id: string;
     level: number;
-    approver_id: string;
+    approver_id: string | null;
+    required_permission: string | null;
     status: string;
     comment: string | null;
     acted_at: Date | null;
     created_at: Date;
-    approver?: WorkflowUserLike;
+    approver?: WorkflowUserLike | null;
 }) => ApprovalStepResponseDto;
 export declare const mapApprovalToResponse: (approval: {
     id: string;

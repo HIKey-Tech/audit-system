@@ -1,4 +1,3 @@
-import { JwtPayload } from '../../../shared/middleware/auth.middleware';
 import { TokenPair } from '../domain/entity/token.entity';
 export declare const generateAccessToken: (payload: {
     sub: string;
@@ -23,5 +22,4 @@ export declare const generatePasswordResetToken: () => {
     expiresAt: Date;
 };
 export declare const buildTokenPair: (accessToken: string, refreshToken: string) => TokenPair;
-export declare const verifyRefreshToken: (token: string) => JwtPayload;
 //# sourceMappingURL=token.utility.d.ts.map

@@ -151,7 +151,7 @@ export class ReportService implements IReportService {
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be approved');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditReport, id);
-    await this.approvalService.approve(approval.id, actor.id);
+    await this.approvalService.approve(approval.id, actor);
     const updated = await prisma.audit_Report.findFirst({
       where: { id, deleted_at: null },
       include: reportInclude,
@@ -169,7 +169,7 @@ export class ReportService implements IReportService {
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be rejected');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditReport, id);
-    await this.approvalService.reject(approval.id, actor.id, reason);
+    await this.approvalService.reject(approval.id, actor, reason);
     const updated = await prisma.audit_Report.findFirst({
       where: { id, deleted_at: null },
       include: reportInclude,

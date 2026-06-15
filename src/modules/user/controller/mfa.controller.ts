@@ -5,7 +5,7 @@ import {
   authenticate,
   requireMfaToken,
   requireEnrollmentContext,
-  requireRole,
+  requirePermission,
 } from '../../../shared/middleware/auth.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { IMfaService } from '../service/interface/mfa.service.interface';
@@ -78,13 +78,13 @@ export class MfaController {
 
     /**
      * @route  POST /auth/2fa/admin-reset
-     * @desc   Super-admin: reset a user's 2FA (lockout recovery)
-     * @access super_admin
+     * @desc   Reset a user's 2FA (lockout recovery)
+     * @access user:reset_2fa
      */
     this.router.post(
       '/admin-reset',
       authenticate,
-      requireRole('super_admin'),
+      requirePermission('user:reset_2fa'),
       validate(MfaAdminResetRequestSchema),
       this._adminReset.bind(this),
     );

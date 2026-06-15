@@ -11,6 +11,8 @@ const audit_utility_1 = require("../../../utility/audit.utility");
 const finding_response_dto_1 = require("../../dto/response/finding.response.dto");
 const findingInclude = {
     engagement: { select: { reference_number: true } },
+    checklist: { select: { control_reference: true, control_description: true } },
+    risk: { select: { title: true } },
     auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
     created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
 };
@@ -21,10 +23,18 @@ class FindingService {
         if (dto.workingPaperId) {
             await this._assertWorkingPaperInEngagement(dto.workingPaperId, engagementId);
         }
+        if (dto.checklistId) {
+            await this._assertChecklistInEngagement(dto.checklistId, engagementId);
+        }
+        if (dto.riskId) {
+            await this._assertRiskExists(dto.riskId);
+        }
         const finding = await prisma_client_1.prisma.audit_Finding.create({
             data: {
                 engagement_id: engagementId,
                 working_paper_id: dto.workingPaperId,
+                checklist_id: dto.checklistId,
+                risk_id: dto.riskId,
                 title: dto.title,
                 description: dto.description,
                 category: dto.category,
@@ -36,6 +46,7 @@ class FindingService {
                 due_date: new Date(dto.dueDate),
                 created_by_id: actor.id,
             },
+            include: findingInclude,
         });
         logger_util_1.logger.info('Audit finding created', { findingId: finding.id, engagementId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.create', module: 'audit', entityType: 'audit_finding', entityId: finding.id });
@@ -51,10 +62,18 @@ class FindingService {
         if (dto.workingPaperId) {
             await this._assertWorkingPaperInEngagement(dto.workingPaperId, finding.engagement_id);
         }
+        if (dto.checklistId) {
+            await this._assertChecklistInEngagement(dto.checklistId, finding.engagement_id);
+        }
+        if (dto.riskId) {
+            await this._assertRiskExists(dto.riskId);
+        }
         const updated = await prisma_client_1.prisma.audit_Finding.update({
             where: { id },
             data: {
                 ...(dto.workingPaperId !== undefined && { working_paper_id: dto.workingPaperId }),
+                ...(dto.checklistId !== undefined && { checklist_id: dto.checklistId }),
+                ...(dto.riskId !== undefined && { risk_id: dto.riskId }),
                 ...(dto.title !== undefined && { title: dto.title }),
                 ...(dto.description !== undefined && { description: dto.description }),
                 ...(dto.category !== undefined && { category: dto.category }),
@@ -65,6 +84,7 @@ class FindingService {
                 ...(dto.auditeeId !== undefined && { auditee_id: dto.auditeeId }),
                 ...(dto.dueDate !== undefined && { due_date: new Date(dto.dueDate) }),
             },
+            include: findingInclude,
         });
         logger_util_1.logger.info('Audit finding updated', { findingId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.update', module: 'audit', entityType: 'audit_finding', entityId: id });
@@ -150,6 +170,9 @@ class FindingService {
             ...(query.severity && { severity: query.severity }),
             ...(query.status && { status: query.status }),
             ...(query.category && { category: query.category }),
+            ...(query.controlReference && {
+                checklist: { control_reference: { contains: query.controlReference } },
+            }),
             ...(query.auditeeId && { auditee_id: query.auditeeId }),
             ...(query.search && {
                 OR: [
@@ -187,6 +210,22 @@ class FindingService {
         });
         if (!paper)
             throw app_error_1.AppError.badRequest('Working paper does not belong to this engagement');
+    }
+    async _assertChecklistInEngagement(checklistId, engagementId) {
+        const checklist = await prisma_client_1.prisma.audit_Checklist.findFirst({
+            where: { id: checklistId, engagement_id: engagementId },
+            select: { id: true },
+        });
+        if (!checklist)
+            throw app_error_1.AppError.badRequest('Checklist item does not belong to this engagement');
+    }
+    async _assertRiskExists(riskId) {
+        const risk = await prisma_client_1.prisma.risk_Register.findFirst({
+            where: { id: riskId, deleted_at: null },
+            select: { id: true },
+        });
+        if (!risk)
+            throw app_error_1.AppError.badRequest('Risk does not exist');
     }
     async _getFinding(id) {
         const finding = await prisma_client_1.prisma.audit_Finding.findFirst({ where: { id, deleted_at: null } });

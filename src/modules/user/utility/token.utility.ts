@@ -4,7 +4,6 @@ import crypto from 'crypto';
 import bcrypt from 'bcryptjs';
 import ms from 'ms';
 import { config } from '../../../shared/config/app.config';
-import { JwtPayload } from '../../../shared/middleware/auth.middleware';
 import { TokenPair } from '../domain/entity/token.entity';
 
 const TEMP_PASSWORD_LOWER = 'abcdefghijkmnopqrstuvwxyz';
@@ -105,7 +104,3 @@ export const buildTokenPair = (
   expiresIn: Math.floor(ms(config.jwt.expiresIn) / 1000),
   tokenType: 'Bearer',
 });
-
-export const verifyRefreshToken = (token: string): JwtPayload => {
-  return jwt.verify(token, config.jwt.refreshSecret) as JwtPayload;
-};

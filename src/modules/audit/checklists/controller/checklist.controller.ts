@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
-import { UpdateChecklistItemRequestSchema } from '../dto/request/checklist.request.dto';
+import { CreateChecklistItemRequestSchema, UpdateChecklistItemRequestSchema } from '../dto/request/checklist.request.dto';
 import { IChecklistService } from '../service/interface/checklist.service.interface';
 
 export class ChecklistController {
@@ -22,6 +22,13 @@ export class ChecklistController {
      * @access Private - audit:read
      */
     this.router.get('/engagements/:id/checklists', requirePermission('checklist:read'), this._getChecklists.bind(this));
+
+    /**
+     * @route  POST /audit/engagements/:id/checklists
+     * @desc   Add a custom checklist item to an engagement
+     * @access Private - checklist:create
+     */
+    this.router.post('/engagements/:id/checklists', requirePermission('checklist:create'), validate(CreateChecklistItemRequestSchema), this._createChecklistItem.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/checklists/progress
@@ -58,6 +65,15 @@ export class ChecklistController {
     try {
       const progress = await this.checklistService.getChecklistProgress(req.params.id);
       res.status(200).json(buildResponse(progress));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _createChecklistItem(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const item = await this.checklistService.createChecklistItem(req.params.id, req.body, req.user!);
+      res.status(201).json(buildResponse(item, 'Checklist item added'));
     } catch (err) {
       next(err);
     }

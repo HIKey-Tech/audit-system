@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { DocumentService } from '../document';
+import { UserService } from '../user';
 import { RiskRegisterService } from '../risk/register/service/implementation/register.service';
 import { reportTemplateService } from '../settings/service/implementation/report-template.service';
 import { workingPaperTemplateService } from '../settings/service/implementation/working-paper-template.service';
@@ -29,11 +30,12 @@ export const createAuditModule = (): Router => {
   const router = Router();
 
   const documentService = new DocumentService();
+  const userService = new UserService();
   const riskRegisterService = new RiskRegisterService();
   const universeService = new UniverseService(riskRegisterService);
   const planningService = new PlanningService();
   const checklistService = new ChecklistService();
-  const engagementService = new EngagementService(checklistService);
+  const engagementService = new EngagementService(checklistService, userService);
   const workingPaperService = new WorkingPaperService(documentService, workingPaperTemplateService);
   const evidenceService = new EvidenceService(documentService);
   const findingService = new FindingService();

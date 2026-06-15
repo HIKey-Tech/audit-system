@@ -21,18 +21,6 @@ export type AppRole =
 // Permissions helper (pure functions — can be used outside React)
 // ─────────────────────────────────────────────────────────────
 
-/** Returns true if the user holds the exact role. */
-export const userHasRole = (user: SessionUser | null, role: AppRole): boolean => {
-  if (!user) return false;
-  return user.roles.includes(role);
-};
-
-/** Returns true if the user holds ANY of the listed roles. */
-export const userHasAnyRole = (user: SessionUser | null, roles: AppRole[]): boolean => {
-  if (!user) return false;
-  return roles.some((r) => user.roles.includes(r));
-};
-
 /** Returns true if the user has the specific permission string (super_admin always passes). */
 export const userHasPermission = (user: SessionUser | null, permission: string): boolean => {
   if (!user) return false;
@@ -80,6 +68,7 @@ export const isExecutive = (user: SessionUser | null): boolean =>
 export interface NavVisibility {
   dashboard: boolean;
   analytics: boolean;
+  assets: boolean;
   auditUniverse: boolean;
   auditPlans: boolean;
   engagements: boolean;
@@ -103,6 +92,7 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
     return {
       dashboard: false,
       analytics: false,
+      assets: false,
       auditUniverse: false,
       auditPlans: false,
       engagements: false,
@@ -125,6 +115,7 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
   return {
     dashboard: true,
     analytics: userHasPermission(user, 'dashboard:read'),
+    assets: userHasPermission(user, 'asset:read'),
     auditUniverse: userHasPermission(user, 'universe:read'),
     auditPlans: userHasPermission(user, 'plan:read'),
     engagements: userHasPermission(user, 'engagement:read'),
@@ -197,24 +188,18 @@ export const usePermissions = () => {
     () => ({
       user: session,
 
-      // Role checks
-      hasRole: (role: AppRole) => userHasRole(session, role),
-      hasAnyRole: (roles: AppRole[]) => userHasAnyRole(session, roles),
+      // Permission check (super_admin always passes)
       hasPermission: (perm: string) => userHasPermission(session, perm),
 
-      // Convenience booleans
+      // Convenience booleans — all permission-derived (super_admin is the one
+      // sanctioned system-role bootstrap).
       isSuperAdmin: session.roles.includes('super_admin'),
-      isAuditAdmin: session.roles.includes('audit_admin'),
-      isAuditManager: session.roles.includes('audit_manager'),
       isAdminLevel: isAdminLevel(session),
       canManageAuditProgramme: canManageAuditProgramme(session),
       isFieldAuditor: isFieldAuditor(session),
-      isAuditLead: session.roles.includes('audit_lead'),
-      isAuditor: session.roles.includes('auditor'),
       isAuditee: isAuditee(session),
       isDirector: isDirector(session),
       isExecutive: isExecutive(session),
-      isCae: session.roles.includes('cae'),
 
       // Computed visibility maps
       nav: getNavVisibility(session),
@@ -239,13 +224,17 @@ export const usePermissions = () => {
         userHasPermission(session, 'user:create')
         || userHasPermission(session, 'user:update')
         || userHasPermission(session, 'user:admin'),
-      canDeactivateUsers:
-        session.roles.includes('super_admin')
-        && userHasPermission(session, 'user:deactivate'),
-      canDeleteUsers:
-        session.roles.includes('super_admin')
-        && userHasPermission(session, 'user:delete'),
+      canDeactivateUsers: userHasPermission(session, 'user:deactivate'),
+      canDeleteUsers: userHasPermission(session, 'user:delete'),
       canReadUsers: userHasPermission(session, 'user:read'),
+      canReadAssets: userHasPermission(session, 'asset:read'),
+      canCreateAssets: userHasPermission(session, 'asset:create'),
+      canUpdateAssets: userHasPermission(session, 'asset:update'),
+      canDeleteAssets: userHasPermission(session, 'asset:delete'),
+      canAdminAssets: userHasPermission(session, 'asset:admin'),
+      canAttestAssets: userHasPermission(session, 'asset:attest'),
+      canLinkAssets: userHasPermission(session, 'asset:link'),
+      canExportAssets: userHasPermission(session, 'asset:export'),
     }),
     [session],
   );

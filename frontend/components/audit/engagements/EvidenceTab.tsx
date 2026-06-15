@@ -13,14 +13,14 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { evidenceApi } from '@/lib/api/audit';
 import { documentsApi } from '@/lib/api/documents';
 import { formatDate, formatFileSize } from '@/lib/utils/format';
-import { useSession, hasAnyRole } from '@/components/providers/AuthProvider';
+import { useSession, hasPermission } from '@/components/providers/AuthProvider';
 import { cn } from '@/lib/utils/cn';
 import type { AuditEngagementDetail, AuditEvidence } from '@/lib/types/domain';
 
 export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
   const session = useSession();
-  const isAdmin = hasAnyRole(session, ['super_admin', 'audit_admin']);
+  const canDispute = hasPermission(session, 'evidence:dispute');
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [disputing, setDisputing] = useState<AuditEvidence | null>(null);
@@ -129,7 +129,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
                     <Download className="h-3.5 w-3.5" />
                     Download
                   </a>
-                  {isAdmin && !ev.isDisputed && (
+                  {canDispute && !ev.isDisputed && (
                     <Button
                       size="sm"
                       variant="ghost"

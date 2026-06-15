@@ -18,6 +18,7 @@ import { DocumentService } from '../../../document/service/implementation/docume
 export const JOB_KEYS = {
   TOKEN_CLEANUP_HOURLY: 'BG:TOKEN:CLEANUP:HOURLY',
   AUDIT_REMINDER_DAILY: 'BG:AUDIT:REMINDER:DAILY',
+  AUDIT_FINDING_OVERDUE_DAILY: 'BG:AUDIT:FINDING_OVERDUE:DAILY',
   MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
   WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
   LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
@@ -313,6 +314,104 @@ export const registerAllJobs = (): void => {
 
       logger.info('Audit reminder job completed', {
         engagementsFound: engagements.length,
+        notificationsSent,
+      });
+    },
+  });
+
+  // BG:AUDIT:FINDING_OVERDUE:DAILY — nag auditees + lead auditors on findings approaching or past their due date
+  schedulerService.register({
+    key: JOB_KEYS.AUDIT_FINDING_OVERDUE_DAILY,
+    name: 'Audit Finding Overdue Reminder',
+    description: 'Reminds auditees and lead auditors of findings approaching or past their remediation due date',
+    cronExpression: '0 8 * * *', // Every day at 08:00
+    handler: async () => {
+      const now = new Date();
+      const reminderWindowEnd = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
+
+      const findings = await prisma.audit_Finding.findMany({
+        where: {
+          deleted_at: null,
+          status: { notIn: ['verified', 'closed'] }, // not yet remediated/verified
+          due_date: { lte: reminderWindowEnd }, // overdue or due within 3 days
+        },
+        select: {
+          id: true,
+          title: true,
+          severity: true,
+          due_date: true,
+          auditee: {
+            select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+          },
+          engagement: {
+            select: {
+              reference_number: true,
+              lead_auditor: {
+                select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+              },
+            },
+          },
+        },
+        orderBy: { due_date: 'asc' },
+      });
+
+      let notificationsSent = 0;
+
+      for (const finding of findings) {
+        const dueDate = finding.due_date.toISOString();
+        const isOverdue = finding.due_date.getTime() < now.getTime();
+        const daysOverdue = Math.ceil((now.getTime() - finding.due_date.getTime()) / 86_400_000);
+        const daysRemaining = Math.max(
+          0,
+          Math.ceil((finding.due_date.getTime() - now.getTime()) / 86_400_000),
+        );
+        const statusLabel = isOverdue ? `overdue by ${daysOverdue} day(s)` : `due in ${daysRemaining} day(s)`;
+        const recipients = [finding.auditee, finding.engagement.lead_auditor];
+
+        for (const recipient of recipients) {
+          const recipientName =
+            recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+          const findingVariables = {
+            recipientName,
+            findingTitle: finding.title,
+            engagementReference: finding.engagement.reference_number,
+            severity: finding.severity,
+            dueDate,
+            statusLabel,
+          };
+
+          try {
+            await notificationQueueService.enqueue('in_app', {
+              userId: recipient.id,
+              title: isOverdue ? 'Finding remediation overdue' : 'Finding remediation due soon',
+              body: `Finding "${finding.title}" (${finding.engagement.reference_number}) is ${statusLabel}.`,
+              type: isOverdue ? 'error' : 'warning',
+              referenceType: 'audit_finding',
+              referenceId: finding.id,
+              metadata: { findingTitle: finding.title, dueDate, severity: finding.severity },
+              eventKey: 'audit.finding.overdue',
+              variables: findingVariables,
+            });
+            await notificationQueueService.enqueue('email', {
+              to: recipient.email,
+              subject: `Finding ${isOverdue ? 'Overdue' : 'Due Soon'}: ${finding.title}`,
+              text: `Finding "${finding.title}" (${finding.engagement.reference_number}) is ${statusLabel}. Due: ${dueDate}.`,
+              eventKey: 'audit.finding.overdue',
+              variables: findingVariables,
+            });
+            notificationsSent += 2;
+          } catch (err) {
+            logger.error('Audit finding overdue notification failed', {
+              err,
+              findingId: finding.id,
+              recipientId: recipient.id,
+            });
+          }
+        }
+      }
+
+      logger.info('Audit finding overdue job completed', {
+        findingsFound: findings.length,
         notificationsSent,
       });
     },

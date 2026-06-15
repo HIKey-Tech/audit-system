@@ -138,7 +138,7 @@ class ReportService {
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be approved');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, id);
-        await this.approvalService.approve(approval.id, actor.id);
+        await this.approvalService.approve(approval.id, actor);
         const updated = await prisma_client_1.prisma.audit_Report.findFirst({
             where: { id, deleted_at: null },
             include: reportInclude,
@@ -155,7 +155,7 @@ class ReportService {
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be rejected');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditReport, id);
-        await this.approvalService.reject(approval.id, actor.id, reason);
+        await this.approvalService.reject(approval.id, actor, reason);
         const updated = await prisma_client_1.prisma.audit_Report.findFirst({
             where: { id, deleted_at: null },
             include: reportInclude,

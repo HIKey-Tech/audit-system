@@ -18,6 +18,8 @@ export declare class FindingService implements IFindingService {
     private _buildFindingWhere;
     private _assertEngagementAllowsFindings;
     private _assertWorkingPaperInEngagement;
+    private _assertChecklistInEngagement;
+    private _assertRiskExists;
     private _getFinding;
 }
 //# sourceMappingURL=finding.service.d.ts.map

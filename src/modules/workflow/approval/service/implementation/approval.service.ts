@@ -15,7 +15,7 @@ import {
   IApprovalStatusService,
 } from '../../../../audit/approval-status/service/interface/approval-status.service.interface';
 import { approvalStatusService as defaultApprovalStatusService } from '../../../../audit/approval-status/service/implementation/approval-status.service';
-import { getApprovalMatrix } from '../../../../audit/utility/audit-config.utility';
+import { ApprovalMatrix, ENGAGEMENT_MANAGER_APPROVER, getApprovalMatrix } from '../../../../audit/utility/audit-config.utility';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import {
   WorkflowApprovalStatus,
@@ -25,7 +25,7 @@ import {
 import { assertHasPermission } from '../../../utility/workflow.utility';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
 import { ApprovalResponseDto, mapApprovalToResponse } from '../../dto/response/approval.response.dto';
-import { IApprovalService } from '../interface/approval.service.interface';
+import { ApprovalActor, IApprovalService } from '../interface/approval.service.interface';
 
 const workflowUserSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -60,6 +60,24 @@ interface ApprovalNotificationContext {
   variables?: Record<string, string>;
 }
 
+/** A resolved approval level: either pinned to one user or open to any permission holder. */
+interface ApproverLevelSpec {
+  approverId: string | null;
+  requiredPermission: string;
+}
+
+/** Just enough of a step to work out who should be notified / who may act. */
+interface StepRecipientSpec {
+  approverId: string | null;
+  requiredPermission: string | null;
+}
+
+/** Capability permission a user must hold to act as an engagement's manager-level approver. */
+const ENGAGEMENT_MANAGER_PERMISSION: Partial<Record<WorkflowEntityType, string>> = {
+  [WorkflowEntityType.AuditWorkingPaper]: 'working_paper:approve',
+  [WorkflowEntityType.AuditReport]: 'report:approve',
+};
+
 export class ApprovalService implements IApprovalService {
   constructor(private readonly approvalStatusService: IApprovalStatusService = defaultApprovalStatusService) {}
 
@@ -79,8 +97,8 @@ export class ApprovalService implements IApprovalService {
     });
     if (existing) throw AppError.conflict('A pending approval already exists for this entity');
 
-    const approverIds = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
-    if (approverIds.length === 0) throw AppError.badRequest('No approvers configured for this approval');
+    const levels = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
+    if (levels.length === 0) throw AppError.badRequest('No approvers configured for this approval');
 
     const createApprovalRecord = async (client: Prisma.TransactionClient) => {
       const created = await client.workflow_Approval.create({
@@ -93,10 +111,11 @@ export class ApprovalService implements IApprovalService {
       });
 
       await client.workflow_Approval_Step.createMany({
-        data: approverIds.map((approverId, index) => ({
+        data: levels.map((spec, index) => ({
           approval_id: created.id,
           level: index + 1,
-          approver_id: approverId,
+          approver_id: spec.approverId,
+          required_permission: spec.requiredPermission,
         })),
       });
 
@@ -124,7 +143,7 @@ export class ApprovalService implements IApprovalService {
       module: 'workflow',
       entityType: dto.entityType,
       entityId: dto.entityId,
-      newValues: { approvalId: approval.id, approverIds },
+      newValues: { approvalId: approval.id, levels },
     });
 
     return mapApprovalToResponse(approval);
@@ -134,37 +153,45 @@ export class ApprovalService implements IApprovalService {
     const currentStep = approval.steps?.find((step) => step.level === approval.currentLevel);
     if (!currentStep) return;
 
-    void this._queueApprovalCreatedAsync(approval, currentStep.approverId);
+    void this._queueApprovalCreatedAsync(approval, {
+      approverId: currentStep.approverId,
+      requiredPermission: currentStep.requiredPermission,
+    });
   }
 
   private async _queueApprovalCreatedAsync(
     approval: ApprovalResponseDto,
-    approverId: string,
+    step: StepRecipientSpec,
   ): Promise<void> {
+    const recipientIds = await this._stepRecipientIds(step);
+    if (recipientIds.length === 0) return;
+
     const [entityReference, submitterName] = await Promise.all([
       this._resolveEntityReference(approval.entityType, approval.entityId),
       this._resolveActorName(approval.submittedById),
     ]);
 
-    this._queueNotification(
-      approverId,
-      {
-        title: 'Approval required',
-        body: `A ${approval.entityType} requires your approval.`,
-        type: 'info',
-        referenceType: 'workflow_approval',
-        referenceId: approval.id,
-      },
-      {
-        eventKey: 'workflow.approval.created',
-        variables: {
-          entityType: approval.entityType,
-          entityReference,
-          submitterName,
-          submittedAt: approval.createdAt,
+    for (const recipientId of recipientIds) {
+      this._queueNotification(
+        recipientId,
+        {
+          title: 'Approval required',
+          body: `A ${approval.entityType} requires your approval.`,
+          type: 'info',
+          referenceType: 'workflow_approval',
+          referenceId: approval.id,
         },
-      },
-    );
+        {
+          eventKey: 'workflow.approval.created',
+          variables: {
+            entityType: approval.entityType,
+            entityReference,
+            submitterName,
+            submittedAt: approval.createdAt,
+          },
+        },
+      );
+    }
   }
 
   private async _queueApprovalApprovedAsync(
@@ -233,21 +260,27 @@ export class ApprovalService implements IApprovalService {
     );
   }
 
-  async approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResponseDto> {
+  async approve(approvalId: string, actor: ApprovalActor, comment?: string): Promise<ApprovalResponseDto> {
     const approval = await this._getPendingApproval(approvalId);
-    const currentStep = this._getCurrentStepForApprover(approval, approverId);
+    const currentStep = this._getActionableStep(approval, actor);
     const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
     const now = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.workflow_Approval_Step.update({
-        where: { id: currentStep.id },
+      // Atomically claim the step: only succeeds while it is still pending, so two
+      // concurrent approvers can't both act — the loser matches 0 rows and aborts.
+      const claimed = await tx.workflow_Approval_Step.updateMany({
+        where: { id: currentStep.id, status: WorkflowApprovalStepStatus.Pending },
         data: {
           status: WorkflowApprovalStepStatus.Approved,
+          approver_id: actor.id,
           comment: comment ?? null,
           acted_at: now,
         },
       });
+      if (claimed.count === 0) {
+        throw AppError.conflict('This approval step has already been actioned');
+      }
 
       if (nextStep) {
         await tx.workflow_Approval.update({
@@ -266,7 +299,7 @@ export class ApprovalService implements IApprovalService {
           tx,
           approval.entity_type as AuditApprovalEntityType,
           approval.entity_id,
-          approverId,
+          actor.id,
           now,
         );
       }
@@ -278,14 +311,17 @@ export class ApprovalService implements IApprovalService {
     }, { timeout: 15000 });
 
     if (nextStep) {
-      void this._queueApprovalCreatedAsync(mapApprovalToResponse(updated), nextStep.approver_id);
+      void this._queueApprovalCreatedAsync(mapApprovalToResponse(updated), {
+        approverId: nextStep.approver_id,
+        requiredPermission: nextStep.required_permission,
+      });
     } else {
-      void this._queueApprovalApprovedAsync(approval, approverId, comment);
+      void this._queueApprovalApprovedAsync(approval, actor.id, comment);
     }
 
-    logger.info('Workflow approval step approved', { approvalId, approverId });
+    logger.info('Workflow approval step approved', { approvalId, approverId: actor.id });
     auditLogService.logAsync({
-      userId: approverId,
+      userId: actor.id,
       action: 'workflow.approval.approve',
       module: 'workflow',
       entityType: approval.entity_type,
@@ -296,20 +332,26 @@ export class ApprovalService implements IApprovalService {
     return mapApprovalToResponse(updated);
   }
 
-  async reject(approvalId: string, approverId: string, reason: string): Promise<ApprovalResponseDto> {
+  async reject(approvalId: string, actor: ApprovalActor, reason: string): Promise<ApprovalResponseDto> {
     const approval = await this._getPendingApproval(approvalId);
-    const currentStep = this._getCurrentStepForApprover(approval, approverId);
+    const currentStep = this._getActionableStep(approval, actor);
     const now = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.workflow_Approval_Step.update({
-        where: { id: currentStep.id },
+      // Atomically claim the step (see approve): the loser of a concurrent
+      // approve/reject on the same step matches 0 rows and aborts.
+      const claimed = await tx.workflow_Approval_Step.updateMany({
+        where: { id: currentStep.id, status: WorkflowApprovalStepStatus.Pending },
         data: {
           status: WorkflowApprovalStepStatus.Rejected,
+          approver_id: actor.id,
           comment: reason,
           acted_at: now,
         },
       });
+      if (claimed.count === 0) {
+        throw AppError.conflict('This approval step has already been actioned');
+      }
 
       await tx.workflow_Approval.update({
         where: { id: approvalId },
@@ -324,7 +366,7 @@ export class ApprovalService implements IApprovalService {
         tx,
         approval.entity_type as AuditApprovalEntityType,
         approval.entity_id,
-        approverId,
+        actor.id,
         reason,
       );
 
@@ -334,11 +376,11 @@ export class ApprovalService implements IApprovalService {
       });
     }, { timeout: 15000 });
 
-    void this._queueApprovalRejectedAsync(approval, approverId, reason);
+    void this._queueApprovalRejectedAsync(approval, actor.id, reason);
 
-    logger.info('Workflow approval rejected', { approvalId, approverId });
+    logger.info('Workflow approval rejected', { approvalId, approverId: actor.id });
     auditLogService.logAsync({
-      userId: approverId,
+      userId: actor.id,
       action: 'workflow.approval.reject',
       module: 'workflow',
       entityType: approval.entity_type,
@@ -369,23 +411,36 @@ export class ApprovalService implements IApprovalService {
   }
 
   async getPendingApprovalsForUser(
-    userId: string,
+    actor: ApprovalActor,
     pagination: PaginationQuery,
   ): Promise<{ approvals: ApprovalResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(pagination);
+
+    // A user sees a step if it is pinned to them, or it is an open permission-pool
+    // step whose required permission they hold.
+    const orConditions: Prisma.Workflow_Approval_StepWhereInput[] = [{ approver_id: actor.id }];
+    if (actor.permissions.length > 0) {
+      orConditions.push({ approver_id: null, required_permission: { in: actor.permissions } });
+    }
+
     const candidateSteps = await prisma.workflow_Approval_Step.findMany({
       where: {
-        approver_id: userId,
         status: WorkflowApprovalStepStatus.Pending,
         approval: { status: WorkflowApprovalStatus.Pending },
+        OR: orConditions,
       },
       include: { approval: { include: approvalInclude } },
       orderBy: { created_at: 'asc' },
     });
 
-    const approvals = candidateSteps
-      .filter((step) => step.level === step.approval.current_level)
-      .map((step) => step.approval);
+    // Only the current-level step is actionable; dedupe to one entry per approval.
+    const approvalsById = new Map<string, ApprovalWithDetails>();
+    for (const step of candidateSteps) {
+      if (step.level === step.approval.current_level) {
+        approvalsById.set(step.approval.id, step.approval);
+      }
+    }
+    const approvals = [...approvalsById.values()];
     const paged = approvals.slice(skip, skip + take);
 
     return {
@@ -407,9 +462,16 @@ export class ApprovalService implements IApprovalService {
       include: approvalInclude,
     });
 
-    const approverIds = [...new Set(approval.steps.map((step) => step.approver_id))];
-    approverIds.forEach((approverId) =>
-      this._queueNotification(approverId, {
+    const recipientIds = new Set<string>();
+    for (const step of approval.steps) {
+      const ids = await this._stepRecipientIds({
+        approverId: step.approver_id,
+        requiredPermission: step.required_permission,
+      });
+      ids.forEach((id) => recipientIds.add(id));
+    }
+    recipientIds.forEach((recipientId) =>
+      this._queueNotification(recipientId, {
         title: 'Approval cancelled',
         body: `The ${approval.entity_type} approval request has been cancelled.`,
         type: 'warning',
@@ -435,74 +497,115 @@ export class ApprovalService implements IApprovalService {
     db: Prisma.TransactionClient | typeof prisma,
     entityType: WorkflowEntityType,
     entityId: string,
-  ): Promise<string[]> {
+  ): Promise<ApproverLevelSpec[]> {
     const matrix = await getApprovalMatrix();
+    const chain = this._chainForEntity(matrix, entityType);
+    if (chain.length === 0) return [];
 
-    // Resolve the engagement's assigned manager for engagement-bound entities so
-    // the manager who owns the engagement reviews its working paper / report,
-    // rather than just any holder of the manager role.
-    let engagementManagerId: string | null = null;
-    let roleSequence: string[] | undefined;
+    // Engagement-bound entities pin levels marked ENGAGEMENT_MANAGER_APPROVER to
+    // the engagement's assigned manager (a specific person), so the manager who
+    // owns the engagement reviews its working paper / report.
+    const engagementManagerId = await this._resolveEngagementManager(db, entityType, entityId);
+    const managerPermission = ENGAGEMENT_MANAGER_PERMISSION[entityType];
 
+    const specs: ApproverLevelSpec[] = [];
+    for (const level of chain) {
+      if (level === ENGAGEMENT_MANAGER_APPROVER) {
+        if (!engagementManagerId) {
+          throw AppError.badRequest(`No engagement manager available for ${entityType} approval`);
+        }
+        if (!managerPermission) {
+          throw AppError.badRequest(`No approver permission configured for ${entityType} manager approval`);
+        }
+        // Pinned to the engagement's manager, who must still hold the permission to act.
+        specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
+        continue;
+      }
+
+      // `level` is a permission slug: any active holder may act. Ensure at least
+      // one exists so the level can't dead-end.
+      const hasHolder = await this._hasActiveUserWithPermission(db, level);
+      if (!hasHolder) {
+        throw AppError.badRequest(`No active user holding permission '${level}' is available for ${entityType} approval`);
+      }
+      specs.push({ approverId: null, requiredPermission: level });
+    }
+    return specs;
+  }
+
+  private _chainForEntity(matrix: ApprovalMatrix, entityType: WorkflowEntityType): string[] {
+    switch (entityType) {
+      case WorkflowEntityType.AuditPlan:
+        return matrix.auditPlan;
+      case WorkflowEntityType.AuditWorkingPaper:
+        return matrix.workingPaper;
+      case WorkflowEntityType.AuditReport:
+        return matrix.auditReport;
+      default:
+        return [];
+    }
+  }
+
+  private async _resolveEngagementManager(
+    db: Prisma.TransactionClient | typeof prisma,
+    entityType: WorkflowEntityType,
+    entityId: string,
+  ): Promise<string | null> {
     if (entityType === WorkflowEntityType.AuditWorkingPaper) {
       const paper = await db.audit_Working_Paper.findFirst({
         where: { id: entityId, deleted_at: null },
         select: { engagement: { select: { audit_manager_id: true } } },
       });
       if (!paper) throw AppError.notFound('Audit working paper');
-      engagementManagerId = paper.engagement.audit_manager_id;
-      roleSequence = matrix.workingPaper;
-    } else if (entityType === WorkflowEntityType.AuditReport) {
+      return paper.engagement.audit_manager_id;
+    }
+    if (entityType === WorkflowEntityType.AuditReport) {
       const report = await db.audit_Report.findFirst({
         where: { id: entityId, deleted_at: null },
         select: { engagement: { select: { audit_manager_id: true } } },
       });
       if (!report) throw AppError.notFound('Audit report');
-      engagementManagerId = report.engagement.audit_manager_id;
-      roleSequence = matrix.auditReport;
-    } else if (entityType === WorkflowEntityType.AuditPlan) {
+      return report.engagement.audit_manager_id;
+    }
+    if (entityType === WorkflowEntityType.AuditPlan) {
       const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
       if (!plan) throw AppError.notFound('Audit plan');
-      roleSequence = matrix.auditPlan;
     }
-
-    // Unknown entity type or empty matrix entry: fall back to the first active CAE.
-    if (!roleSequence || roleSequence.length === 0) {
-      const fallback = await this._getFirstActiveUserByRole(db, 'cae');
-      return fallback ? [fallback] : [];
-    }
-
-    const chain: string[] = [];
-    for (let level = 0; level < roleSequence.length; level += 1) {
-      // For engagement-bound entities the first approver is the engagement's
-      // assigned manager (a specific person), not just any holder of the role.
-      if (level === 0 && engagementManagerId) {
-        chain.push(engagementManagerId);
-        continue;
-      }
-      const userId = await this._getFirstActiveUserByRole(db, roleSequence[level]);
-      if (!userId) {
-        throw AppError.badRequest(`No active user with role '${roleSequence[level]}' configured for ${entityType} approval`);
-      }
-      chain.push(userId);
-    }
-    return chain;
+    return null;
   }
 
-  private async _getFirstActiveUserByRole(
+  private async _hasActiveUserWithPermission(
     db: Prisma.TransactionClient | typeof prisma,
-    roleName: string,
-  ): Promise<string | null> {
+    permissionSlug: string,
+  ): Promise<boolean> {
     const user = await db.user.findFirst({
-      where: {
-        deleted_at: null,
-        is_active: true,
-        user_roles: { some: { role: { name: roleName } } },
-      },
+      where: this._activeHolderWhere(permissionSlug),
       select: { id: true },
-      orderBy: { created_at: 'asc' },
     });
-    return user?.id ?? null;
+    return user !== null;
+  }
+
+  /** All active users who currently hold a permission — the pool that can act on a pool level. */
+  private async _stepRecipientIds(step: StepRecipientSpec): Promise<string[]> {
+    if (step.approverId) return [step.approverId];
+    if (!step.requiredPermission) return [];
+    const users = await prisma.user.findMany({
+      where: this._activeHolderWhere(step.requiredPermission),
+      select: { id: true },
+    });
+    return users.map((user) => user.id);
+  }
+
+  private _activeHolderWhere(permissionSlug: string): Prisma.UserWhereInput {
+    return {
+      deleted_at: null,
+      is_active: true,
+      user_roles: {
+        some: {
+          role: { role_permissions: { some: { permission: { slug: permissionSlug } } } },
+        },
+      },
+    };
   }
 
   private async _getPendingApproval(approvalId: string): Promise<ApprovalWithDetails> {
@@ -517,14 +620,19 @@ export class ApprovalService implements IApprovalService {
     return approval;
   }
 
-  private _getCurrentStepForApprover(approval: ApprovalWithDetails, approverId: string): ApprovalWithDetails['steps'][number] {
+  private _getActionableStep(approval: ApprovalWithDetails, actor: ApprovalActor): ApprovalWithDetails['steps'][number] {
     const step = approval.steps.find((item) => item.level === approval.current_level);
     if (!step) throw AppError.badRequest('Approval has no pending current step');
-    if (step.approver_id !== approverId) {
-      throw AppError.forbidden('You are not the approver for the current approval step');
-    }
     if (step.status !== WorkflowApprovalStepStatus.Pending) {
       throw AppError.badRequest('Current approval step has already been actioned');
+    }
+    // A step always requires its permission. A pinned step additionally requires
+    // the actor to be that specific user (the engagement's manager); a pool step
+    // is open to any holder of the permission.
+    const holdsPermission = !step.required_permission || actor.permissions.includes(step.required_permission);
+    const isPinnedApprover = step.approver_id === null || step.approver_id === actor.id;
+    if (!holdsPermission || !isPinnedApprover) {
+      throw AppError.forbidden('You are not authorized to act on the current approval step');
     }
     return step;
   }

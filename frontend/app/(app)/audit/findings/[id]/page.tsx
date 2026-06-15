@@ -24,8 +24,8 @@ const STATUSES = ['open', 'management_response_received', 'in_remediation', 'ver
 export default function FindingDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const { hasAnyRole } = usePermissions();
-  const canChangeStatus = hasAnyRole(['super_admin', 'audit_admin', 'audit_lead', 'cae']);
+  const { hasPermission } = usePermissions();
+  const canChangeStatus = hasPermission('finding:update');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['findings', params?.id],

@@ -27,6 +27,7 @@ import {
   SlidersHorizontal,
   Users,
   Send,
+  Server,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -98,6 +99,7 @@ const NAV: NavItem[] = [
   },
 
   { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
+  { type: 'link', label: 'Assets', href: '/assets', icon: Server, matchPrefix: '/assets', visKey: 'assets', description: 'Asset registry with ownership, classification, attestations, and audit links.' },
   { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister', description: 'Enterprise risks with likelihood × impact scoring.' },
   { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents', description: 'Files and evidence attached to audit records.' },
   { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics', description: 'Dashboards and metrics on the audit programme.' },

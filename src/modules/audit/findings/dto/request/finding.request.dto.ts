@@ -3,6 +3,8 @@ import { FindingCategory, FindingSeverity, FindingStatus } from '../../../domain
 
 export const CreateFindingRequestSchema = z.object({
   workingPaperId: z.string().uuid().optional(),
+  checklistId: z.string().uuid().optional(),
+  riskId: z.string().uuid().optional(),
   title: z.string().min(1).max(200),
   description: z.string().min(1),
   category: z.nativeEnum(FindingCategory),
@@ -16,6 +18,8 @@ export const CreateFindingRequestSchema = z.object({
 
 export const UpdateFindingRequestSchema = z.object({
   workingPaperId: z.string().uuid().nullable().optional(),
+  checklistId: z.string().uuid().nullable().optional(),
+  riskId: z.string().uuid().nullable().optional(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().min(1).optional(),
   category: z.nativeEnum(FindingCategory).optional(),
@@ -38,6 +42,7 @@ export const FindingQuerySchema = z.object({
   severity: z.nativeEnum(FindingSeverity).optional(),
   status: z.nativeEnum(FindingStatus).optional(),
   category: z.nativeEnum(FindingCategory).optional(),
+  controlReference: z.string().trim().optional(),
   auditeeId: z.string().uuid().optional(),
   sortBy: z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),

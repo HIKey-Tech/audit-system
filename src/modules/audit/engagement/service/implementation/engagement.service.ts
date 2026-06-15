@@ -11,11 +11,11 @@ import {
   assertHasPermission,
   assertTransition,
   buildReferenceNumber,
-  hasAuditeeRole,
   parseReferenceSequence,
 } from '../../../utility/audit.utility';
 import { getAuditLifecycleRules } from '../../../utility/audit-config.utility';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
+import { IUserService } from '../../../../user';
 import {
   CreateAdhocEngagementRequestDto,
   CreateEngagementFromPlanRequestDto,
@@ -25,13 +25,33 @@ import {
 import { EngagementResponseDto, mapEngagementToResponse } from '../../dto/response/engagement.response.dto';
 import { IEngagementService } from '../interface/engagement.service.interface';
 
+/**
+ * Permissions an engagement's audit manager must hold: they are the pinned
+ * approver for the engagement's working papers and the first-level approver for
+ * its report, so without these the approval chain would dead-end.
+ */
+const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve'] as const;
+
 const engagementInclude = {
   universe: true,
   plan_item: { include: { plan: { select: { id: true, title: true } } } },
 };
 
 export class EngagementService implements IEngagementService {
-  constructor(private readonly checklistService: IChecklistService) {}
+  constructor(
+    private readonly checklistService: IChecklistService,
+    private readonly userService: IUserService,
+  ) {}
+
+  private async _assertManagerCanApprove(managerId: string): Promise<void> {
+    const manager = await this.userService.getUserById(managerId);
+    const missing = MANAGER_APPROVAL_PERMISSIONS.filter((slug) => !manager.permissions.includes(slug));
+    if (missing.length > 0) {
+      throw AppError.badRequest(
+        `Assigned audit manager must hold approval permissions: ${missing.join(', ')}`,
+      );
+    }
+  }
 
   async createFromPlanItem(
     planItemId: string,
@@ -47,6 +67,7 @@ export class EngagementService implements IEngagementService {
     if (!planItem) throw AppError.notFound('Audit plan item');
     if (planItem.plan.status !== PlanStatus.Approved) throw AppError.badRequest('Plan must be approved before creating an engagement');
     if (planItem.engagement_created) throw AppError.conflict('An engagement has already been created from this plan item');
+    await this._assertManagerCanApprove(dto.auditManagerId);
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.$transaction(async (tx) => {
@@ -85,6 +106,7 @@ export class EngagementService implements IEngagementService {
   async createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
     assertHasPermission(actor.permissions, 'engagement:create');
     if (!dto.adhocReason) throw AppError.badRequest('Ad-hoc reason is required');
+    await this._assertManagerCanApprove(dto.auditManagerId);
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.audit_Engagement.create({
@@ -115,6 +137,7 @@ export class EngagementService implements IEngagementService {
   async updateEngagement(id: string, dto: UpdateEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
     assertHasPermission(actor.permissions, 'engagement:update');
     await this._assertEngagementExists(id);
+    if (dto.auditManagerId !== undefined) await this._assertManagerCanApprove(dto.auditManagerId);
 
     const engagement = await prisma.audit_Engagement.update({
       where: { id },

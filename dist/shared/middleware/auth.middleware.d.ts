@@ -43,5 +43,4 @@ export declare const requireMfaToken: (scope: "mfa_enroll" | "mfa_challenge") =>
  */
 export declare const requireEnrollmentContext: (req: Request, _res: Response, next: NextFunction) => void;
 export declare const requirePermission: (...requiredPermissions: string[]) => (req: Request, _res: Response, next: NextFunction) => void;
-export declare const requireRole: (...requiredRoles: string[]) => (req: Request, _res: Response, next: NextFunction) => void;
 //# sourceMappingURL=auth.middleware.d.ts.map

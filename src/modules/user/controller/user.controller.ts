@@ -1,6 +1,6 @@
 // src/modules/user/controller/user.controller.ts
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission, requireRole } from '../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { IUserService } from '../service/interface/user.service.interface';
@@ -131,7 +131,6 @@ export class UserController {
      */
     this.router.post(
       '/:id/deactivate',
-      requireRole('super_admin'),
       requirePermission('user:deactivate'),
       this._deactivateUser.bind(this),
     );
@@ -143,7 +142,6 @@ export class UserController {
      */
     this.router.post(
       '/:id/activate',
-      requireRole('super_admin'),
       requirePermission('user:deactivate'),
       this._activateUser.bind(this),
     );
@@ -155,7 +153,6 @@ export class UserController {
      */
     this.router.delete(
       '/:id',
-      requireRole('super_admin'),
       requirePermission('user:delete'),
       this._deleteUser.bind(this),
     );

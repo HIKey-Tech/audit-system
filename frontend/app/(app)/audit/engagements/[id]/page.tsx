@@ -21,6 +21,7 @@ import { nextEngagementStatus } from '@/lib/utils/status';
 import { OverviewTab } from '@/components/audit/engagements/OverviewTab';
 import { WorkingPapersTab } from '@/components/audit/engagements/WorkingPapersTab';
 import { EvidenceTab } from '@/components/audit/engagements/EvidenceTab';
+import { AssetsTab } from '@/components/audit/engagements/AssetsTab';
 import { FindingsTab } from '@/components/audit/engagements/FindingsTab';
 import { ChecklistsTab } from '@/components/audit/engagements/ChecklistsTab';
 import { ReportTab } from '@/components/audit/engagements/ReportTab';
@@ -31,6 +32,7 @@ type TabKey =
   | 'overview'
   | 'working-papers'
   | 'evidence'
+  | 'assets'
   | 'findings'
   | 'checklists'
   | 'report'
@@ -40,6 +42,7 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
   { key: 'working-papers', label: 'Working Papers' },
   { key: 'evidence', label: 'Evidence' },
+  { key: 'assets', label: 'Assets' },
   { key: 'findings', label: 'Findings' },
   { key: 'checklists', label: 'Checklists' },
   { key: 'report', label: 'Report' },
@@ -58,7 +61,7 @@ export default function EngagementDetailPage(): JSX.Element {
   });
 
   const qc = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, canReadAssets } = usePermissions();
   const canAdvanceEngagement = hasPermission('engagement:update');
 
   const advanceMutation = useMutation({
@@ -96,7 +99,7 @@ export default function EngagementDetailPage(): JSX.Element {
     );
   }
 
-  const tabs: TabItem[] = TAB_DEFS.map((t) => ({
+  const tabs: TabItem[] = TAB_DEFS.filter((t) => t.key !== 'assets' || canReadAssets).map((t) => ({
     key: t.key,
     label: t.label,
     count:
@@ -166,6 +169,7 @@ export default function EngagementDetailPage(): JSX.Element {
       {tab === 'overview' && <OverviewTab engagement={data} />}
       {tab === 'working-papers' && <WorkingPapersTab engagement={data} />}
       {tab === 'evidence' && <EvidenceTab engagement={data} />}
+      {tab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
       {tab === 'findings' && <FindingsTab engagement={data} />}
       {tab === 'checklists' && <ChecklistsTab engagement={data} />}
       {tab === 'report' && <ReportTab engagement={data} />}

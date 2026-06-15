@@ -173,7 +173,7 @@ class PlanningService {
         if (plan.status !== audit_enum_1.PlanStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted plans can be approved');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditPlan, planId);
-        await this.approvalService.approve(approval.id, actor.id);
+        await this.approvalService.approve(approval.id, actor);
         const updated = await this.getPlanById(planId);
         logger_util_1.logger.info('Audit plan approved', { planId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.approve', module: 'audit', entityType: 'audit_plan', entityId: planId });
@@ -185,7 +185,7 @@ class PlanningService {
         if (plan.status !== audit_enum_1.PlanStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted plans can be rejected');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditPlan, planId);
-        await this.approvalService.reject(approval.id, actor.id, reason);
+        await this.approvalService.reject(approval.id, actor, reason);
         const updated = await this.getPlanById(planId);
         logger_util_1.logger.info('Audit plan rejected', { planId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.plan.reject', module: 'audit', entityType: 'audit_plan', entityId: planId, newValues: { reason } });

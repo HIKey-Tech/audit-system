@@ -492,6 +492,116 @@ export interface AuditFollowUp {
 }
 
 // ============================================================
+// Assets
+// ============================================================
+export interface AssetUser {
+  id: string;
+  email: string;
+  displayName: string | null;
+  firstName: string;
+  lastName: string;
+  department: string | null;
+  jobTitle: string | null;
+}
+
+export interface Asset {
+  id: string;
+  assetTag: string;
+  name: string;
+  description: string | null;
+  assetType: string;
+  category: string | null;
+  status: string;
+  lifecycleState: string;
+  criticality: string;
+  dataClassification: string;
+  confidentialityRating: string;
+  integrityRating: string;
+  availabilityRating: string;
+  ownerId: string;
+  owner?: AssetUser;
+  custodianId: string | null;
+  custodian?: AssetUser | null;
+  department: string | null;
+  location: string | null;
+  environment: string | null;
+  hostname: string | null;
+  ipAddress: string | null;
+  serialNumber: string | null;
+  manufacturer: string | null;
+  model: string | null;
+  osName: string | null;
+  osVersion: string | null;
+  supplier: string | null;
+  sourceSystem: string;
+  sourceId: string | null;
+  lastSeenAt: string | null;
+  lastAttestedAt: string | null;
+  metadata: Record<string, unknown> | null;
+  createdById: string;
+  createdBy?: AssetUser;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetRelationship {
+  id: string;
+  sourceAssetId: string;
+  targetAssetId: string;
+  relationshipType: string;
+  description: string | null;
+  targetAsset?: Pick<Asset, 'id' | 'assetTag' | 'name' | 'assetType' | 'criticality'>;
+  sourceAsset?: Pick<Asset, 'id' | 'assetTag' | 'name' | 'assetType' | 'criticality'>;
+  createdById: string;
+  createdAt: string;
+}
+
+export interface AssetAttestation {
+  id: string;
+  assetId: string;
+  attestedById: string;
+  attestedBy?: AssetUser;
+  status: string;
+  notes: string | null;
+  snapshot: Record<string, unknown>;
+  attestedAt: string;
+  createdAt: string;
+}
+
+export interface AssetSource {
+  id: string;
+  assetId: string;
+  sourceSystem: string;
+  sourceId: string;
+  syncStatus: string;
+  lastSyncedAt: string | null;
+  rawPayload: Record<string, unknown> | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AssetLink {
+  id: string;
+  assetId: string;
+  linkedEntityType: string;
+  linkedEntityId: string;
+  scopeRole?: string;
+  scopeReason?: string | null;
+  impactSummary?: string | null;
+  linkReason?: string | null;
+  createdById: string;
+  createdAt: string;
+}
+
+export interface AssetAuditContext {
+  universeLinks: AssetLink[];
+  engagementLinks: AssetLink[];
+  findingLinks: AssetLink[];
+  riskLinks: AssetLink[];
+  evidenceLinks: AssetLink[];
+}
+
+// ============================================================
 // Risk
 // ============================================================
 export interface RiskCategory {

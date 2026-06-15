@@ -1,11 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.assertHasPermission = exports.hasAuditeeRole = exports.AUDITEE_ROLE = void 0;
+exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.assertHasPermission = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const audit_enum_1 = require("../domain/enum/audit.enum");
-exports.AUDITEE_ROLE = 'auditee';
-const hasAuditeeRole = (roles) => roles.includes(exports.AUDITEE_ROLE);
-exports.hasAuditeeRole = hasAuditeeRole;
 const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
     if (!permissions.includes(required)) {
         throw app_error_1.AppError.forbidden(message);

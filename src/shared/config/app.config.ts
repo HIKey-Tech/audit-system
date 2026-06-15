@@ -78,6 +78,10 @@ export const config = {
     expiresIn: requireDurationEnv('JWT_EXPIRES_IN', '15m'),
     refreshSecret: requireEnv('JWT_REFRESH_SECRET'),
     refreshExpiresIn: requireDurationEnv('JWT_REFRESH_EXPIRES_IN', '7d'),
+    // Window after a token is rotated during which the just-rotated token may
+    // still be presented without tripping theft detection. Absorbs benign
+    // concurrent refreshes from multiple tabs/devices sharing one cookie.
+    refreshRotationGrace: requireDurationEnv('JWT_REFRESH_ROTATION_GRACE', '30s'),
   },
 
   oidc: {

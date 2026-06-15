@@ -70,4 +70,42 @@ export declare const riskRegisterWithDetailsInclude: {
 export type RiskRegisterWithDetails = Prisma.Risk_RegisterGetPayload<{
     include: typeof riskRegisterWithDetailsInclude;
 }>;
+export declare const assetWithDetailsInclude: {
+    owner: {
+        select: {
+            id: true;
+            email: true;
+            display_name: true;
+            first_name: true;
+            last_name: true;
+            department: true;
+            job_title: true;
+        };
+    };
+    custodian: {
+        select: {
+            id: true;
+            email: true;
+            display_name: true;
+            first_name: true;
+            last_name: true;
+            department: true;
+            job_title: true;
+        };
+    };
+    created_by: {
+        select: {
+            id: true;
+            email: true;
+            display_name: true;
+            first_name: true;
+            last_name: true;
+            department: true;
+            job_title: true;
+        };
+    };
+};
+export type AssetWithDetails = Prisma.AssetGetPayload<{
+    include: typeof assetWithDetailsInclude;
+}>;
 //# sourceMappingURL=prisma.types.d.ts.map

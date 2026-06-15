@@ -25,8 +25,8 @@ import type { WorkflowAssignment } from '@/lib/types/domain';
 export default function AssignmentsPage(): JSX.Element {
   const router = useRouter();
   const qc = useQueryClient();
-  const { isAdminLevel, isAuditLead } = usePermissions();
-  const canAssign = isAdminLevel || isAuditLead;
+  const { hasPermission } = usePermissions();
+  const canAssign = hasPermission('assignment:create');
   const [open, setOpen] = useState(false);
 
   const mine = useQuery({

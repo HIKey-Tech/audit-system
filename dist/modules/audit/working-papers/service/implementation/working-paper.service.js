@@ -1,4 +1,7 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorkingPaperService = void 0;
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
@@ -12,6 +15,8 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const working_paper_response_dto_1 = require("../../dto/response/working-paper.response.dto");
 const working_paper_import_utility_1 = require("../../utility/working-paper-import.utility");
+const working_paper_utility_1 = require("../../utility/working-paper.utility");
+const puppeteer_1 = __importDefault(require("puppeteer"));
 class WorkingPaperService {
     documentService;
     templateService;
@@ -155,7 +160,7 @@ class WorkingPaperService {
         if (paper.status !== audit_enum_1.WorkingPaperStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted working papers can be approved');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditWorkingPaper, id);
-        await this.approvalService.approve(approval.id, actor.id);
+        await this.approvalService.approve(approval.id, actor);
         const updated = await this._getPaper(id);
         logger_util_1.logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.approve', module: 'audit', entityType: 'audit_working_paper', entityId: id });
@@ -167,7 +172,7 @@ class WorkingPaperService {
         if (paper.status !== audit_enum_1.WorkingPaperStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted working papers can be rejected');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditWorkingPaper, id);
-        await this.approvalService.reject(approval.id, actor.id, reason);
+        await this.approvalService.reject(approval.id, actor, reason);
         const updated = await this._getPaper(id);
         logger_util_1.logger.info('Audit working paper rejected', { workingPaperId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.reject', module: 'audit', entityType: 'audit_working_paper', entityId: id, newValues: { reason } });
@@ -189,7 +194,7 @@ class WorkingPaperService {
         });
         return papers.map(working_paper_response_dto_1.mapWorkingPaperToResponse);
     }
-    async exportWorkingPaper(id) {
+    async exportWorkingPaper(id, format) {
         const paper = await prisma_client_1.prisma.audit_Working_Paper.findFirst({
             where: { id, deleted_at: null },
             include: {
@@ -199,22 +204,62 @@ class WorkingPaperService {
         });
         if (!paper)
             throw app_error_1.AppError.notFound('Audit working paper');
+        if (paper.status !== audit_enum_1.WorkingPaperStatus.Approved) {
+            throw app_error_1.AppError.badRequest('Only approved working papers can be exported');
+        }
         const auditorName = paper.created_by.display_name || paper.created_by.email;
-        const buffer = await this.documentService.renderDocxTemplate('working_paper', {
-            title: paper.title,
-            engagementReference: paper.engagement.reference_number,
-            engagementTitle: paper.engagement.title,
-            auditorName,
-            date: new Date().toISOString().slice(0, 10),
-            status: paper.status,
-            version: String(paper.version_number),
-            content: paper.content,
-        });
+        const exportDate = new Date().toISOString().slice(0, 10);
+        const slug = paper.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
+        const buffer = format === 'pdf'
+            ? await this._renderWorkingPaperPdf({
+                title: paper.title,
+                engagementReference: paper.engagement.reference_number,
+                engagementTitle: paper.engagement.title,
+                workingPaperType: paper.working_paper_type,
+                auditorName,
+                status: paper.status,
+                version: String(paper.version_number),
+                date: exportDate,
+                sections: (0, working_paper_utility_1.parseWorkingPaperSections)(paper.content),
+            })
+            : await this.documentService.renderDocxTemplate('working_paper', {
+                title: paper.title,
+                engagementReference: paper.engagement.reference_number,
+                engagementTitle: paper.engagement.title,
+                auditorName,
+                date: exportDate,
+                status: paper.status,
+                version: String(paper.version_number),
+                content: paper.content,
+            });
+        logger_util_1.logger.info('Working paper exported', { workingPaperId: id, format });
         return {
-            fileName: `${paper.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase()}-working-paper.docx`,
-            mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            fileName: `${slug}-working-paper.${format}`,
+            mimeType: format === 'pdf'
+                ? 'application/pdf'
+                : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
             buffer,
         };
+    }
+    async _renderWorkingPaperPdf(data) {
+        const html = (0, working_paper_utility_1.buildWorkingPaperHtml)(data);
+        const browser = await puppeteer_1.default.launch({ headless: true });
+        try {
+            const page = await browser.newPage();
+            await page.setContent(html, { waitUntil: 'networkidle0' });
+            const pdfBuffer = await page.pdf({
+                format: 'A4',
+                printBackground: true,
+                margin: { top: '20mm', bottom: '20mm', left: '18mm', right: '18mm' },
+                displayHeaderFooter: true,
+                headerTemplate: '<div></div>',
+                footerTemplate: '<div style="font-size:9px;width:100%;text-align:center;color:#64748B;padding:0 18mm;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
+            });
+            return Buffer.from(pdfBuffer);
+        }
+        finally {
+            await browser.close();
+        }
     }
     async _assertEngagementInProgress(engagementId) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({

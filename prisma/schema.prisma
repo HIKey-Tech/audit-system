@@ -83,6 +83,16 @@ model User {
   requests_initiated              Workflow_Request[]        @relation("WorkflowRequestInitiator")
   request_steps                   Workflow_Request_Step[]   @relation("WorkflowRequestStepRecipient")
   request_actions                 Workflow_Request_Action[] @relation("WorkflowRequestActionActor")
+  assets_owned                    Asset[]                  @relation("AssetOwner")
+  assets_custodied                Asset[]                  @relation("AssetCustodian")
+  assets_created                  Asset[]                  @relation("AssetCreatedBy")
+  asset_relationships_created     Asset_Relationship[]     @relation("AssetRelationshipCreatedBy")
+  asset_attestations              Asset_Attestation[]      @relation("AssetAttestedBy")
+  asset_universe_links_created    Audit_Universe_Asset[]   @relation("AuditUniverseAssetCreatedBy")
+  asset_engagement_links_created  Audit_Engagement_Asset[] @relation("AuditEngagementAssetCreatedBy")
+  asset_finding_links_created     Audit_Finding_Asset[]    @relation("AuditFindingAssetCreatedBy")
+  asset_risk_links_created        Risk_Asset_Link[]        @relation("RiskAssetLinkCreatedBy")
+  asset_evidence_links_created    Audit_Evidence_Asset[]   @relation("AuditEvidenceAssetCreatedBy")
   notification_templates_created  Notification_Template[]  @relation("NotificationTemplateCreatedBy")
   notification_templates_updated  Notification_Template[]  @relation("NotificationTemplateUpdatedBy")
   working_paper_templates_created Working_Paper_Template[] @relation("WorkingPaperTemplateCreatedBy")
@@ -156,6 +166,10 @@ model Refresh_Token {
   token_hash String    @unique
   expires_at DateTime
   revoked_at DateTime?
+  // Set to the successor token's id when this token is rotated out by a normal
+  // refresh. Lets reuse-detection tell a benign concurrent refresh (e.g. two
+  // browser tabs sharing one cookie) apart from a genuine stolen-token replay.
+  replaced_by String?
   ip_address String?
   user_agent String?
   created_at DateTime  @default(now())
@@ -396,6 +410,235 @@ model Document_Template {
 }
 
 // ============================================================
+// ASSET MODULE
+//
+// SQL Server does not support native enums, so all enum-like
+// fields below are modelled as String and mirrored in
+// src/modules/asset/domain/enum/asset.enum.ts.
+// ============================================================
+
+model Asset {
+  id                     String    @id @default(uuid())
+  asset_tag              String    @unique
+  name                   String
+  description            String?   @db.NVarChar(Max)
+  asset_type             String
+  category               String?
+  status                 String    @default("active")
+  lifecycle_state        String    @default("active")
+  criticality            String    @default("medium")
+  data_classification    String    @default("internal")
+  confidentiality_rating String    @default("medium")
+  integrity_rating       String    @default("medium")
+  availability_rating    String    @default("medium")
+  owner_id               String
+  custodian_id           String?
+  department             String?
+  location               String?
+  environment            String?
+  hostname               String?
+  ip_address             String?
+  serial_number          String?
+  manufacturer           String?
+  model                  String?
+  os_name                String?
+  os_version             String?
+  supplier               String?
+  source_system          String    @default("manual")
+  source_id              String?
+  last_seen_at           DateTime?
+  last_attested_at       DateTime?
+  metadata               String?   @db.NVarChar(Max)
+  created_by_id          String
+  deleted_at             DateTime?
+  created_at             DateTime  @default(now())
+  updated_at             DateTime  @updatedAt
+
+  owner              User                       @relation("AssetOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  custodian          User?                      @relation("AssetCustodian", fields: [custodian_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by         User                       @relation("AssetCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  relationships_from Asset_Relationship[]       @relation("AssetRelationshipSource")
+  relationships_to   Asset_Relationship[]       @relation("AssetRelationshipTarget")
+  attestations       Asset_Attestation[]
+  sources            Asset_Source[]
+  universe_links     Audit_Universe_Asset[]
+  engagement_links   Audit_Engagement_Asset[]
+  finding_links      Audit_Finding_Asset[]
+  risk_links         Risk_Asset_Link[]
+  evidence_links     Audit_Evidence_Asset[]
+
+  @@index([asset_type])
+  @@index([status])
+  @@index([lifecycle_state])
+  @@index([criticality])
+  @@index([data_classification])
+  @@index([owner_id])
+  @@index([custodian_id])
+  @@index([department])
+  @@index([environment])
+  @@index([source_system])
+  @@index([last_seen_at])
+  @@index([last_attested_at])
+  @@map("assets")
+}
+
+model Asset_Relationship {
+  id                String   @id @default(uuid())
+  source_asset_id   String
+  target_asset_id   String
+  relationship_type String
+  description       String?  @db.NVarChar(Max)
+  created_by_id     String
+  created_at        DateTime @default(now())
+
+  source_asset Asset @relation("AssetRelationshipSource", fields: [source_asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  target_asset Asset @relation("AssetRelationshipTarget", fields: [target_asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by   User  @relation("AssetRelationshipCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([source_asset_id, target_asset_id, relationship_type])
+  @@index([source_asset_id])
+  @@index([target_asset_id])
+  @@index([relationship_type])
+  @@map("asset_relationships")
+}
+
+model Asset_Attestation {
+  id             String   @id @default(uuid())
+  asset_id       String
+  attested_by_id String
+  status         String   @default("confirmed") // confirmed | changes_required | rejected
+  notes          String?  @db.NVarChar(Max)
+  snapshot       String   @db.NVarChar(Max)
+  attested_at    DateTime @default(now())
+  created_at     DateTime @default(now())
+
+  asset       Asset @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  attested_by User  @relation("AssetAttestedBy", fields: [attested_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([asset_id])
+  @@index([attested_by_id])
+  @@index([status])
+  @@index([attested_at])
+  @@map("asset_attestations")
+}
+
+model Asset_Source {
+  id             String    @id @default(uuid())
+  asset_id       String
+  source_system  String
+  source_id      String
+  sync_status    String    @default("synced") // synced | pending | failed | stale
+  last_synced_at DateTime?
+  raw_payload    String?   @db.NVarChar(Max)
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  asset Asset @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([source_system, source_id])
+  @@index([asset_id])
+  @@index([source_system])
+  @@index([sync_status])
+  @@index([last_synced_at])
+  @@map("asset_sources")
+}
+
+model Audit_Universe_Asset {
+  id            String   @id @default(uuid())
+  universe_id   String
+  asset_id      String
+  created_by_id String
+  created_at    DateTime @default(now())
+
+  universe   Audit_Universe @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset          @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User           @relation("AuditUniverseAssetCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([universe_id, asset_id])
+  @@index([universe_id])
+  @@index([asset_id])
+  @@index([created_by_id])
+  @@map("audit_universe_assets")
+}
+
+model Audit_Engagement_Asset {
+  id            String   @id @default(uuid())
+  engagement_id String
+  asset_id      String
+  scope_role    String   @default("primary") // primary | supporting | dependency | excluded_reference
+  scope_reason  String?  @db.NVarChar(Max)
+  created_by_id String
+  created_at    DateTime @default(now())
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset            @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User             @relation("AuditEngagementAssetCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([engagement_id, asset_id])
+  @@index([engagement_id])
+  @@index([asset_id])
+  @@index([scope_role])
+  @@index([created_by_id])
+  @@map("audit_engagement_assets")
+}
+
+model Audit_Finding_Asset {
+  id             String   @id @default(uuid())
+  finding_id     String
+  asset_id       String
+  impact_summary String?  @db.NVarChar(Max)
+  created_by_id  String
+  created_at     DateTime @default(now())
+
+  finding    Audit_Finding @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset         @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User          @relation("AuditFindingAssetCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([finding_id, asset_id])
+  @@index([finding_id])
+  @@index([asset_id])
+  @@index([created_by_id])
+  @@map("audit_finding_assets")
+}
+
+model Risk_Asset_Link {
+  id            String   @id @default(uuid())
+  risk_id       String
+  asset_id      String
+  link_reason   String?  @db.NVarChar(Max)
+  created_by_id String
+  created_at    DateTime @default(now())
+
+  risk       Risk_Register @relation(fields: [risk_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset         @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User          @relation("RiskAssetLinkCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([risk_id, asset_id])
+  @@index([risk_id])
+  @@index([asset_id])
+  @@index([created_by_id])
+  @@map("risk_asset_links")
+}
+
+model Audit_Evidence_Asset {
+  id            String   @id @default(uuid())
+  evidence_id   String
+  asset_id      String
+  created_by_id String
+  created_at    DateTime @default(now())
+
+  evidence   Audit_Evidence @relation(fields: [evidence_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset          @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User           @relation("AuditEvidenceAssetCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([evidence_id, asset_id])
+  @@index([evidence_id])
+  @@index([asset_id])
+  @@index([created_by_id])
+  @@map("audit_evidence_assets")
+}
+
+// ============================================================
 // BACKGROUND SERVICE MODULE
 // ============================================================
 
@@ -475,6 +718,7 @@ model Audit_Universe {
   plan_items  Audit_Plan_Item[]
   engagements Audit_Engagement[]
   risks       Risk_Register[]
+  asset_links Audit_Universe_Asset[]
 
   @@index([category])
   @@index([status])
@@ -566,6 +810,7 @@ model Audit_Engagement {
   report               Audit_Report?
   checklists           Audit_Checklist[]
   workflow_assignments Workflow_Assignment[]
+  asset_links          Audit_Engagement_Asset[]
 
   @@index([status])
   @@index([audit_type])
@@ -633,6 +878,7 @@ model Audit_Evidence {
   uploaded_by   User                 @relation("EvidenceUploadedBy", fields: [uploaded_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   remediations  Audit_Follow_Up[]    @relation("FollowUpRemediationEvidence")
   checklists    Audit_Checklist[]
+  asset_links   Audit_Evidence_Asset[]
 
   @@index([engagement_id])
   @@index([working_paper_id])
@@ -645,6 +891,8 @@ model Audit_Finding {
   id               String    @id @default(uuid())
   engagement_id    String
   working_paper_id String?
+  checklist_id     String? // failed control test this finding was raised against (the "criteria")
+  risk_id          String? // links the finding into the risk register (feedback loop)
   title            String
   description      String    @db.NVarChar(Max)
   category         String // it | financial | compliance | operational
@@ -664,11 +912,14 @@ model Audit_Finding {
 
   engagement    Audit_Engagement     @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   working_paper Audit_Working_Paper? @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  checklist     Audit_Checklist?     @relation(fields: [checklist_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  risk          Risk_Register?       @relation("RiskFindings", fields: [risk_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   auditee       User                 @relation("FindingAuditee", fields: [auditee_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   created_by    User                 @relation("FindingCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   closed_by     User?                @relation("FindingClosedBy", fields: [closed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   evidence      Audit_Evidence[]
   follow_up     Audit_Follow_Up?
+  asset_links   Audit_Finding_Asset[]
 
   @@index([engagement_id])
   @@index([severity])
@@ -676,6 +927,8 @@ model Audit_Finding {
   @@index([auditee_id])
   @@index([due_date])
   @@index([category])
+  @@index([checklist_id])
+  @@index([risk_id])
   @@map("audit_findings")
 }
 
@@ -750,6 +1003,7 @@ model Audit_Checklist {
   engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   evidence   Audit_Evidence?  @relation(fields: [evidence_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   tested_by  User?            @relation("ChecklistTestedBy", fields: [tested_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  findings   Audit_Finding[]
 
   @@index([engagement_id])
   @@index([audit_type])
@@ -806,6 +1060,8 @@ model Risk_Register {
   universe    Audit_Universe?   @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   created_by  User              @relation("RiskCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   assessments Risk_Assessment[]
+  asset_links Risk_Asset_Link[]
+  findings    Audit_Finding[]   @relation("RiskFindings")
 
   @@index([category_id])
   @@index([owner_id])
@@ -875,20 +1131,25 @@ model Workflow_Approval {
 }
 
 model Workflow_Approval_Step {
-  id          String    @id @default(uuid())
-  approval_id String
-  level       Int
-  approver_id String
-  status      String    @default("pending") // pending | approved | rejected
-  comment     String?   @db.NVarChar(Max)
-  acted_at    DateTime?
-  created_at  DateTime  @default(now())
+  id                  String    @id @default(uuid())
+  approval_id         String
+  level               Int
+  // Null until someone acts on a permission-pool level; pinned up-front only for
+  // engagement-manager levels. On action it records who actually approved/rejected.
+  approver_id         String?
+  // Permission a user must hold to act on this level. Null only for legacy rows.
+  required_permission String?
+  status              String    @default("pending") // pending | approved | rejected
+  comment             String?   @db.NVarChar(Max)
+  acted_at            DateTime?
+  created_at          DateTime  @default(now())
 
   approval Workflow_Approval @relation(fields: [approval_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  approver User              @relation("WorkflowApprovalStepApprover", fields: [approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approver User?             @relation("WorkflowApprovalStepApprover", fields: [approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([approval_id])
   @@index([approver_id])
+  @@index([required_permission])
   @@index([status])
   @@index([level])
   @@map("workflow_approval_steps")

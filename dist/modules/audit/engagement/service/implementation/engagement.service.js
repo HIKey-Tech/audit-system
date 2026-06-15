@@ -10,14 +10,29 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const engagement_response_dto_1 = require("../../dto/response/engagement.response.dto");
+/**
+ * Permissions an engagement's audit manager must hold: they are the pinned
+ * approver for the engagement's working papers and the first-level approver for
+ * its report, so without these the approval chain would dead-end.
+ */
+const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve'];
 const engagementInclude = {
     universe: true,
     plan_item: { include: { plan: { select: { id: true, title: true } } } },
 };
 class EngagementService {
     checklistService;
-    constructor(checklistService) {
+    userService;
+    constructor(checklistService, userService) {
         this.checklistService = checklistService;
+        this.userService = userService;
+    }
+    async _assertManagerCanApprove(managerId) {
+        const manager = await this.userService.getUserById(managerId);
+        const missing = MANAGER_APPROVAL_PERMISSIONS.filter((slug) => !manager.permissions.includes(slug));
+        if (missing.length > 0) {
+            throw app_error_1.AppError.badRequest(`Assigned audit manager must hold approval permissions: ${missing.join(', ')}`);
+        }
     }
     async createFromPlanItem(planItemId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:create');
@@ -31,6 +46,7 @@ class EngagementService {
             throw app_error_1.AppError.badRequest('Plan must be approved before creating an engagement');
         if (planItem.engagement_created)
             throw app_error_1.AppError.conflict('An engagement has already been created from this plan item');
+        await this._assertManagerCanApprove(dto.auditManagerId);
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
         const engagement = await prisma_client_1.prisma.$transaction(async (tx) => {
             const created = await tx.audit_Engagement.create({
@@ -65,6 +81,7 @@ class EngagementService {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:create');
         if (!dto.adhocReason)
             throw app_error_1.AppError.badRequest('Ad-hoc reason is required');
+        await this._assertManagerCanApprove(dto.auditManagerId);
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
         const engagement = await prisma_client_1.prisma.audit_Engagement.create({
             data: {
@@ -92,6 +109,8 @@ class EngagementService {
     async updateEngagement(id, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:update');
         await this._assertEngagementExists(id);
+        if (dto.auditManagerId !== undefined)
+            await this._assertManagerCanApprove(dto.auditManagerId);
         const engagement = await prisma_client_1.prisma.audit_Engagement.update({
             where: { id },
             data: {

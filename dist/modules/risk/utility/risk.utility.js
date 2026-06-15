@@ -1,11 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.toIso = exports.getRiskScoreBand = exports.calculateRiskScore = exports.assertHasPermission = exports.hasAuditeeRole = exports.AUDITEE_ROLE = void 0;
+exports.toIso = exports.getRiskScoreBand = exports.calculateRiskScore = exports.assertHasPermission = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const risk_enum_1 = require("../domain/enum/risk.enum");
-exports.AUDITEE_ROLE = 'auditee';
-const hasAuditeeRole = (roles) => roles.includes(exports.AUDITEE_ROLE);
-exports.hasAuditeeRole = hasAuditeeRole;
 /** Permission-based authorization gate (see audit.utility for rationale). */
 const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
     if (!permissions.includes(required)) {

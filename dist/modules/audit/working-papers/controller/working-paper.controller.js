@@ -74,8 +74,8 @@ class WorkingPaperController {
          */
         this.router.post('/working-papers/:id/reject', (0, auth_middleware_1.requirePermission)('working_paper:reject'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.RejectWorkingPaperRequestSchema), this._rejectWorkingPaper.bind(this));
         /**
-         * @route  GET /audit/working-papers/:id/export
-         * @desc   Export working paper
+         * @route  GET /audit/working-papers/:id/export?format=docx|pdf
+         * @desc   Export an approved working paper as DOCX (default) or PDF
          * @access Private - working_paper:read
          */
         this.router.get('/working-papers/:id/export', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._exportWorkingPaper.bind(this));
@@ -162,7 +162,11 @@ class WorkingPaperController {
     }
     async _exportWorkingPaper(req, res, next) {
         try {
-            const file = await this.workingPaperService.exportWorkingPaper(req.params.id);
+            const requested = String(req.query.format ?? 'docx').toLowerCase();
+            if (requested !== 'docx' && requested !== 'pdf') {
+                throw app_error_1.AppError.badRequest("Query param 'format' must be 'docx' or 'pdf'");
+            }
+            const file = await this.workingPaperService.exportWorkingPaper(req.params.id, requested);
             res.setHeader('Content-Type', file.mimeType);
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.fileName)}"`);
             res.status(200).send(file.buffer);

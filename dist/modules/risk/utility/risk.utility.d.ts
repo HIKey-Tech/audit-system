@@ -1,6 +1,4 @@
 import { RiskScoreBand } from '../domain/enum/risk.enum';
-export declare const AUDITEE_ROLE = "auditee";
-export declare const hasAuditeeRole: (roles: string[]) => boolean;
 /** Permission-based authorization gate (see audit.utility for rationale). */
 export declare const assertHasPermission: (permissions: string[], required: string, message?: string) => void;
 export declare const calculateRiskScore: (likelihood: number, impact: number) => number;

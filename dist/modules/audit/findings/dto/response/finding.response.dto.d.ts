@@ -5,6 +5,11 @@ export interface FindingResponseDto {
     engagementId: string;
     engagementReference?: string;
     workingPaperId: string | null;
+    checklistId: string | null;
+    controlReference?: string;
+    controlDescription?: string;
+    riskId: string | null;
+    riskTitle?: string;
     title: string;
     description: string;
     category: string;
@@ -38,6 +43,15 @@ export declare const mapFindingToResponse: (finding: {
         reference_number: string;
     };
     working_paper_id: string | null;
+    checklist_id: string | null;
+    checklist?: {
+        control_reference: string;
+        control_description: string;
+    } | null;
+    risk_id: string | null;
+    risk?: {
+        title: string;
+    } | null;
     title: string;
     description: string;
     category: string;

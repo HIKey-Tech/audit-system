@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
+exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
 const prisma_client_1 = require("../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../shared/utils/logger.util");
 const audit_utility_1 = require("./audit.utility");
@@ -42,15 +42,21 @@ const getChecklistTemplateControls = async (auditType) => {
     }));
 };
 exports.getChecklistTemplateControls = getChecklistTemplateControls;
+/**
+ * Sentinel chain entry: resolve this level to the entity's assigned engagement
+ * manager (a specific person) rather than to a permission holder.
+ */
+exports.ENGAGEMENT_MANAGER_APPROVER = 'engagement_manager';
 exports.DEFAULT_APPROVAL_MATRIX = {
-    auditPlan: ['cae'],
-    workingPaper: ['audit_manager'],
-    auditReport: ['audit_manager', 'director', 'cae'],
+    auditPlan: ['plan:approve'],
+    workingPaper: [exports.ENGAGEMENT_MANAGER_APPROVER],
+    auditReport: [exports.ENGAGEMENT_MANAGER_APPROVER, 'report:approve:oversight', 'report:approve:final'],
 };
 /**
  * Reads the GBB-configurable approval matrix from system_config. Admins edit this
  * in Settings to control who signs off on plans, working papers, and reports — the
- * approval engine resolves these role names to users instead of hardcoding them.
+ * approval engine resolves each level to a permission holder (or the engagement
+ * manager), never to a hardcoded role.
  */
 const getApprovalMatrix = async () => {
     const parsed = await getJsonConfig('approval_matrix', {});

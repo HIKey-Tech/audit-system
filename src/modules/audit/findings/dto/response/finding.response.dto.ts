@@ -6,6 +6,11 @@ export interface FindingResponseDto {
   engagementId: string;
   engagementReference?: string;
   workingPaperId: string | null;
+  checklistId: string | null;
+  controlReference?: string;
+  controlDescription?: string;
+  riskId: string | null;
+  riskTitle?: string;
   title: string;
   description: string;
   category: string;
@@ -43,6 +48,10 @@ export const mapFindingToResponse = (finding: {
   engagement_id: string;
   engagement?: { reference_number: string };
   working_paper_id: string | null;
+  checklist_id: string | null;
+  checklist?: { control_reference: string; control_description: string } | null;
+  risk_id: string | null;
+  risk?: { title: string } | null;
   title: string;
   description: string;
   category: string;
@@ -67,6 +76,11 @@ export const mapFindingToResponse = (finding: {
   engagementId: finding.engagement_id,
   engagementReference: finding.engagement?.reference_number,
   workingPaperId: finding.working_paper_id,
+  checklistId: finding.checklist_id,
+  controlReference: finding.checklist?.control_reference,
+  controlDescription: finding.checklist?.control_description,
+  riskId: finding.risk_id,
+  riskTitle: finding.risk?.title,
   title: finding.title,
   description: finding.description,
   category: finding.category,

@@ -6,7 +6,7 @@ import { ActorContext, ChecklistProgress } from '../../../domain/entity/audit.en
 import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
 import { assertHasPermission, emptyChecklistProgress } from '../../../utility/audit.utility';
 import { getChecklistTemplateControls } from '../../../utility/audit-config.utility';
-import { UpdateChecklistItemRequestDto } from '../../dto/request/checklist.request.dto';
+import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto } from '../../dto/request/checklist.request.dto';
 import { ChecklistResponseDto, mapChecklistToResponse } from '../../dto/response/checklist.response.dto';
 import { IChecklistService } from '../interface/checklist.service.interface';
 
@@ -42,6 +42,37 @@ export class ChecklistService implements IChecklistService {
       entityId: engagementId,
       newValues: { count: controls.length },
     });
+  }
+
+  async createChecklistItem(engagementId: string, dto: CreateChecklistItemRequestDto, actor: ActorContext): Promise<ChecklistResponseDto> {
+    assertHasPermission(actor.permissions, 'checklist:create');
+
+    const engagement = await prisma.audit_Engagement.findFirst({
+      where: { id: engagementId, deleted_at: null },
+      select: { id: true, audit_type: true },
+    });
+    if (!engagement) throw AppError.notFound('Audit engagement');
+
+    const item = await prisma.audit_Checklist.create({
+      data: {
+        engagement_id: engagementId,
+        audit_type: dto.auditType ?? (engagement.audit_type as AuditType),
+        control_reference: dto.controlReference,
+        control_description: dto.controlDescription,
+        test_procedure: dto.testProcedure,
+      },
+    });
+
+    logger.info('Audit checklist item created', { checklistItemId: item.id, engagementId, actorId: actor.id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.checklist.create',
+      module: 'audit',
+      entityType: 'audit_checklist',
+      entityId: item.id,
+      newValues: mapChecklistToResponse(item),
+    });
+    return mapChecklistToResponse(item);
   }
 
   async updateChecklistItem(id: string, dto: UpdateChecklistItemRequestDto, actor: ActorContext): Promise<ChecklistResponseDto> {

@@ -44,10 +44,10 @@ class MfaController {
         this.router.post('/backup-codes/regenerate', auth_middleware_1.authenticate, this._regenerateBackupCodes.bind(this));
         /**
          * @route  POST /auth/2fa/admin-reset
-         * @desc   Super-admin: reset a user's 2FA (lockout recovery)
-         * @access super_admin
+         * @desc   Reset a user's 2FA (lockout recovery)
+         * @access user:reset_2fa
          */
-        this.router.post('/admin-reset', auth_middleware_1.authenticate, (0, auth_middleware_1.requireRole)('super_admin'), (0, validate_middleware_1.validate)(auth_request_dto_1.MfaAdminResetRequestSchema), this._adminReset.bind(this));
+        this.router.post('/admin-reset', auth_middleware_1.authenticate, (0, auth_middleware_1.requirePermission)('user:reset_2fa'), (0, validate_middleware_1.validate)(auth_request_dto_1.MfaAdminResetRequestSchema), this._adminReset.bind(this));
     }
     async _setup(req, res, next) {
         try {

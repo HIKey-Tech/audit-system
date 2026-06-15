@@ -31,8 +31,8 @@ export default function PlanDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const qc = useQueryClient();
-  const { canManageAuditProgramme: canWrite, hasAnyRole } = usePermissions();
-  const isAdmin = hasAnyRole(['super_admin', 'audit_admin', 'director', 'cae']);
+  const { canManageAuditProgramme: canWrite, hasPermission } = usePermissions();
+  const isAdmin = hasPermission('plan:approve');
 
   const [addItemOpen, setAddItemOpen] = useState(false);
   const [createEngOpen, setCreateEngOpen] = useState<{ itemId: string; title: string } | null>(null);

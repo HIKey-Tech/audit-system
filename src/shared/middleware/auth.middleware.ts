@@ -185,19 +185,3 @@ export const requirePermission = (...requiredPermissions: string[]) =>
     next();
   };
 
-export const requireRole = (...requiredRoles: string[]) =>
-  (req: Request, _res: Response, next: NextFunction): void => {
-    if (!req.user) {
-      return next(AppError.unauthorized());
-    }
-
-    const hasRole = requiredRoles.some((role) =>
-      req.user!.roles.includes(role),
-    );
-
-    if (!hasRole) {
-      return next(AppError.forbidden('Insufficient role'));
-    }
-
-    next();
-  };

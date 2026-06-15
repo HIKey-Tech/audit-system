@@ -5,7 +5,7 @@ import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { WorkflowEntityType } from '../../../domain/enum/workflow.enum';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
 import { ApprovalResponseDto } from '../../dto/response/approval.response.dto';
-import { IApprovalService } from '../interface/approval.service.interface';
+import { ApprovalActor, IApprovalService } from '../interface/approval.service.interface';
 export declare class ApprovalService implements IApprovalService {
     private readonly approvalStatusService;
     constructor(approvalStatusService?: IApprovalStatusService);
@@ -14,19 +14,24 @@ export declare class ApprovalService implements IApprovalService {
     private _queueApprovalCreatedAsync;
     private _queueApprovalApprovedAsync;
     private _queueApprovalRejectedAsync;
-    approve(approvalId: string, approverId: string, comment?: string): Promise<ApprovalResponseDto>;
-    reject(approvalId: string, approverId: string, reason: string): Promise<ApprovalResponseDto>;
+    approve(approvalId: string, actor: ApprovalActor, comment?: string): Promise<ApprovalResponseDto>;
+    reject(approvalId: string, actor: ApprovalActor, reason: string): Promise<ApprovalResponseDto>;
     getApprovalById(approvalId: string): Promise<ApprovalResponseDto>;
     getApprovalByEntity(entityType: WorkflowEntityType, entityId: string): Promise<ApprovalResponseDto>;
-    getPendingApprovalsForUser(userId: string, pagination: PaginationQuery): Promise<{
+    getPendingApprovalsForUser(actor: ApprovalActor, pagination: PaginationQuery): Promise<{
         approvals: ApprovalResponseDto[];
         meta: PaginationMeta;
     }>;
     cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
     private _resolveApproverChain;
-    private _getFirstActiveUserByRole;
+    private _chainForEntity;
+    private _resolveEngagementManager;
+    private _hasActiveUserWithPermission;
+    /** All active users who currently hold a permission — the pool that can act on a pool level. */
+    private _stepRecipientIds;
+    private _activeHolderWhere;
     private _getPendingApproval;
-    private _getCurrentStepForApprover;
+    private _getActionableStep;
     private _notifyUser;
     private _queueNotification;
     private _resolveEntityReference;

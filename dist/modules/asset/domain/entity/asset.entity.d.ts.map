@@ -1,0 +1,1 @@
+{"version":3,"file":"asset.entity.d.ts","sourceRoot":"","sources":["../../../../../src/modules/asset/domain/entity/asset.entity.ts"],"names":[],"mappings":"AAAA,MAAM,WAAW,iBAAiB;IAChC,EAAE,EAAE,MAAM,CAAC;IACX,KAAK,EAAE,MAAM,EAAE,CAAC;IAChB,WAAW,EAAE,MAAM,EAAE,CAAC;IACtB,YAAY,CAAC,EAAE,OAAO,CAAC;CACxB;AAED,MAAM,MAAM,UAAU,GAAG,MAAM,CAAC,MAAM,EAAE,OAAO,CAAC,CAAC"}

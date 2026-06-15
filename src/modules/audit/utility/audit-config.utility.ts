@@ -71,23 +71,36 @@ export const getChecklistTemplateControls = async (
     }));
 };
 
+/**
+ * Sentinel chain entry: resolve this level to the entity's assigned engagement
+ * manager (a specific person) rather than to a permission holder.
+ */
+export const ENGAGEMENT_MANAGER_APPROVER = 'engagement_manager';
+
 export interface ApprovalMatrix {
-  /** Ordered list of role names whose holders approve each level, per entity type. */
+  /**
+   * Ordered approver chain per entity type. Each level is either the
+   * ENGAGEMENT_MANAGER_APPROVER sentinel (resolved to the entity's engagement
+   * manager) or a permission slug (resolved to an active holder of that
+   * permission). Approvers are never resolved by role name — roles matter only
+   * insofar as an admin grants these permissions to them.
+   */
   auditPlan: string[];
   workingPaper: string[];
   auditReport: string[];
 }
 
 export const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix = {
-  auditPlan: ['cae'],
-  workingPaper: ['audit_manager'],
-  auditReport: ['audit_manager', 'director', 'cae'],
+  auditPlan: ['plan:approve'],
+  workingPaper: [ENGAGEMENT_MANAGER_APPROVER],
+  auditReport: [ENGAGEMENT_MANAGER_APPROVER, 'report:approve:oversight', 'report:approve:final'],
 };
 
 /**
  * Reads the GBB-configurable approval matrix from system_config. Admins edit this
  * in Settings to control who signs off on plans, working papers, and reports — the
- * approval engine resolves these role names to users instead of hardcoding them.
+ * approval engine resolves each level to a permission holder (or the engagement
+ * manager), never to a hardcoded role.
  */
 export const getApprovalMatrix = async (): Promise<ApprovalMatrix> => {
   const parsed = await getJsonConfig<Partial<ApprovalMatrix>>('approval_matrix', {});

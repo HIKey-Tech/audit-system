@@ -11,7 +11,8 @@ export declare class EscalationService implements IEscalationService {
     createOrUpdateEscalationPolicy(dto: UpsertEscalationPolicyRequestDto, updatedBy: WorkflowActorContext): Promise<EscalationPolicyResponseDto>;
     private _fireEscalation;
     private _resolveEscalationTargets;
-    private _getUsersByRole;
+    private _getUsersByRoles;
+    private _getUsersByPermission;
     private _getLatestEscalation;
     private _getPolicyThresholds;
     private _thresholdForLevel;

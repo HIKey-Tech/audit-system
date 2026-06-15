@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.ChecklistService = exports.FollowUpService = exports.ReportService = exports.FindingService = exports.EvidenceService = exports.WorkingPaperService = exports.EngagementService = exports.PlanningService = exports.UniverseService = exports.createAuditModule = void 0;
 const express_1 = require("express");
 const document_1 = require("../document");
+const user_1 = require("../user");
 const register_service_1 = require("../risk/register/service/implementation/register.service");
 const report_template_service_1 = require("../settings/service/implementation/report-template.service");
 const working_paper_template_service_1 = require("../settings/service/implementation/working-paper-template.service");
@@ -30,11 +31,12 @@ const checklist_controller_1 = require("./checklists/controller/checklist.contro
 const createAuditModule = () => {
     const router = (0, express_1.Router)();
     const documentService = new document_1.DocumentService();
+    const userService = new user_1.UserService();
     const riskRegisterService = new register_service_1.RiskRegisterService();
     const universeService = new universe_service_1.UniverseService(riskRegisterService);
     const planningService = new planning_service_1.PlanningService();
     const checklistService = new checklist_service_1.ChecklistService();
-    const engagementService = new engagement_service_1.EngagementService(checklistService);
+    const engagementService = new engagement_service_1.EngagementService(checklistService, userService);
     const workingPaperService = new working_paper_service_1.WorkingPaperService(documentService, working_paper_template_service_1.workingPaperTemplateService);
     const evidenceService = new evidence_service_1.EvidenceService(documentService);
     const findingService = new finding_service_1.FindingService();

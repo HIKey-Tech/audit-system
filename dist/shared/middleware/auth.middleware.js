@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requireRole = exports.requirePermission = exports.requireEnrollmentContext = exports.requireMfaToken = exports.authenticate = void 0;
+exports.requirePermission = exports.requireEnrollmentContext = exports.requireMfaToken = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const app_config_1 = require("../config/app.config");
 const app_error_1 = require("../errors/app.error");
@@ -124,15 +124,4 @@ const requirePermission = (...requiredPermissions) => (req, _res, next) => {
     next();
 };
 exports.requirePermission = requirePermission;
-const requireRole = (...requiredRoles) => (req, _res, next) => {
-    if (!req.user) {
-        return next(app_error_1.AppError.unauthorized());
-    }
-    const hasRole = requiredRoles.some((role) => req.user.roles.includes(role));
-    if (!hasRole) {
-        return next(app_error_1.AppError.forbidden('Insufficient role'));
-    }
-    next();
-};
-exports.requireRole = requireRole;
 //# sourceMappingURL=auth.middleware.js.map

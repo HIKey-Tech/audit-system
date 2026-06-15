@@ -23,6 +23,12 @@ class ChecklistController {
          */
         this.router.get('/engagements/:id/checklists', (0, auth_middleware_1.requirePermission)('checklist:read'), this._getChecklists.bind(this));
         /**
+         * @route  POST /audit/engagements/:id/checklists
+         * @desc   Add a custom checklist item to an engagement
+         * @access Private - checklist:create
+         */
+        this.router.post('/engagements/:id/checklists', (0, auth_middleware_1.requirePermission)('checklist:create'), (0, validate_middleware_1.validate)(checklist_request_dto_1.CreateChecklistItemRequestSchema), this._createChecklistItem.bind(this));
+        /**
          * @route  GET /audit/engagements/:id/checklists/progress
          * @desc   Get checklist progress
          * @access Private - audit:read
@@ -54,6 +60,15 @@ class ChecklistController {
         try {
             const progress = await this.checklistService.getChecklistProgress(req.params.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(progress));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _createChecklistItem(req, res, next) {
+        try {
+            const item = await this.checklistService.createChecklistItem(req.params.id, req.body, req.user);
+            res.status(201).json((0, api_response_type_1.buildResponse)(item, 'Checklist item added'));
         }
         catch (err) {
             next(err);

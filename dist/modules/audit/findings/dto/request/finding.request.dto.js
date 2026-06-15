@@ -5,6 +5,8 @@ const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 exports.CreateFindingRequestSchema = zod_1.z.object({
     workingPaperId: zod_1.z.string().uuid().optional(),
+    checklistId: zod_1.z.string().uuid().optional(),
+    riskId: zod_1.z.string().uuid().optional(),
     title: zod_1.z.string().min(1).max(200),
     description: zod_1.z.string().min(1),
     category: zod_1.z.nativeEnum(audit_enum_1.FindingCategory),
@@ -17,6 +19,8 @@ exports.CreateFindingRequestSchema = zod_1.z.object({
 });
 exports.UpdateFindingRequestSchema = zod_1.z.object({
     workingPaperId: zod_1.z.string().uuid().nullable().optional(),
+    checklistId: zod_1.z.string().uuid().nullable().optional(),
+    riskId: zod_1.z.string().uuid().nullable().optional(),
     title: zod_1.z.string().min(1).max(200).optional(),
     description: zod_1.z.string().min(1).optional(),
     category: zod_1.z.nativeEnum(audit_enum_1.FindingCategory).optional(),
@@ -37,6 +41,7 @@ exports.FindingQuerySchema = zod_1.z.object({
     severity: zod_1.z.nativeEnum(audit_enum_1.FindingSeverity).optional(),
     status: zod_1.z.nativeEnum(audit_enum_1.FindingStatus).optional(),
     category: zod_1.z.nativeEnum(audit_enum_1.FindingCategory).optional(),
+    controlReference: zod_1.z.string().trim().optional(),
     auditeeId: zod_1.z.string().uuid().optional(),
     sortBy: zod_1.z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),

@@ -205,7 +205,7 @@ export class PlanningService implements IPlanningService {
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be approved');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditPlan, planId);
-    await this.approvalService.approve(approval.id, actor.id);
+    await this.approvalService.approve(approval.id, actor);
     const updated = await this.getPlanById(planId);
 
     logger.info('Audit plan approved', { planId, actorId: actor.id });
@@ -219,7 +219,7 @@ export class PlanningService implements IPlanningService {
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be rejected');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditPlan, planId);
-    await this.approvalService.reject(approval.id, actor.id, reason);
+    await this.approvalService.reject(approval.id, actor, reason);
     const updated = await this.getPlanById(planId);
 
     logger.info('Audit plan rejected', { planId, actorId: actor.id });

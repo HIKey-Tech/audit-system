@@ -29,6 +29,11 @@ const approvalInclude = client_1.Prisma.validator()({
         orderBy: { level: 'asc' },
     },
 });
+/** Capability permission a user must hold to act as an engagement's manager-level approver. */
+const ENGAGEMENT_MANAGER_PERMISSION = {
+    [workflow_enum_1.WorkflowEntityType.AuditWorkingPaper]: 'working_paper:approve',
+    [workflow_enum_1.WorkflowEntityType.AuditReport]: 'report:approve',
+};
 class ApprovalService {
     approvalStatusService;
     constructor(approvalStatusService = approval_status_service_1.approvalStatusService) {
@@ -46,8 +51,8 @@ class ApprovalService {
         });
         if (existing)
             throw app_error_1.AppError.conflict('A pending approval already exists for this entity');
-        const approverIds = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
-        if (approverIds.length === 0)
+        const levels = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
+        if (levels.length === 0)
             throw app_error_1.AppError.badRequest('No approvers configured for this approval');
         const createApprovalRecord = async (client) => {
             const created = await client.workflow_Approval.create({
@@ -59,10 +64,11 @@ class ApprovalService {
                 },
             });
             await client.workflow_Approval_Step.createMany({
-                data: approverIds.map((approverId, index) => ({
+                data: levels.map((spec, index) => ({
                     approval_id: created.id,
                     level: index + 1,
-                    approver_id: approverId,
+                    approver_id: spec.approverId,
+                    required_permission: spec.requiredPermission,
                 })),
             });
             return client.workflow_Approval.findUniqueOrThrow({
@@ -87,7 +93,7 @@ class ApprovalService {
             module: 'workflow',
             entityType: dto.entityType,
             entityId: dto.entityId,
-            newValues: { approvalId: approval.id, approverIds },
+            newValues: { approvalId: approval.id, levels },
         });
         return (0, approval_response_dto_1.mapApprovalToResponse)(approval);
     }
@@ -95,28 +101,36 @@ class ApprovalService {
         const currentStep = approval.steps?.find((step) => step.level === approval.currentLevel);
         if (!currentStep)
             return;
-        void this._queueApprovalCreatedAsync(approval, currentStep.approverId);
+        void this._queueApprovalCreatedAsync(approval, {
+            approverId: currentStep.approverId,
+            requiredPermission: currentStep.requiredPermission,
+        });
     }
-    async _queueApprovalCreatedAsync(approval, approverId) {
+    async _queueApprovalCreatedAsync(approval, step) {
+        const recipientIds = await this._stepRecipientIds(step);
+        if (recipientIds.length === 0)
+            return;
         const [entityReference, submitterName] = await Promise.all([
             this._resolveEntityReference(approval.entityType, approval.entityId),
             this._resolveActorName(approval.submittedById),
         ]);
-        this._queueNotification(approverId, {
-            title: 'Approval required',
-            body: `A ${approval.entityType} requires your approval.`,
-            type: 'info',
-            referenceType: 'workflow_approval',
-            referenceId: approval.id,
-        }, {
-            eventKey: 'workflow.approval.created',
-            variables: {
-                entityType: approval.entityType,
-                entityReference,
-                submitterName,
-                submittedAt: approval.createdAt,
-            },
-        });
+        for (const recipientId of recipientIds) {
+            this._queueNotification(recipientId, {
+                title: 'Approval required',
+                body: `A ${approval.entityType} requires your approval.`,
+                type: 'info',
+                referenceType: 'workflow_approval',
+                referenceId: approval.id,
+            }, {
+                eventKey: 'workflow.approval.created',
+                variables: {
+                    entityType: approval.entityType,
+                    entityReference,
+                    submitterName,
+                    submittedAt: approval.createdAt,
+                },
+            });
+        }
     }
     async _queueApprovalApprovedAsync(approval, approverId, comment) {
         const [entityReference, submitterName, approverName] = await Promise.all([
@@ -164,20 +178,26 @@ class ApprovalService {
             },
         });
     }
-    async approve(approvalId, approverId, comment) {
+    async approve(approvalId, actor, comment) {
         const approval = await this._getPendingApproval(approvalId);
-        const currentStep = this._getCurrentStepForApprover(approval, approverId);
+        const currentStep = this._getActionableStep(approval, actor);
         const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
         const now = new Date();
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
-            await tx.workflow_Approval_Step.update({
-                where: { id: currentStep.id },
+            // Atomically claim the step: only succeeds while it is still pending, so two
+            // concurrent approvers can't both act — the loser matches 0 rows and aborts.
+            const claimed = await tx.workflow_Approval_Step.updateMany({
+                where: { id: currentStep.id, status: workflow_enum_1.WorkflowApprovalStepStatus.Pending },
                 data: {
                     status: workflow_enum_1.WorkflowApprovalStepStatus.Approved,
+                    approver_id: actor.id,
                     comment: comment ?? null,
                     acted_at: now,
                 },
             });
+            if (claimed.count === 0) {
+                throw app_error_1.AppError.conflict('This approval step has already been actioned');
+            }
             if (nextStep) {
                 await tx.workflow_Approval.update({
                     where: { id: approvalId },
@@ -192,7 +212,7 @@ class ApprovalService {
                         completed_at: now,
                     },
                 });
-                await this.approvalStatusService.markApproved(tx, approval.entity_type, approval.entity_id, approverId, now);
+                await this.approvalStatusService.markApproved(tx, approval.entity_type, approval.entity_id, actor.id, now);
             }
             return tx.workflow_Approval.findUniqueOrThrow({
                 where: { id: approvalId },
@@ -200,14 +220,17 @@ class ApprovalService {
             });
         }, { timeout: 15000 });
         if (nextStep) {
-            void this._queueApprovalCreatedAsync((0, approval_response_dto_1.mapApprovalToResponse)(updated), nextStep.approver_id);
+            void this._queueApprovalCreatedAsync((0, approval_response_dto_1.mapApprovalToResponse)(updated), {
+                approverId: nextStep.approver_id,
+                requiredPermission: nextStep.required_permission,
+            });
         }
         else {
-            void this._queueApprovalApprovedAsync(approval, approverId, comment);
+            void this._queueApprovalApprovedAsync(approval, actor.id, comment);
         }
-        logger_util_1.logger.info('Workflow approval step approved', { approvalId, approverId });
+        logger_util_1.logger.info('Workflow approval step approved', { approvalId, approverId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
-            userId: approverId,
+            userId: actor.id,
             action: 'workflow.approval.approve',
             module: 'workflow',
             entityType: approval.entity_type,
@@ -216,19 +239,25 @@ class ApprovalService {
         });
         return (0, approval_response_dto_1.mapApprovalToResponse)(updated);
     }
-    async reject(approvalId, approverId, reason) {
+    async reject(approvalId, actor, reason) {
         const approval = await this._getPendingApproval(approvalId);
-        const currentStep = this._getCurrentStepForApprover(approval, approverId);
+        const currentStep = this._getActionableStep(approval, actor);
         const now = new Date();
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
-            await tx.workflow_Approval_Step.update({
-                where: { id: currentStep.id },
+            // Atomically claim the step (see approve): the loser of a concurrent
+            // approve/reject on the same step matches 0 rows and aborts.
+            const claimed = await tx.workflow_Approval_Step.updateMany({
+                where: { id: currentStep.id, status: workflow_enum_1.WorkflowApprovalStepStatus.Pending },
                 data: {
                     status: workflow_enum_1.WorkflowApprovalStepStatus.Rejected,
+                    approver_id: actor.id,
                     comment: reason,
                     acted_at: now,
                 },
             });
+            if (claimed.count === 0) {
+                throw app_error_1.AppError.conflict('This approval step has already been actioned');
+            }
             await tx.workflow_Approval.update({
                 where: { id: approvalId },
                 data: {
@@ -237,16 +266,16 @@ class ApprovalService {
                     completed_at: now,
                 },
             });
-            await this.approvalStatusService.markRejected(tx, approval.entity_type, approval.entity_id, approverId, reason);
+            await this.approvalStatusService.markRejected(tx, approval.entity_type, approval.entity_id, actor.id, reason);
             return tx.workflow_Approval.findUniqueOrThrow({
                 where: { id: approvalId },
                 include: approvalInclude,
             });
         }, { timeout: 15000 });
-        void this._queueApprovalRejectedAsync(approval, approverId, reason);
-        logger_util_1.logger.info('Workflow approval rejected', { approvalId, approverId });
+        void this._queueApprovalRejectedAsync(approval, actor.id, reason);
+        logger_util_1.logger.info('Workflow approval rejected', { approvalId, approverId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
-            userId: approverId,
+            userId: actor.id,
             action: 'workflow.approval.reject',
             module: 'workflow',
             entityType: approval.entity_type,
@@ -274,20 +303,31 @@ class ApprovalService {
             throw app_error_1.AppError.notFound('Workflow approval');
         return (0, approval_response_dto_1.mapApprovalToResponse)(approval);
     }
-    async getPendingApprovalsForUser(userId, pagination) {
+    async getPendingApprovalsForUser(actor, pagination) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(pagination);
+        // A user sees a step if it is pinned to them, or it is an open permission-pool
+        // step whose required permission they hold.
+        const orConditions = [{ approver_id: actor.id }];
+        if (actor.permissions.length > 0) {
+            orConditions.push({ approver_id: null, required_permission: { in: actor.permissions } });
+        }
         const candidateSteps = await prisma_client_1.prisma.workflow_Approval_Step.findMany({
             where: {
-                approver_id: userId,
                 status: workflow_enum_1.WorkflowApprovalStepStatus.Pending,
                 approval: { status: workflow_enum_1.WorkflowApprovalStatus.Pending },
+                OR: orConditions,
             },
             include: { approval: { include: approvalInclude } },
             orderBy: { created_at: 'asc' },
         });
-        const approvals = candidateSteps
-            .filter((step) => step.level === step.approval.current_level)
-            .map((step) => step.approval);
+        // Only the current-level step is actionable; dedupe to one entry per approval.
+        const approvalsById = new Map();
+        for (const step of candidateSteps) {
+            if (step.level === step.approval.current_level) {
+                approvalsById.set(step.approval.id, step.approval);
+            }
+        }
+        const approvals = [...approvalsById.values()];
         const paged = approvals.slice(skip, skip + take);
         return {
             approvals: paged.map(approval_response_dto_1.mapApprovalToResponse),
@@ -305,8 +345,15 @@ class ApprovalService {
             },
             include: approvalInclude,
         });
-        const approverIds = [...new Set(approval.steps.map((step) => step.approver_id))];
-        approverIds.forEach((approverId) => this._queueNotification(approverId, {
+        const recipientIds = new Set();
+        for (const step of approval.steps) {
+            const ids = await this._stepRecipientIds({
+                approverId: step.approver_id,
+                requiredPermission: step.required_permission,
+            });
+            ids.forEach((id) => recipientIds.add(id));
+        }
+        recipientIds.forEach((recipientId) => this._queueNotification(recipientId, {
             title: 'Approval cancelled',
             body: `The ${approval.entity_type} approval request has been cancelled.`,
             type: 'warning',
@@ -326,11 +373,50 @@ class ApprovalService {
     }
     async _resolveApproverChain(db, entityType, entityId) {
         const matrix = await (0, audit_config_utility_1.getApprovalMatrix)();
-        // Resolve the engagement's assigned manager for engagement-bound entities so
-        // the manager who owns the engagement reviews its working paper / report,
-        // rather than just any holder of the manager role.
-        let engagementManagerId = null;
-        let roleSequence;
+        const chain = this._chainForEntity(matrix, entityType);
+        if (chain.length === 0)
+            return [];
+        // Engagement-bound entities pin levels marked ENGAGEMENT_MANAGER_APPROVER to
+        // the engagement's assigned manager (a specific person), so the manager who
+        // owns the engagement reviews its working paper / report.
+        const engagementManagerId = await this._resolveEngagementManager(db, entityType, entityId);
+        const managerPermission = ENGAGEMENT_MANAGER_PERMISSION[entityType];
+        const specs = [];
+        for (const level of chain) {
+            if (level === audit_config_utility_1.ENGAGEMENT_MANAGER_APPROVER) {
+                if (!engagementManagerId) {
+                    throw app_error_1.AppError.badRequest(`No engagement manager available for ${entityType} approval`);
+                }
+                if (!managerPermission) {
+                    throw app_error_1.AppError.badRequest(`No approver permission configured for ${entityType} manager approval`);
+                }
+                // Pinned to the engagement's manager, who must still hold the permission to act.
+                specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
+                continue;
+            }
+            // `level` is a permission slug: any active holder may act. Ensure at least
+            // one exists so the level can't dead-end.
+            const hasHolder = await this._hasActiveUserWithPermission(db, level);
+            if (!hasHolder) {
+                throw app_error_1.AppError.badRequest(`No active user holding permission '${level}' is available for ${entityType} approval`);
+            }
+            specs.push({ approverId: null, requiredPermission: level });
+        }
+        return specs;
+    }
+    _chainForEntity(matrix, entityType) {
+        switch (entityType) {
+            case workflow_enum_1.WorkflowEntityType.AuditPlan:
+                return matrix.auditPlan;
+            case workflow_enum_1.WorkflowEntityType.AuditWorkingPaper:
+                return matrix.workingPaper;
+            case workflow_enum_1.WorkflowEntityType.AuditReport:
+                return matrix.auditReport;
+            default:
+                return [];
+        }
+    }
+    async _resolveEngagementManager(db, entityType, entityId) {
         if (entityType === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper) {
             const paper = await db.audit_Working_Paper.findFirst({
                 where: { id: entityId, deleted_at: null },
@@ -338,57 +424,53 @@ class ApprovalService {
             });
             if (!paper)
                 throw app_error_1.AppError.notFound('Audit working paper');
-            engagementManagerId = paper.engagement.audit_manager_id;
-            roleSequence = matrix.workingPaper;
+            return paper.engagement.audit_manager_id;
         }
-        else if (entityType === workflow_enum_1.WorkflowEntityType.AuditReport) {
+        if (entityType === workflow_enum_1.WorkflowEntityType.AuditReport) {
             const report = await db.audit_Report.findFirst({
                 where: { id: entityId, deleted_at: null },
                 select: { engagement: { select: { audit_manager_id: true } } },
             });
             if (!report)
                 throw app_error_1.AppError.notFound('Audit report');
-            engagementManagerId = report.engagement.audit_manager_id;
-            roleSequence = matrix.auditReport;
+            return report.engagement.audit_manager_id;
         }
-        else if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan) {
+        if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan) {
             const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
             if (!plan)
                 throw app_error_1.AppError.notFound('Audit plan');
-            roleSequence = matrix.auditPlan;
         }
-        // Unknown entity type or empty matrix entry: fall back to the first active CAE.
-        if (!roleSequence || roleSequence.length === 0) {
-            const fallback = await this._getFirstActiveUserByRole(db, 'cae');
-            return fallback ? [fallback] : [];
-        }
-        const chain = [];
-        for (let level = 0; level < roleSequence.length; level += 1) {
-            // For engagement-bound entities the first approver is the engagement's
-            // assigned manager (a specific person), not just any holder of the role.
-            if (level === 0 && engagementManagerId) {
-                chain.push(engagementManagerId);
-                continue;
-            }
-            const userId = await this._getFirstActiveUserByRole(db, roleSequence[level]);
-            if (!userId) {
-                throw app_error_1.AppError.badRequest(`No active user with role '${roleSequence[level]}' configured for ${entityType} approval`);
-            }
-            chain.push(userId);
-        }
-        return chain;
+        return null;
     }
-    async _getFirstActiveUserByRole(db, roleName) {
+    async _hasActiveUserWithPermission(db, permissionSlug) {
         const user = await db.user.findFirst({
-            where: {
-                deleted_at: null,
-                is_active: true,
-                user_roles: { some: { role: { name: roleName } } },
-            },
+            where: this._activeHolderWhere(permissionSlug),
             select: { id: true },
-            orderBy: { created_at: 'asc' },
         });
-        return user?.id ?? null;
+        return user !== null;
+    }
+    /** All active users who currently hold a permission — the pool that can act on a pool level. */
+    async _stepRecipientIds(step) {
+        if (step.approverId)
+            return [step.approverId];
+        if (!step.requiredPermission)
+            return [];
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: this._activeHolderWhere(step.requiredPermission),
+            select: { id: true },
+        });
+        return users.map((user) => user.id);
+    }
+    _activeHolderWhere(permissionSlug) {
+        return {
+            deleted_at: null,
+            is_active: true,
+            user_roles: {
+                some: {
+                    role: { role_permissions: { some: { permission: { slug: permissionSlug } } } },
+                },
+            },
+        };
     }
     async _getPendingApproval(approvalId) {
         const approval = await prisma_client_1.prisma.workflow_Approval.findUnique({
@@ -402,15 +484,20 @@ class ApprovalService {
         }
         return approval;
     }
-    _getCurrentStepForApprover(approval, approverId) {
+    _getActionableStep(approval, actor) {
         const step = approval.steps.find((item) => item.level === approval.current_level);
         if (!step)
             throw app_error_1.AppError.badRequest('Approval has no pending current step');
-        if (step.approver_id !== approverId) {
-            throw app_error_1.AppError.forbidden('You are not the approver for the current approval step');
-        }
         if (step.status !== workflow_enum_1.WorkflowApprovalStepStatus.Pending) {
             throw app_error_1.AppError.badRequest('Current approval step has already been actioned');
+        }
+        // A step always requires its permission. A pinned step additionally requires
+        // the actor to be that specific user (the engagement's manager); a pool step
+        // is open to any holder of the permission.
+        const holdsPermission = !step.required_permission || actor.permissions.includes(step.required_permission);
+        const isPinnedApprover = step.approver_id === null || step.approver_id === actor.id;
+        if (!holdsPermission || !isPinnedApprover) {
+            throw app_error_1.AppError.forbidden('You are not authorized to act on the current approval step');
         }
         return step;
     }

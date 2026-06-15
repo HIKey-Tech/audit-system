@@ -10,11 +10,6 @@ import {
   WorkingPaperStatus,
 } from '../domain/enum/audit.enum';
 
-export const AUDITEE_ROLE = 'auditee';
-
-export const hasAuditeeRole = (roles: string[]): boolean =>
-  roles.includes(AUDITEE_ROLE);
-
 export const assertHasPermission = (
   permissions: string[],
   required: string,

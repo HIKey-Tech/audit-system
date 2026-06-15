@@ -16,6 +16,7 @@ const mapApprovalStepToResponse = (step) => ({
     approvalId: step.approval_id,
     level: step.level,
     approverId: step.approver_id,
+    requiredPermission: step.required_permission,
     status: step.status,
     comment: step.comment,
     actedAt: step.acted_at?.toISOString() ?? null,

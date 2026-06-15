@@ -67,3 +67,29 @@ export const riskRegisterWithDetailsInclude = Prisma.validator<Prisma.Risk_Regis
 export type RiskRegisterWithDetails = Prisma.Risk_RegisterGetPayload<{
   include: typeof riskRegisterWithDetailsInclude;
 }>;
+
+const assetUserBriefSelect = Prisma.validator<Prisma.UserSelect>()({
+  id: true,
+  email: true,
+  display_name: true,
+  first_name: true,
+  last_name: true,
+  department: true,
+  job_title: true,
+});
+
+export const assetWithDetailsInclude = Prisma.validator<Prisma.AssetInclude>()({
+  owner: {
+    select: assetUserBriefSelect,
+  },
+  custodian: {
+    select: assetUserBriefSelect,
+  },
+  created_by: {
+    select: assetUserBriefSelect,
+  },
+});
+
+export type AssetWithDetails = Prisma.AssetGetPayload<{
+  include: typeof assetWithDetailsInclude;
+}>;

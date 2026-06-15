@@ -31,6 +31,7 @@ export declare const config: {
         readonly expiresIn: string;
         readonly refreshSecret: string;
         readonly refreshExpiresIn: string;
+        readonly refreshRotationGrace: string;
     };
     readonly oidc: {
         readonly provider: "azure_ad" | "generic";

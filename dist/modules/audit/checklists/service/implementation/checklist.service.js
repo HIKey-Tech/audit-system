@@ -41,6 +41,34 @@ class ChecklistService {
             newValues: { count: controls.length },
         });
     }
+    async createChecklistItem(engagementId, dto, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:create');
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { id: true, audit_type: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        const item = await prisma_client_1.prisma.audit_Checklist.create({
+            data: {
+                engagement_id: engagementId,
+                audit_type: dto.auditType ?? engagement.audit_type,
+                control_reference: dto.controlReference,
+                control_description: dto.controlDescription,
+                test_procedure: dto.testProcedure,
+            },
+        });
+        logger_util_1.logger.info('Audit checklist item created', { checklistItemId: item.id, engagementId, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.checklist.create',
+            module: 'audit',
+            entityType: 'audit_checklist',
+            entityId: item.id,
+            newValues: (0, checklist_response_dto_1.mapChecklistToResponse)(item),
+        });
+        return (0, checklist_response_dto_1.mapChecklistToResponse)(item);
+    }
     async updateChecklistItem(id, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:update');
         await this._assertChecklistExists(id);

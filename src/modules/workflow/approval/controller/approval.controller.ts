@@ -66,7 +66,7 @@ export class ApprovalController {
 
   private async _getPendingApprovals(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { approvals, meta } = await this.approvalService.getPendingApprovalsForUser(req.user!.id, req.query);
+      const { approvals, meta } = await this.approvalService.getPendingApprovalsForUser(req.user!, req.query);
       res.status(200).json(buildResponse(approvals, 'Pending approvals retrieved', meta));
     } catch (err) {
       next(err);
@@ -93,7 +93,7 @@ export class ApprovalController {
 
   private async _approve(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const approval = await this.approvalService.approve(req.params.id, req.user!.id, req.body.comment);
+      const approval = await this.approvalService.approve(req.params.id, req.user!, req.body.comment);
       res.status(200).json(buildResponse(approval, 'Approval step approved'));
     } catch (err) {
       next(err);
@@ -102,7 +102,7 @@ export class ApprovalController {
 
   private async _reject(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const approval = await this.approvalService.reject(req.params.id, req.user!.id, req.body.reason);
+      const approval = await this.approvalService.reject(req.params.id, req.user!, req.body.reason);
       res.status(200).json(buildResponse(approval, 'Approval rejected'));
     } catch (err) {
       next(err);

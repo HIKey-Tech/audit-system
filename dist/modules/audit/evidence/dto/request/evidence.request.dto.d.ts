@@ -3,21 +3,21 @@ export declare const UploadEvidenceMetadataSchema: z.ZodObject<{
     workingPaperId: z.ZodOptional<z.ZodString>;
     findingId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    workingPaperId?: string | undefined;
     findingId?: string | undefined;
+    workingPaperId?: string | undefined;
 }, {
-    workingPaperId?: string | undefined;
     findingId?: string | undefined;
+    workingPaperId?: string | undefined;
 }>;
 export declare const EvidenceQuerySchema: z.ZodObject<{
     workingPaperId: z.ZodOptional<z.ZodString>;
     findingId: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
-    workingPaperId?: string | undefined;
     findingId?: string | undefined;
+    workingPaperId?: string | undefined;
 }, {
-    workingPaperId?: string | undefined;
     findingId?: string | undefined;
+    workingPaperId?: string | undefined;
 }>;
 export declare const DisputeEvidenceRequestSchema: z.ZodObject<{
     reason: z.ZodString;

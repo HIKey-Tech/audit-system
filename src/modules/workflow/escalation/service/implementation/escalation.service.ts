@@ -12,7 +12,7 @@ import {
   WorkflowEscalationEntityType,
   WorkflowEscalationReason,
 } from '../../../domain/enum/workflow.enum';
-import { assertHasPermission, hasElapsed } from '../../../utility/workflow.utility';
+import { assertHasPermission, getEscalationMatrix, hasElapsed } from '../../../utility/workflow.utility';
 import { UpsertEscalationPolicyRequestDto } from '../../dto/request/escalation.request.dto';
 import {
   EscalationPolicyResponseDto,
@@ -308,6 +308,8 @@ export class EscalationService implements IEscalationService {
       last_name: true,
     } as const;
 
+    const matrix = await getEscalationMatrix();
+
     if (entityType === WorkflowEscalationEntityType.AuditEngagement) {
       const engagement = await prisma.audit_Engagement.findFirst({
         where: { id: entityId, deleted_at: null },
@@ -319,8 +321,8 @@ export class EscalationService implements IEscalationService {
       if (!engagement) throw AppError.notFound('Audit engagement');
       if (level === 1) return [engagement.lead_auditor];
       if (level === 2) return [engagement.audit_manager];
-      if (level === 3) return this._getUsersByRole('director');
-      return this._getUsersByRole('cae');
+      if (level === 3) return this._getUsersByRoles(matrix.auditEngagement.level3);
+      return this._getUsersByRoles(matrix.auditEngagement.beyond);
     }
 
     if (entityType === WorkflowEscalationEntityType.WorkflowRequest) {
@@ -348,6 +350,7 @@ export class EscalationService implements IEscalationService {
           where: { status: WorkflowApprovalStepStatus.Pending },
           select: {
             level: true,
+            required_permission: true,
             approver: { select: targetSelect },
           },
         },
@@ -356,19 +359,44 @@ export class EscalationService implements IEscalationService {
     if (!approval) throw AppError.notFound('Workflow approval');
     if (level === 1) {
       const currentStep = approval.steps.find((step) => step.level === approval.current_level);
-      return currentStep ? [currentStep.approver] : [];
+      if (!currentStep) return [];
+      // Pinned step: that approver. Pool step (no pinned approver): the whole
+      // permission pool, so a stuck approval nudges everyone who can act.
+      if (currentStep.approver) return [currentStep.approver];
+      if (currentStep.required_permission) return this._getUsersByPermission(currentStep.required_permission);
+      return [];
     }
-    if (level === 3) return this._getUsersByRole('director');
-    if (level === 4) return this._getUsersByRole('cae');
-    return this._getUsersByRole('audit_manager');
+    if (level === 3) return this._getUsersByRoles(matrix.workflowApproval.level3);
+    if (level === 4) return this._getUsersByRoles(matrix.workflowApproval.level4);
+    return this._getUsersByRoles(matrix.workflowApproval.otherwise);
   }
 
-  private async _getUsersByRole(roleName: string): Promise<NotificationTarget[]> {
+  private async _getUsersByRoles(roleNames: string[]): Promise<NotificationTarget[]> {
+    if (roleNames.length === 0) return [];
     return prisma.user.findMany({
       where: {
         deleted_at: null,
         is_active: true,
-        user_roles: { some: { role: { name: roleName } } },
+        user_roles: { some: { role: { name: { in: roleNames } } } },
+      },
+      select: {
+        id: true,
+        email: true,
+        display_name: true,
+        first_name: true,
+        last_name: true,
+      },
+    });
+  }
+
+  private async _getUsersByPermission(permissionSlug: string): Promise<NotificationTarget[]> {
+    return prisma.user.findMany({
+      where: {
+        deleted_at: null,
+        is_active: true,
+        user_roles: {
+          some: { role: { role_permissions: { some: { permission: { slug: permissionSlug } } } } },
+        },
       },
       select: {
         id: true,

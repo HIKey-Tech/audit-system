@@ -14,7 +14,8 @@ export interface ApprovalStepResponseDto {
   id: string;
   approvalId: string;
   level: number;
-  approverId: string;
+  approverId: string | null;
+  requiredPermission: string | null;
   status: string;
   comment: string | null;
   actedAt: string | null;
@@ -51,17 +52,19 @@ export const mapApprovalStepToResponse = (step: {
   id: string;
   approval_id: string;
   level: number;
-  approver_id: string;
+  approver_id: string | null;
+  required_permission: string | null;
   status: string;
   comment: string | null;
   acted_at: Date | null;
   created_at: Date;
-  approver?: WorkflowUserLike;
+  approver?: WorkflowUserLike | null;
 }): ApprovalStepResponseDto => ({
   id: step.id,
   approvalId: step.approval_id,
   level: step.level,
   approverId: step.approver_id,
+  requiredPermission: step.required_permission,
   status: step.status,
   comment: step.comment,
   actedAt: step.acted_at?.toISOString() ?? null,
