@@ -11,8 +11,10 @@ import type {
   AuditEvidence,
   AuditFinding,
   AuditChecklistItem,
+  ChecklistTemplateConfig,
   AuditReport,
   AuditFollowUp,
+  EligibleUserDto,
 } from '../types/domain';
 
 // ============================================================
@@ -166,6 +168,12 @@ export const engagementsApi = {
     api.put<AuditEngagement>(`/audit/engagements/${id}`, dto),
   updateStatus: (id: string, status: string) =>
     api.patch<AuditEngagement>(`/audit/engagements/${id}/status`, { status }),
+  /** GET /audit/engagements/eligible-users — permission-eligible, scored candidates for lead/manager */
+  eligibleUsers: (q: { role: 'lead_auditor' | 'audit_manager'; auditType?: string; priority?: string }) =>
+    api.get<EligibleUserDto[]>(
+      `/audit/engagements/eligible-users`,
+      q as Record<string, string | number | boolean | undefined>,
+    ),
 };
 
 // ============================================================
@@ -285,6 +293,8 @@ export const findingsApi = {
     api.put<AuditFinding>(`/audit/findings/${id}`, dto),
   updateStatus: (id: string, status: string) =>
     api.patch<AuditFinding>(`/audit/findings/${id}/status`, { status }),
+  close: (id: string) =>
+    api.post<AuditFinding>(`/audit/findings/${id}/close`),
   /** Fix 4: no DELETE /audit/findings — stub that throws */
   remove: (_id: string): Promise<void> => {
     throw new Error('Not supported: findings cannot be deleted via API');
@@ -299,6 +309,9 @@ export const checklistsApi = {
     api.get<Record<string, AuditChecklistItem[]>>(`/audit/engagements/${engagementId}/checklists`),
   update: (id: string, dto: { result: string; notes?: string | null }) =>
     api.patch<AuditChecklistItem>(`/audit/checklists/${id}`, dto),
+  getTemplates: () => api.get<ChecklistTemplateConfig>('/audit/checklist-templates'),
+  updateTemplates: (templates: ChecklistTemplateConfig) =>
+    api.put<ChecklistTemplateConfig>('/audit/checklist-templates', { templates }),
 };
 
 // ============================================================
@@ -404,4 +417,152 @@ export const followUpApi = {
       `/audit/findings/${findingId}/followup/verify`,
       dto,
     ),
+};
+
+// ============================================================
+// Compliance frameworks & controls
+// ============================================================
+export interface ComplianceFramework {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  category: string;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface ComplianceControl {
+  id: string;
+  frameworkId: string;
+  frameworkCode: string | null;
+  frameworkName: string | null;
+  controlReference: string;
+  controlDescription: string;
+  testProcedure: string;
+  auditType: string;
+  isActive: boolean;
+  createdAt: string | null;
+  updatedAt: string | null;
+}
+
+export interface FrameworkCoverage {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  isActive: boolean;
+  totalControls: number;
+  activeControls: number;
+  byAuditType: Record<string, number>;
+}
+
+export interface ComplianceCoverage {
+  frameworks: FrameworkCoverage[];
+  totalFrameworks: number;
+  totalControls: number;
+  activeControls: number;
+}
+
+export interface ControlsListQuery {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  frameworkId?: string;
+  auditType?: string;
+  isActive?: boolean;
+}
+
+export interface CreateFrameworkDto {
+  code: string;
+  name: string;
+  description?: string;
+  category: string;
+  isActive?: boolean;
+}
+
+export interface CreateControlDto {
+  frameworkId: string;
+  controlReference: string;
+  controlDescription: string;
+  testProcedure: string;
+  auditType: string;
+  isActive?: boolean;
+}
+
+export interface FrameworkTestedCoverage {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  totalControls: number;
+  testedControls: number;
+  coveragePct: number;
+  passed: number;
+  failed: number;
+  notApplicable: number;
+  passRatePct: number;
+}
+
+export interface TestedCoverage {
+  frameworks: FrameworkTestedCoverage[];
+  totalControls: number;
+  testedControls: number;
+  coveragePct: number;
+  passed: number;
+  failed: number;
+  notApplicable: number;
+}
+
+export interface ControlRisk {
+  riskId: string;
+  title: string;
+  currentScore: number;
+  status: string;
+  category: string | null;
+}
+
+export interface RiskCoverageItem {
+  id: string;
+  title: string;
+  currentScore: number;
+  status: string;
+  category: string | null;
+  mappedControls: number;
+  testedControls: number;
+}
+
+export interface RiskCoverage {
+  risks: RiskCoverageItem[];
+  totalRisks: number;
+  coveredRisks: number;
+  uncoveredRisks: number;
+}
+
+export const complianceApi = {
+  coverage: () => api.get<ComplianceCoverage>('/audit/compliance/coverage'),
+  testedCoverage: () => api.get<TestedCoverage>('/audit/compliance/tested-coverage'),
+  riskCoverage: () => api.get<RiskCoverage>('/audit/compliance/risk-coverage'),
+  listControlRisks: (controlId: string) =>
+    api.get<ControlRisk[]>(`/audit/compliance/controls/${controlId}/risks`),
+  linkRisk: (controlId: string, riskId: string) =>
+    api.post<ControlRisk[]>(`/audit/compliance/controls/${controlId}/risks`, { riskId }),
+  unlinkRisk: (controlId: string, riskId: string) =>
+    api.delete(`/audit/compliance/controls/${controlId}/risks/${riskId}`),
+  listFrameworks: () => api.get<ComplianceFramework[]>('/audit/compliance/frameworks'),
+  createFramework: (dto: CreateFrameworkDto) =>
+    api.post<ComplianceFramework>('/audit/compliance/frameworks', dto),
+  updateFramework: (id: string, dto: Partial<CreateFrameworkDto>) =>
+    api.put<ComplianceFramework>(`/audit/compliance/frameworks/${id}`, dto),
+  listControls: (q?: ControlsListQuery) =>
+    api.getPaginated<ComplianceControl>(
+      '/audit/compliance/controls',
+      q as Record<string, string | number | boolean | undefined>,
+    ),
+  createControl: (dto: CreateControlDto) =>
+    api.post<ComplianceControl>('/audit/compliance/controls', dto),
+  updateControl: (id: string, dto: Partial<CreateControlDto>) =>
+    api.put<ComplianceControl>(`/audit/compliance/controls/${id}`, dto),
+  deleteControl: (id: string) => api.delete(`/audit/compliance/controls/${id}`),
 };

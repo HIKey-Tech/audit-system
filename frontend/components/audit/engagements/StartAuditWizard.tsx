@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { UserPlus, Award, Check } from 'lucide-react';
+import { Award, Check } from 'lucide-react';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -13,11 +13,11 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Badge } from '@/components/ui/Badge';
-import { Avatar } from '@/components/ui/Avatar';
 import { UserSelect } from '@/components/common/UserSelect';
+import { ScoredUserSelect } from '@/components/common/ScoredUserSelect';
 import { engagementsApi, plansApi, universeApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
-import { initialsFromName } from '@/lib/utils/format';
+import { usersApi } from '@/lib/api/users';
 import { getMatchScore, isRelevantSkill } from './assignment-matching';
 import type { AuditEngagement } from '@/lib/types/domain';
 
@@ -30,20 +30,29 @@ const toISO = (d: string): string => (d ? `${d}T00:00:00.000Z` : d);
 interface Props {
   open: boolean;
   onClose: () => void;
+  /** Pre-select the audit type — used by the dedicated domain modules. */
+  initialAuditType?: AuditType;
+  /** Pre-select the starting mode — domain modules open straight into ad-hoc. */
+  initialMode?: Mode;
 }
 
-export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
+export const StartAuditWizard = ({
+  open,
+  onClose,
+  initialAuditType,
+  initialMode = 'plan',
+}: Props): JSX.Element => {
   const qc = useQueryClient();
   const router = useRouter();
 
   const [step, setStep] = useState(1);
-  const [mode, setMode] = useState<Mode>('plan');
+  const [mode, setMode] = useState<Mode>(initialMode);
 
   // scope
   const [planId, setPlanId] = useState('');
   const [planItemId, setPlanItemId] = useState('');
   const [universeId, setUniverseId] = useState('');
-  const [auditType, setAuditType] = useState<AuditType>('compliance');
+  const [auditType, setAuditType] = useState<AuditType>(initialAuditType ?? 'compliance');
   const [priority, setPriority] = useState<Priority>('medium');
   const [adhocReason, setAdhocReason] = useState('');
   // team + schedule
@@ -51,33 +60,35 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
   const [leadAuditorId, setLeadAuditorId] = useState('');
   const [auditManagerId, setAuditManagerId] = useState('');
   const [auditeeId, setAuditeeId] = useState('');
+  const [supportingIds, setSupportingIds] = useState<string[]>([]);
+  const [candidateSearch, setCandidateSearch] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
   const [sla, setSla] = useState('');
   const [slaTouched, setSlaTouched] = useState(false);
   // created
   const [created, setCreated] = useState<AuditEngagement | null>(null);
-  const [roleByUser, setRoleByUser] = useState<Record<string, 'lead_auditor' | 'supporting_auditor'>>({});
 
   const reset = () => {
     setStep(1);
-    setMode('plan');
+    setMode(initialMode);
     setPlanId('');
     setPlanItemId('');
     setUniverseId('');
-    setAuditType('compliance');
+    setAuditType(initialAuditType ?? 'compliance');
     setPriority('medium');
     setAdhocReason('');
     setTitle('');
     setLeadAuditorId('');
     setAuditManagerId('');
     setAuditeeId('');
+    setSupportingIds([]);
+    setCandidateSearch('');
     setStart('');
     setEnd('');
     setSla('');
     setSlaTouched(false);
     setCreated(null);
-    setRoleByUser({});
   };
 
   useEffect(() => {
@@ -116,33 +127,81 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
   );
   const selectedEntity = (universe.data?.items ?? []).find((e) => e.id === universeId) ?? null;
 
+  const usersQuery = useQuery({
+    queryKey: ['users', 'all'],
+    queryFn: () => usersApi.list({ pageSize: 100 }),
+    staleTime: 5 * 60_000,
+    enabled: open,
+  });
+  const userName = (userId: string): string => {
+    const u = usersQuery.data?.items.find((x) => x.id === userId);
+    return u ? (u.displayName || `${u.firstName} ${u.lastName}`) : userId;
+  };
+
+  // Audit type drives skill matching — from the plan item (plan mode) or the picked type (ad-hoc).
+  const effectiveAuditType = useMemo(() => {
+    if (mode === 'plan') {
+      return (planDetail.data?.items ?? []).find((i) => i.id === planItemId)?.auditType ?? auditType;
+    }
+    return auditType;
+  }, [mode, planDetail.data, planItemId, auditType]);
+
+  // Supporting-auditor candidates: active users (excluding the core roles), ranked by skill match.
+  const supportingCandidates = useMemo(() => {
+    const coreIds = [leadAuditorId, auditManagerId, auditeeId];
+    const q = candidateSearch.trim().toLowerCase();
+    return (usersQuery.data?.items ?? [])
+      .filter((u) => u.isActive && !coreIds.includes(u.id))
+      .filter((u) => {
+        if (!q) return true;
+        const name = (u.displayName || `${u.firstName} ${u.lastName}`).toLowerCase();
+        return name.includes(q) || u.skills.some((s) => s.toLowerCase().includes(q));
+      })
+      .sort((a, b) => {
+        const diff = getMatchScore(b.skills, effectiveAuditType) - getMatchScore(a.skills, effectiveAuditType);
+        if (diff !== 0) return diff;
+        return (a.displayName || a.firstName).localeCompare(b.displayName || b.firstName);
+      });
+  }, [usersQuery.data, leadAuditorId, auditManagerId, auditeeId, candidateSearch, effectiveAuditType]);
+
   const create = useMutation({
     mutationFn: async (): Promise<AuditEngagement> => {
-      if (mode === 'plan') {
-        return engagementsApi.createFromPlan({
-          title: title.trim(),
-          leadAuditorId,
-          auditManagerId,
-          auditeeId,
-          plannedStartDate: toISO(start),
-          plannedEndDate: toISO(end),
-          slaDeadline: toISO(sla),
-          planItemId,
-        });
+      const eng = mode === 'plan'
+        ? await engagementsApi.createFromPlan({
+            title: title.trim(),
+            leadAuditorId,
+            auditManagerId,
+            auditeeId,
+            plannedStartDate: toISO(start),
+            plannedEndDate: toISO(end),
+            slaDeadline: toISO(sla),
+            planItemId,
+          })
+        : await engagementsApi.createAdhoc({
+            title: title.trim(),
+            leadAuditorId,
+            auditManagerId,
+            auditeeId,
+            plannedStartDate: toISO(start),
+            plannedEndDate: toISO(end),
+            slaDeadline: toISO(sla),
+            universeId,
+            auditType,
+            priority,
+            adhocReason: adhocReason.trim(),
+          });
+
+      // Assign the supporting auditors picked in step 2.
+      if (supportingIds.length > 0) {
+        const results = await Promise.allSettled(
+          supportingIds.map((userId) =>
+            workflowApi.createAssignment({ engagementId: eng.id, userId, role: 'supporting_auditor' }),
+          ),
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) toast.warning(`${failed} supporting auditor(s) could not be assigned — add them from the engagement.`);
       }
-      return engagementsApi.createAdhoc({
-        title: title.trim(),
-        leadAuditorId,
-        auditManagerId,
-        auditeeId,
-        plannedStartDate: toISO(start),
-        plannedEndDate: toISO(end),
-        slaDeadline: toISO(sla),
-        universeId,
-        auditType,
-        priority,
-        adhocReason: adhocReason.trim(),
-      });
+      return eng;
     },
     onSuccess: (eng) => {
       setCreated(eng);
@@ -150,27 +209,6 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
       setStep(4);
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to create engagement'),
-  });
-
-  const candidates = useQuery({
-    queryKey: ['engagements', created?.id, 'candidates'],
-    queryFn: () => workflowApi.getCandidates(created!.id),
-    enabled: Boolean(created?.id),
-  });
-
-  const assign = useMutation({
-    mutationFn: (dto: { userId: string; role: 'lead_auditor' | 'supporting_auditor' }) =>
-      workflowApi.createAssignment({ engagementId: created!.id, userId: dto.userId, role: dto.role }),
-    onSuccess: (_, vars) => {
-      toast.success('Staff assigned');
-      setRoleByUser((prev) => {
-        const next = { ...prev };
-        delete next[vars.userId];
-        return next;
-      });
-      qc.invalidateQueries({ queryKey: ['engagements', created!.id, 'candidates'] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to assign'),
   });
 
   const startNow = useMutation({
@@ -207,17 +245,7 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
     setStep((s) => s + 1);
   };
 
-  const sortedCandidates = useMemo(() => {
-    const at = created?.auditType ?? auditType;
-    return [...(candidates.data ?? [])].sort((a, b) => {
-      const sa = getMatchScore(a.skills, at);
-      const sb = getMatchScore(b.skills, at);
-      if (sa !== sb) return sb - sa;
-      return a.activeEngagementCount - b.activeEngagementCount;
-    });
-  }, [candidates.data, created, auditType]);
-
-  const stepLabels = ['Scope', 'Team & schedule', 'Review', 'Assign team'];
+  const stepLabels = ['Scope', 'Team & schedule', 'Review', 'Launch'];
 
   return (
     <SlideOver
@@ -402,15 +430,76 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Engagement title" />
           </FormField>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField label="Lead auditor" required tooltip="Owns fieldwork and day-to-day execution of the engagement.">
-              <UserSelect value={leadAuditorId} onChange={setLeadAuditorId} />
+            <FormField label="Lead auditor" required tooltip="Owns fieldwork and day-to-day execution of the engagement. Ranked by skill match, workload and capacity.">
+              <ScoredUserSelect role="lead_auditor" auditType={effectiveAuditType} priority={priority} value={leadAuditorId} onChange={setLeadAuditorId} />
             </FormField>
-            <FormField label="Audit manager" required tooltip="Reviews and signs off the lead auditor's work.">
-              <UserSelect value={auditManagerId} onChange={setAuditManagerId} />
+            <FormField label="Audit manager" required tooltip="Reviews and signs off the lead auditor's work. Lists only users who can approve.">
+              <ScoredUserSelect role="audit_manager" auditType={effectiveAuditType} priority={priority} value={auditManagerId} onChange={setAuditManagerId} />
             </FormField>
           </div>
           <FormField label="Auditee" required tooltip="Primary contact in the audited area who provides evidence and management responses.">
             <UserSelect value={auditeeId} onChange={setAuditeeId} />
+          </FormField>
+          <FormField
+            label={`Supporting auditors${supportingIds.length > 0 ? ` (${supportingIds.length} selected)` : ''}`}
+            tooltip="Optional. Additional auditors who support fieldwork. Ranked by skill match to this audit type; can be changed later."
+          >
+            <Input
+              value={candidateSearch}
+              onChange={(e) => setCandidateSearch(e.target.value)}
+              placeholder="Search by name or skill…"
+            />
+            <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
+              {usersQuery.isLoading ? (
+                <p className="text-xs text-text-muted">Loading users…</p>
+              ) : supportingCandidates.length === 0 ? (
+                <p className="text-xs text-text-muted">No matching users.</p>
+              ) : (
+                supportingCandidates.map((c) => {
+                  const selected = supportingIds.includes(c.id);
+                  const matched = getMatchScore(c.skills, effectiveAuditType) > 0;
+                  const relevant = c.skills.filter((s) => isRelevantSkill(s, effectiveAuditType)).slice(0, 3);
+                  return (
+                    <div
+                      key={c.id}
+                      className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-2.5"
+                    >
+                      <div className="min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <p className="text-sm font-medium text-text-primary">
+                            {c.displayName || `${c.firstName} ${c.lastName}`}
+                          </p>
+                          {matched && (
+                            <Badge tone="purple" className="flex items-center gap-0.5">
+                              <Award className="h-3 w-3" /> Recommended
+                            </Badge>
+                          )}
+                        </div>
+                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                          {c.department && <span className="text-[11px] text-text-muted">{c.department}</span>}
+                          {relevant.map((s) => (
+                            <span key={s} className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">{s}</span>
+                          ))}
+                        </div>
+                      </div>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant={selected ? 'secondary' : 'primary'}
+                        leftIcon={selected ? <Check className="h-3.5 w-3.5" /> : undefined}
+                        onClick={() =>
+                          setSupportingIds((prev) =>
+                            selected ? prev.filter((x) => x !== c.id) : [...prev, c.id],
+                          )
+                        }
+                      >
+                        {selected ? 'Added' : 'Add'}
+                      </Button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
           </FormField>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField label="Planned start" required>
@@ -441,57 +530,45 @@ export const StartAuditWizard = ({ open, onClose }: Props): JSX.Element => {
           {mode === 'ad_hoc' && <Row label="Audit type" value={auditType} />}
           {mode === 'ad_hoc' && <Row label="Priority" value={priority} />}
           <Row label="Title" value={title} />
+          <Row label="Lead auditor" value={userName(leadAuditorId)} />
+          <Row label="Audit manager" value={userName(auditManagerId)} />
+          <Row label="Auditee" value={userName(auditeeId)} />
+          <Row
+            label="Supporting auditors"
+            value={supportingIds.length > 0 ? supportingIds.map(userName).join(', ') : 'None'}
+          />
           <Row label="Schedule" value={`${start} → ${end} (SLA ${sla})`} />
         </dl>
       )}
 
-      {/* Step 4 — Assign team */}
+      {/* Step 4 — Launch */}
       {step === 4 && (
         <div className="space-y-4">
-          <p className="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-text-secondary">
-            Engagement <span className="font-semibold text-text-primary">{created?.referenceNumber}</span> created. Add supporting auditors below, then start the audit.
-          </p>
-          {candidates.isLoading ? (
-            <p className="text-xs text-text-muted">Loading candidates…</p>
-          ) : sortedCandidates.length === 0 ? (
-            <p className="text-xs text-text-muted">No available candidates.</p>
-          ) : (
-            <ul className="space-y-2">
-              {sortedCandidates.map((c) => {
-                const at = created?.auditType ?? auditType;
-                const matched = getMatchScore(c.skills, at) > 0;
-                const role = roleByUser[c.id] ?? 'supporting_auditor';
-                return (
-                  <li key={c.id} className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-surface p-3">
-                    <div className="flex items-center gap-2.5">
-                      <Avatar initials={initialsFromName(undefined, undefined, c.displayName)} size="md" tone={matched ? 'navy' : 'slate'} />
-                      <div className="min-w-0">
-                        <p className="text-sm font-semibold text-text-primary">{c.displayName}</p>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                          <Badge tone={c.activeEngagementCount >= 3 ? 'red' : c.activeEngagementCount > 0 ? 'blue' : 'green'}>
-                            {c.activeEngagementCount === 0 ? 'Available' : `${c.activeEngagementCount} active`}
-                          </Badge>
-                          {matched && <Badge tone="purple" className="flex items-center gap-0.5"><Award className="h-3 w-3" /> Recommended</Badge>}
-                          {c.skills.filter((s) => isRelevantSkill(s, at)).slice(0, 3).map((s) => (
-                            <span key={s} className="rounded bg-primary/10 px-1.5 py-0.5 text-[11px] font-semibold text-primary">{s}</span>
-                          ))}
-                        </div>
-                      </div>
-                    </div>
-                    <div className="flex items-center gap-1.5">
-                      <Select className="h-8 text-xs" value={role} onChange={(e) => setRoleByUser((p) => ({ ...p, [c.id]: e.target.value as 'lead_auditor' | 'supporting_auditor' }))}>
-                        <option value="supporting_auditor">Supporting</option>
-                        <option value="lead_auditor">Lead</option>
-                      </Select>
-                      <Button size="sm" leftIcon={<UserPlus className="h-3.5 w-3.5" />} onClick={() => assign.mutate({ userId: c.id, role })} isLoading={assign.isPending && assign.variables?.userId === c.id}>
-                        Assign
-                      </Button>
-                    </div>
-                  </li>
-                );
-              })}
+          <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
+              <Check className="h-4 w-4 stroke-[3]" />
+            </span>
+            <div className="text-sm">
+              <p className="font-semibold text-text-primary">
+                Engagement {created?.referenceNumber} created
+              </p>
+              <p className="text-text-secondary">
+                Team assigned. Start fieldwork now, or leave it in Planning to review later.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-lg border border-border bg-surface p-3">
+            <p className="mb-2 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Team</p>
+            <ul className="space-y-1.5 text-sm">
+              <li className="flex justify-between"><span className="text-text-secondary">Lead Auditor</span><span className="font-medium text-text-primary">{userName(leadAuditorId)}</span></li>
+              <li className="flex justify-between"><span className="text-text-secondary">Audit Manager</span><span className="font-medium text-text-primary">{userName(auditManagerId)}</span></li>
+              <li className="flex justify-between"><span className="text-text-secondary">Auditee</span><span className="font-medium text-text-primary">{userName(auditeeId)}</span></li>
+              {supportingIds.map((id) => (
+                <li key={id} className="flex justify-between"><span className="text-text-secondary">Supporting Auditor</span><span className="font-medium text-text-primary">{userName(id)}</span></li>
+              ))}
             </ul>
-          )}
+          </div>
         </div>
       )}
     </SlideOver>

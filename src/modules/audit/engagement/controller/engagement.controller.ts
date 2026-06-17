@@ -5,6 +5,7 @@ import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   CreateAdhocEngagementRequestSchema,
   CreateEngagementFromPlanRequestSchema,
+  EligibleUsersQuerySchema,
   EngagementQuerySchema,
   UpdateEngagementRequestSchema,
   UpdateEngagementStatusRequestSchema,
@@ -42,6 +43,13 @@ export class EngagementController {
      * @access Private - audit:read
      */
     this.router.get('/', requirePermission('engagement:read'), validate(EngagementQuerySchema, 'query'), this._listEngagements.bind(this));
+
+    /**
+     * @route  GET /audit/engagements/eligible-users
+     * @desc   Permission-eligible, optimization-scored candidates for the lead-auditor / audit-manager slots
+     * @access Private - engagement:create
+     */
+    this.router.get('/eligible-users', requirePermission('engagement:create'), validate(EligibleUsersQuerySchema, 'query'), this._getEligibleUsers.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id
@@ -96,6 +104,15 @@ export class EngagementController {
     try {
       const engagement = await this.engagementService.updateStatus(req.params.id, req.body.status, req.user!);
       res.status(200).json(buildResponse(engagement, 'Audit engagement status updated'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getEligibleUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const users = await this.engagementService.getEligibleUsers(req.query as never);
+      res.status(200).json(buildResponse(users, 'Eligible users retrieved'));
     } catch (err) {
       next(err);
     }

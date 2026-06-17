@@ -20,6 +20,11 @@ class NotificationService {
             auth: app_config_1.config.email.user
                 ? { user: app_config_1.config.email.user, pass: app_config_1.config.email.password }
                 : undefined,
+            // Pool connections so a batch drain reuses sockets instead of opening
+            // one per message.
+            pool: true,
+            maxConnections: 5,
+            maxMessages: 100,
             connectionTimeout: 10_000,
             greetingTimeout: 10_000,
             socketTimeout: 15_000,

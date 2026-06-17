@@ -31,6 +31,11 @@ export class NotificationService implements INotificationService {
       auth: config.email.user
         ? { user: config.email.user, pass: config.email.password }
         : undefined,
+      // Pool connections so a batch drain reuses sockets instead of opening
+      // one per message.
+      pool: true,
+      maxConnections: 5,
+      maxMessages: 100,
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 15_000,

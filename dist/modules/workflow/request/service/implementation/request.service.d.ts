@@ -28,7 +28,9 @@ export declare class RequestService implements IRequestService {
     private _advance;
     private _buildSignature;
     private _buildAttachmentManifest;
+    private _toAttachments;
     private _toDetail;
+    private _toDetailMany;
     private _loadRequest;
     private _loadActionableRequest;
     private _assertCurrentRecipient;

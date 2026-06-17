@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { PlanStatus, ReportStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
+import { FindingStatus, PlanStatus, ReportStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
 import {
   AuditApprovalEntityType,
   IApprovalStatusService,
@@ -38,6 +38,18 @@ export class ApprovalStatusService implements IApprovalStatusService {
       return;
     }
 
+    if (entityType === 'audit_finding_closure') {
+      await tx.audit_Finding.update({
+        where: { id: entityId },
+        data: {
+          status: FindingStatus.Closed,
+          closed_by_id: approverId,
+          closed_at: approvedAt,
+        },
+      });
+      return;
+    }
+
     await tx.audit_Report.update({
       where: { id: entityId },
       data: { status: ReportStatus.Approved },
@@ -71,6 +83,18 @@ export class ApprovalStatusService implements IApprovalStatusService {
           status: WorkingPaperStatus.Rejected,
           reviewed_by_id: approverId,
           rejection_reason: reason,
+        },
+      });
+      return;
+    }
+
+    if (entityType === 'audit_finding_closure') {
+      await tx.audit_Finding.update({
+        where: { id: entityId },
+        data: {
+          status: FindingStatus.Verified,
+          closed_by_id: null,
+          closed_at: null,
         },
       });
       return;

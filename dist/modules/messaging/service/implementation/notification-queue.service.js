@@ -4,6 +4,7 @@ exports.notificationQueueService = exports.NotificationQueueService = void 0;
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
+const notification_queue_service_interface_1 = require("../interface/notification-queue.service.interface");
 const notification_service_1 = require("./notification.service");
 const template_service_1 = require("./template.service");
 const template_utility_1 = require("../../utility/template.utility");
@@ -12,6 +13,13 @@ const PENDING_STATUS = 'pending';
 const PROCESSING_STATUS = 'processing';
 const SENT_STATUS = 'sent';
 const FAILED_STATUS = 'failed';
+// Exponential backoff between retries: 2^attempts minutes, capped. Keeps a
+// flapping SMTP relay or a single bad recipient from being hammered every tick.
+const RETRY_BACKOFF_CAP_MINUTES = 60;
+const computeRetryDelayMs = (attempts) => {
+    const minutes = Math.min(2 ** attempts, RETRY_BACKOFF_CAP_MINUTES);
+    return minutes * 60 * 1000;
+};
 const isRecord = (value) => typeof value === 'object' && value !== null && !Array.isArray(value);
 const isStringArray = (value) => Array.isArray(value) && value.every((item) => typeof item === 'string');
 const isStringRecord = (value) => isRecord(value) && Object.values(value).every((item) => typeof item === 'string');
@@ -141,23 +149,51 @@ const renderInAppWithTemplate = async (dto) => {
     };
 };
 class NotificationQueueService {
-    async enqueue(type, payload) {
-        await prisma_client_1.prisma.notification_Queue.create({
+    // Single-process re-entrancy guard. Prevents an overlapping cron tick from
+    // starting a second drain while one is still running (cross-instance
+    // double-send is already prevented by the optimistic claim below).
+    isProcessing = false;
+    async enqueue(type, payload, options = {}) {
+        const db = options.tx ?? prisma_client_1.prisma;
+        await db.notification_Queue.create({
             data: {
                 type,
                 payload: JSON.stringify(payload),
                 status: PENDING_STATUS,
+                priority: options.priority ?? notification_queue_service_interface_1.NOTIFICATION_PRIORITY.NORMAL,
+                ...(options.scheduledAt ? { scheduled_at: options.scheduledAt } : {}),
             },
         });
-        logger_util_1.logger.info('Notification queued', { type });
+        logger_util_1.logger.info('Notification queued', { type, priority: options.priority ?? notification_queue_service_interface_1.NOTIFICATION_PRIORITY.NORMAL });
+    }
+    async enqueueSafe(type, payload, options = {}) {
+        try {
+            await this.enqueue(type, payload, options);
+        }
+        catch (err) {
+            logger_util_1.logger.error('Notification enqueue failed (suppressed)', { err, type });
+        }
     }
     async processQueue() {
+        if (this.isProcessing) {
+            logger_util_1.logger.warn('Notification queue drain skipped — previous run still in progress');
+            return;
+        }
+        this.isProcessing = true;
+        try {
+            await this._drainQueue();
+        }
+        finally {
+            this.isProcessing = false;
+        }
+    }
+    async _drainQueue() {
         const items = await prisma_client_1.prisma.notification_Queue.findMany({
             where: {
                 status: PENDING_STATUS,
                 scheduled_at: { lte: new Date() },
             },
-            orderBy: { scheduled_at: 'asc' },
+            orderBy: [{ priority: 'desc' }, { scheduled_at: 'asc' }],
             take: BATCH_SIZE,
         });
         for (const item of items) {
@@ -224,6 +260,10 @@ class NotificationQueueService {
                         status,
                         last_error: lastError,
                         processed_at: finalFailure ? new Date() : null,
+                        // Defer the next retry with exponential backoff.
+                        ...(finalFailure
+                            ? {}
+                            : { scheduled_at: new Date(Date.now() + computeRetryDelayMs(attempts)) }),
                     },
                 }).catch((updateErr) => {
                     logger_util_1.logger.error('Notification queue failure state update failed', {

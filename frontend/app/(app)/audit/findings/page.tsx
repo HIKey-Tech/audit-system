@@ -87,7 +87,7 @@ export default function FindingsListPage(): JSX.Element {
       key: 'due',
       header: 'Due Date',
       render: (f) => {
-        const overdue = new Date(f.dueDate) < new Date() && !['verified', 'closed'].includes(f.status);
+        const overdue = new Date(f.dueDate) < new Date() && !['verified', 'pending_closure', 'closed'].includes(f.status);
         return (
           <span className={cn('text-xs', overdue ? 'font-medium text-danger' : 'text-text-secondary')}>
             {formatDate(f.dueDate)}
@@ -131,12 +131,11 @@ export default function FindingsListPage(): JSX.Element {
           </Select>
           <Select value={category} onChange={(e) => setCategory(e.target.value)}>
             <option value="">All categories</option>
-            <option value="control_deficiency">Control deficiency</option>
-            <option value="compliance_breach">Compliance breach</option>
-            <option value="operational_risk">Operational risk</option>
-            <option value="security_risk">Security risk</option>
-            <option value="financial_misstatement">Financial misstatement</option>
-            <option value="other">Other</option>
+            <option value="it">IT</option>
+            <option value="financial">Financial</option>
+            <option value="compliance">Compliance</option>
+            <option value="systems">Systems</option>
+            <option value="operational">Operational</option>
           </Select>
         </div>
       </Card>

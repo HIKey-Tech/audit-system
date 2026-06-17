@@ -5,7 +5,7 @@ import { AppError } from '../../../../shared/errors/app.error';
 import { config } from '../../../../shared/config/app.config';
 import { logger } from '../../../../shared/utils/logger.util';
 import { PaginationMeta, parsePagination, buildPaginationMeta } from '../../../../shared/types/api-response.type';
-import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
+import { INotificationQueueService, NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
 import {
   IUserService,
@@ -90,6 +90,7 @@ export class UserService implements IUserService {
         department: dto.department,
         job_title: dto.jobTitle,
         ...(dto.skills && { skills: JSON.stringify(dto.skills) }),
+        ...(dto.maxConcurrentEngagements !== undefined && { max_concurrent_engagements: dto.maxConcurrentEngagements }),
         password_hash,
         is_super_admin: assignedRoles.some((role) => role.name === 'super_admin'),
         ...(dto.roleIds?.length
@@ -381,6 +382,7 @@ export class UserService implements IUserService {
         ...(dto.department !== undefined && { department: dto.department }),
         ...(dto.jobTitle !== undefined && { job_title: dto.jobTitle }),
         ...(dto.skills !== undefined && { skills: dto.skills ? JSON.stringify(dto.skills) : null }),
+        ...(dto.maxConcurrentEngagements !== undefined && { max_concurrent_engagements: dto.maxConcurrentEngagements }),
       },
       include: userWithRolesInclude,
     }) as UserWithRoles;
@@ -650,6 +652,6 @@ export class UserService implements IUserService {
         '</ul>',
         '<p>Please sign in and change your password immediately.</p>',
       ].join(''),
-    });
+    }, { priority: NOTIFICATION_PRIORITY.HIGH });
   }
 }

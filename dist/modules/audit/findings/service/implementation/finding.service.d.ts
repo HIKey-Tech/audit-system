@@ -1,10 +1,13 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus } from '../../../domain/enum/audit.enum';
 import { CreateFindingRequestDto, FindingQueryDto, UpdateFindingRequestDto } from '../../dto/request/finding.request.dto';
 import { FindingResponseDto } from '../../dto/response/finding.response.dto';
 import { IFindingService } from '../interface/finding.service.interface';
 export declare class FindingService implements IFindingService {
+    private readonly approvalService;
+    constructor(approvalService?: IApprovalService);
     createFinding(engagementId: string, dto: CreateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto>;
     updateFinding(id: string, dto: UpdateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto>;
     updateFindingStatus(id: string, newStatus: FindingStatus, actor: ActorContext): Promise<FindingResponseDto>;

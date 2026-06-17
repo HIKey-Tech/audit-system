@@ -9,23 +9,37 @@ const audit_log_service_1 = require("../../../../logging/service/implementation/
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const audit_config_utility_1 = require("../../../utility/audit-config.utility");
+const assignment_matching_util_1 = require("../../../../workflow/assignment/utility/assignment-matching.util");
 const engagement_response_dto_1 = require("../../dto/response/engagement.response.dto");
 /**
  * Permissions an engagement's audit manager must hold: they are the pinned
  * approver for the engagement's working papers and the first-level approver for
  * its report, so without these the approval chain would dead-end.
  */
-const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve'];
+const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve', 'finding:close'];
+/**
+ * Permission a lead auditor must hold: they run fieldwork on the engagement and
+ * author its working papers. This is the minimum "is an auditor" gate — it
+ * admits the `auditor`, `audit_lead` and `audit_manager` roles while excluding
+ * auditees, viewers and non-audit staff who can't produce working papers.
+ */
+const LEAD_AUDITOR_PERMISSIONS = ['working_paper:create'];
+const userNameSelect = { select: { id: true, first_name: true, last_name: true, display_name: true } };
 const engagementInclude = {
     universe: true,
     plan_item: { include: { plan: { select: { id: true, title: true } } } },
+    lead_auditor: userNameSelect,
+    audit_manager: userNameSelect,
+    auditee: userNameSelect,
 };
 class EngagementService {
     checklistService;
     userService;
-    constructor(checklistService, userService) {
+    assignmentService;
+    constructor(checklistService, userService, assignmentService) {
         this.checklistService = checklistService;
         this.userService = userService;
+        this.assignmentService = assignmentService;
     }
     async _assertManagerCanApprove(managerId) {
         const manager = await this.userService.getUserById(managerId);
@@ -33,6 +47,52 @@ class EngagementService {
         if (missing.length > 0) {
             throw app_error_1.AppError.badRequest(`Assigned audit manager must hold approval permissions: ${missing.join(', ')}`);
         }
+    }
+    async _assertLeadAuditorEligible(leadAuditorId) {
+        const lead = await this.userService.getUserById(leadAuditorId);
+        const missing = LEAD_AUDITOR_PERMISSIONS.filter((slug) => !lead.permissions.includes(slug));
+        if (missing.length > 0) {
+            throw app_error_1.AppError.badRequest(`Assigned lead auditor must hold fieldwork permissions: ${missing.join(', ')}`);
+        }
+    }
+    async getEligibleUsers(query) {
+        const requiredPermissions = query.role === 'audit_manager' ? MANAGER_APPROVAL_PERMISSIONS : LEAD_AUDITOR_PERMISSIONS;
+        const userQuery = {
+            page: 1,
+            pageSize: 100,
+            isActive: true,
+            sortBy: 'created_at',
+            sortOrder: 'desc',
+        };
+        const [{ users }, workloadMap] = await Promise.all([
+            this.userService.listUsers(userQuery),
+            this.assignmentService.getActiveWorkloadMap(),
+        ]);
+        const auditType = query.auditType ?? '';
+        const priority = query.priority ?? 'medium';
+        return users
+            .filter((u) => u.isActive && requiredPermissions.every((p) => u.permissions.includes(p)))
+            .map((u) => {
+            const activeEngagementCount = workloadMap.get(u.id) ?? 0;
+            const matchedSkills = (0, assignment_matching_util_1.getMatchedSkills)(u.skills, auditType);
+            const skillScore = (0, assignment_matching_util_1.getSkillScore)(u.skills, auditType);
+            const capacity = u.maxConcurrentEngagements ?? assignment_matching_util_1.MAX_CONCURRENT_ENGAGEMENTS;
+            const overCapacity = activeEngagementCount >= capacity;
+            return {
+                id: u.id,
+                displayName: u.displayName || `${u.firstName} ${u.lastName}`.trim(),
+                department: u.department,
+                jobTitle: u.jobTitle,
+                skills: u.skills,
+                matchedSkills,
+                activeEngagementCount,
+                recommendationScore: (0, assignment_matching_util_1.getRecommendationScore)(skillScore, activeEngagementCount, priority),
+                recommended: skillScore > 0 && !overCapacity,
+                overCapacity,
+            };
+        })
+            .sort((a, b) => b.recommendationScore - a.recommendationScore ||
+            a.activeEngagementCount - b.activeEngagementCount);
     }
     async createFromPlanItem(planItemId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:create');
@@ -47,6 +107,7 @@ class EngagementService {
         if (planItem.engagement_created)
             throw app_error_1.AppError.conflict('An engagement has already been created from this plan item');
         await this._assertManagerCanApprove(dto.auditManagerId);
+        await this._assertLeadAuditorEligible(dto.leadAuditorId);
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
         const engagement = await prisma_client_1.prisma.$transaction(async (tx) => {
             const created = await tx.audit_Engagement.create({
@@ -82,6 +143,7 @@ class EngagementService {
         if (!dto.adhocReason)
             throw app_error_1.AppError.badRequest('Ad-hoc reason is required');
         await this._assertManagerCanApprove(dto.auditManagerId);
+        await this._assertLeadAuditorEligible(dto.leadAuditorId);
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
         const engagement = await prisma_client_1.prisma.audit_Engagement.create({
             data: {
@@ -111,6 +173,8 @@ class EngagementService {
         await this._assertEngagementExists(id);
         if (dto.auditManagerId !== undefined)
             await this._assertManagerCanApprove(dto.auditManagerId);
+        if (dto.leadAuditorId !== undefined)
+            await this._assertLeadAuditorEligible(dto.leadAuditorId);
         const engagement = await prisma_client_1.prisma.audit_Engagement.update({
             where: { id },
             data: {
@@ -146,11 +210,11 @@ class EngagementService {
                 where: {
                     engagement_id: id,
                     deleted_at: null,
-                    status: { notIn: [audit_enum_1.FindingStatus.Verified, audit_enum_1.FindingStatus.Closed] },
+                    status: { not: audit_enum_1.FindingStatus.Closed },
                 },
             });
             if (openFindingCount > 0)
-                throw app_error_1.AppError.badRequest('Cannot close engagement while findings remain unverified or open');
+                throw app_error_1.AppError.badRequest('Cannot close engagement while findings remain open or awaiting closure approval');
         }
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
             const result = await tx.audit_Engagement.update({
@@ -177,13 +241,30 @@ class EngagementService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, newValues: { status: newStatus } });
         return this._withMetrics(updated);
     }
+    /**
+     * Access scope: unless the actor can read ALL engagements, they may only see
+     * engagements they are a party to — lead auditor, audit manager, auditee, or a
+     * workflow assignee. Returns undefined for unrestricted (read_all) access.
+     */
+    _actorScope(actor) {
+        if (actor.permissions.includes('engagement:read_all'))
+            return undefined;
+        return {
+            OR: [
+                { lead_auditor_id: actor.id },
+                { audit_manager_id: actor.id },
+                { auditee_id: actor.id },
+                { workflow_assignments: { some: { user_id: actor.id } } },
+            ],
+        };
+    }
     async getEngagementById(id, actor) {
-        const isAuditee = !actor.permissions.includes('engagement:read');
+        const scope = this._actorScope(actor);
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: {
                 id,
                 deleted_at: null,
-                ...(isAuditee && { auditee_id: actor.id }),
+                ...(scope ?? {}),
             },
             include: engagementInclude,
         });
@@ -193,21 +274,14 @@ class EngagementService {
     }
     async listEngagements(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
-        const canReadAll = actor.permissions.includes('engagement:read_all');
-        const isAuditee = !actor.permissions.includes('engagement:read');
+        const scope = this._actorScope(actor);
         const where = {
             deleted_at: null,
             ...(query.status && { status: query.status }),
             ...(query.auditType && { audit_type: query.auditType }),
             ...(query.leadAuditorId && { lead_auditor_id: query.leadAuditorId }),
             ...(query.auditManagerId && { audit_manager_id: query.auditManagerId }),
-            ...(isAuditee && { auditee_id: actor.id }),
-            ...(!canReadAll && !isAuditee && {
-                OR: [
-                    { lead_auditor_id: actor.id },
-                    { workflow_assignments: { some: { user_id: actor.id } } },
-                ],
-            }),
+            ...(scope ?? {}),
         };
         const [total, engagements] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.count({ where }),
@@ -239,24 +313,59 @@ class EngagementService {
             throw app_error_1.AppError.notFound('Audit engagement');
     }
     async _withMetrics(engagement) {
-        const [findingGroups, workingPaperCount, checklistProgress] = await Promise.all([
+        const [findingGroups, workingPaperGroups, checklistProgress, report, evidenceCount, assetCount] = await Promise.all([
             prisma_client_1.prisma.audit_Finding.groupBy({
                 by: ['severity'],
                 where: { engagement_id: engagement.id, deleted_at: null },
                 _count: { _all: true },
             }),
-            prisma_client_1.prisma.audit_Working_Paper.count({ where: { engagement_id: engagement.id, deleted_at: null } }),
+            prisma_client_1.prisma.audit_Working_Paper.groupBy({
+                by: ['status'],
+                where: { engagement_id: engagement.id, deleted_at: null },
+                _count: { _all: true },
+            }),
             this.checklistService.getChecklistProgress(engagement.id),
+            prisma_client_1.prisma.audit_Report.findFirst({
+                where: { engagement_id: engagement.id, deleted_at: null },
+                select: { status: true },
+            }),
+            prisma_client_1.prisma.audit_Evidence.count({ where: { engagement_id: engagement.id } }),
+            prisma_client_1.prisma.audit_Engagement_Asset.count({ where: { engagement_id: engagement.id } }),
         ]);
+        const findingStatusGroups = await prisma_client_1.prisma.audit_Finding.groupBy({
+            by: ['status'],
+            where: { engagement_id: engagement.id, deleted_at: null },
+            _count: { _all: true },
+        });
         const findingCounts = findingGroups.map((group) => ({
             severity: group.severity,
             count: group._count._all,
         }));
         const progress = checklistProgress;
+        const wpCountByStatus = (status) => workingPaperGroups.find((g) => g.status === status)?._count._all ?? 0;
+        const workingPaperCount = workingPaperGroups.reduce((sum, g) => sum + g._count._all, 0);
+        const workingPaperStats = {
+            total: workingPaperCount,
+            approved: wpCountByStatus('approved'),
+            rejected: wpCountByStatus('rejected'),
+        };
+        const findingTotal = findingStatusGroups.reduce((sum, g) => sum + g._count._all, 0);
+        const findingCountByStatus = (status) => findingStatusGroups.find((g) => g.status === status)?._count._all ?? 0;
+        const resolvedFindings = findingCountByStatus('closed');
+        const findingStats = {
+            total: findingTotal,
+            open: findingCountByStatus('open'),
+            unresolved: findingTotal - resolvedFindings,
+        };
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement, {
             findingCounts,
             workingPaperCount,
             checklistProgress: progress,
+            workingPaperStats,
+            findingStats,
+            reportStatus: report?.status ?? null,
+            evidenceCount,
+            assetCount,
         });
     }
     async _assertLifecycleGate(id, newStatus) {
@@ -277,15 +386,19 @@ class EngagementService {
                 }
             }
             if (lifecycleRules.requireApprovedWorkingPaperBeforeUnderReview) {
-                const approvedPaperCount = await prisma_client_1.prisma.audit_Working_Paper.count({
-                    where: {
-                        engagement_id: id,
-                        deleted_at: null,
-                        status: 'approved',
-                    },
-                });
-                if (approvedPaperCount === 0) {
-                    throw app_error_1.AppError.badRequest('Cannot move engagement to review before at least one working paper is approved');
+                const [totalPaperCount, unapprovedPaperCount] = await prisma_client_1.prisma.$transaction([
+                    prisma_client_1.prisma.audit_Working_Paper.count({
+                        where: { engagement_id: id, deleted_at: null },
+                    }),
+                    prisma_client_1.prisma.audit_Working_Paper.count({
+                        where: { engagement_id: id, deleted_at: null, status: { not: 'approved' } },
+                    }),
+                ]);
+                if (totalPaperCount === 0) {
+                    throw app_error_1.AppError.badRequest('Cannot move engagement to review before at least one working paper is created and approved');
+                }
+                if (unapprovedPaperCount > 0) {
+                    throw app_error_1.AppError.badRequest('Cannot move engagement to review while working papers remain unapproved — all working papers must be approved');
                 }
             }
         }

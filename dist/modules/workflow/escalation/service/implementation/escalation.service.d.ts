@@ -13,8 +13,9 @@ export declare class EscalationService implements IEscalationService {
     private _resolveEscalationTargets;
     private _getUsersByRoles;
     private _getUsersByPermission;
-    private _getLatestEscalation;
-    private _getPolicyThresholds;
+    private _latestEscalationMap;
+    private _loadPolicyThresholds;
+    private _resolveThresholds;
     private _thresholdForLevel;
     private _notifyTarget;
 }

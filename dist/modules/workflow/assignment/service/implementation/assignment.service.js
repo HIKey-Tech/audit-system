@@ -9,6 +9,7 @@ const api_response_type_1 = require("../../../../../shared/types/api-response.ty
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const workflow_utility_1 = require("../../../utility/workflow.utility");
+const assignment_matching_util_1 = require("../../utility/assignment-matching.util");
 const assignment_response_dto_1 = require("../../dto/response/assignment.response.dto");
 const workflowUserSelect = client_1.Prisma.validator()({
     id: true,
@@ -30,11 +31,18 @@ class AssignmentService {
         const [engagement, user, existing] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.findFirst({
                 where: { id: dto.engagementId, deleted_at: null },
-                select: { id: true, title: true, reference_number: true, sla_deadline: true },
+                select: {
+                    id: true,
+                    title: true,
+                    reference_number: true,
+                    sla_deadline: true,
+                    planned_start_date: true,
+                    planned_end_date: true,
+                },
             }),
             prisma_client_1.prisma.user.findFirst({
                 where: { id: dto.userId, deleted_at: null, is_active: true },
-                select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+                select: { id: true, email: true, display_name: true, first_name: true, last_name: true, max_concurrent_engagements: true },
             }),
             prisma_client_1.prisma.workflow_Assignment.findFirst({
                 where: {
@@ -51,15 +59,26 @@ class AssignmentService {
             throw app_error_1.AppError.notFound('User');
         if (existing)
             throw app_error_1.AppError.conflict('User is already assigned to this engagement in that role');
-        const assignment = await prisma_client_1.prisma.workflow_Assignment.create({
-            data: {
-                engagement_id: dto.engagementId,
+        // Capacity + schedule guard: block over-allocating an auditor across
+        // engagements whose planned windows overlap this one.
+        const otherActive = await prisma_client_1.prisma.workflow_Assignment.findMany({
+            where: {
                 user_id: dto.userId,
-                role: dto.role,
-                assigned_by_id: assignedBy.id,
+                engagement: {
+                    id: { not: dto.engagementId },
+                    deleted_at: null,
+                    status: { in: assignment_matching_util_1.ACTIVE_ENGAGEMENT_STATUSES },
+                },
             },
-            include: assignmentInclude,
+            select: {
+                engagement: { select: { planned_start_date: true, planned_end_date: true } },
+            },
         });
+        const overlapping = otherActive.filter((a) => (0, assignment_matching_util_1.rangesOverlap)(engagement.planned_start_date, engagement.planned_end_date, a.engagement.planned_start_date, a.engagement.planned_end_date));
+        const capacity = user.max_concurrent_engagements ?? assignment_matching_util_1.MAX_CONCURRENT_ENGAGEMENTS;
+        if (overlapping.length >= capacity) {
+            throw app_error_1.AppError.conflict(`User already has ${overlapping.length} engagements overlapping this period (capacity is ${capacity}).`);
+        }
         const assigneeName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
         const assignmentVariables = {
             assigneeName,
@@ -68,22 +87,36 @@ class AssignmentService {
             assignmentRole: dto.role,
             slaDeadline: engagement.sla_deadline.toISOString(),
         };
-        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
-            userId: dto.userId,
-            title: 'Audit assignment',
-            body: `You have been assigned to ${engagement.title} as ${dto.role}.`,
-            type: 'info',
-            referenceType: 'audit_engagement',
-            referenceId: dto.engagementId,
-            eventKey: 'workflow.assignment.created',
-            variables: assignmentVariables,
-        });
-        await notification_queue_service_1.notificationQueueService.enqueue('email', {
-            to: user.email,
-            subject: 'Audit assignment',
-            text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
-            eventKey: 'workflow.assignment.created',
-            variables: assignmentVariables,
+        // Transactional outbox: the assignment row and its notifications commit
+        // together, so a queue-write failure can never leave a silent assignment.
+        const assignment = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const created = await tx.workflow_Assignment.create({
+                data: {
+                    engagement_id: dto.engagementId,
+                    user_id: dto.userId,
+                    role: dto.role,
+                    assigned_by_id: assignedBy.id,
+                },
+                include: assignmentInclude,
+            });
+            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+                userId: dto.userId,
+                title: 'Audit assignment',
+                body: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+                type: 'info',
+                referenceType: 'audit_engagement',
+                referenceId: dto.engagementId,
+                eventKey: 'workflow.assignment.created',
+                variables: assignmentVariables,
+            }, { tx });
+            await notification_queue_service_1.notificationQueueService.enqueue('email', {
+                to: user.email,
+                subject: 'Audit assignment',
+                text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+                eventKey: 'workflow.assignment.created',
+                variables: assignmentVariables,
+            }, { tx });
+            return created;
         });
         logger_util_1.logger.info('Workflow assignment created', {
             assignmentId: assignment.id,
@@ -112,19 +145,21 @@ class AssignmentService {
         });
         if (!assignment)
             throw app_error_1.AppError.notFound('Workflow assignment');
-        await prisma_client_1.prisma.workflow_Assignment.delete({ where: { id: assignmentId } });
-        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
-            userId: assignment.user_id,
-            title: 'Audit assignment removed',
-            body: `You have been unassigned from ${assignment.engagement.title}.`,
-            type: 'warning',
-            referenceType: 'audit_engagement',
-            referenceId: assignment.engagement_id,
-        });
-        await notification_queue_service_1.notificationQueueService.enqueue('email', {
-            to: assignment.user.email,
-            subject: 'Audit assignment removed',
-            text: `You have been unassigned from ${assignment.engagement.title}.`,
+        await prisma_client_1.prisma.$transaction(async (tx) => {
+            await tx.workflow_Assignment.delete({ where: { id: assignmentId } });
+            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+                userId: assignment.user_id,
+                title: 'Audit assignment removed',
+                body: `You have been unassigned from ${assignment.engagement.title}.`,
+                type: 'warning',
+                referenceType: 'audit_engagement',
+                referenceId: assignment.engagement_id,
+            }, { tx });
+            await notification_queue_service_1.notificationQueueService.enqueue('email', {
+                to: assignment.user.email,
+                subject: 'Audit assignment removed',
+                text: `You have been unassigned from ${assignment.engagement.title}.`,
+            }, { tx });
         });
         logger_util_1.logger.info('Workflow assignment removed', { assignmentId, actorId: removedBy.id });
         audit_log_service_1.auditLogService.logAsync({
@@ -180,7 +215,7 @@ class AssignmentService {
                 user_id: userId,
                 engagement: {
                     deleted_at: null,
-                    status: { notIn: ['reported', 'closed'] },
+                    status: { in: assignment_matching_util_1.ACTIVE_ENGAGEMENT_STATUSES },
                 },
             },
             select: { engagement: { select: { status: true } } },
@@ -197,6 +232,13 @@ class AssignmentService {
         };
     }
     async getCandidates(engagementId) {
+        // Need the engagement's audit type + priority to score skill fit and weight workload.
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { id: true, audit_type: true, priority: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
         // Get already-assigned user IDs for this engagement
         const existingAssignments = await prisma_client_1.prisma.workflow_Assignment.findMany({
             where: { engagement_id: engagementId },
@@ -215,6 +257,7 @@ class AssignmentService {
                 department: true,
                 job_title: true,
                 skills: true,
+                max_concurrent_engagements: true,
             },
         });
         // Get active engagement counts per user
@@ -222,7 +265,7 @@ class AssignmentService {
             by: ['user_id'],
             where: {
                 engagement: {
-                    status: { in: ['planned', 'in_progress', 'under_review'] },
+                    status: { in: assignment_matching_util_1.ACTIVE_ENGAGEMENT_STATUSES },
                     deleted_at: null,
                 },
             },
@@ -231,15 +274,42 @@ class AssignmentService {
         const workloadMap = new Map(activeAssignments.map(a => [a.user_id, a._count.user_id]));
         return users
             .filter(u => !assignedIds.has(u.id))
-            .map(u => ({
-            id: u.id,
-            displayName: u.display_name || `${u.first_name} ${u.last_name}`.trim(),
-            email: u.email,
-            department: u.department,
-            jobTitle: u.job_title,
-            skills: parseSkillsJson(u.skills),
-            activeEngagementCount: workloadMap.get(u.id) ?? 0,
-        }));
+            .map(u => {
+            const skills = parseSkillsJson(u.skills);
+            const activeEngagementCount = workloadMap.get(u.id) ?? 0;
+            const matchedSkills = (0, assignment_matching_util_1.getMatchedSkills)(skills, engagement.audit_type);
+            const skillScore = (0, assignment_matching_util_1.getSkillScore)(skills, engagement.audit_type);
+            const capacity = u.max_concurrent_engagements ?? assignment_matching_util_1.MAX_CONCURRENT_ENGAGEMENTS;
+            const overCapacity = activeEngagementCount >= capacity;
+            return {
+                id: u.id,
+                displayName: u.display_name || `${u.first_name} ${u.last_name}`.trim(),
+                email: u.email,
+                department: u.department,
+                jobTitle: u.job_title,
+                skills,
+                activeEngagementCount,
+                matchedSkills,
+                recommendationScore: (0, assignment_matching_util_1.getRecommendationScore)(skillScore, activeEngagementCount, engagement.priority),
+                recommended: skillScore > 0 && !overCapacity,
+                overCapacity,
+            };
+        })
+            .sort((a, b) => b.recommendationScore - a.recommendationScore ||
+            a.activeEngagementCount - b.activeEngagementCount);
+    }
+    async getActiveWorkloadMap() {
+        const grouped = await prisma_client_1.prisma.workflow_Assignment.groupBy({
+            by: ['user_id'],
+            where: {
+                engagement: {
+                    status: { in: assignment_matching_util_1.ACTIVE_ENGAGEMENT_STATUSES },
+                    deleted_at: null,
+                },
+            },
+            _count: { user_id: true },
+        });
+        return new Map(grouped.map(a => [a.user_id, a._count.user_id]));
     }
 }
 exports.AssignmentService = AssignmentService;

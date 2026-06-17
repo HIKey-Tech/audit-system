@@ -5,8 +5,13 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { ActorContext, ChecklistProgress } from '../../../domain/entity/audit.entity';
 import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
 import { assertHasPermission, emptyChecklistProgress } from '../../../utility/audit.utility';
-import { getChecklistTemplateControls } from '../../../utility/audit-config.utility';
-import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto } from '../../dto/request/checklist.request.dto';
+import {
+  ChecklistTemplateControl,
+  getChecklistTemplateConfig,
+  getEngagementControls,
+  setChecklistTemplateConfig,
+} from '../../../utility/audit-config.utility';
+import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto, UpdateChecklistTemplatesRequestDto } from '../../dto/request/checklist.request.dto';
 import { ChecklistResponseDto, mapChecklistToResponse } from '../../dto/response/checklist.response.dto';
 import { IChecklistService } from '../interface/checklist.service.interface';
 
@@ -22,7 +27,7 @@ export class ChecklistService implements IChecklistService {
     if (existing > 0) return;
 
     const auditType = engagement.audit_type as AuditType;
-    const controls = await getChecklistTemplateControls(auditType);
+    const controls = await getEngagementControls(auditType);
     await prisma.audit_Checklist.createMany({
       data: controls.map((control) => ({
         engagement_id: engagementId,
@@ -169,6 +174,26 @@ export class ChecklistService implements IChecklistService {
       notTested: counts[ChecklistResult.NotTested],
       total: grouped.reduce((sum, row) => sum + row._count._all, 0),
     };
+  }
+
+  async getChecklistTemplates(): Promise<Record<AuditType, ChecklistTemplateControl[]>> {
+    return getChecklistTemplateConfig();
+  }
+
+  async updateChecklistTemplates(
+    dto: UpdateChecklistTemplatesRequestDto,
+    actor: ActorContext,
+  ): Promise<Record<AuditType, ChecklistTemplateControl[]>> {
+    assertHasPermission(actor.permissions, 'settings:manage');
+    const result = await setChecklistTemplateConfig(dto.templates, actor.id);
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.checklist.templates.update',
+      module: 'audit',
+      entityType: 'system_config',
+      entityId: 'checklist_templates',
+    });
+    return result;
   }
 
   private async _assertChecklistExists(id: string): Promise<void> {

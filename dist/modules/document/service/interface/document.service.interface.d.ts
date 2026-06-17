@@ -11,6 +11,12 @@ export interface IDocumentService {
         meta: PaginationMeta;
     }>;
     listByEntity(entityType: string, entityId: string): Promise<DocumentResponseDto[]>;
+    /**
+     * Batched variant of {@link listByEntity}: loads documents for many entities of
+     * the same type in a single query, grouped by entity id. Use this instead of
+     * calling listByEntity in a loop to avoid N+1 queries on list endpoints.
+     */
+    listByEntityIds(entityType: string, entityIds: string[]): Promise<Map<string, DocumentResponseDto[]>>;
     serveFile(storedName: string): Promise<ServedFileDto>;
     getFileById(id: string): Promise<ServedFileDto>;
     uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;

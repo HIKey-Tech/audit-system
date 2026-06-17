@@ -1,5 +1,31 @@
-import { ChecklistProgress, FindingSeverityCount } from '../../../domain/entity/audit.entity';
+import { ChecklistProgress, FindingSeverityCount, FindingStats, WorkingPaperStats } from '../../../domain/entity/audit.entity';
 import { UniverseResponseDto, mapUniverseToResponse } from '../../../universe/dto/response/universe.response.dto';
+
+interface UserNameFields {
+  first_name: string;
+  last_name: string;
+  display_name: string | null;
+}
+
+const fullName = (user?: UserNameFields | null): string | null => {
+  if (!user) return null;
+  return user.display_name?.trim() || `${user.first_name} ${user.last_name}`.trim() || null;
+};
+
+/** A permission-eligible candidate for a lead-auditor / audit-manager slot,
+ *  scored for resource optimization (skill fit + workload + priority). */
+export interface EligibleUserDto {
+  id: string;
+  displayName: string;
+  department: string | null;
+  jobTitle: string | null;
+  skills: string[];
+  matchedSkills: string[];
+  activeEngagementCount: number;
+  recommendationScore: number;
+  recommended: boolean;
+  overCapacity: boolean;
+}
 
 export interface EngagementResponseDto {
   id: string;
@@ -14,6 +40,9 @@ export interface EngagementResponseDto {
   leadAuditorId: string;
   auditManagerId: string;
   auditeeId: string;
+  leadAuditorName?: string | null;
+  auditManagerName?: string | null;
+  auditeeName?: string | null;
   plannedStartDate: string;
   plannedEndDate: string;
   actualStartDate: string | null;
@@ -28,6 +57,11 @@ export interface EngagementResponseDto {
   findingCounts?: FindingSeverityCount[];
   workingPaperCount?: number;
   checklistProgress?: ChecklistProgress;
+  workingPaperStats?: WorkingPaperStats;
+  findingStats?: FindingStats;
+  reportStatus?: string | null;
+  evidenceCount?: number;
+  assetCount?: number;
 }
 
 export const mapEngagementToResponse = (
@@ -55,11 +89,19 @@ export const mapEngagementToResponse = (
     updated_at: Date;
     universe?: Parameters<typeof mapUniverseToResponse>[0];
     plan_item?: { plan?: { title: string } | null } | null;
+    lead_auditor?: UserNameFields | null;
+    audit_manager?: UserNameFields | null;
+    auditee?: UserNameFields | null;
   },
   extras?: {
     findingCounts?: FindingSeverityCount[];
     workingPaperCount?: number;
     checklistProgress?: ChecklistProgress;
+    workingPaperStats?: WorkingPaperStats;
+    findingStats?: FindingStats;
+    reportStatus?: string | null;
+    evidenceCount?: number;
+    assetCount?: number;
   },
 ): EngagementResponseDto => ({
   id: engagement.id,
@@ -74,6 +116,9 @@ export const mapEngagementToResponse = (
   leadAuditorId: engagement.lead_auditor_id,
   auditManagerId: engagement.audit_manager_id,
   auditeeId: engagement.auditee_id,
+  leadAuditorName: fullName(engagement.lead_auditor),
+  auditManagerName: fullName(engagement.audit_manager),
+  auditeeName: fullName(engagement.auditee),
   plannedStartDate: engagement.planned_start_date.toISOString(),
   plannedEndDate: engagement.planned_end_date.toISOString(),
   actualStartDate: engagement.actual_start_date?.toISOString() ?? null,
@@ -88,4 +133,9 @@ export const mapEngagementToResponse = (
   findingCounts: extras?.findingCounts,
   workingPaperCount: extras?.workingPaperCount,
   checklistProgress: extras?.checklistProgress,
+  workingPaperStats: extras?.workingPaperStats,
+  findingStats: extras?.findingStats,
+  reportStatus: extras?.reportStatus,
+  evidenceCount: extras?.evidenceCount,
+  assetCount: extras?.assetCount,
 });

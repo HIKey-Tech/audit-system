@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
+import { cache } from '../../../../shared/cache/cache.client';
 import { DashboardActorContext } from '../../domain/entity/dashboard.entity';
 import {
   daysBetween,
@@ -22,9 +23,16 @@ import {
 } from '../../dto/response/dashboard.response.dto';
 
 const ENGAGEMENT_CLOSED_LIKE_STATUSES = ['reported', 'closed'] as const;
-const FINDING_RESOLVED_STATUSES = ['closed', 'verified'] as const;
+const FINDING_RESOLVED_STATUSES = ['closed', 'verified', 'pending_closure'] as const;
 const FINDING_OPEN_NOT_CLOSED_STATUS = 'closed';
 const ACTIVITY_MODULES = ['audit', 'workflow', 'risk', 'document', 'user'] as const;
+
+// Analytics is an expensive ~20-query aggregation. We serve it stale-while-
+// revalidate: a cached payload is returned instantly and refreshed in the
+// background once older than this window, so a request never blocks on the
+// aggregation (except the very first cold call). Oversight users share a single
+// org-wide entry; scope-restricted users get a per-user entry.
+const ANALYTICS_FRESH_SECONDS = 30;
 
 interface EscalationCountRow {
   total_count: bigint | number | null;
@@ -78,6 +86,24 @@ const normalizeCount = (count: bigint | number | null): number => {
 
 export class DashboardService {
   async getAuditAnalytics(actor: DashboardActorContext): Promise<AuditAnalyticsResponseDto> {
+    // Cache key tracks scope, not just identity: every oversight user resolves
+    // to the same org-wide payload (the big concurrency win), while scoped
+    // auditors/auditees — whose results filter on their own id — get a per-user
+    // entry so data never leaks across scopes.
+    const scoped =
+      isRestrictedAuditor(actor.permissions) || isRestrictedAuditee(actor.permissions);
+    const cacheKey = scoped
+      ? `dashboard:analytics:user:${actor.id}`
+      : 'dashboard:analytics:org';
+
+    return cache.getOrSetSwr(cacheKey, ANALYTICS_FRESH_SECONDS, () =>
+      this._computeAuditAnalytics(actor),
+    );
+  }
+
+  private async _computeAuditAnalytics(
+    actor: DashboardActorContext,
+  ): Promise<AuditAnalyticsResponseDto> {
     const [lifecycle, workingPapers, findings, reporting, followUp, riskCoverage] = await Promise.all([
       this._getLifecycleAnalytics(actor),
       this._getWorkingPaperAnalytics(actor),
@@ -275,6 +301,7 @@ export class DashboardService {
       management_response_received: 0,
       in_remediation: 0,
       verified: 0,
+      pending_closure: 0,
       closed: 0,
     };
     for (const group of statusGroups) {

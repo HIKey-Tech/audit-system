@@ -4,7 +4,7 @@ import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { ActorContext, ChecklistProgress, FindingSeverityCount } from '../../../domain/entity/audit.entity';
+import { ActorContext, ChecklistProgress, FindingSeverityCount, FindingStats, WorkingPaperStats } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus, PlanStatus } from '../../../domain/enum/audit.enum';
 import {
   ENGAGEMENT_TRANSITIONS,
@@ -16,13 +16,22 @@ import {
 import { getAuditLifecycleRules } from '../../../utility/audit-config.utility';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
 import { IUserService } from '../../../../user';
+import { UserQueryDto } from '../../../../user/dto/request/user.request.dto';
+import { IAssignmentService } from '../../../../workflow/assignment/service/interface/assignment.service.interface';
+import {
+  MAX_CONCURRENT_ENGAGEMENTS,
+  getMatchedSkills,
+  getRecommendationScore,
+  getSkillScore,
+} from '../../../../workflow/assignment/utility/assignment-matching.util';
 import {
   CreateAdhocEngagementRequestDto,
   CreateEngagementFromPlanRequestDto,
+  EligibleUsersQueryDto,
   EngagementQueryDto,
   UpdateEngagementRequestDto,
 } from '../../dto/request/engagement.request.dto';
-import { EngagementResponseDto, mapEngagementToResponse } from '../../dto/response/engagement.response.dto';
+import { EligibleUserDto, EngagementResponseDto, mapEngagementToResponse } from '../../dto/response/engagement.response.dto';
 import { IEngagementService } from '../interface/engagement.service.interface';
 
 /**
@@ -30,17 +39,31 @@ import { IEngagementService } from '../interface/engagement.service.interface';
  * approver for the engagement's working papers and the first-level approver for
  * its report, so without these the approval chain would dead-end.
  */
-const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve'] as const;
+const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve', 'finding:close'] as const;
+
+/**
+ * Permission a lead auditor must hold: they run fieldwork on the engagement and
+ * author its working papers. This is the minimum "is an auditor" gate — it
+ * admits the `auditor`, `audit_lead` and `audit_manager` roles while excluding
+ * auditees, viewers and non-audit staff who can't produce working papers.
+ */
+const LEAD_AUDITOR_PERMISSIONS = ['working_paper:create'] as const;
+
+const userNameSelect = { select: { id: true, first_name: true, last_name: true, display_name: true } };
 
 const engagementInclude = {
   universe: true,
   plan_item: { include: { plan: { select: { id: true, title: true } } } },
+  lead_auditor: userNameSelect,
+  audit_manager: userNameSelect,
+  auditee: userNameSelect,
 };
 
 export class EngagementService implements IEngagementService {
   constructor(
     private readonly checklistService: IChecklistService,
     private readonly userService: IUserService,
+    private readonly assignmentService: IAssignmentService,
   ) {}
 
   private async _assertManagerCanApprove(managerId: string): Promise<void> {
@@ -51,6 +74,63 @@ export class EngagementService implements IEngagementService {
         `Assigned audit manager must hold approval permissions: ${missing.join(', ')}`,
       );
     }
+  }
+
+  private async _assertLeadAuditorEligible(leadAuditorId: string): Promise<void> {
+    const lead = await this.userService.getUserById(leadAuditorId);
+    const missing = LEAD_AUDITOR_PERMISSIONS.filter((slug) => !lead.permissions.includes(slug));
+    if (missing.length > 0) {
+      throw AppError.badRequest(
+        `Assigned lead auditor must hold fieldwork permissions: ${missing.join(', ')}`,
+      );
+    }
+  }
+
+  async getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]> {
+    const requiredPermissions =
+      query.role === 'audit_manager' ? MANAGER_APPROVAL_PERMISSIONS : LEAD_AUDITOR_PERMISSIONS;
+
+    const userQuery: UserQueryDto = {
+      page: 1,
+      pageSize: 100,
+      isActive: true,
+      sortBy: 'created_at',
+      sortOrder: 'desc',
+    };
+    const [{ users }, workloadMap] = await Promise.all([
+      this.userService.listUsers(userQuery),
+      this.assignmentService.getActiveWorkloadMap(),
+    ]);
+
+    const auditType = query.auditType ?? '';
+    const priority = query.priority ?? 'medium';
+
+    return users
+      .filter((u) => u.isActive && requiredPermissions.every((p) => u.permissions.includes(p)))
+      .map((u) => {
+        const activeEngagementCount = workloadMap.get(u.id) ?? 0;
+        const matchedSkills = getMatchedSkills(u.skills, auditType);
+        const skillScore = getSkillScore(u.skills, auditType);
+        const capacity = u.maxConcurrentEngagements ?? MAX_CONCURRENT_ENGAGEMENTS;
+        const overCapacity = activeEngagementCount >= capacity;
+        return {
+          id: u.id,
+          displayName: u.displayName || `${u.firstName} ${u.lastName}`.trim(),
+          department: u.department,
+          jobTitle: u.jobTitle,
+          skills: u.skills,
+          matchedSkills,
+          activeEngagementCount,
+          recommendationScore: getRecommendationScore(skillScore, activeEngagementCount, priority),
+          recommended: skillScore > 0 && !overCapacity,
+          overCapacity,
+        };
+      })
+      .sort(
+        (a, b) =>
+          b.recommendationScore - a.recommendationScore ||
+          a.activeEngagementCount - b.activeEngagementCount,
+      );
   }
 
   async createFromPlanItem(
@@ -68,6 +148,7 @@ export class EngagementService implements IEngagementService {
     if (planItem.plan.status !== PlanStatus.Approved) throw AppError.badRequest('Plan must be approved before creating an engagement');
     if (planItem.engagement_created) throw AppError.conflict('An engagement has already been created from this plan item');
     await this._assertManagerCanApprove(dto.auditManagerId);
+    await this._assertLeadAuditorEligible(dto.leadAuditorId);
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.$transaction(async (tx) => {
@@ -107,6 +188,7 @@ export class EngagementService implements IEngagementService {
     assertHasPermission(actor.permissions, 'engagement:create');
     if (!dto.adhocReason) throw AppError.badRequest('Ad-hoc reason is required');
     await this._assertManagerCanApprove(dto.auditManagerId);
+    await this._assertLeadAuditorEligible(dto.leadAuditorId);
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.audit_Engagement.create({
@@ -138,6 +220,7 @@ export class EngagementService implements IEngagementService {
     assertHasPermission(actor.permissions, 'engagement:update');
     await this._assertEngagementExists(id);
     if (dto.auditManagerId !== undefined) await this._assertManagerCanApprove(dto.auditManagerId);
+    if (dto.leadAuditorId !== undefined) await this._assertLeadAuditorEligible(dto.leadAuditorId);
 
     const engagement = await prisma.audit_Engagement.update({
       where: { id },
@@ -177,10 +260,10 @@ export class EngagementService implements IEngagementService {
         where: {
           engagement_id: id,
           deleted_at: null,
-          status: { notIn: [FindingStatus.Verified, FindingStatus.Closed] },
+          status: { not: FindingStatus.Closed },
         },
       });
-      if (openFindingCount > 0) throw AppError.badRequest('Cannot close engagement while findings remain unverified or open');
+      if (openFindingCount > 0) throw AppError.badRequest('Cannot close engagement while findings remain open or awaiting closure approval');
     }
 
     const updated = await prisma.$transaction(async (tx) => {
@@ -213,13 +296,30 @@ export class EngagementService implements IEngagementService {
     return this._withMetrics(updated);
   }
 
+  /**
+   * Access scope: unless the actor can read ALL engagements, they may only see
+   * engagements they are a party to — lead auditor, audit manager, auditee, or a
+   * workflow assignee. Returns undefined for unrestricted (read_all) access.
+   */
+  private _actorScope(actor: ActorContext): Prisma.Audit_EngagementWhereInput | undefined {
+    if (actor.permissions.includes('engagement:read_all')) return undefined;
+    return {
+      OR: [
+        { lead_auditor_id: actor.id },
+        { audit_manager_id: actor.id },
+        { auditee_id: actor.id },
+        { workflow_assignments: { some: { user_id: actor.id } } },
+      ],
+    };
+  }
+
   async getEngagementById(id: string, actor: ActorContext): Promise<EngagementResponseDto> {
-    const isAuditee = !actor.permissions.includes('engagement:read');
+    const scope = this._actorScope(actor);
     const engagement = await prisma.audit_Engagement.findFirst({
       where: {
         id,
         deleted_at: null,
-        ...(isAuditee && { auditee_id: actor.id }),
+        ...(scope ?? {}),
       },
       include: engagementInclude,
     });
@@ -229,21 +329,14 @@ export class EngagementService implements IEngagementService {
 
   async listEngagements(query: EngagementQueryDto, actor: ActorContext): Promise<{ engagements: EngagementResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
-    const canReadAll = actor.permissions.includes('engagement:read_all');
-    const isAuditee = !actor.permissions.includes('engagement:read');
+    const scope = this._actorScope(actor);
     const where: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
       ...(query.status && { status: query.status }),
       ...(query.auditType && { audit_type: query.auditType }),
       ...(query.leadAuditorId && { lead_auditor_id: query.leadAuditorId }),
       ...(query.auditManagerId && { audit_manager_id: query.auditManagerId }),
-      ...(isAuditee && { auditee_id: actor.id }),
-      ...(!canReadAll && !isAuditee && {
-        OR: [
-          { lead_auditor_id: actor.id },
-          { workflow_assignments: { some: { user_id: actor.id } } },
-        ],
-      }),
+      ...(scope ?? {}),
     };
 
     const [total, engagements] = await prisma.$transaction([
@@ -279,15 +372,31 @@ export class EngagementService implements IEngagementService {
   }
 
   private async _withMetrics(engagement: Parameters<typeof mapEngagementToResponse>[0]): Promise<EngagementResponseDto> {
-    const [findingGroups, workingPaperCount, checklistProgress] = await Promise.all([
+    const [findingGroups, workingPaperGroups, checklistProgress, report, evidenceCount, assetCount] = await Promise.all([
       prisma.audit_Finding.groupBy({
         by: ['severity'],
         where: { engagement_id: engagement.id, deleted_at: null },
         _count: { _all: true },
       }),
-      prisma.audit_Working_Paper.count({ where: { engagement_id: engagement.id, deleted_at: null } }),
+      prisma.audit_Working_Paper.groupBy({
+        by: ['status'],
+        where: { engagement_id: engagement.id, deleted_at: null },
+        _count: { _all: true },
+      }),
       this.checklistService.getChecklistProgress(engagement.id),
+      prisma.audit_Report.findFirst({
+        where: { engagement_id: engagement.id, deleted_at: null },
+        select: { status: true },
+      }),
+      prisma.audit_Evidence.count({ where: { engagement_id: engagement.id } }),
+      prisma.audit_Engagement_Asset.count({ where: { engagement_id: engagement.id } }),
     ]);
+
+    const findingStatusGroups = await prisma.audit_Finding.groupBy({
+      by: ['status'],
+      where: { engagement_id: engagement.id, deleted_at: null },
+      _count: { _all: true },
+    });
 
     const findingCounts: FindingSeverityCount[] = findingGroups.map((group) => ({
       severity: group.severity,
@@ -295,10 +404,34 @@ export class EngagementService implements IEngagementService {
     }));
     const progress: ChecklistProgress = checklistProgress;
 
+    const wpCountByStatus = (status: string): number =>
+      workingPaperGroups.find((g) => g.status === status)?._count._all ?? 0;
+    const workingPaperCount = workingPaperGroups.reduce((sum, g) => sum + g._count._all, 0);
+    const workingPaperStats: WorkingPaperStats = {
+      total: workingPaperCount,
+      approved: wpCountByStatus('approved'),
+      rejected: wpCountByStatus('rejected'),
+    };
+
+    const findingTotal = findingStatusGroups.reduce((sum, g) => sum + g._count._all, 0);
+    const findingCountByStatus = (status: string): number =>
+      findingStatusGroups.find((g) => g.status === status)?._count._all ?? 0;
+    const resolvedFindings = findingCountByStatus('closed');
+    const findingStats: FindingStats = {
+      total: findingTotal,
+      open: findingCountByStatus('open'),
+      unresolved: findingTotal - resolvedFindings,
+    };
+
     return mapEngagementToResponse(engagement, {
       findingCounts,
       workingPaperCount,
       checklistProgress: progress,
+      workingPaperStats,
+      findingStats,
+      reportStatus: report?.status ?? null,
+      evidenceCount,
+      assetCount,
     });
   }
 
@@ -322,15 +455,19 @@ export class EngagementService implements IEngagementService {
       }
 
       if (lifecycleRules.requireApprovedWorkingPaperBeforeUnderReview) {
-        const approvedPaperCount = await prisma.audit_Working_Paper.count({
-          where: {
-            engagement_id: id,
-            deleted_at: null,
-            status: 'approved',
-          },
-        });
-        if (approvedPaperCount === 0) {
-          throw AppError.badRequest('Cannot move engagement to review before at least one working paper is approved');
+        const [totalPaperCount, unapprovedPaperCount] = await prisma.$transaction([
+          prisma.audit_Working_Paper.count({
+            where: { engagement_id: id, deleted_at: null },
+          }),
+          prisma.audit_Working_Paper.count({
+            where: { engagement_id: id, deleted_at: null, status: { not: 'approved' } },
+          }),
+        ]);
+        if (totalPaperCount === 0) {
+          throw AppError.badRequest('Cannot move engagement to review before at least one working paper is created and approved');
+        }
+        if (unapprovedPaperCount > 0) {
+          throw AppError.badRequest('Cannot move engagement to review while working papers remain unapproved — all working papers must be approved');
         }
       }
     }

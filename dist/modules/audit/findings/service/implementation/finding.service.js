@@ -6,6 +6,9 @@ const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
+const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
+const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const finding_response_dto_1 = require("../../dto/response/finding.response.dto");
@@ -17,6 +20,10 @@ const findingInclude = {
     created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
 };
 class FindingService {
+    approvalService;
+    constructor(approvalService = approval_service_1.workflowApprovalService) {
+        this.approvalService = approvalService;
+    }
     async createFinding(engagementId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'finding:create');
         await this._assertEngagementAllowsFindings(engagementId);
@@ -29,24 +36,56 @@ class FindingService {
         if (dto.riskId) {
             await this._assertRiskExists(dto.riskId);
         }
-        const finding = await prisma_client_1.prisma.audit_Finding.create({
-            data: {
-                engagement_id: engagementId,
-                working_paper_id: dto.workingPaperId,
-                checklist_id: dto.checklistId,
-                risk_id: dto.riskId,
-                title: dto.title,
-                description: dto.description,
-                category: dto.category,
-                severity: dto.severity,
-                root_cause: dto.rootCause,
-                risk_implication: dto.riskImplication,
-                recommendation: dto.recommendation,
-                auditee_id: dto.auditeeId,
-                due_date: new Date(dto.dueDate),
-                created_by_id: actor.id,
-            },
-            include: findingInclude,
+        // Transactional outbox: the finding and the auditee's "new finding" alert
+        // commit together. Without this the auditee would only learn of the finding
+        // via the daily overdue sweep.
+        const finding = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const created = await tx.audit_Finding.create({
+                data: {
+                    engagement_id: engagementId,
+                    working_paper_id: dto.workingPaperId,
+                    checklist_id: dto.checklistId,
+                    risk_id: dto.riskId,
+                    title: dto.title,
+                    description: dto.description,
+                    category: dto.category,
+                    severity: dto.severity,
+                    root_cause: dto.rootCause,
+                    risk_implication: dto.riskImplication,
+                    recommendation: dto.recommendation,
+                    auditee_id: dto.auditeeId,
+                    due_date: new Date(dto.dueDate),
+                    created_by_id: actor.id,
+                },
+                include: findingInclude,
+            });
+            const dueDate = created.due_date.toISOString();
+            const auditeeName = created.auditee.display_name ?? `${created.auditee.first_name} ${created.auditee.last_name}`.trim();
+            const findingVariables = {
+                auditeeName,
+                findingTitle: created.title,
+                engagementReference: created.engagement.reference_number,
+                severity: created.severity,
+                dueDate,
+            };
+            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+                userId: created.auditee_id,
+                title: 'New audit finding assigned',
+                body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
+                type: 'warning',
+                referenceType: 'audit_finding',
+                referenceId: created.id,
+                eventKey: 'audit.finding.assigned',
+                variables: findingVariables,
+            }, { tx });
+            await notification_queue_service_1.notificationQueueService.enqueue('email', {
+                to: created.auditee.email,
+                subject: `New Audit Finding: ${created.title}`,
+                text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
+                eventKey: 'audit.finding.assigned',
+                variables: findingVariables,
+            }, { tx });
+            return created;
         });
         logger_util_1.logger.info('Audit finding created', { findingId: finding.id, engagementId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.create', module: 'audit', entityType: 'audit_finding', entityId: finding.id });
@@ -107,12 +146,25 @@ class FindingService {
         const finding = await this._getFinding(id);
         if (finding.status !== audit_enum_1.FindingStatus.Verified)
             throw app_error_1.AppError.badRequest('Only verified findings can be closed');
-        const updated = await prisma_client_1.prisma.audit_Finding.update({
-            where: { id },
-            data: { status: audit_enum_1.FindingStatus.Closed, closed_by_id: actor.id, closed_at: new Date() },
-        });
-        logger_util_1.logger.info('Audit finding closed', { findingId: id, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.close', module: 'audit', entityType: 'audit_finding', entityId: id });
+        const { updated, approval } = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const updated = await tx.audit_Finding.update({
+                where: { id },
+                data: {
+                    status: audit_enum_1.FindingStatus.PendingClosure,
+                    closed_by_id: null,
+                    closed_at: null,
+                },
+                include: findingInclude,
+            });
+            const approval = await this.approvalService.createApproval({
+                entityType: workflow_enum_1.WorkflowEntityType.AuditFindingClosure,
+                entityId: id,
+            }, actor, tx);
+            return { updated, approval };
+        }, { timeout: 15000 });
+        this.approvalService.queueApprovalRequiredNotification(approval);
+        logger_util_1.logger.info('Audit finding closure requested', { findingId: id, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.close.request', module: 'audit', entityType: 'audit_finding', entityId: id });
         return (0, finding_response_dto_1.mapFindingToResponse)(updated);
     }
     async getFindingById(id, actor) {

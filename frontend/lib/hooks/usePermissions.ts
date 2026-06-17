@@ -63,6 +63,56 @@ export const isExecutive = (user: SessionUser | null): boolean =>
   !userHasPermission(user, 'plan:create');
 
 // ─────────────────────────────────────────────────────────────
+// Analytics scope
+// ─────────────────────────────────────────────────────────────
+// Mirrors the backend scoping in dashboard.utility.ts (isRestrictedAuditor /
+// isRestrictedAuditee) so the page can tell the viewer WHICH data they are
+// seeing. The server is still the source of truth — this only labels the view.
+export type AnalyticsScopeKey = 'org' | 'engagements' | 'findings';
+
+export interface AnalyticsScope {
+  key: AnalyticsScopeKey;
+  label: string;
+  description: string;
+}
+
+export const getAnalyticsScope = (user: SessionUser | null): AnalyticsScope => {
+  const can = (perm: string): boolean => userHasPermission(user, perm);
+  const readAllEngagements = can('engagement:read_all');
+  const readEngagements = can('engagement:read');
+  const readAllFindings = can('finding:read_all');
+  const respondFollowup = can('followup:respond');
+
+  // Backend: isRestrictedAuditee
+  const restrictedAuditee = !readAllFindings && (respondFollowup || !readEngagements);
+  // Backend: isRestrictedAuditor
+  const restrictedAuditor = !readAllEngagements && readEngagements;
+
+  // Auditees (no engagement visibility) see only findings raised against them.
+  if (restrictedAuditee && !readEngagements) {
+    return {
+      key: 'findings',
+      label: 'Your findings',
+      description: 'Scoped to findings raised against you. Risk metrics remain organization-wide.',
+    };
+  }
+  // Field auditors see only the engagements they lead or are assigned to.
+  if (restrictedAuditor) {
+    return {
+      key: 'engagements',
+      label: 'Your engagements',
+      description: 'Scoped to engagements you lead or are assigned to. Risk metrics remain organization-wide.',
+    };
+  }
+  // Oversight roles see the whole programme.
+  return {
+    key: 'org',
+    label: 'Organization-wide',
+    description: 'Aggregated across all engagements, findings, and reports in the audit programme.',
+  };
+};
+
+// ─────────────────────────────────────────────────────────────
 // Navigation visibility rules
 // ─────────────────────────────────────────────────────────────
 export interface NavVisibility {
@@ -204,6 +254,7 @@ export const usePermissions = () => {
       // Computed visibility maps
       nav: getNavVisibility(session),
       dashboard: getDashboardVisibility(session),
+      analyticsScope: getAnalyticsScope(session),
 
       // Can this user create/edit audit content?
       canWriteAudit:

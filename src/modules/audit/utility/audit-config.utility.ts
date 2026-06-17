@@ -72,6 +72,88 @@ export const getChecklistTemplateControls = async (
 };
 
 /**
+ * Authoritative control source for populating an engagement's checklist.
+ *
+ * Prefers the structured compliance_controls library (active controls for the
+ * audit type); falls back to the legacy checklist_templates JSON / built-in
+ * CONTROL_SETS when the library has no controls for that type. Callers still
+ * snapshot the returned text onto the checklist row, so a populated engagement
+ * is unaffected by later edits to the library.
+ */
+export const getEngagementControls = async (
+  auditType: AuditType,
+): Promise<ChecklistTemplateControl[]> => {
+  const dbControls = await prisma.compliance_Control.findMany({
+    where: { audit_type: auditType, is_active: true, deleted_at: null },
+    orderBy: { control_reference: 'asc' },
+    select: { control_reference: true, control_description: true, test_procedure: true },
+  });
+  if (dbControls.length > 0) {
+    return dbControls.map((control) => ({
+      controlReference: control.control_reference,
+      controlDescription: control.control_description,
+      testProcedure: control.test_procedure,
+    }));
+  }
+  return getChecklistTemplateControls(auditType);
+};
+
+export const CHECKLIST_TEMPLATE_CONFIG_KEY = 'checklist_templates';
+
+/**
+ * Full per-audit-type checklist template config: saved overrides for each audit
+ * type, falling back to the built-in CONTROL_SETS where nothing is configured.
+ */
+export const getChecklistTemplateConfig = async (): Promise<Record<AuditType, ChecklistTemplateControl[]>> => {
+  const parsed = await getJsonConfig<ChecklistTemplateConfig>(CHECKLIST_TEMPLATE_CONFIG_KEY, {});
+  const result = {} as Record<AuditType, ChecklistTemplateControl[]>;
+  for (const auditType of Object.values(AuditType)) {
+    const saved = parsed[auditType];
+    const controls = Array.isArray(saved) && saved.length > 0
+      ? saved.filter(isChecklistTemplateControl)
+      : (CONTROL_SETS[auditType] ?? []);
+    result[auditType] = controls.map((control) => ({
+      controlReference: control.controlReference,
+      controlDescription: control.controlDescription,
+      testProcedure: control.testProcedure,
+    }));
+  }
+  return result;
+};
+
+/** Validates and persists (upserts) the full checklist template config. */
+export const setChecklistTemplateConfig = async (
+  config: ChecklistTemplateConfig,
+  actorId: string,
+): Promise<Record<AuditType, ChecklistTemplateControl[]>> => {
+  const clean: ChecklistTemplateConfig = {};
+  for (const auditType of Object.values(AuditType)) {
+    const controls = config[auditType];
+    if (!controls) continue;
+    clean[auditType] = controls
+      .filter(isChecklistTemplateControl)
+      .map((control) => ({
+        controlReference: control.controlReference.trim(),
+        controlDescription: control.controlDescription.trim(),
+        testProcedure: control.testProcedure.trim(),
+      }))
+      .filter((control) => control.controlReference.length > 0);
+  }
+  await prisma.system_Config.upsert({
+    where: { key: CHECKLIST_TEMPLATE_CONFIG_KEY },
+    create: {
+      key: CHECKLIST_TEMPLATE_CONFIG_KEY,
+      value: JSON.stringify(clean),
+      description: 'Per-audit-type checklist control templates used to populate engagement checklists.',
+      updated_by_id: actorId,
+    },
+    update: { value: JSON.stringify(clean), updated_by_id: actorId },
+  });
+  logger.info('Checklist templates updated', { actorId });
+  return getChecklistTemplateConfig();
+};
+
+/**
  * Sentinel chain entry: resolve this level to the entity's assigned engagement
  * manager (a specific person) rather than to a permission holder.
  */
@@ -88,12 +170,14 @@ export interface ApprovalMatrix {
   auditPlan: string[];
   workingPaper: string[];
   auditReport: string[];
+  findingClosure: string[];
 }
 
 export const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix = {
   auditPlan: ['plan:approve'],
   workingPaper: [ENGAGEMENT_MANAGER_APPROVER],
   auditReport: [ENGAGEMENT_MANAGER_APPROVER, 'report:approve:oversight', 'report:approve:final'],
+  findingClosure: [ENGAGEMENT_MANAGER_APPROVER],
 };
 
 /**

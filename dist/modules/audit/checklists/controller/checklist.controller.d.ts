@@ -5,6 +5,8 @@ export declare class ChecklistController {
     readonly router: Router;
     constructor(checklistService: IChecklistService);
     private _registerRoutes;
+    private _getChecklistTemplates;
+    private _updateChecklistTemplates;
     private _getChecklists;
     private _getChecklistProgress;
     private _createChecklistItem;

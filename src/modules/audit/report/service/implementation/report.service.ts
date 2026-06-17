@@ -146,7 +146,6 @@ export class ReportService implements IReportService {
   }
 
   async approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto> {
-    assertHasPermission(actor.permissions, 'report:approve');
     const report = await this._getReport(id);
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be approved');
 
@@ -164,7 +163,6 @@ export class ReportService implements IReportService {
   }
 
   async rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto> {
-    assertHasPermission(actor.permissions, 'report:reject');
     const report = await this._getReport(id);
     if (report.status !== ReportStatus.Submitted) throw AppError.badRequest('Only submitted reports can be rejected');
 
@@ -227,7 +225,9 @@ export class ReportService implements IReportService {
       findingCount: String(report.engagement.findings.length),
     };
 
-    await notificationQueueService.enqueue(
+    // Post-commit: the report is already issued, so a queue-write hiccup must
+    // not fail the request — enqueueSafe swallows and logs.
+    await notificationQueueService.enqueueSafe(
       'in_app',
       {
         userId: report.engagement.auditee_id,
@@ -242,7 +242,7 @@ export class ReportService implements IReportService {
     );
 
     if (auditee?.email) {
-      await notificationQueueService.enqueue(
+      await notificationQueueService.enqueueSafe(
         'email',
         {
           to: auditee.email,

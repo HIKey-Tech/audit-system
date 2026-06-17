@@ -52,7 +52,14 @@ export const EngagementQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+export const EligibleUsersQuerySchema = z.object({
+  role: z.enum(['lead_auditor', 'audit_manager']),
+  auditType: z.nativeEnum(AuditType).optional(),
+  priority: z.nativeEnum(AuditPriority).optional(),
+});
+
 export type CreateEngagementFromPlanRequestDto = z.infer<typeof CreateEngagementFromPlanRequestSchema>;
+export type EligibleUsersQueryDto = z.infer<typeof EligibleUsersQuerySchema>;
 export type CreateAdhocEngagementRequestDto = z.infer<typeof CreateAdhocEngagementRequestSchema>;
 export type UpdateEngagementRequestDto = z.infer<typeof UpdateEngagementRequestSchema>;
 export type UpdateEngagementStatusRequestDto = z.infer<typeof UpdateEngagementStatusRequestSchema>;

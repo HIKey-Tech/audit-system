@@ -180,15 +180,20 @@ export class WorkingPaperService implements IWorkingPaperService {
       throw AppError.badRequest('Only draft or rejected working papers can be submitted');
     }
 
-    const updated = await prisma.audit_Working_Paper.update({
-      where: { id },
-      data: { status: WorkingPaperStatus.Submitted, rejection_reason: null },
-    });
+    const { updated, approval } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.audit_Working_Paper.update({
+        where: { id },
+        data: { status: WorkingPaperStatus.Submitted, rejection_reason: null },
+      });
 
-    await this.approvalService.createApproval({
-      entityType: WorkflowEntityType.AuditWorkingPaper,
-      entityId: id,
-    }, actor);
+      const approval = await this.approvalService.createApproval({
+        entityType: WorkflowEntityType.AuditWorkingPaper,
+        entityId: id,
+      }, actor, tx);
+
+      return { updated, approval };
+    }, { timeout: 15000 });
+    this.approvalService.queueApprovalRequiredNotification(approval);
 
     logger.info('Audit working paper submitted', { workingPaperId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.submit', module: 'audit', entityType: 'audit_working_paper', entityId: id });

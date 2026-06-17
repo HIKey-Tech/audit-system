@@ -111,6 +111,13 @@ export const config = {
     ttl: parseInt(optionalEnv('REDIS_TTL', '3600'), 10),
   },
 
+  cache: {
+    // 'redis' in shared/clustered deployments; 'memory' for local dev / single
+    // instance. The Redis client degrades to a cache-miss (never throws) if the
+    // server is unreachable, so this only selects the preferred backend.
+    driver: optionalEnv('CACHE_DRIVER', 'memory') as 'redis' | 'memory',
+  },
+
   email: {
     host: optionalEnv('SMTP_HOST', 'smtp.gmail.com'),
     port: parseInt(optionalEnv('SMTP_PORT', '587'), 10),

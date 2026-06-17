@@ -61,6 +61,12 @@ class FollowUpService {
         });
         logger_util_1.logger.info('Management response submitted', { findingId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.response.submit', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id });
+        await this._notifyLeadAuditor(finding, {
+            title: 'Management response submitted',
+            body: `A management response was submitted for finding "${finding.title}" (${finding.engagement.reference_number}).`,
+            type: 'info',
+            eventKey: 'audit.followup.response.submitted',
+        });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
     async submitRemediationEvidence(findingId, evidenceId, actor) {
@@ -95,6 +101,12 @@ class FollowUpService {
         });
         logger_util_1.logger.info('Remediation evidence submitted', { findingId, evidenceId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.evidence.submit', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: { evidenceId } });
+        await this._notifyLeadAuditor(finding, {
+            title: 'Remediation awaiting verification',
+            body: `Remediation evidence was submitted for finding "${finding.title}" (${finding.engagement.reference_number}) and is awaiting your verification.`,
+            type: 'info',
+            eventKey: 'audit.followup.evidence.submitted',
+        });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
     async uploadRemediationEvidence(findingId, file, actor) {
@@ -174,7 +186,7 @@ class FollowUpService {
                 findingTitle: finding.title,
                 verificationNotes: dto.verificationNotes ?? '',
             };
-            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
                 userId: finding.auditee_id,
                 title: 'Remediation verified',
                 body: `Remediation for "${finding.title}" has been verified.`,
@@ -185,7 +197,7 @@ class FollowUpService {
                 variables: verifiedVariables,
             });
             if (auditee?.email) {
-                await notification_queue_service_1.notificationQueueService.enqueue('email', {
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
                     to: auditee.email,
                     subject: `Finding Verified: ${finding.title}`,
                     text: `Remediation for "${finding.title}" has been verified.`,
@@ -195,14 +207,35 @@ class FollowUpService {
             }
         }
         else {
-            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+            const auditee = await prisma_client_1.prisma.user.findUnique({
+                where: { id: finding.auditee_id },
+                select: { email: true, display_name: true, first_name: true, last_name: true },
+            });
+            const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
+            const rejectedVariables = {
+                auditeeName,
+                findingTitle: finding.title,
+                verificationNotes: dto.verificationNotes ?? '',
+            };
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
                 userId: finding.auditee_id,
                 title: 'Remediation rejected',
                 body: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
                 type: 'warning',
                 referenceType: 'audit_finding',
                 referenceId: findingId,
+                eventKey: 'audit.followup.rejected',
+                variables: rejectedVariables,
             });
+            if (auditee?.email) {
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+                    to: auditee.email,
+                    subject: `Remediation Rejected: ${finding.title}`,
+                    text: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
+                    eventKey: 'audit.followup.rejected',
+                    variables: rejectedVariables,
+                });
+            }
         }
         logger_util_1.logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });
@@ -231,11 +264,57 @@ class FollowUpService {
     async _getFinding(findingId) {
         const finding = await prisma_client_1.prisma.audit_Finding.findFirst({
             where: { id: findingId, deleted_at: null },
-            select: { id: true, engagement_id: true, auditee_id: true, title: true },
+            select: {
+                id: true,
+                engagement_id: true,
+                auditee_id: true,
+                title: true,
+                engagement: {
+                    select: {
+                        reference_number: true,
+                        lead_auditor: {
+                            select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+                        },
+                    },
+                },
+            },
         });
         if (!finding)
             throw app_error_1.AppError.notFound('Audit finding');
         return finding;
+    }
+    /**
+     * Notify the engagement's lead auditor that an auditee has acted on a finding
+     * (management response / remediation evidence). Post-commit and best-effort —
+     * never throws into the caller.
+     */
+    async _notifyLeadAuditor(finding, notification) {
+        const lead = finding.engagement.lead_auditor;
+        if (!lead)
+            return;
+        const recipientName = lead.display_name ?? `${lead.first_name} ${lead.last_name}`.trim();
+        const variables = {
+            recipientName,
+            findingTitle: finding.title,
+            engagementReference: finding.engagement.reference_number,
+        };
+        await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+            userId: lead.id,
+            title: notification.title,
+            body: notification.body,
+            type: notification.type,
+            referenceType: 'audit_finding',
+            referenceId: finding.id,
+            eventKey: notification.eventKey,
+            variables,
+        });
+        await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+            to: lead.email,
+            subject: notification.title,
+            text: notification.body,
+            eventKey: notification.eventKey,
+            variables,
+        });
     }
 }
 exports.FollowUpService = FollowUpService;

@@ -10,6 +10,7 @@ export const CreateUserRequestSchema = z.object({
   department: z.string().max(100).optional(),
   jobTitle: z.string().max(100).optional(),
   skills: z.array(z.string().trim().min(1, 'Skill tag must not be empty').max(100)).max(30, 'Maximum 30 skill tags').optional(),
+  maxConcurrentEngagements: z.number().int().positive().max(50).optional(),
   password: z
     .string()
     .min(8)
@@ -29,6 +30,7 @@ export const UpdateUserRequestSchema = z.object({
   department: z.string().max(100).optional(),
   jobTitle: z.string().max(100).optional(),
   skills: z.array(z.string().trim().min(1, 'Skill tag must not be empty').max(100)).max(30, 'Maximum 30 skill tags').optional(),
+  maxConcurrentEngagements: z.number().int().positive().max(50).nullable().optional(),
 });
 
 export const AssignRoleRequestSchema = z.object({

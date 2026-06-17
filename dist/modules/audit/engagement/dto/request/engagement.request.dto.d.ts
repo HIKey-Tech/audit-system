@@ -16,24 +16,24 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     priority: z.ZodOptional<z.ZodNativeEnum<typeof AuditPriority>>;
 }, "strip", z.ZodTypeAny, {
     title: string;
+    slaDeadline: string;
     plannedStartDate: string;
     plannedEndDate: string;
     leadAuditorId: string;
     auditManagerId: string;
     auditeeId: string;
-    slaDeadline: string;
     planItemId: string;
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
     auditType?: AuditType | undefined;
 }, {
     title: string;
+    slaDeadline: string;
     plannedStartDate: string;
     plannedEndDate: string;
     leadAuditorId: string;
     auditManagerId: string;
     auditeeId: string;
-    slaDeadline: string;
     planItemId: string;
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
@@ -58,24 +58,24 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     priority: AuditPriority;
     universeId: string;
     auditType: AuditType;
+    slaDeadline: string;
     plannedStartDate: string;
     plannedEndDate: string;
     leadAuditorId: string;
     auditManagerId: string;
     auditeeId: string;
-    slaDeadline: string;
     adhocReason: string;
 }, {
     title: string;
     priority: AuditPriority;
     universeId: string;
     auditType: AuditType;
+    slaDeadline: string;
     plannedStartDate: string;
     plannedEndDate: string;
     leadAuditorId: string;
     auditManagerId: string;
     auditeeId: string;
-    slaDeadline: string;
     adhocReason: string;
 }>;
 export declare const UpdateEngagementRequestSchema: z.ZodObject<{
@@ -91,22 +91,22 @@ export declare const UpdateEngagementRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     priority?: AuditPriority | undefined;
+    slaDeadline?: string | undefined;
     plannedStartDate?: string | undefined;
     plannedEndDate?: string | undefined;
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
     auditeeId?: string | undefined;
-    slaDeadline?: string | undefined;
     adhocReason?: string | null | undefined;
 }, {
     title?: string | undefined;
     priority?: AuditPriority | undefined;
+    slaDeadline?: string | undefined;
     plannedStartDate?: string | undefined;
     plannedEndDate?: string | undefined;
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
     auditeeId?: string | undefined;
-    slaDeadline?: string | undefined;
     adhocReason?: string | null | undefined;
 }>;
 export declare const UpdateEngagementStatusRequestSchema: z.ZodObject<{
@@ -144,7 +144,21 @@ export declare const EngagementQuerySchema: z.ZodObject<{
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
 }>;
+export declare const EligibleUsersQuerySchema: z.ZodObject<{
+    role: z.ZodEnum<["lead_auditor", "audit_manager"]>;
+    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    priority: z.ZodOptional<z.ZodNativeEnum<typeof AuditPriority>>;
+}, "strip", z.ZodTypeAny, {
+    role: "lead_auditor" | "audit_manager";
+    priority?: AuditPriority | undefined;
+    auditType?: AuditType | undefined;
+}, {
+    role: "lead_auditor" | "audit_manager";
+    priority?: AuditPriority | undefined;
+    auditType?: AuditType | undefined;
+}>;
 export type CreateEngagementFromPlanRequestDto = z.infer<typeof CreateEngagementFromPlanRequestSchema>;
+export type EligibleUsersQueryDto = z.infer<typeof EligibleUsersQuerySchema>;
 export type CreateAdhocEngagementRequestDto = z.infer<typeof CreateAdhocEngagementRequestSchema>;
 export type UpdateEngagementRequestDto = z.infer<typeof UpdateEngagementRequestSchema>;
 export type UpdateEngagementStatusRequestDto = z.infer<typeof UpdateEngagementStatusRequestSchema>;

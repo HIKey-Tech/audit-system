@@ -14,6 +14,7 @@ import {
   AlertOctagon,
   AlertTriangle,
   FileText,
+  Archive,
   ShieldAlert,
   CheckSquare,
   FolderOpen,
@@ -28,6 +29,8 @@ import {
   Users,
   Send,
   Server,
+  LayoutGrid,
+  Library,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -40,6 +43,7 @@ import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { usePermissions, type NavVisibility } from '@/lib/hooks/usePermissions';
 import { useLayout } from '@/components/providers/LayoutProvider';
+import { AUDIT_DOMAINS } from '@/lib/audit-domains';
 
 interface NavLink {
   type: 'link';
@@ -84,6 +88,22 @@ const NAV: NavItem[] = [
 
   {
     type: 'group',
+    label: 'Audit Modules',
+    icon: LayoutGrid,
+    description: 'Dedicated workspaces for IT, Financial, Systems, and Compliance audits.',
+    children: AUDIT_DOMAINS.map((d): NavLink => ({
+      type: 'link',
+      label: d.label,
+      href: d.href,
+      icon: d.icon,
+      matchPrefix: d.href,
+      visKey: 'engagements',
+      description: `${d.focus} — ${d.framework}.`,
+    })),
+  },
+
+  {
+    type: 'group',
     label: 'Audit',
     icon: Briefcase,
     description: 'Engagements, findings, plans, universe, and reports.',
@@ -95,6 +115,8 @@ const NAV: NavItem[] = [
       { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
       { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
       { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
+      { type: 'link', label: 'Compliance Frameworks', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR).' },
+      { type: 'link', label: 'Evidence Repository', href: '/audit/repository', icon: Archive, matchPrefix: '/audit/repository', visKey: 'engagements', description: 'Central, searchable store of all audit records, supporting documents, and evidence.' },
     ],
   },
 

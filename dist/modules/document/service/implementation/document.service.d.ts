@@ -12,6 +12,7 @@ export declare class DocumentService implements IDocumentService {
         meta: PaginationMeta;
     }>;
     listByEntity(entityType: string, entityId: string): Promise<DocumentResponseDto[]>;
+    listByEntityIds(entityType: string, entityIds: string[]): Promise<Map<string, DocumentResponseDto[]>>;
     getFileById(id: string): Promise<ServedFileDto>;
     serveFile(storedName: string): Promise<ServedFileDto>;
     uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;

@@ -4,7 +4,7 @@ import { prisma } from '../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../shared/errors/app.error';
 import { logger } from '../../../../shared/utils/logger.util';
 import { config } from '../../../../shared/config/app.config';
-import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
+import { INotificationQueueService, NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { IMfaService } from '../interface/mfa.service.interface';
 import { MfaMethod } from '../../dto/request/auth.request.dto';
 import { MfaSetupResponseDto } from '../../dto/response/user.response.dto';
@@ -234,7 +234,7 @@ export class MfaService implements IMfaService {
         `<p style="font-size:24px;font-weight:bold;letter-spacing:3px">${otp}</p>`,
         `<p>It expires in ${escapeHtml(config.mfa.emailOtpTtl)}. If you did not try to sign in, ignore this email.</p>`,
       ].join(''),
-    });
+    }, { priority: NOTIFICATION_PRIORITY.HIGH });
   }
 
   /** Strict consume (enrolment): throws with a clear message on failure. */

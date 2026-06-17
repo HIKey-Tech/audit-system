@@ -27,6 +27,17 @@ class ApprovalStatusService {
             });
             return;
         }
+        if (entityType === 'audit_finding_closure') {
+            await tx.audit_Finding.update({
+                where: { id: entityId },
+                data: {
+                    status: audit_enum_1.FindingStatus.Closed,
+                    closed_by_id: approverId,
+                    closed_at: approvedAt,
+                },
+            });
+            return;
+        }
         await tx.audit_Report.update({
             where: { id: entityId },
             data: { status: audit_enum_1.ReportStatus.Approved },
@@ -52,6 +63,17 @@ class ApprovalStatusService {
                     status: audit_enum_1.WorkingPaperStatus.Rejected,
                     reviewed_by_id: approverId,
                     rejection_reason: reason,
+                },
+            });
+            return;
+        }
+        if (entityType === 'audit_finding_closure') {
+            await tx.audit_Finding.update({
+                where: { id: entityId },
+                data: {
+                    status: audit_enum_1.FindingStatus.Verified,
+                    closed_by_id: null,
+                    closed_at: null,
                 },
             });
             return;

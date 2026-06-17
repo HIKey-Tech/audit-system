@@ -6,6 +6,7 @@ const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_config_1 = require("../../../../shared/config/app.config");
+const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
 const token_utility_1 = require("../../utility/token.utility");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     switch (char) {
@@ -124,7 +125,7 @@ class PasswordResetService {
                 `<p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p>`,
                 `<p>This link expires in ${escapeHtml(ttl)}. If you did not request this, you can safely ignore this email.</p>`,
             ].join(''),
-        });
+        }, { priority: notification_queue_service_interface_1.NOTIFICATION_PRIORITY.HIGH });
     }
 }
 exports.PasswordResetService = PasswordResetService;

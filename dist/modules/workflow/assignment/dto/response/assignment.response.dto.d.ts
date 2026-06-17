@@ -37,6 +37,14 @@ export interface AssignmentCandidateDto {
     jobTitle: string | null;
     skills: string[];
     activeEngagementCount: number;
+    /** Skills matching the engagement's audit type (highlighted in the UI). */
+    matchedSkills: string[];
+    /** Backend recommendation score; candidates are returned sorted by this desc. */
+    recommendationScore: number;
+    /** Skill-fit candidate with spare capacity — surface as "Recommended". */
+    recommended: boolean;
+    /** At or above the concurrency cap — assignment will be blocked. */
+    overCapacity: boolean;
 }
 export declare const mapAssignmentToResponse: (assignment: {
     id: string;

@@ -22,6 +22,10 @@ const Schema = z.object({
   email: z.string().email('Valid email required'),
   jobTitle: z.string().max(200).optional().or(z.literal('')),
   department: z.string().max(200).optional().or(z.literal('')),
+  maxConcurrentEngagements: z
+    .string()
+    .optional()
+    .refine((v) => !v || (/^\d+$/.test(v) && Number(v) >= 1 && Number(v) <= 50), 'Enter a whole number between 1 and 50'),
 });
 
 type FormValues = z.infer<typeof Schema>;
@@ -60,6 +64,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
       email: '',
       jobTitle: '',
       department: '',
+      maxConcurrentEngagements: '',
     },
   });
 
@@ -71,6 +76,8 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         email: user.email,
         jobTitle: user.jobTitle ?? '',
         department: user.department ?? '',
+        maxConcurrentEngagements:
+          user.maxConcurrentEngagements != null ? String(user.maxConcurrentEngagements) : '',
       });
       setSelectedRoleIds(user.roles.map((r) => r.id));
       setSkillTags(user.skills ?? []);
@@ -82,6 +89,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         email: '',
         jobTitle: '',
         department: '',
+        maxConcurrentEngagements: '',
       });
       setSelectedRoleIds([]);
       setSkillTags([]);
@@ -109,6 +117,9 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         jobTitle: values.jobTitle || undefined,
         department: values.department || undefined,
         skills: skillTags.length > 0 ? skillTags : undefined,
+        maxConcurrentEngagements: values.maxConcurrentEngagements
+          ? Number(values.maxConcurrentEngagements)
+          : undefined,
       });
       if (selectedRoleIds.length > 0) {
         await usersApi.assignRoles(created.id, selectedRoleIds);
@@ -131,6 +142,9 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
         jobTitle: values.jobTitle || undefined,
         department: values.department || undefined,
         skills: skillTags,
+        maxConcurrentEngagements: values.maxConcurrentEngagements
+          ? Number(values.maxConcurrentEngagements)
+          : null,
       });
       await usersApi.assignRoles(user!.id, selectedRoleIds);
       return updated;
@@ -271,6 +285,21 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
               className="flex-1 min-w-[120px] border-0 bg-transparent text-sm outline-none placeholder:text-text-muted"
             />
           </div>
+        </FormField>
+
+        <FormField
+          label="Max concurrent engagements"
+          error={errors.maxConcurrentEngagements?.message}
+          hint="Capacity cap used when assigning this auditor. Leave blank to use the system default."
+        >
+          <Input
+            type="number"
+            min={1}
+            max={50}
+            placeholder="System default"
+            error={errors.maxConcurrentEngagements?.message}
+            {...register('maxConcurrentEngagements')}
+          />
         </FormField>
 
         <FormField label="Roles">

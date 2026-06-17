@@ -201,3 +201,33 @@ export const createStorageClient = (
       return new LocalStorageClient();
   }
 };
+
+/**
+ * Boot-time check that the configured storage backend is usable, so a
+ * misconfigured deployment fails fast instead of on the first upload.
+ *
+ * For the local provider this creates the upload directory if missing and
+ * confirms the process can write to it (the common VPS failure mode: wrong
+ * STORAGE_LOCAL_PATH or directory not owned by the Node user). Remote
+ * providers are left to surface auth/permission errors on first request.
+ */
+export const verifyStorageReady = async (
+  provider: StorageProvider | string = config.storage.provider,
+): Promise<void> => {
+  if (provider !== StorageProvider.LOCAL) return;
+
+  const basePath = path.resolve(config.storage.localPath);
+  const probe = path.join(basePath, `.write-test-${uuidv4()}`);
+
+  try {
+    await fs.mkdir(basePath, { recursive: true });
+    await fs.writeFile(probe, 'ok');
+    await fs.unlink(probe);
+    logger.info('Local document storage verified writable', { basePath });
+  } catch (err) {
+    throw new Error(
+      `Local document storage is not writable at "${basePath}" — set STORAGE_LOCAL_PATH ` +
+        `to a directory the application user can write to. Cause: ${String(err)}`,
+    );
+  }
+};

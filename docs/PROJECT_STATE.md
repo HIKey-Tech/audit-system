@@ -2,7 +2,11 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-06-15 (rev 27)
+> Last updated: 2026-06-16 (rev 29)
+
+> **rev 29 changelog:** Added formal workflow approval for audit finding closure. `audit_finding_closure` is now a workflow approval entity with configurable `approval_matrix.findingClosure` (default: engagement manager). Closing a verified finding now moves it to `pending_closure` and creates an approval transactionally; final workflow approval sets the finding to `closed`, while rejection returns it to `verified`. Engagement closure now requires findings to be fully closed, not merely verified. Settings UI exposes the finding-closure matrix and the finding detail UI requests closure through the close endpoint.
+
+> **rev 28 changelog:** Tightened workflow approval consistency. Report-specific approve/reject endpoints now require generic workflow action permissions (`approval:approve` / `approval:reject`) and defer per-level report sign-off authorization to the configurable workflow approval matrix, so oversight/final approvers can use the report endpoint without needing generic `report:approve`. Working-paper submission now wraps status update + approval creation in one transaction and queues the approval notification after commit, preventing submitted papers without approval records.
 
 > **rev 27 changelog:** Added the frontend Asset Registry module. The Next.js app now includes a permission-gated `/assets` registry, `/assets/:id` detail workspace, asset create/edit/delete flows, relationship management, attestations, source/provenance records, and audit-context display. Sidebar visibility and UI actions are driven by `asset:*` permissions. Audit engagement detail now includes an Assets tab for linking/unlinking assets in engagement scope. Frontend production build passes.
 

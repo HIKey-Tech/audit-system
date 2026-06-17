@@ -6,6 +6,7 @@
 // ============================================================
 export interface PermissionDto {
   id: string;
+  slug: string;
   name: string;
   module: string;
   action: string;
@@ -38,6 +39,7 @@ export interface UserDto {
   department: string | null;
   jobTitle: string | null;
   skills: string[];
+  maxConcurrentEngagements: number | null;
   isActive: boolean;
   lastLoginAt: string | null;
   createdAt: string;
@@ -87,6 +89,7 @@ export interface FindingsSummary {
     management_response_received: number;
     in_remediation: number;
     verified: number;
+    pending_closure: number;
     closed: number;
   };
   overdue: number;
@@ -340,6 +343,34 @@ export interface AuditEngagement {
   description?: string | null;
 }
 
+export interface ChecklistProgress {
+  passed: number;
+  failed: number;
+  notApplicable: number;
+  notTested: number;
+  total: number;
+}
+
+export interface ChecklistTemplateControl {
+  controlReference: string;
+  controlDescription: string;
+  testProcedure: string;
+}
+
+export type ChecklistTemplateConfig = Record<string, ChecklistTemplateControl[]>;
+
+export interface WorkingPaperStats {
+  total: number;
+  approved: number;
+  rejected: number;
+}
+
+export interface FindingStats {
+  total: number;
+  open: number;
+  unresolved: number;
+}
+
 export interface AuditEngagementDetail extends AuditEngagement {
   workingPapers?: AuditWorkingPaper[];
   evidence?: AuditEvidence[];
@@ -347,6 +378,15 @@ export interface AuditEngagementDetail extends AuditEngagement {
   checklists?: AuditChecklistItem[];
   report?: AuditReport | null;
   assignments?: AuditAssignment[];
+  /** Aggregates returned by the detail endpoint for lifecycle gating. */
+  checklistProgress?: ChecklistProgress;
+  workingPaperStats?: WorkingPaperStats;
+  findingStats?: FindingStats;
+  findingCounts?: { severity: string; count: number }[];
+  workingPaperCount?: number;
+  reportStatus?: string | null;
+  evidenceCount?: number;
+  assetCount?: number;
 }
 
 export interface AuditAssignment {
@@ -688,6 +728,20 @@ export interface WorkflowAssignment {
   assignedAt: string;
 }
 
+/** Permission-eligible, optimization-scored candidate for a lead-auditor / audit-manager slot. */
+export interface EligibleUserDto {
+  id: string;
+  displayName: string;
+  department: string | null;
+  jobTitle: string | null;
+  skills: string[];
+  matchedSkills: string[];
+  activeEngagementCount: number;
+  recommendationScore: number;
+  recommended: boolean;
+  overCapacity: boolean;
+}
+
 export interface AssignmentCandidateDto {
   id: string;
   displayName: string;
@@ -696,6 +750,14 @@ export interface AssignmentCandidateDto {
   jobTitle: string | null;
   skills: string[];
   activeEngagementCount: number;
+  /** Skills matching the engagement's audit type. */
+  matchedSkills: string[];
+  /** Backend recommendation score; list is already sorted by this desc. */
+  recommendationScore: number;
+  /** Skill-fit candidate with spare capacity. */
+  recommended: boolean;
+  /** At or above the concurrency cap — assignment is blocked server-side. */
+  overCapacity: boolean;
 }
 
 export interface WorkflowEscalation {

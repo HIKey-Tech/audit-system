@@ -58,6 +58,7 @@ export enum FindingCategory {
   It = 'it',
   Financial = 'financial',
   Compliance = 'compliance',
+  Systems = 'systems',
   Operational = 'operational',
 }
 
@@ -74,6 +75,7 @@ export enum FindingStatus {
   ManagementResponseReceived = 'management_response_received',
   InRemediation = 'in_remediation',
   Verified = 'verified',
+  PendingClosure = 'pending_closure',
   Closed = 'closed',
 }
 

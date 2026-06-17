@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
 import { UserSelect } from '@/components/common/UserSelect';
+import { ScoredUserSelect } from '@/components/common/ScoredUserSelect';
 import { plansApi } from '@/lib/api/audit';
 
 /** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
@@ -134,14 +135,16 @@ export const CreateEngagementSlideOver = ({
         </FormField>
 
         <FormField label="Lead auditor" required error={errors.leadAuditorId?.message}>
-          <UserSelect
+          <ScoredUserSelect
+            role="lead_auditor"
             value={lead}
             onChange={(v) => setValue('leadAuditorId', v, { shouldValidate: true })}
             error={errors.leadAuditorId?.message}
           />
         </FormField>
         <FormField label="Audit manager" required error={errors.auditManagerId?.message}>
-          <UserSelect
+          <ScoredUserSelect
+            role="audit_manager"
             value={manager}
             onChange={(v) => setValue('auditManagerId', v, { shouldValidate: true })}
             error={errors.auditManagerId?.message}

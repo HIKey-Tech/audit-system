@@ -1,1 +1,1 @@
-{"version":3,"file":"notification-queue.service.interface.js","sourceRoot":"","sources":["../../../../../src/modules/messaging/service/interface/notification-queue.service.interface.ts"],"names":[],"mappings":""}
+{"version":3,"file":"notification-queue.service.interface.js","sourceRoot":"","sources":["../../../../../src/modules/messaging/service/interface/notification-queue.service.interface.ts"],"names":[],"mappings":";;;AAcA;;;;GAIG;AACU,QAAA,qBAAqB,GAAG;IACnC,IAAI,EAAE,GAAG;IACT,MAAM,EAAE,CAAC;CACD,CAAC"}

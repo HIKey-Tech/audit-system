@@ -45,25 +45,25 @@ class ReportTemplateController {
          * @desc   Create report template
          * @access Private - settings:manage
          */
-        this.router.post('/', (0, auth_middleware_1.requirePermission)('settings:manage'), (0, validate_middleware_1.validate)(settings_request_dto_1.CreateReportTemplateRequestSchema), this._createTemplate.bind(this));
+        this.router.post('/', (0, auth_middleware_1.requirePermission)('report_template:manage'), (0, validate_middleware_1.validate)(settings_request_dto_1.CreateReportTemplateRequestSchema), this._createTemplate.bind(this));
         /**
          * @route  PUT /settings/report-templates/:id
          * @desc   Update report template
          * @access Private - settings:manage
          */
-        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('settings:manage'), (0, validate_middleware_1.validate)(settings_request_dto_1.UpdateReportTemplateRequestSchema), this._updateTemplate.bind(this));
+        this.router.put('/:id', (0, auth_middleware_1.requirePermission)('report_template:manage'), (0, validate_middleware_1.validate)(settings_request_dto_1.UpdateReportTemplateRequestSchema), this._updateTemplate.bind(this));
         /**
          * @route  POST /settings/report-templates/:id/set-default
          * @desc   Mark report template as system default
          * @access Private - settings:manage
          */
-        this.router.post('/:id/set-default', (0, auth_middleware_1.requirePermission)('settings:manage'), this._setDefaultTemplate.bind(this));
+        this.router.post('/:id/set-default', (0, auth_middleware_1.requirePermission)('report_template:manage'), this._setDefaultTemplate.bind(this));
         /**
          * @route  DELETE /settings/report-templates/:id
          * @desc   Deactivate report template
          * @access Private - settings:manage
          */
-        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('settings:manage'), this._deactivateTemplate.bind(this));
+        this.router.delete('/:id', (0, auth_middleware_1.requirePermission)('report_template:manage'), this._deactivateTemplate.bind(this));
     }
     async _listTemplates(req, res, next) {
         try {

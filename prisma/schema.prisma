@@ -25,6 +25,7 @@ model User {
   department     String?
   job_title      String?
   skills         String?   @db.NVarChar(Max) // JSON array of skill tags e.g. ["ISO 27001","ITGC"]
+  max_concurrent_engagements Int? // per-auditor capacity cap; null falls back to the system default
   is_active      Boolean   @default(true)
   is_system_user Boolean   @default(false)
   is_super_admin Boolean   @default(false)
@@ -294,6 +295,7 @@ model Notification_Queue {
   type         String // email | in_app
   payload      String    @db.NVarChar(Max) // JSON string
   status       String    @default("pending") // pending | processing | sent | failed
+  priority     Int       @default(0) // higher = drained first (e.g. OTP / password reset)
   attempts     Int       @default(0)
   max_attempts Int       @default(3)
   last_error   String?   @db.NVarChar(Max)
@@ -302,7 +304,7 @@ model Notification_Queue {
   created_at   DateTime  @default(now())
   updated_at   DateTime  @updatedAt
 
-  @@index([status, scheduled_at])
+  @@index([status, priority, scheduled_at])
   @@map("notification_queue")
 }
 
@@ -901,7 +903,7 @@ model Audit_Finding {
   risk_implication String    @db.NVarChar(Max)
   recommendation   String    @db.NVarChar(Max)
   auditee_id       String
-  status           String    @default("open") // open | management_response_received | in_remediation | verified | closed
+  status           String    @default("open") // open | management_response_received | in_remediation | verified | pending_closure | closed
   due_date         DateTime
   created_by_id    String
   closed_by_id     String?
@@ -1059,9 +1061,10 @@ model Risk_Register {
   owner       User              @relation("RiskOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   universe    Audit_Universe?   @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   created_by  User              @relation("RiskCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  assessments Risk_Assessment[]
-  asset_links Risk_Asset_Link[]
-  findings    Audit_Finding[]   @relation("RiskFindings")
+  assessments   Risk_Assessment[]
+  asset_links   Risk_Asset_Link[]
+  findings      Audit_Finding[]           @relation("RiskFindings")
+  control_links Compliance_Control_Risk[]
 
   @@index([category_id])
   @@index([owner_id])
@@ -1350,6 +1353,75 @@ model Report_Template {
   @@index([is_active])
   @@index([is_default])
   @@map("report_templates")
+}
+
+// ============================================================
+// Compliance framework library — structured control catalogue.
+// Frameworks (ISO 27001, PCI DSS, NIST, NDPR, …) own controls that
+// engagements draw on. Replaces the flat checklist_templates JSON as the
+// authoritative, GBB-editable source for control coverage reporting.
+//
+//   framework.category : it | financial | compliance | systems | governance
+//   control.audit_type : it | financial | compliance | systems
+// ============================================================
+model Compliance_Framework {
+  id          String    @id @default(uuid())
+  code        String    @unique // ISO27001 | PCIDSS | NIST-CSF | NDPR | ...
+  name        String
+  description String?   @db.NVarChar(Max)
+  category    String
+  is_active   Boolean   @default(true)
+  created_by_id String?
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  controls Compliance_Control[]
+
+  @@index([is_active])
+  @@map("compliance_frameworks")
+}
+
+model Compliance_Control {
+  id                  String    @id @default(uuid())
+  framework_id        String
+  control_reference   String
+  control_description String    @db.NVarChar(Max)
+  test_procedure      String    @db.NVarChar(Max)
+  audit_type          String // it | financial | compliance | systems
+  is_active           Boolean   @default(true)
+  created_by_id       String?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+  deleted_at          DateTime?
+
+  framework  Compliance_Framework      @relation(fields: [framework_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  risk_links Compliance_Control_Risk[]
+
+  @@unique([framework_id, control_reference])
+  @@index([framework_id])
+  @@index([audit_type])
+  @@index([is_active])
+  @@map("compliance_controls")
+}
+
+// Maps a control to the risk(s) it mitigates (ISO 31000 / COBIT control–risk
+// linkage), enabling risk-based assurance: which register risks have control
+// coverage, and how much of it has been tested.
+model Compliance_Control_Risk {
+  id            String   @id @default(uuid())
+  control_id    String
+  risk_id       String
+  created_by_id String?
+  created_at    DateTime @default(now())
+
+  control Compliance_Control @relation(fields: [control_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  risk    Risk_Register      @relation(fields: [risk_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([control_id, risk_id])
+  @@index([control_id])
+  @@index([risk_id])
+  @@map("compliance_control_risks")
 }
 
 model System_Config {

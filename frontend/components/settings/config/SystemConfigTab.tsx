@@ -1,221 +1,283 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Pencil, Check, X, SlidersHorizontal } from 'lucide-react';
+import {
+  Building2,
+  Timer,
+  FileText,
+  Check,
+  RefreshCw,
+  SlidersHorizontal,
+  ArrowRight,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Badge } from '@/components/ui/Badge';
-import { EmptyState } from '@/components/ui/EmptyState';
+import { Card, CardHeader } from '@/components/ui/Card';
+import { Button } from '@/components/ui/Button';
+import { FormField } from '@/components/ui/FormField';
+import { Input, Textarea } from '@/components/ui/Input';
+import { ErrorState } from '@/components/ui/ErrorState';
+import { Skeleton } from '@/components/ui/Skeleton';
 import { systemConfigApi } from '@/lib/api/settings';
 import type { SystemConfigDto } from '@/lib/types/domain';
-import { cn } from '@/lib/utils/cn';
 
-interface EditState {
+type FieldType = 'text' | 'email' | 'tel' | 'url' | 'number' | 'textarea';
+
+interface FieldDef {
   key: string;
-  value: string;
+  label: string;
+  help?: string;
+  type: FieldType;
+  placeholder?: string;
+  suffix?: string;
 }
+
+interface GroupDef {
+  title: string;
+  subtitle: string;
+  icon: ReactNode;
+  fields: FieldDef[];
+}
+
+// Friendly, grouped presentation of the plain-text/number config keys.
+// The structured JSON keys are handled in the Audit Customization tab.
+const GROUPS: GroupDef[] = [
+  {
+    title: 'Organisation',
+    subtitle: 'Details shown across the app and printed on audit reports.',
+    icon: <Building2 className="h-4 w-4" />,
+    fields: [
+      { key: 'org_name', label: 'Organisation name', type: 'text', help: 'Full legal name shown on reports.' },
+      { key: 'org_short_name', label: 'Short name', type: 'text', help: 'Abbreviation used in compact places.' },
+      { key: 'audit_dept_name', label: 'Audit department name', type: 'text' },
+      { key: 'org_email', label: 'Contact email', type: 'email', placeholder: 'name@example.com' },
+      { key: 'org_phone', label: 'Contact phone', type: 'tel', placeholder: '+234 ...' },
+      { key: 'org_website', label: 'Website', type: 'url', placeholder: 'https://...' },
+      { key: 'org_address', label: 'Address', type: 'textarea', help: 'Appears in report headers.' },
+    ],
+  },
+  {
+    title: 'Service levels',
+    subtitle: 'Default timeframes applied to new audit work.',
+    icon: <Timer className="h-4 w-4" />,
+    fields: [
+      { key: 'default_sla_days', label: 'Default engagement turnaround', type: 'number', suffix: 'days', help: 'Target time to complete an engagement.' },
+      { key: 'finding_due_days', label: 'Default finding due window', type: 'number', suffix: 'days', help: 'Time given to remediate a finding.' },
+    ],
+  },
+  {
+    title: 'Reporting',
+    subtitle: 'Wording printed on generated audit reports.',
+    icon: <FileText className="h-4 w-4" />,
+    fields: [
+      { key: 'report_footer_notice', label: 'Report footer notice', type: 'textarea', help: 'Confidentiality line printed at the foot of every report.' },
+    ],
+  },
+];
+
+// Structured settings that live in the Audit Customization tab — never shown as raw JSON here.
+const STRUCTURED_KEYS = new Set([
+  'audit_lifecycle_rules',
+  'audit_sla_rules',
+  'dashboard_kpi_visibility',
+  'audit_taxonomy',
+  'approval_matrix',
+  'checklist_templates',
+]);
+
+const KNOWN_KEYS = new Set(GROUPS.flatMap((g) => g.fields.map((f) => f.key)));
+
+const humanize = (key: string): string =>
+  key.replace(/[_-]+/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 
 export const SystemConfigTab = (): JSX.Element => {
   const qc = useQueryClient();
-  const [editing, setEditing] = useState<EditState | null>(null);
+  const [drafts, setDrafts] = useState<Record<string, string>>({});
 
   const query = useQuery({
     queryKey: ['settings', 'config'],
     queryFn: systemConfigApi.list,
   });
 
+  const configByKey = useMemo(() => {
+    const rows = query.data ?? [];
+    return new Map(rows.map((row) => [row.key, row]));
+  }, [query.data]);
+
   const saveMut = useMutation({
-    mutationFn: ({ key, value }: { key: string; value: string | null }) =>
-      systemConfigApi.update(key, value || null),
-    onSuccess: (updated) => {
-      toast.success(`Config "${updated.key}" updated`);
+    mutationFn: async (keys: string[]) =>
+      Promise.all(keys.map((key) => systemConfigApi.update(key, drafts[key] ?? ''))),
+    onSuccess: (updatedRows) => {
       qc.setQueryData<SystemConfigDto[]>(['settings', 'config'], (prev) =>
-        prev ? prev.map((c) => (c.key === updated.key ? updated : c)) : prev,
+        prev ? prev.map((row) => updatedRows.find((u) => u.key === row.key) ?? row) : prev,
       );
-      setEditing(null);
+      setDrafts((prev) => {
+        const next = { ...prev };
+        updatedRows.forEach((u) => delete next[u.key]);
+        return next;
+      });
+      toast.success('Settings saved');
     },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : 'Failed to update config'),
+    onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to save settings'),
   });
-
-  const startEdit = (cfg: SystemConfigDto) => {
-    setEditing({ key: cfg.key, value: cfg.value ?? '' });
-  };
-
-  const cancelEdit = () => setEditing(null);
-
-  const saveEdit = () => {
-    if (!editing) return;
-    saveMut.mutate({ key: editing.key, value: editing.value });
-  };
 
   if (query.isLoading) {
     return (
-      <div className="overflow-hidden rounded-lg border border-border">
-        {Array.from({ length: 6 }).map((_, i) => (
-          <div
-            key={i}
-            className={cn('flex items-center gap-4 px-4 py-3', i > 0 && 'border-t border-border')}
-          >
-            <div className="h-4 w-40 animate-pulse rounded bg-surface-alt" />
-            <div className="h-4 w-64 animate-pulse rounded bg-surface-alt" />
-            <div className="ml-auto h-4 w-16 animate-pulse rounded bg-surface-alt" />
-          </div>
+      <div className="space-y-5">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <Skeleton key={i} className="h-56" />
         ))}
       </div>
     );
   }
-
   if (query.isError) {
-    return (
-      <div className="rounded-lg border border-border bg-surface-elevated p-10 text-center">
-        <p className="text-sm text-danger">Failed to load system configuration.</p>
-        <button
-          type="button"
-          onClick={() => query.refetch()}
-          className="mt-2 text-xs font-medium text-primary hover:underline"
-        >
-          Try again
-        </button>
-      </div>
-    );
+    return <ErrorState onRetry={() => query.refetch()} />;
   }
 
-  const configs = query.data ?? [];
+  // Any scalar key the backend exposes that we don't explicitly group — show it so
+  // nothing silently disappears, but keep it out of the structured-JSON bucket.
+  const extraFields: FieldDef[] = (query.data ?? [])
+    .filter((row) => !KNOWN_KEYS.has(row.key) && !STRUCTURED_KEYS.has(row.key))
+    .map((row) => ({
+      key: row.key,
+      label: humanize(row.key),
+      help: row.description ?? undefined,
+      type: (row.value?.length ?? 0) > 80 ? 'textarea' : 'text',
+    }));
 
-  if (configs.length === 0) {
-    return (
-      <EmptyState
-        icon={<SlidersHorizontal className="h-4 w-4" />}
-        title="No configuration keys"
-        description="System configuration keys will appear here once defined."
-      />
-    );
-  }
+  const groups: GroupDef[] = extraFields.length
+    ? [
+        ...GROUPS,
+        {
+          title: 'Additional settings',
+          subtitle: 'Other configuration values.',
+          icon: <SlidersHorizontal className="h-4 w-4" />,
+          fields: extraFields,
+        },
+      ]
+    : GROUPS;
+
+  const valueOf = (key: string): string => drafts[key] ?? configByKey.get(key)?.value ?? '';
+  const isDirty = (key: string): boolean =>
+    key in drafts && drafts[key] !== (configByKey.get(key)?.value ?? '');
+
+  const setDraft = (key: string, value: string) =>
+    setDrafts((prev) => ({ ...prev, [key]: value }));
+
+  const isStructuredSaving = (keys: string[]) =>
+    saveMut.isPending && keys.some((k) => (saveMut.variables ?? []).includes(k));
 
   return (
-    <div className="overflow-hidden rounded-lg border border-border bg-surface-elevated">
-      <div className="bg-surface-alt px-4 py-2.5 hidden md:block">
-        <div className="grid grid-cols-[180px_1fr_150px_100px_56px] gap-4">
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-            Key
-          </span>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-            Value
-          </span>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-            Description
-          </span>
-          <span className="text-[11px] font-semibold uppercase tracking-wider text-text-secondary">
-            Visibility
-          </span>
-          <span />
-        </div>
+    <div className="space-y-5">
+      <div className="flex items-start gap-3 rounded-lg border border-border bg-surface-alt/50 px-4 py-3">
+        <SlidersHorizontal className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
+        <p className="text-xs leading-relaxed text-text-secondary">
+          Edit your organisation details and default timeframes below. Advanced rules — approval
+          chains, lifecycle gates, SLA matrices, audit taxonomy, and checklist templates — are
+          managed in the{' '}
+          <span className="inline-flex items-center gap-0.5 font-medium text-text-primary">
+            Audit Customization <ArrowRight className="h-3 w-3" />
+          </span>{' '}
+          tab.
+        </p>
       </div>
 
-      <div className="divide-y divide-border">
-        {configs.map((cfg) => {
-          const isEditing = editing?.key === cfg.key;
-          const isSaving = saveMut.isPending && editing?.key === cfg.key;
+      {groups.map((group) => {
+        const dirtyKeys = group.fields.map((f) => f.key).filter(isDirty);
+        const groupDirty = dirtyKeys.length > 0;
+        const groupSaving = isStructuredSaving(group.fields.map((f) => f.key));
 
-          return (
-            <div
-              key={cfg.id}
-              className={cn(
-                'flex flex-col gap-3 p-4 md:grid md:grid-cols-[180px_1fr_150px_100px_56px] md:items-center md:gap-4 md:px-4 md:py-3 transition-colors',
-                isEditing && 'bg-blue-50/30',
-              )}
-            >
-              {/* Key */}
-              <div className="flex items-center justify-between md:block">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden">Key</span>
-                <code className="truncate rounded bg-slate-100 px-2 py-0.5 text-xs font-mono text-text-primary">
-                  {cfg.key}
-                </code>
-              </div>
-
-              {/* Value */}
-              <div className="min-w-0 flex flex-col md:block">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden mb-1">Value</span>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    value={editing.value}
-                    onChange={(e) => setEditing({ ...editing, value: e.target.value })}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter') saveEdit();
-                      if (e.key === 'Escape') cancelEdit();
-                    }}
-                    autoFocus
-                    className="w-full rounded-md border border-primary bg-white px-3 py-1.5 text-sm text-text-primary shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/40"
-                  />
-                ) : (
-                  <span
-                    className={cn(
-                      'block truncate text-sm',
-                      cfg.value ? 'text-text-primary' : 'italic text-text-muted',
-                    )}
-                  >
-                    {cfg.value ?? 'Not set'}
+        return (
+          <Card key={group.title}>
+            <CardHeader
+              title={
+                <span className="flex items-center gap-2">
+                  <span className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10 text-primary">
+                    {group.icon}
                   </span>
-                )}
-              </div>
+                  {group.title}
+                </span>
+              }
+              subtitle={group.subtitle}
+            />
 
-              {/* Description */}
-              <div className="flex flex-col md:block">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden mb-1">Description</span>
-                <p className="truncate text-xs text-text-secondary">
-                  {cfg.description ?? '—'}
-                </p>
-              </div>
-
-              {/* Visibility */}
-              <div className="flex items-center justify-between md:block">
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary md:hidden">Visibility</span>
-                <Badge tone={cfg.isPublic ? 'green' : 'gray'}>
-                  {cfg.isPublic ? 'Public' : 'Private'}
-                </Badge>
-              </div>
-
-              {/* Actions */}
-              <div className="flex items-center justify-end border-t border-border/40 pt-2 mt-1 md:border-none md:pt-0 md:mt-0 gap-1">
-                {isEditing ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={saveEdit}
-                      disabled={isSaving}
-                      aria-label="Save"
-                      className="rounded p-1.5 text-emerald-600 hover:bg-emerald-50 transition-colors disabled:opacity-50"
-                    >
-                      <Check className="h-4 w-4" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={cancelEdit}
-                      disabled={isSaving}
-                      aria-label="Cancel"
-                      className="rounded p-1.5 text-text-secondary hover:bg-surface-alt transition-colors disabled:opacity-50"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => startEdit(cfg)}
-                    aria-label={`Edit ${cfg.key}`}
-                    className="rounded p-1.5 text-text-secondary hover:bg-surface-alt hover:text-text-primary transition-colors cursor-pointer"
-                  >
-                    <Pencil className="h-4 w-4" />
-                  </button>
-                )}
-              </div>
+            <div className="grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              {group.fields.map((field) => {
+                const isWide = field.type === 'textarea';
+                return (
+                  <div key={field.key} className={isWide ? 'sm:col-span-2' : undefined}>
+                    <FormField label={field.label} hint={field.help}>
+                      {field.type === 'textarea' ? (
+                        <Textarea
+                          rows={3}
+                          value={valueOf(field.key)}
+                          placeholder={field.placeholder}
+                          onChange={(e) => setDraft(field.key, e.target.value)}
+                        />
+                      ) : field.type === 'number' ? (
+                        <div className="flex items-center gap-2">
+                          <div className="w-32">
+                            <Input
+                              type="number"
+                              min={0}
+                              inputMode="numeric"
+                              value={valueOf(field.key)}
+                              placeholder={field.placeholder}
+                              onChange={(e) => setDraft(field.key, e.target.value)}
+                            />
+                          </div>
+                          {field.suffix && (
+                            <span className="text-sm text-text-secondary">{field.suffix}</span>
+                          )}
+                        </div>
+                      ) : (
+                        <Input
+                          type={field.type}
+                          autoComplete="off"
+                          value={valueOf(field.key)}
+                          placeholder={field.placeholder}
+                          onChange={(e) => setDraft(field.key, e.target.value)}
+                        />
+                      )}
+                    </FormField>
+                  </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
+
+            <div className="mt-5 flex items-center justify-end gap-2 border-t border-border pt-4">
+              {groupDirty && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<RefreshCw className="h-3.5 w-3.5" />}
+                  onClick={() =>
+                    setDrafts((prev) => {
+                      const next = { ...prev };
+                      dirtyKeys.forEach((k) => delete next[k]);
+                      return next;
+                    })
+                  }
+                >
+                  Discard
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                leftIcon={<Check className="h-3.5 w-3.5" />}
+                disabled={!groupDirty || groupSaving}
+                isLoading={groupSaving}
+                onClick={() => saveMut.mutate(dirtyKeys)}
+              >
+                Save changes
+              </Button>
+            </div>
+          </Card>
+        );
+      })}
     </div>
   );
 };

@@ -20,6 +20,8 @@ const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
 const app_config_1 = require("./shared/config/app.config");
 const logger_util_1 = require("./shared/utils/logger.util");
 const prisma_client_1 = require("./shared/prisma/prisma.client");
+const cache_client_1 = require("./shared/cache/cache.client");
+const storage_client_1 = require("./modules/document/service/client/storage.client");
 const error_handler_middleware_1 = require("./shared/middleware/error-handler.middleware");
 const request_logger_middleware_1 = require("./modules/logging/utility/request-logger.middleware");
 const logging_1 = require("./modules/logging");
@@ -95,7 +97,9 @@ const buildApp = () => {
     return app;
 };
 const startServer = async () => {
+    await (0, storage_client_1.verifyStorageReady)();
     await (0, prisma_client_1.connectDatabase)();
+    await cache_client_1.cache.connect();
     const app = buildApp();
     const server = http_1.default.createServer(app);
     await new Promise((resolve, reject) => {
@@ -130,6 +134,7 @@ const shutdown = async (server, signal) => {
         logger_util_1.logger.info('HTTP server closed');
         background_1.schedulerService.stopAll();
         logger_util_1.logger.info('Scheduler stopped');
+        await cache_client_1.cache.disconnect();
         await (0, prisma_client_1.disconnectDatabase)();
         clearTimeout(forceExit);
         process.exit(0);

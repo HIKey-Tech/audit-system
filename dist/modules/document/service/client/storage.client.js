@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.createStorageClient = exports.AwsS3StorageClient = exports.AzureBlobStorageClient = exports.LocalStorageClient = void 0;
+exports.verifyStorageReady = exports.createStorageClient = exports.AwsS3StorageClient = exports.AzureBlobStorageClient = exports.LocalStorageClient = void 0;
 // src/modules/document/service/client/storage.client.ts
 const client_s3_1 = require("@aws-sdk/client-s3");
 const s3_request_presigner_1 = require("@aws-sdk/s3-request-presigner");
@@ -155,4 +155,30 @@ const createStorageClient = (provider = app_config_1.config.storage.provider) =>
     }
 };
 exports.createStorageClient = createStorageClient;
+/**
+ * Boot-time check that the configured storage backend is usable, so a
+ * misconfigured deployment fails fast instead of on the first upload.
+ *
+ * For the local provider this creates the upload directory if missing and
+ * confirms the process can write to it (the common VPS failure mode: wrong
+ * STORAGE_LOCAL_PATH or directory not owned by the Node user). Remote
+ * providers are left to surface auth/permission errors on first request.
+ */
+const verifyStorageReady = async (provider = app_config_1.config.storage.provider) => {
+    if (provider !== document_enum_1.StorageProvider.LOCAL)
+        return;
+    const basePath = path_1.default.resolve(app_config_1.config.storage.localPath);
+    const probe = path_1.default.join(basePath, `.write-test-${(0, uuid_1.v4)()}`);
+    try {
+        await promises_1.default.mkdir(basePath, { recursive: true });
+        await promises_1.default.writeFile(probe, 'ok');
+        await promises_1.default.unlink(probe);
+        logger_util_1.logger.info('Local document storage verified writable', { basePath });
+    }
+    catch (err) {
+        throw new Error(`Local document storage is not writable at "${basePath}" — set STORAGE_LOCAL_PATH ` +
+            `to a directory the application user can write to. Cause: ${String(err)}`);
+    }
+};
+exports.verifyStorageReady = verifyStorageReady;
 //# sourceMappingURL=storage.client.js.map

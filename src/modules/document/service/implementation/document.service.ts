@@ -159,6 +159,40 @@ export class DocumentService implements IDocumentService {
     );
   }
 
+  async listByEntityIds(
+    entityType: string,
+    entityIds: string[],
+  ): Promise<Map<string, DocumentResponseDto[]>> {
+    const grouped = new Map<string, DocumentResponseDto[]>();
+    if (entityIds.length === 0) return grouped;
+
+    // Single query for every entity in the batch — callers that previously
+    // looped over listByEntity collapse from N queries to 1.
+    const docs = await prisma.document.findMany({
+      where: { entity_type: entityType, entity_id: { in: entityIds }, deleted_at: null },
+      orderBy: { created_at: 'desc' },
+      include: uploaderInclude,
+    });
+
+    const mapped = await Promise.all(
+      docs.map(async (doc) => ({
+        entityId: doc.entity_id,
+        dto: mapDocumentToResponse(
+          doc,
+          await this._storageClient(doc.storage_provider).getUrl(doc.storage_path),
+        ),
+      })),
+    );
+
+    for (const { entityId, dto } of mapped) {
+      if (!entityId) continue;
+      const bucket = grouped.get(entityId);
+      if (bucket) bucket.push(dto);
+      else grouped.set(entityId, [dto]);
+    }
+    return grouped;
+  }
+
   async getFileById(id: string): Promise<ServedFileDto> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },

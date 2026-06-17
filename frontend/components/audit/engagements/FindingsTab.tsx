@@ -33,7 +33,7 @@ function toISODatetime(dateStr: string): string {
 const Schema = z.object({
   title: z.string().min(2).max(200),
   description: z.string().min(1),
-  category: z.enum(['it', 'financial', 'compliance', 'operational']),
+  category: z.enum(['it', 'financial', 'compliance', 'systems', 'operational']),
   severity: z.enum(['critical', 'high', 'medium', 'low', 'informational']),
   rootCause: z.string().min(1, 'Root cause is required'),
   riskImplication: z.string().min(1, 'Risk implication is required'),
@@ -67,7 +67,9 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
     defaultValues: {
       title: '',
       description: '',
-      category: 'compliance',
+      // Default to the engagement's audit domain so findings stay attributable
+      // to the module they were raised in (overridable, e.g. cross-domain "operational").
+      category: (engagement.auditType as FormValues['category']) ?? 'compliance',
       severity: 'medium',
       rootCause: '',
       riskImplication: '',
@@ -142,7 +144,7 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
           <ul className="divide-y divide-border">
             {list.data.map((f) => {
               const overdue =
-                new Date(f.dueDate) < new Date() && !['verified', 'closed'].includes(f.status);
+                new Date(f.dueDate) < new Date() && !['verified', 'pending_closure', 'closed'].includes(f.status);
               return (
                 <li key={f.id}>
                   <Link
@@ -201,6 +203,7 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
                 <option value="it">IT</option>
                 <option value="financial">Financial</option>
                 <option value="compliance">Compliance</option>
+                <option value="systems">Systems</option>
                 <option value="operational">Operational</option>
               </Select>
             </FormField>

@@ -10,5 +10,8 @@ export declare class EvidenceController {
     private _linkToFinding;
     private _disputeEvidence;
     private _listEvidence;
+    private _listRepository;
+    private _getRepositoryEvidence;
+    private _getDownloadUrl;
 }
 //# sourceMappingURL=evidence.controller.d.ts.map

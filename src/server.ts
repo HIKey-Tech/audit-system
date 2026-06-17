@@ -17,6 +17,8 @@ import swaggerUi from 'swagger-ui-express';
 import { config } from './shared/config/app.config';
 import { logger } from './shared/utils/logger.util';
 import { connectDatabase, disconnectDatabase } from './shared/prisma/prisma.client';
+import { cache } from './shared/cache/cache.client';
+import { verifyStorageReady } from './modules/document/service/client/storage.client';
 import {
   errorHandlerMiddleware,
   notFoundMiddleware,
@@ -119,7 +121,9 @@ const buildApp = (): Application => {
 };
 
 const startServer = async (): Promise<http.Server> => {
+  await verifyStorageReady();
   await connectDatabase();
+  await cache.connect();
 
   const app = buildApp();
   const server = http.createServer(app);
@@ -164,6 +168,7 @@ const shutdown = async (server: http.Server, signal: string): Promise<void> => {
     schedulerService.stopAll();
     logger.info('Scheduler stopped');
 
+    await cache.disconnect();
     await disconnectDatabase();
 
     clearTimeout(forceExit);

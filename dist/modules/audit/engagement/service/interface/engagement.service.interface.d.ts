@@ -1,8 +1,8 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
-import { CreateAdhocEngagementRequestDto, CreateEngagementFromPlanRequestDto, EngagementQueryDto, UpdateEngagementRequestDto } from '../../dto/request/engagement.request.dto';
-import { EngagementResponseDto } from '../../dto/response/engagement.response.dto';
+import { CreateAdhocEngagementRequestDto, CreateEngagementFromPlanRequestDto, EligibleUsersQueryDto, EngagementQueryDto, UpdateEngagementRequestDto } from '../../dto/request/engagement.request.dto';
+import { EligibleUserDto, EngagementResponseDto } from '../../dto/response/engagement.response.dto';
 export interface IEngagementService {
     createFromPlanItem(planItemId: string, dto: CreateEngagementFromPlanRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;
     createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;
@@ -13,5 +13,6 @@ export interface IEngagementService {
         engagements: EngagementResponseDto[];
         meta: PaginationMeta;
     }>;
+    getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]>;
 }
 //# sourceMappingURL=engagement.service.interface.d.ts.map

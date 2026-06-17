@@ -138,6 +138,7 @@ const FINDING_CATEGORY_LABEL: Record<string, string> = {
   it: 'IT',
   financial: 'Financial',
   compliance: 'Compliance',
+  systems: 'Systems',
   operational: 'Operational',
 };
 
@@ -146,6 +147,7 @@ const FINDING_STATUS_LABEL: Record<string, string> = {
   management_response_received: 'Management Response Received',
   in_remediation: 'In Remediation',
   verified: 'Verified',
+  pending_closure: 'Pending Closure',
   closed: 'Closed',
 };
 

@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
-import { CreateChecklistItemRequestSchema, UpdateChecklistItemRequestSchema } from '../dto/request/checklist.request.dto';
+import { CreateChecklistItemRequestSchema, UpdateChecklistItemRequestSchema, UpdateChecklistTemplatesRequestSchema } from '../dto/request/checklist.request.dto';
 import { IChecklistService } from '../service/interface/checklist.service.interface';
 
 export class ChecklistController {
@@ -15,6 +15,20 @@ export class ChecklistController {
 
   private _registerRoutes(): void {
     this.router.use(authenticate);
+
+    /**
+     * @route  GET /audit/checklist-templates
+     * @desc   Get the per-audit-type checklist control templates
+     * @access Private - settings:read
+     */
+    this.router.get('/checklist-templates', requirePermission('settings:read'), this._getChecklistTemplates.bind(this));
+
+    /**
+     * @route  PUT /audit/checklist-templates
+     * @desc   Replace the per-audit-type checklist control templates
+     * @access Private - settings:manage
+     */
+    this.router.put('/checklist-templates', requirePermission('settings:manage'), validate(UpdateChecklistTemplatesRequestSchema), this._updateChecklistTemplates.bind(this));
 
     /**
      * @route  GET /audit/engagements/:id/checklists
@@ -50,6 +64,24 @@ export class ChecklistController {
      * @access Private - audit:write
      */
     this.router.post('/checklists/:id/evidence/:evidenceId', requirePermission('checklist:update'), this._linkEvidenceToChecklistItem.bind(this));
+  }
+
+  private async _getChecklistTemplates(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const templates = await this.checklistService.getChecklistTemplates();
+      res.status(200).json(buildResponse(templates));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _updateChecklistTemplates(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const templates = await this.checklistService.updateChecklistTemplates(req.body, req.user!);
+      res.status(200).json(buildResponse(templates, 'Checklist templates updated'));
+    } catch (err) {
+      next(err);
+    }
   }
 
   private async _getChecklists(req: Request, res: Response, next: NextFunction): Promise<void> {

@@ -72,7 +72,7 @@ export class ReportTemplateController {
      */
     this.router.post(
       '/',
-      requirePermission('settings:manage'),
+      requirePermission('report_template:manage'),
       validate(CreateReportTemplateRequestSchema),
       this._createTemplate.bind(this),
     );
@@ -84,7 +84,7 @@ export class ReportTemplateController {
      */
     this.router.put(
       '/:id',
-      requirePermission('settings:manage'),
+      requirePermission('report_template:manage'),
       validate(UpdateReportTemplateRequestSchema),
       this._updateTemplate.bind(this),
     );
@@ -96,7 +96,7 @@ export class ReportTemplateController {
      */
     this.router.post(
       '/:id/set-default',
-      requirePermission('settings:manage'),
+      requirePermission('report_template:manage'),
       this._setDefaultTemplate.bind(this),
     );
 
@@ -107,7 +107,7 @@ export class ReportTemplateController {
      */
     this.router.delete(
       '/:id',
-      requirePermission('settings:manage'),
+      requirePermission('report_template:manage'),
       this._deactivateTemplate.bind(this),
     );
   }

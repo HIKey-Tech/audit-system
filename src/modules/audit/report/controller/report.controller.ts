@@ -67,16 +67,16 @@ export class ReportController {
     /**
      * @route  POST /audit/reports/:id/approve
      * @desc   Approve audit report
-     * @access Private - audit:admin
+     * @access Private - approval:approve
      */
-    this.router.post('/reports/:id/approve', requirePermission('report:approve'), this._approveReport.bind(this));
+    this.router.post('/reports/:id/approve', requirePermission('approval:approve'), this._approveReport.bind(this));
 
     /**
      * @route  POST /audit/reports/:id/reject
      * @desc   Reject audit report
-     * @access Private - audit:admin
+     * @access Private - approval:reject
      */
-    this.router.post('/reports/:id/reject', requirePermission('report:reject'), validate(RejectReportRequestSchema), this._rejectReport.bind(this));
+    this.router.post('/reports/:id/reject', requirePermission('approval:reject'), validate(RejectReportRequestSchema), this._rejectReport.bind(this));
 
     /**
      * @route  POST /audit/reports/:id/issue

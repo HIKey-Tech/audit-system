@@ -22,3 +22,15 @@ export interface ChecklistProgress {
   notTested: number;
   total: number;
 }
+
+export interface WorkingPaperStats {
+  total: number;
+  approved: number;
+  rejected: number;
+}
+
+export interface FindingStats {
+  total: number;
+  open: number; // status === 'open' (awaiting management response)
+  unresolved: number; // status !== 'closed'
+}

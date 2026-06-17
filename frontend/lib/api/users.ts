@@ -21,6 +21,7 @@ export interface CreateUserDto {
   jobTitle?: string;
   phone?: string;
   skills?: string[];
+  maxConcurrentEngagements?: number;
   roleIds?: string[];
 }
 
@@ -32,6 +33,7 @@ export interface UpdateUserDto {
   jobTitle?: string;
   phone?: string;
   skills?: string[];
+  maxConcurrentEngagements?: number | null;
 }
 
 export interface ChangePasswordDto {

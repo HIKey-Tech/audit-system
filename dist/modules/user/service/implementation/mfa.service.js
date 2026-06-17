@@ -10,6 +10,7 @@ const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_config_1 = require("../../../../shared/config/app.config");
+const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
 const token_utility_1 = require("../../utility/token.utility");
 const mfa_utility_1 = require("../../utility/mfa.utility");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
@@ -194,7 +195,7 @@ class MfaService {
                 `<p style="font-size:24px;font-weight:bold;letter-spacing:3px">${otp}</p>`,
                 `<p>It expires in ${escapeHtml(app_config_1.config.mfa.emailOtpTtl)}. If you did not try to sign in, ignore this email.</p>`,
             ].join(''),
-        });
+        }, { priority: notification_queue_service_interface_1.NOTIFICATION_PRIORITY.HIGH });
     }
     /** Strict consume (enrolment): throws with a clear message on failure. */
     async _consumeEmailOtp(userId, code) {

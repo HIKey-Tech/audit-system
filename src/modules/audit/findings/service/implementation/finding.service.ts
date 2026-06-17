@@ -4,6 +4,10 @@ import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
+import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
+import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus } from '../../../domain/enum/audit.enum';
 import { FINDING_TRANSITIONS, assertHasPermission, assertTransition } from '../../../utility/audit.utility';
@@ -24,6 +28,8 @@ const findingInclude = {
 };
 
 export class FindingService implements IFindingService {
+  constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
+
   async createFinding(engagementId: string, dto: CreateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto> {
     assertHasPermission(actor.permissions, 'finding:create');
     await this._assertEngagementAllowsFindings(engagementId);
@@ -37,24 +43,61 @@ export class FindingService implements IFindingService {
       await this._assertRiskExists(dto.riskId);
     }
 
-    const finding = await prisma.audit_Finding.create({
-      data: {
-        engagement_id: engagementId,
-        working_paper_id: dto.workingPaperId,
-        checklist_id: dto.checklistId,
-        risk_id: dto.riskId,
-        title: dto.title,
-        description: dto.description,
-        category: dto.category,
-        severity: dto.severity,
-        root_cause: dto.rootCause,
-        risk_implication: dto.riskImplication,
-        recommendation: dto.recommendation,
-        auditee_id: dto.auditeeId,
-        due_date: new Date(dto.dueDate),
-        created_by_id: actor.id,
-      },
-      include: findingInclude,
+    // Transactional outbox: the finding and the auditee's "new finding" alert
+    // commit together. Without this the auditee would only learn of the finding
+    // via the daily overdue sweep.
+    const finding = await prisma.$transaction(async (tx) => {
+      const created = await tx.audit_Finding.create({
+        data: {
+          engagement_id: engagementId,
+          working_paper_id: dto.workingPaperId,
+          checklist_id: dto.checklistId,
+          risk_id: dto.riskId,
+          title: dto.title,
+          description: dto.description,
+          category: dto.category,
+          severity: dto.severity,
+          root_cause: dto.rootCause,
+          risk_implication: dto.riskImplication,
+          recommendation: dto.recommendation,
+          auditee_id: dto.auditeeId,
+          due_date: new Date(dto.dueDate),
+          created_by_id: actor.id,
+        },
+        include: findingInclude,
+      });
+
+      const dueDate = created.due_date.toISOString();
+      const auditeeName =
+        created.auditee.display_name ?? `${created.auditee.first_name} ${created.auditee.last_name}`.trim();
+      const findingVariables = {
+        auditeeName,
+        findingTitle: created.title,
+        engagementReference: created.engagement.reference_number,
+        severity: created.severity,
+        dueDate,
+      };
+
+      await notificationQueueService.enqueue('in_app', {
+        userId: created.auditee_id,
+        title: 'New audit finding assigned',
+        body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
+        type: 'warning',
+        referenceType: 'audit_finding',
+        referenceId: created.id,
+        eventKey: 'audit.finding.assigned',
+        variables: findingVariables,
+      }, { tx });
+
+      await notificationQueueService.enqueue('email', {
+        to: created.auditee.email,
+        subject: `New Audit Finding: ${created.title}`,
+        text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
+        eventKey: 'audit.finding.assigned',
+        variables: findingVariables,
+      }, { tx });
+
+      return created;
     });
 
     logger.info('Audit finding created', { findingId: finding.id, engagementId, actorId: actor.id });
@@ -121,13 +164,28 @@ export class FindingService implements IFindingService {
     const finding = await this._getFinding(id);
     if (finding.status !== FindingStatus.Verified) throw AppError.badRequest('Only verified findings can be closed');
 
-    const updated = await prisma.audit_Finding.update({
-      where: { id },
-      data: { status: FindingStatus.Closed, closed_by_id: actor.id, closed_at: new Date() },
-    });
+    const { updated, approval } = await prisma.$transaction(async (tx) => {
+      const updated = await tx.audit_Finding.update({
+        where: { id },
+        data: {
+          status: FindingStatus.PendingClosure,
+          closed_by_id: null,
+          closed_at: null,
+        },
+        include: findingInclude,
+      });
 
-    logger.info('Audit finding closed', { findingId: id, actorId: actor.id });
-    auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.close', module: 'audit', entityType: 'audit_finding', entityId: id });
+      const approval = await this.approvalService.createApproval({
+        entityType: WorkflowEntityType.AuditFindingClosure,
+        entityId: id,
+      }, actor, tx);
+
+      return { updated, approval };
+    }, { timeout: 15000 });
+    this.approvalService.queueApprovalRequiredNotification(approval);
+
+    logger.info('Audit finding closure requested', { findingId: id, actorId: actor.id });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.close.request', module: 'audit', entityType: 'audit_finding', entityId: id });
     return mapFindingToResponse(updated);
   }
 

@@ -56,6 +56,9 @@ export declare const config: {
         readonly password: string;
         readonly ttl: number;
     };
+    readonly cache: {
+        readonly driver: "redis" | "memory";
+    };
     readonly email: {
         readonly host: string;
         readonly port: number;

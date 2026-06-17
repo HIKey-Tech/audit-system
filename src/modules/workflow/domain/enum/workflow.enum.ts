@@ -2,6 +2,7 @@ export enum WorkflowEntityType {
   AuditPlan = 'audit_plan',
   AuditWorkingPaper = 'audit_working_paper',
   AuditReport = 'audit_report',
+  AuditFindingClosure = 'audit_finding_closure',
 }
 
 export enum WorkflowApprovalStatus {

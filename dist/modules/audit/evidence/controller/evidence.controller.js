@@ -23,6 +23,25 @@ class EvidenceController {
     _registerRoutes() {
         this.router.use(auth_middleware_1.authenticate);
         /**
+         * @route  GET /audit/evidence
+         * @desc   Centralized evidence repository — list all audit evidence across
+         *         every engagement, with search, filters and pagination
+         * @access Private - evidence:read
+         */
+        this.router.get('/evidence', (0, auth_middleware_1.requirePermission)('evidence:read'), (0, validate_middleware_1.validate)(evidence_request_dto_1.EvidenceRepositoryQuerySchema, 'query'), this._listRepository.bind(this));
+        /**
+         * @route  GET /audit/evidence/:id/download
+         * @desc   Get a secure download URL for a single evidence item
+         * @access Private - evidence:read
+         */
+        this.router.get('/evidence/:id/download', (0, auth_middleware_1.requirePermission)('evidence:read'), this._getDownloadUrl.bind(this));
+        /**
+         * @route  GET /audit/evidence/:id
+         * @desc   Get a single evidence item with full repository context
+         * @access Private - evidence:read
+         */
+        this.router.get('/evidence/:id', (0, auth_middleware_1.requirePermission)('evidence:read'), this._getRepositoryEvidence.bind(this));
+        /**
          * @route  POST /audit/engagements/:id/evidence
          * @desc   Upload audit evidence
          * @access Private - audit:write
@@ -102,6 +121,33 @@ class EvidenceController {
         try {
             const evidence = await this.evidenceService.listEvidence(req.params.id, req.query);
             res.status(200).json((0, api_response_type_1.buildResponse)(evidence));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listRepository(req, res, next) {
+        try {
+            const { evidence, meta } = await this.evidenceService.listRepository(req.query, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(evidence, 'Success', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getRepositoryEvidence(req, res, next) {
+        try {
+            const evidence = await this.evidenceService.getRepositoryEvidence(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(evidence));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getDownloadUrl(req, res, next) {
+        try {
+            const downloadUrl = await this.evidenceService.getDownloadUrl(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)({ downloadUrl }));
         }
         catch (err) {
             next(err);

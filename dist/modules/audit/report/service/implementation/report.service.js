@@ -133,7 +133,6 @@ class ReportService {
         return (0, report_response_dto_1.mapReportToResponse)(submittedReport);
     }
     async approveReport(id, actor) {
-        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'report:approve');
         const report = await this._getReport(id);
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be approved');
@@ -150,7 +149,6 @@ class ReportService {
         return (0, report_response_dto_1.mapReportToResponse)(updated);
     }
     async rejectReport(id, reason, actor) {
-        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'report:reject');
         const report = await this._getReport(id);
         if (report.status !== audit_enum_1.ReportStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted reports can be rejected');
@@ -209,7 +207,9 @@ class ReportService {
             issuedBy,
             findingCount: String(report.engagement.findings.length),
         };
-        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+        // Post-commit: the report is already issued, so a queue-write hiccup must
+        // not fail the request — enqueueSafe swallows and logs.
+        await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
             userId: report.engagement.auditee_id,
             title: 'Audit report issued',
             body: `Audit report "${report.title}" has been issued.`,
@@ -220,7 +220,7 @@ class ReportService {
             variables: reportVariables,
         });
         if (auditee?.email) {
-            await notification_queue_service_1.notificationQueueService.enqueue('email', {
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
                 to: auditee.email,
                 subject: `Audit Report Issued: ${report.title}`,
                 text: `Audit report "${report.title}" has been issued.`,

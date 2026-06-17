@@ -19,4 +19,14 @@ export interface ChecklistProgress {
     notTested: number;
     total: number;
 }
+export interface WorkingPaperStats {
+    total: number;
+    approved: number;
+    rejected: number;
+}
+export interface FindingStats {
+    total: number;
+    open: number;
+    unresolved: number;
+}
 //# sourceMappingURL=audit.entity.d.ts.map

@@ -304,7 +304,7 @@ class RequestService {
                 take,
             }),
         ]);
-        const mapped = await Promise.all(requests.map((r) => this._toDetail(r)));
+        const mapped = await this._toDetailMany(requests);
         return { requests: mapped, meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize) };
     }
     async inbox(query, actor) {
@@ -322,7 +322,7 @@ class RequestService {
             .filter((step) => step.level === step.request.current_level)
             .map((step) => step.request);
         const paged = requests.slice(skip, skip + take);
-        const mapped = await Promise.all(paged.map((r) => this._toDetail(r)));
+        const mapped = await this._toDetailMany(paged);
         return { requests: mapped, meta: (0, api_response_type_1.buildPaginationMeta)(requests.length, page, pageSize) };
     }
     async getCandidates(actor) {
@@ -458,16 +458,26 @@ class RequestService {
             };
         }));
     }
-    async _toDetail(request) {
-        const documents = await this.documentService.listByEntity(ATTACHMENT_ENTITY_TYPE, request.id);
-        const attachments = documents.map((doc) => ({
+    _toAttachments(documents) {
+        return documents.map((doc) => ({
             documentId: doc.id,
             originalName: doc.originalName,
             mimeType: doc.mimeType,
             fileSize: doc.fileSize,
             downloadUrl: doc.downloadUrl ?? '',
         }));
-        return (0, request_response_dto_1.mapRequestToResponse)(request, attachments);
+    }
+    async _toDetail(request) {
+        const documents = await this.documentService.listByEntity(ATTACHMENT_ENTITY_TYPE, request.id);
+        return (0, request_response_dto_1.mapRequestToResponse)(request, this._toAttachments(documents));
+    }
+    // Batched detail mapping for list endpoints: loads every request's attachments
+    // in one query instead of one per request (avoids an N+1).
+    async _toDetailMany(requests) {
+        if (requests.length === 0)
+            return [];
+        const attachmentsByRequest = await this.documentService.listByEntityIds(ATTACHMENT_ENTITY_TYPE, requests.map((request) => request.id));
+        return requests.map((request) => (0, request_response_dto_1.mapRequestToResponse)(request, this._toAttachments(attachmentsByRequest.get(request.id) ?? [])));
     }
     async _loadRequest(requestId) {
         const request = await prisma_client_1.prisma.workflow_Request.findFirst({

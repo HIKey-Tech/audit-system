@@ -43,6 +43,13 @@ interface EscalationThresholds {
   level4Hours: number;
 }
 
+const DEFAULT_THRESHOLDS: EscalationThresholds = {
+  level1Hours: 24,
+  level2Hours: 72,
+  level3Hours: 120,
+  level4Hours: 168,
+};
+
 interface NotificationTarget {
   id: string;
   email: string;
@@ -62,6 +69,11 @@ export class EscalationService implements IEscalationService {
     };
     const now = new Date();
 
+    // Preload all active policies once (handful of audit types) instead of
+    // re-querying per engagement — avoids an N+1 across the overdue batch.
+    const thresholdsByAuditType = await this._loadPolicyThresholds();
+    const approvalThresholds = this._resolveThresholds(thresholdsByAuditType, EscalationPolicyAuditType.All);
+
     const engagements = await prisma.audit_Engagement.findMany({
       where: {
         deleted_at: null,
@@ -76,13 +88,23 @@ export class EscalationService implements IEscalationService {
     });
     result.checkedEngagements = engagements.length;
 
+    // One query for the latest escalation of every engagement in the batch,
+    // instead of one findFirst per engagement.
+    const engagementLatest = await this._latestEscalationMap(
+      WorkflowEscalationEntityType.AuditEngagement,
+      engagements.map((engagement) => engagement.id),
+    );
+
     for (const engagement of engagements) {
       try {
-        const latest = await this._getLatestEscalation(WorkflowEscalationEntityType.AuditEngagement, engagement.id);
+        const latest = engagementLatest.get(engagement.id) ?? null;
         const level = latest ? latest.escalation_level + 1 : 1;
         if (level > 4) continue;
 
-        const thresholds = await this._getPolicyThresholds(engagement.audit_type as EscalationPolicyAuditType);
+        const thresholds = this._resolveThresholds(
+          thresholdsByAuditType,
+          engagement.audit_type as EscalationPolicyAuditType,
+        );
         const basis = latest?.notified_at ?? engagement.sla_deadline;
         if (!hasElapsed(basis, this._thresholdForLevel(thresholds, level), now)) continue;
 
@@ -104,11 +126,14 @@ export class EscalationService implements IEscalationService {
       select: { id: true, created_at: true },
     });
     result.checkedApprovals = approvals.length;
-    const approvalThresholds = await this._getPolicyThresholds(EscalationPolicyAuditType.All);
+    const approvalLatest = await this._latestEscalationMap(
+      WorkflowEscalationEntityType.WorkflowApproval,
+      approvals.map((approval) => approval.id),
+    );
 
     for (const approval of approvals) {
       try {
-        const latest = await this._getLatestEscalation(WorkflowEscalationEntityType.WorkflowApproval, approval.id);
+        const latest = approvalLatest.get(approval.id) ?? null;
         const level = latest ? latest.escalation_level + 1 : 1;
         if (level > 4) continue;
 
@@ -135,10 +160,14 @@ export class EscalationService implements IEscalationService {
       select: { id: true, created_at: true },
     });
     result.checkedRequests = pendingRequests.length;
+    const requestLatest = await this._latestEscalationMap(
+      WorkflowEscalationEntityType.WorkflowRequest,
+      pendingRequests.map((request) => request.id),
+    );
 
     for (const request of pendingRequests) {
       try {
-        const latest = await this._getLatestEscalation(WorkflowEscalationEntityType.WorkflowRequest, request.id);
+        const latest = requestLatest.get(request.id) ?? null;
         const level = latest ? latest.escalation_level + 1 : 1;
         if (level > 2) continue;
 
@@ -408,39 +437,59 @@ export class EscalationService implements IEscalationService {
     });
   }
 
-  private async _getLatestEscalation(
+  // Latest escalation per entity for a whole batch in a single query. Rows are
+  // ordered highest-level/most-recent first, so the first row seen per entity
+  // wins.
+  private async _latestEscalationMap(
     entityType: WorkflowEscalationEntityType,
-    entityId: string,
-  ): Promise<{ escalation_level: number; notified_at: Date } | null> {
-    return prisma.workflow_Escalation.findFirst({
-      where: { entity_type: entityType, entity_id: entityId },
-      select: { escalation_level: true, notified_at: true },
+    entityIds: string[],
+  ): Promise<Map<string, { escalation_level: number; notified_at: Date }>> {
+    const map = new Map<string, { escalation_level: number; notified_at: Date }>();
+    if (entityIds.length === 0) return map;
+
+    const rows = await prisma.workflow_Escalation.findMany({
+      where: { entity_type: entityType, entity_id: { in: entityIds } },
+      select: { entity_id: true, escalation_level: true, notified_at: true },
       orderBy: [{ escalation_level: 'desc' }, { notified_at: 'desc' }],
     });
+    for (const row of rows) {
+      if (!map.has(row.entity_id)) {
+        map.set(row.entity_id, {
+          escalation_level: row.escalation_level,
+          notified_at: row.notified_at,
+        });
+      }
+    }
+    return map;
   }
 
-  private async _getPolicyThresholds(auditType: EscalationPolicyAuditType): Promise<EscalationThresholds> {
-    const policy = await prisma.escalation_Policy.findFirst({
-      where: { audit_type: auditType, is_active: true },
-    }) ?? await prisma.escalation_Policy.findFirst({
-      where: { audit_type: EscalationPolicyAuditType.All, is_active: true },
+  // All active policies loaded once into a map keyed by audit type, so the
+  // escalation sweep never re-queries the same policy per entity.
+  private async _loadPolicyThresholds(): Promise<Map<string, EscalationThresholds>> {
+    const policies = await prisma.escalation_Policy.findMany({
+      where: { is_active: true },
     });
-
-    if (!policy) {
-      return {
-        level1Hours: 24,
-        level2Hours: 72,
-        level3Hours: 120,
-        level4Hours: 168,
-      };
+    const map = new Map<string, EscalationThresholds>();
+    for (const policy of policies) {
+      map.set(policy.audit_type, {
+        level1Hours: policy.level_1_hours,
+        level2Hours: policy.level_2_hours,
+        level3Hours: policy.level_3_hours,
+        level4Hours: policy.level_4_hours,
+      });
     }
+    return map;
+  }
 
-    return {
-      level1Hours: policy.level_1_hours,
-      level2Hours: policy.level_2_hours,
-      level3Hours: policy.level_3_hours,
-      level4Hours: policy.level_4_hours,
-    };
+  private _resolveThresholds(
+    byAuditType: Map<string, EscalationThresholds>,
+    auditType: EscalationPolicyAuditType,
+  ): EscalationThresholds {
+    return (
+      byAuditType.get(auditType)
+      ?? byAuditType.get(EscalationPolicyAuditType.All)
+      ?? DEFAULT_THRESHOLDS
+    );
   }
 
   private _thresholdForLevel(thresholds: EscalationThresholds, level: number): number {
@@ -487,7 +536,9 @@ export class EscalationService implements IEscalationService {
       }
     }
 
-    await notificationQueueService.enqueue(
+    // Runs inside the escalation batch — one bad recipient must not abort the
+    // rest, so enqueueSafe swallows and logs.
+    await notificationQueueService.enqueueSafe(
       'in_app',
       {
         userId: target.id,
@@ -501,7 +552,7 @@ export class EscalationService implements IEscalationService {
       },
     );
 
-    await notificationQueueService.enqueue(
+    await notificationQueueService.enqueueSafe(
       'email',
       {
         to: target.email,

@@ -13,7 +13,6 @@ import { workflowApi } from '@/lib/api/workflow';
 import { initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
-import { getMatchScore, isRelevantSkill } from './assignment-matching';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 interface Props {
@@ -77,13 +76,9 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to remove assignment'),
   });
 
-  // Sort candidates by match score descending, then active workload ascending
-  const sortedCandidates = [...(candidates.data ?? [])].sort((a, b) => {
-    const scoreA = getMatchScore(a.skills, engagement.auditType);
-    const scoreB = getMatchScore(b.skills, engagement.auditType);
-    if (scoreA !== scoreB) return scoreB - scoreA;
-    return a.activeEngagementCount - b.activeEngagementCount;
-  });
+  // Candidates arrive already scored and ranked by the backend
+  // (skill fit + workload + engagement priority).
+  const sortedCandidates = candidates.data ?? [];
 
   return (
     <SlideOver
@@ -160,12 +155,11 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
           ) : (
             <div className="space-y-3">
               {sortedCandidates.map((c) => {
-                const matchScore = getMatchScore(c.skills, engagement.auditType);
                 const assignedRole = roleToAssign[c.id] ?? 'supporting_auditor';
-                
+
                 // Color workloads
                 let workloadTone: 'green' | 'blue' | 'red' = 'green';
-                if (c.activeEngagementCount >= 3) workloadTone = 'red';
+                if (c.overCapacity || c.activeEngagementCount >= 3) workloadTone = 'red';
                 else if (c.activeEngagementCount > 0) workloadTone = 'blue';
 
                 return (
@@ -178,7 +172,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                       <Avatar
                         initials={initialsFromName(undefined, undefined, c.displayName)}
                         size="md"
-                        tone={matchScore > 0 ? 'navy' : 'slate'}
+                        tone={c.matchedSkills.length > 0 ? 'navy' : 'slate'}
                       />
                       <div className="min-w-0">
                         <h4 className="text-xs font-bold text-text-primary truncate" title={c.displayName}>
@@ -208,10 +202,13 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                             ? 'Available (0 active)' 
                             : `${c.activeEngagementCount} active audit${c.activeEngagementCount > 1 ? 's' : ''}`}
                         </Badge>
-                        {matchScore > 0 && (
+                        {c.recommended && (
                           <Badge tone="purple" className="flex items-center gap-0.5">
                             <Award className="h-3 w-3" /> Recommended
                           </Badge>
+                        )}
+                        {c.overCapacity && (
+                          <Badge tone="red">At capacity</Badge>
                         )}
                       </div>
 
@@ -219,7 +216,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                       {c.skills.length > 0 ? (
                         <div className="flex flex-wrap gap-1">
                           {c.skills.map((s) => {
-                            const isMatch = isRelevantSkill(s, engagement.auditType);
+                            const isMatch = c.matchedSkills.includes(s);
                             return (
                               <span
                                 key={s}

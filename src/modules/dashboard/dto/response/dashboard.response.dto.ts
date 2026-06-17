@@ -37,6 +37,7 @@ export interface FindingStatusBreakdown {
   management_response_received: number;
   in_remediation: number;
   verified: number;
+  pending_closure: number;
   closed: number;
 }
 

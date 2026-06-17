@@ -369,12 +369,16 @@ const registerAllJobs = () => {
             logger_util_1.logger.info('Workflow escalation job completed', result);
         },
     });
-    // BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE - process queued notifications
+    // BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE - process queued notifications.
+    // Runs every 15s (6-field cron) so latency-sensitive, high-priority mail
+    // (OTP / password reset) drains quickly. processQueue() is re-entrancy-guarded,
+    // so a long drain can't overlap the next tick. Job key kept stable to preserve
+    // its persisted enable/disable state.
     exports.schedulerService.register({
         key: exports.JOB_KEYS.MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE,
         name: 'Notification Queue Processor',
-        description: 'Processes pending email and in-app notifications from the queue',
-        cronExpression: '* * * * *',
+        description: 'Processes pending email and in-app notifications from the queue (every 15s, priority-ordered)',
+        cronExpression: '*/15 * * * * *',
         handler: async () => {
             await notification_queue_service_1.notificationQueueService.processQueue();
         },

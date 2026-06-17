@@ -78,6 +78,11 @@ export const UserDetailSlideOver = ({ userId, onClose }: Props): JSX.Element => 
               value={user.jobTitle}
             />
             <DetailRow
+              icon={<ShieldCheck className="h-3.5 w-3.5" />}
+              label="Max Concurrent Engagements"
+              value={user.maxConcurrentEngagements != null ? String(user.maxConcurrentEngagements) : 'System default'}
+            />
+            <DetailRow
               icon={<Clock className="h-3.5 w-3.5" />}
               label="Last Login"
               value={user.lastLoginAt ? formatDate(user.lastLoginAt) : 'Never'}

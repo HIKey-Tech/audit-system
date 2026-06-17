@@ -3,7 +3,7 @@ import { prisma } from '../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../shared/errors/app.error';
 import { logger } from '../../../../shared/utils/logger.util';
 import { config } from '../../../../shared/config/app.config';
-import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
+import { INotificationQueueService, NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { IPasswordResetService } from '../interface/password-reset.service.interface';
 import {
   generatePasswordResetToken,
@@ -156,6 +156,6 @@ export class PasswordResetService implements IPasswordResetService {
         `<p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p>`,
         `<p>This link expires in ${escapeHtml(ttl)}. If you did not request this, you can safely ignore this email.</p>`,
       ].join(''),
-    });
+    }, { priority: NOTIFICATION_PRIORITY.HIGH });
   }
 }

@@ -9,6 +9,7 @@ const report_template_service_1 = require("../settings/service/implementation/re
 const working_paper_template_service_1 = require("../settings/service/implementation/working-paper-template.service");
 const system_config_service_1 = require("../settings/service/implementation/system-config.service");
 const approval_service_1 = require("../workflow/approval/service/implementation/approval.service");
+const assignment_service_1 = require("../workflow/assignment/service/implementation/assignment.service");
 const universe_service_1 = require("./universe/service/implementation/universe.service");
 const planning_service_1 = require("./planning/service/implementation/planning.service");
 const checklist_service_1 = require("./checklists/service/implementation/checklist.service");
@@ -19,6 +20,7 @@ const finding_service_1 = require("./findings/service/implementation/finding.ser
 const follow_up_service_1 = require("./follow-up/service/implementation/follow-up.service");
 const report_service_1 = require("./report/service/implementation/report.service");
 const report_generation_service_1 = require("./report/service/implementation/report-generation.service");
+const repository_service_1 = require("./repository/service/implementation/repository.service");
 const universe_controller_1 = require("./universe/controller/universe.controller");
 const planning_controller_1 = require("./planning/controller/planning.controller");
 const engagement_controller_1 = require("./engagement/controller/engagement.controller");
@@ -28,6 +30,9 @@ const finding_controller_1 = require("./findings/controller/finding.controller")
 const follow_up_controller_1 = require("./follow-up/controller/follow-up.controller");
 const report_controller_1 = require("./report/controller/report.controller");
 const checklist_controller_1 = require("./checklists/controller/checklist.controller");
+const repository_controller_1 = require("./repository/controller/repository.controller");
+const compliance_service_1 = require("./compliance/service/implementation/compliance.service");
+const compliance_controller_1 = require("./compliance/controller/compliance.controller");
 const createAuditModule = () => {
     const router = (0, express_1.Router)();
     const documentService = new document_1.DocumentService();
@@ -36,13 +41,14 @@ const createAuditModule = () => {
     const universeService = new universe_service_1.UniverseService(riskRegisterService);
     const planningService = new planning_service_1.PlanningService();
     const checklistService = new checklist_service_1.ChecklistService();
-    const engagementService = new engagement_service_1.EngagementService(checklistService, userService);
+    const engagementService = new engagement_service_1.EngagementService(checklistService, userService, assignment_service_1.workflowAssignmentService);
     const workingPaperService = new working_paper_service_1.WorkingPaperService(documentService, working_paper_template_service_1.workingPaperTemplateService);
     const evidenceService = new evidence_service_1.EvidenceService(documentService);
     const findingService = new finding_service_1.FindingService();
     const followUpService = new follow_up_service_1.FollowUpService(documentService);
     const reportGenerationService = new report_generation_service_1.ReportGenerationService(report_template_service_1.reportTemplateService, system_config_service_1.systemConfigService, approval_service_1.workflowApprovalService);
     const reportService = new report_service_1.ReportService(followUpService, documentService, reportGenerationService, report_template_service_1.reportTemplateService);
+    const repositoryService = new repository_service_1.RepositoryService(documentService);
     const universeController = new universe_controller_1.UniverseController(universeService);
     const planningController = new planning_controller_1.PlanningController(planningService);
     const engagementController = new engagement_controller_1.EngagementController(engagementService);
@@ -52,6 +58,8 @@ const createAuditModule = () => {
     const followUpController = new follow_up_controller_1.FollowUpController(followUpService);
     const reportController = new report_controller_1.ReportController(reportService);
     const checklistController = new checklist_controller_1.ChecklistController(checklistService);
+    const repositoryController = new repository_controller_1.RepositoryController(repositoryService);
+    const complianceController = new compliance_controller_1.ComplianceController(new compliance_service_1.ComplianceService());
     router.use('/audit/universe', universeController.router);
     router.use('/audit/plans', planningController.router);
     router.use('/audit/engagements', engagementController.router);
@@ -61,6 +69,8 @@ const createAuditModule = () => {
     router.use('/audit', reportController.router);
     router.use('/audit', followUpController.router);
     router.use('/audit', checklistController.router);
+    router.use('/audit', repositoryController.router);
+    router.use('/audit', complianceController.router);
     return router;
 };
 exports.createAuditModule = createAuditModule;

@@ -1,5 +1,7 @@
 import { ActorContext, ChecklistProgress } from '../../../domain/entity/audit.entity';
-import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto } from '../../dto/request/checklist.request.dto';
+import { AuditType } from '../../../domain/enum/audit.enum';
+import { ChecklistTemplateControl } from '../../../utility/audit-config.utility';
+import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto, UpdateChecklistTemplatesRequestDto } from '../../dto/request/checklist.request.dto';
 import { ChecklistResponseDto } from '../../dto/response/checklist.response.dto';
 
 export interface IChecklistService {
@@ -9,4 +11,6 @@ export interface IChecklistService {
   linkEvidenceToChecklistItem(checklistItemId: string, evidenceId: string, actor: ActorContext): Promise<ChecklistResponseDto>;
   getChecklists(engagementId: string): Promise<Record<string, ChecklistResponseDto[]>>;
   getChecklistProgress(engagementId: string): Promise<ChecklistProgress>;
+  getChecklistTemplates(): Promise<Record<AuditType, ChecklistTemplateControl[]>>;
+  updateChecklistTemplates(dto: UpdateChecklistTemplatesRequestDto, actor: ActorContext): Promise<Record<AuditType, ChecklistTemplateControl[]>>;
 }

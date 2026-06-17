@@ -7,6 +7,7 @@ import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   DisputeEvidenceRequestSchema,
   EvidenceQuerySchema,
+  EvidenceRepositoryQuerySchema,
   UploadEvidenceMetadataSchema,
 } from '../dto/request/evidence.request.dto';
 import { IEvidenceService } from '../service/interface/evidence.service.interface';
@@ -23,6 +24,28 @@ export class EvidenceController {
 
   private _registerRoutes(): void {
     this.router.use(authenticate);
+
+    /**
+     * @route  GET /audit/evidence
+     * @desc   Centralized evidence repository — list all audit evidence across
+     *         every engagement, with search, filters and pagination
+     * @access Private - evidence:read
+     */
+    this.router.get('/evidence', requirePermission('evidence:read'), validate(EvidenceRepositoryQuerySchema, 'query'), this._listRepository.bind(this));
+
+    /**
+     * @route  GET /audit/evidence/:id/download
+     * @desc   Get a secure download URL for a single evidence item
+     * @access Private - evidence:read
+     */
+    this.router.get('/evidence/:id/download', requirePermission('evidence:read'), this._getDownloadUrl.bind(this));
+
+    /**
+     * @route  GET /audit/evidence/:id
+     * @desc   Get a single evidence item with full repository context
+     * @access Private - evidence:read
+     */
+    this.router.get('/evidence/:id', requirePermission('evidence:read'), this._getRepositoryEvidence.bind(this));
 
     /**
      * @route  POST /audit/engagements/:id/evidence
@@ -112,6 +135,33 @@ export class EvidenceController {
     try {
       const evidence = await this.evidenceService.listEvidence(req.params.id, req.query as never);
       res.status(200).json(buildResponse(evidence));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listRepository(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { evidence, meta } = await this.evidenceService.listRepository(req.query as never, req.user!);
+      res.status(200).json(buildResponse(evidence, 'Success', meta));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getRepositoryEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const evidence = await this.evidenceService.getRepositoryEvidence(req.params.id, req.user!);
+      res.status(200).json(buildResponse(evidence));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getDownloadUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const downloadUrl = await this.evidenceService.getDownloadUrl(req.params.id, req.user!);
+      res.status(200).json(buildResponse({ downloadUrl }));
     } catch (err) {
       next(err);
     }

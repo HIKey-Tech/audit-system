@@ -35,6 +35,12 @@ class EngagementController {
          */
         this.router.get('/', (0, auth_middleware_1.requirePermission)('engagement:read'), (0, validate_middleware_1.validate)(engagement_request_dto_1.EngagementQuerySchema, 'query'), this._listEngagements.bind(this));
         /**
+         * @route  GET /audit/engagements/eligible-users
+         * @desc   Permission-eligible, optimization-scored candidates for the lead-auditor / audit-manager slots
+         * @access Private - engagement:create
+         */
+        this.router.get('/eligible-users', (0, auth_middleware_1.requirePermission)('engagement:create'), (0, validate_middleware_1.validate)(engagement_request_dto_1.EligibleUsersQuerySchema, 'query'), this._getEligibleUsers.bind(this));
+        /**
          * @route  GET /audit/engagements/:id
          * @desc   Get engagement
          * @access Private - audit:read
@@ -84,6 +90,15 @@ class EngagementController {
         try {
             const engagement = await this.engagementService.updateStatus(req.params.id, req.body.status, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(engagement, 'Audit engagement status updated'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getEligibleUsers(req, res, next) {
+        try {
+            const users = await this.engagementService.getEligibleUsers(req.query);
+            res.status(200).json((0, api_response_type_1.buildResponse)(users, 'Eligible users retrieved'));
         }
         catch (err) {
             next(err);

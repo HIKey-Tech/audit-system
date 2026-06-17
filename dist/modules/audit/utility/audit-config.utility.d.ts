@@ -24,6 +24,24 @@ export declare const getAuditLifecycleRules: () => Promise<AuditLifecycleRules>;
 export declare const getAuditSlaRules: () => Promise<AuditSlaRules>;
 export declare const getChecklistTemplateControls: (auditType: AuditType) => Promise<ChecklistTemplateControl[]>;
 /**
+ * Authoritative control source for populating an engagement's checklist.
+ *
+ * Prefers the structured compliance_controls library (active controls for the
+ * audit type); falls back to the legacy checklist_templates JSON / built-in
+ * CONTROL_SETS when the library has no controls for that type. Callers still
+ * snapshot the returned text onto the checklist row, so a populated engagement
+ * is unaffected by later edits to the library.
+ */
+export declare const getEngagementControls: (auditType: AuditType) => Promise<ChecklistTemplateControl[]>;
+export declare const CHECKLIST_TEMPLATE_CONFIG_KEY = "checklist_templates";
+/**
+ * Full per-audit-type checklist template config: saved overrides for each audit
+ * type, falling back to the built-in CONTROL_SETS where nothing is configured.
+ */
+export declare const getChecklistTemplateConfig: () => Promise<Record<AuditType, ChecklistTemplateControl[]>>;
+/** Validates and persists (upserts) the full checklist template config. */
+export declare const setChecklistTemplateConfig: (config: ChecklistTemplateConfig, actorId: string) => Promise<Record<AuditType, ChecklistTemplateControl[]>>;
+/**
  * Sentinel chain entry: resolve this level to the entity's assigned engagement
  * manager (a specific person) rather than to a permission holder.
  */
@@ -39,6 +57,7 @@ export interface ApprovalMatrix {
     auditPlan: string[];
     workingPaper: string[];
     auditReport: string[];
+    findingClosure: string[];
 }
 export declare const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix;
 /**

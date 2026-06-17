@@ -21,7 +21,7 @@ class ChecklistService {
         if (existing > 0)
             return;
         const auditType = engagement.audit_type;
-        const controls = await (0, audit_config_utility_1.getChecklistTemplateControls)(auditType);
+        const controls = await (0, audit_config_utility_1.getEngagementControls)(auditType);
         await prisma_client_1.prisma.audit_Checklist.createMany({
             data: controls.map((control) => ({
                 engagement_id: engagementId,
@@ -153,6 +153,21 @@ class ChecklistService {
             notTested: counts[audit_enum_1.ChecklistResult.NotTested],
             total: grouped.reduce((sum, row) => sum + row._count._all, 0),
         };
+    }
+    async getChecklistTemplates() {
+        return (0, audit_config_utility_1.getChecklistTemplateConfig)();
+    }
+    async updateChecklistTemplates(dto, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'settings:manage');
+        const result = await (0, audit_config_utility_1.setChecklistTemplateConfig)(dto.templates, actor.id);
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.checklist.templates.update',
+            module: 'audit',
+            entityType: 'system_config',
+            entityId: 'checklist_templates',
+        });
+        return result;
     }
     async _assertChecklistExists(id) {
         const item = await prisma_client_1.prisma.audit_Checklist.findUnique({ where: { id }, select: { id: true } });

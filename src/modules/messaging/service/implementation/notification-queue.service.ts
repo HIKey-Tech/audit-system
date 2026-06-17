@@ -6,7 +6,9 @@ import {
   SendEmailDto,
 } from '../interface/notification.service.interface';
 import {
+  EnqueueOptions,
   INotificationQueueService,
+  NOTIFICATION_PRIORITY,
   NotificationQueuePayloadByType,
   NotificationQueueType,
 } from '../interface/notification-queue.service.interface';
@@ -20,6 +22,14 @@ const PENDING_STATUS = 'pending';
 const PROCESSING_STATUS = 'processing';
 const SENT_STATUS = 'sent';
 const FAILED_STATUS = 'failed';
+
+// Exponential backoff between retries: 2^attempts minutes, capped. Keeps a
+// flapping SMTP relay or a single bad recipient from being hammered every tick.
+const RETRY_BACKOFF_CAP_MINUTES = 60;
+const computeRetryDelayMs = (attempts: number): number => {
+  const minutes = Math.min(2 ** attempts, RETRY_BACKOFF_CAP_MINUTES);
+  return minutes * 60 * 1000;
+};
 
 type QueueStatus = typeof PENDING_STATUS
   | typeof PROCESSING_STATUS
@@ -181,28 +191,62 @@ const renderInAppWithTemplate = async (
 };
 
 export class NotificationQueueService implements INotificationQueueService {
+  // Single-process re-entrancy guard. Prevents an overlapping cron tick from
+  // starting a second drain while one is still running (cross-instance
+  // double-send is already prevented by the optimistic claim below).
+  private isProcessing = false;
+
   async enqueue<T extends NotificationQueueType>(
     type: T,
     payload: NotificationQueuePayloadByType[T],
+    options: EnqueueOptions = {},
   ): Promise<void> {
-    await prisma.notification_Queue.create({
+    const db = options.tx ?? prisma;
+    await db.notification_Queue.create({
       data: {
         type,
         payload: JSON.stringify(payload),
         status: PENDING_STATUS,
+        priority: options.priority ?? NOTIFICATION_PRIORITY.NORMAL,
+        ...(options.scheduledAt ? { scheduled_at: options.scheduledAt } : {}),
       },
     });
 
-    logger.info('Notification queued', { type });
+    logger.info('Notification queued', { type, priority: options.priority ?? NOTIFICATION_PRIORITY.NORMAL });
+  }
+
+  async enqueueSafe<T extends NotificationQueueType>(
+    type: T,
+    payload: NotificationQueuePayloadByType[T],
+    options: EnqueueOptions = {},
+  ): Promise<void> {
+    try {
+      await this.enqueue(type, payload, options);
+    } catch (err) {
+      logger.error('Notification enqueue failed (suppressed)', { err, type });
+    }
   }
 
   async processQueue(): Promise<void> {
+    if (this.isProcessing) {
+      logger.warn('Notification queue drain skipped — previous run still in progress');
+      return;
+    }
+    this.isProcessing = true;
+    try {
+      await this._drainQueue();
+    } finally {
+      this.isProcessing = false;
+    }
+  }
+
+  private async _drainQueue(): Promise<void> {
     const items = await prisma.notification_Queue.findMany({
       where: {
         status: PENDING_STATUS,
         scheduled_at: { lte: new Date() },
       },
-      orderBy: { scheduled_at: 'asc' },
+      orderBy: [{ priority: 'desc' }, { scheduled_at: 'asc' }],
       take: BATCH_SIZE,
     });
 
@@ -273,6 +317,10 @@ export class NotificationQueueService implements INotificationQueueService {
             status,
             last_error: lastError,
             processed_at: finalFailure ? new Date() : null,
+            // Defer the next retry with exponential backoff.
+            ...(finalFailure
+              ? {}
+              : { scheduled_at: new Date(Date.now() + computeRetryDelayMs(attempts)) }),
           },
         }).catch((updateErr: unknown) => {
           logger.error('Notification queue failure state update failed', {

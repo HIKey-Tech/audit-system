@@ -6,6 +6,7 @@ var WorkflowEntityType;
     WorkflowEntityType["AuditPlan"] = "audit_plan";
     WorkflowEntityType["AuditWorkingPaper"] = "audit_working_paper";
     WorkflowEntityType["AuditReport"] = "audit_report";
+    WorkflowEntityType["AuditFindingClosure"] = "audit_finding_closure";
 })(WorkflowEntityType || (exports.WorkflowEntityType = WorkflowEntityType = {}));
 var WorkflowApprovalStatus;
 (function (WorkflowApprovalStatus) {

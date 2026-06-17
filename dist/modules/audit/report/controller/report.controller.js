@@ -55,15 +55,15 @@ class ReportController {
         /**
          * @route  POST /audit/reports/:id/approve
          * @desc   Approve audit report
-         * @access Private - audit:admin
+         * @access Private - approval:approve
          */
-        this.router.post('/reports/:id/approve', (0, auth_middleware_1.requirePermission)('report:approve'), this._approveReport.bind(this));
+        this.router.post('/reports/:id/approve', (0, auth_middleware_1.requirePermission)('approval:approve'), this._approveReport.bind(this));
         /**
          * @route  POST /audit/reports/:id/reject
          * @desc   Reject audit report
-         * @access Private - audit:admin
+         * @access Private - approval:reject
          */
-        this.router.post('/reports/:id/reject', (0, auth_middleware_1.requirePermission)('report:reject'), (0, validate_middleware_1.validate)(report_request_dto_1.RejectReportRequestSchema), this._rejectReport.bind(this));
+        this.router.post('/reports/:id/reject', (0, auth_middleware_1.requirePermission)('approval:reject'), (0, validate_middleware_1.validate)(report_request_dto_1.RejectReportRequestSchema), this._rejectReport.bind(this));
         /**
          * @route  POST /audit/reports/:id/issue
          * @desc   Issue audit report

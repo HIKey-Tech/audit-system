@@ -9,6 +9,7 @@ export declare class EngagementController {
     private _createAdhoc;
     private _updateEngagement;
     private _updateStatus;
+    private _getEligibleUsers;
     private _getEngagementById;
     private _listEngagements;
 }

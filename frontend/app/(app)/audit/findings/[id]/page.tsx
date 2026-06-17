@@ -19,13 +19,14 @@ import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { cn } from '@/lib/utils/cn';
 
-const STATUSES = ['open', 'management_response_received', 'in_remediation', 'verified', 'closed'] as const;
+const STATUSES = ['open', 'management_response_received', 'in_remediation', 'verified'] as const;
 
 export default function FindingDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
   const canChangeStatus = hasPermission('finding:update');
+  const canClose = hasPermission('finding:close');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['findings', params?.id],
@@ -45,6 +46,16 @@ export default function FindingDetailPage(): JSX.Element {
     onSuccess: () => {
       toast.success('Status updated');
       qc.invalidateQueries({ queryKey: ['findings', params!.id] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const requestClosure = useMutation({
+    mutationFn: () => findingsApi.close(params!.id),
+    onSuccess: () => {
+      toast.success('Finding closure sent for approval');
+      qc.invalidateQueries({ queryKey: ['findings', params!.id] });
+      qc.invalidateQueries({ queryKey: ['workflow', 'approvals'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
@@ -72,7 +83,7 @@ export default function FindingDetailPage(): JSX.Element {
     );
   }
 
-  const overdue = new Date(data.dueDate) < new Date() && !['verified', 'closed'].includes(data.status);
+  const overdue = new Date(data.dueDate) < new Date() && !['verified', 'pending_closure', 'closed'].includes(data.status);
 
   return (
     <div>
@@ -103,6 +114,15 @@ export default function FindingDetailPage(): JSX.Element {
                   ))}
                 </Select>
               </div>
+            )}
+            {canClose && data.status === 'verified' && (
+              <Button
+                size="sm"
+                onClick={() => requestClosure.mutate()}
+                isLoading={requestClosure.isPending}
+              >
+                Request closure
+              </Button>
             )}
           </div>
         }

@@ -42,6 +42,7 @@ export interface UserResponseDto {
     department: string | null;
     jobTitle: string | null;
     skills: string[];
+    maxConcurrentEngagements: number | null;
     isActive: boolean;
     isSuperAdmin: boolean;
     lastLoginAt: string | null;
@@ -122,6 +123,7 @@ export declare const mapUserToResponse: (user: {
     department: string | null;
     job_title: string | null;
     skills: string | null;
+    max_concurrent_engagements: number | null;
     is_active: boolean;
     is_super_admin: boolean;
     last_login_at: Date | null;

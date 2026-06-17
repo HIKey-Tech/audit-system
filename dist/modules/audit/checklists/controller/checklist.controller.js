@@ -17,6 +17,18 @@ class ChecklistController {
     _registerRoutes() {
         this.router.use(auth_middleware_1.authenticate);
         /**
+         * @route  GET /audit/checklist-templates
+         * @desc   Get the per-audit-type checklist control templates
+         * @access Private - settings:read
+         */
+        this.router.get('/checklist-templates', (0, auth_middleware_1.requirePermission)('settings:read'), this._getChecklistTemplates.bind(this));
+        /**
+         * @route  PUT /audit/checklist-templates
+         * @desc   Replace the per-audit-type checklist control templates
+         * @access Private - settings:manage
+         */
+        this.router.put('/checklist-templates', (0, auth_middleware_1.requirePermission)('settings:manage'), (0, validate_middleware_1.validate)(checklist_request_dto_1.UpdateChecklistTemplatesRequestSchema), this._updateChecklistTemplates.bind(this));
+        /**
          * @route  GET /audit/engagements/:id/checklists
          * @desc   Get engagement checklists
          * @access Private - audit:read
@@ -46,6 +58,24 @@ class ChecklistController {
          * @access Private - audit:write
          */
         this.router.post('/checklists/:id/evidence/:evidenceId', (0, auth_middleware_1.requirePermission)('checklist:update'), this._linkEvidenceToChecklistItem.bind(this));
+    }
+    async _getChecklistTemplates(_req, res, next) {
+        try {
+            const templates = await this.checklistService.getChecklistTemplates();
+            res.status(200).json((0, api_response_type_1.buildResponse)(templates));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _updateChecklistTemplates(req, res, next) {
+        try {
+            const templates = await this.checklistService.updateChecklistTemplates(req.body, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(templates, 'Checklist templates updated'));
+        }
+        catch (err) {
+            next(err);
+        }
     }
     async _getChecklists(req, res, next) {
         try {

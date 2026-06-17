@@ -142,14 +142,18 @@ class WorkingPaperService {
         if (!audit_utility_1.WP_REVIEWABLE_STATUSES.includes(paper.status)) {
             throw app_error_1.AppError.badRequest('Only draft or rejected working papers can be submitted');
         }
-        const updated = await prisma_client_1.prisma.audit_Working_Paper.update({
-            where: { id },
-            data: { status: audit_enum_1.WorkingPaperStatus.Submitted, rejection_reason: null },
-        });
-        await this.approvalService.createApproval({
-            entityType: workflow_enum_1.WorkflowEntityType.AuditWorkingPaper,
-            entityId: id,
-        }, actor);
+        const { updated, approval } = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const updated = await tx.audit_Working_Paper.update({
+                where: { id },
+                data: { status: audit_enum_1.WorkingPaperStatus.Submitted, rejection_reason: null },
+            });
+            const approval = await this.approvalService.createApproval({
+                entityType: workflow_enum_1.WorkflowEntityType.AuditWorkingPaper,
+                entityId: id,
+            }, actor, tx);
+            return { updated, approval };
+        }, { timeout: 15000 });
+        this.approvalService.queueApprovalRequiredNotification(approval);
         logger_util_1.logger.info('Audit working paper submitted', { workingPaperId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.submit', module: 'audit', entityType: 'audit_working_paper', entityId: id });
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);

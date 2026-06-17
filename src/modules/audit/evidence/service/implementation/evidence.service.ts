@@ -1,13 +1,21 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
+import { buildPaginationMeta, parsePagination, PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
 import { assertHasPermission } from '../../../utility/audit.utility';
-import { EvidenceQueryDto, UploadEvidenceDto } from '../../dto/request/evidence.request.dto';
-import { EvidenceResponseDto, mapEvidenceToResponse } from '../../dto/response/evidence.response.dto';
+import { EvidenceQueryDto, EvidenceRepositoryQueryDto, UploadEvidenceDto } from '../../dto/request/evidence.request.dto';
+import {
+  EvidenceResponseDto,
+  RepositoryEvidenceResponseDto,
+  evidenceRepositoryInclude,
+  mapEvidenceToRepositoryResponse,
+  mapEvidenceToResponse,
+} from '../../dto/response/evidence.response.dto';
 import { IEvidenceService } from '../interface/evidence.service.interface';
 
 export class EvidenceService implements IEvidenceService {
@@ -108,6 +116,73 @@ export class EvidenceService implements IEvidenceService {
       orderBy: { uploaded_at: 'desc' },
     });
     return evidence.map(mapEvidenceToResponse);
+  }
+
+  // ──────────── Centralized evidence repository (cross-engagement) ────────────
+
+  async listRepository(
+    query: EvidenceRepositoryQueryDto,
+    actor: ActorContext,
+  ): Promise<{ evidence: RepositoryEvidenceResponseDto[]; meta: PaginationMeta }> {
+    assertHasPermission(actor.permissions, 'evidence:read');
+    const { skip, take, page, pageSize } = parsePagination(query);
+
+    const where: Prisma.Audit_EvidenceWhereInput = {
+      engagement: { deleted_at: null },
+      ...(query.engagementId && { engagement_id: query.engagementId }),
+      ...(query.findingId && { finding_id: query.findingId }),
+      ...(query.workingPaperId && { working_paper_id: query.workingPaperId }),
+      ...(query.uploadedById && { uploaded_by_id: query.uploadedById }),
+      ...(query.fileType && { file_type: query.fileType }),
+      ...(query.isDisputed !== undefined && { is_disputed: query.isDisputed }),
+      ...((query.uploadedFrom || query.uploadedTo) && {
+        uploaded_at: {
+          ...(query.uploadedFrom && { gte: query.uploadedFrom }),
+          ...(query.uploadedTo && { lte: query.uploadedTo }),
+        },
+      }),
+      ...(query.search && {
+        OR: [
+          { file_name: { contains: query.search } },
+          { engagement: { is: { reference_number: { contains: query.search } } } },
+          { engagement: { is: { title: { contains: query.search } } } },
+        ],
+      }),
+    };
+
+    const [rows, total] = await prisma.$transaction([
+      prisma.audit_Evidence.findMany({
+        where,
+        include: evidenceRepositoryInclude,
+        orderBy: { uploaded_at: 'desc' },
+        skip,
+        take,
+      }),
+      prisma.audit_Evidence.count({ where }),
+    ]);
+
+    return {
+      evidence: rows.map(mapEvidenceToRepositoryResponse),
+      meta: buildPaginationMeta(total, page, pageSize),
+    };
+  }
+
+  async getRepositoryEvidence(evidenceId: string, actor: ActorContext): Promise<RepositoryEvidenceResponseDto> {
+    assertHasPermission(actor.permissions, 'evidence:read');
+    const evidence = await prisma.audit_Evidence.findFirst({
+      where: { id: evidenceId, engagement: { deleted_at: null } },
+      include: evidenceRepositoryInclude,
+    });
+    if (!evidence) throw AppError.notFound('Audit evidence');
+    return mapEvidenceToRepositoryResponse(evidence);
+  }
+
+  async getDownloadUrl(evidenceId: string, actor: ActorContext): Promise<string> {
+    assertHasPermission(actor.permissions, 'evidence:read');
+    const evidence = await this._getEvidence(evidenceId);
+    const url = await this.documentService.getDownloadUrl(evidence.document_id);
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.download', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId });
+    return url;
   }
 
   private async _assertEngagementInProgress(engagementId: string): Promise<void> {

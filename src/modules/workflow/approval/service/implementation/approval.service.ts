@@ -76,6 +76,7 @@ interface StepRecipientSpec {
 const ENGAGEMENT_MANAGER_PERMISSION: Partial<Record<WorkflowEntityType, string>> = {
   [WorkflowEntityType.AuditWorkingPaper]: 'working_paper:approve',
   [WorkflowEntityType.AuditReport]: 'report:approve',
+  [WorkflowEntityType.AuditFindingClosure]: 'finding:close',
 };
 
 export class ApprovalService implements IApprovalService {
@@ -541,6 +542,8 @@ export class ApprovalService implements IApprovalService {
         return matrix.workingPaper;
       case WorkflowEntityType.AuditReport:
         return matrix.auditReport;
+      case WorkflowEntityType.AuditFindingClosure:
+        return matrix.findingClosure;
       default:
         return [];
     }
@@ -566,6 +569,14 @@ export class ApprovalService implements IApprovalService {
       });
       if (!report) throw AppError.notFound('Audit report');
       return report.engagement.audit_manager_id;
+    }
+    if (entityType === WorkflowEntityType.AuditFindingClosure) {
+      const finding = await db.audit_Finding.findFirst({
+        where: { id: entityId, deleted_at: null },
+        select: { engagement: { select: { audit_manager_id: true } } },
+      });
+      if (!finding) throw AppError.notFound('Audit finding');
+      return finding.engagement.audit_manager_id;
     }
     if (entityType === WorkflowEntityType.AuditPlan) {
       const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
@@ -718,6 +729,13 @@ export class ApprovalService implements IApprovalService {
         select: { title: true },
       });
       return wp?.title ?? entityId;
+    }
+    if (entityType === WorkflowEntityType.AuditFindingClosure) {
+      const finding = await prisma.audit_Finding.findUnique({
+        where: { id: entityId },
+        select: { title: true, engagement: { select: { reference_number: true } } },
+      });
+      return finding ? `${finding.engagement.reference_number} - ${finding.title}` : entityId;
     }
     if (entityType === WorkflowEntityType.AuditPlan) {
       const plan = await prisma.audit_Plan.findUnique({

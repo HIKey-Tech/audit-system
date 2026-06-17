@@ -19,5 +19,11 @@ export declare class FollowUpService implements IFollowUpService {
     getFollowUp(findingId: string): Promise<FollowUpResponseDto>;
     listPendingFollowUps(engagementId: string): Promise<FollowUpResponseDto[]>;
     private _getFinding;
+    /**
+     * Notify the engagement's lead auditor that an auditee has acted on a finding
+     * (management response / remediation evidence). Post-commit and best-effort —
+     * never throws into the caller.
+     */
+    private _notifyLeadAuditor;
 }
 //# sourceMappingURL=follow-up.service.d.ts.map

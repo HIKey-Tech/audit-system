@@ -22,6 +22,12 @@ const workflowUserSelect = client_1.Prisma.validator()({
 const escalationInclude = client_1.Prisma.validator()({
     escalated_to: { select: workflowUserSelect },
 });
+const DEFAULT_THRESHOLDS = {
+    level1Hours: 24,
+    level2Hours: 72,
+    level3Hours: 120,
+    level4Hours: 168,
+};
 class EscalationService {
     async checkAndEscalate() {
         const result = {
@@ -32,6 +38,10 @@ class EscalationService {
             failures: 0,
         };
         const now = new Date();
+        // Preload all active policies once (handful of audit types) instead of
+        // re-querying per engagement — avoids an N+1 across the overdue batch.
+        const thresholdsByAuditType = await this._loadPolicyThresholds();
+        const approvalThresholds = this._resolveThresholds(thresholdsByAuditType, workflow_enum_1.EscalationPolicyAuditType.All);
         const engagements = await prisma_client_1.prisma.audit_Engagement.findMany({
             where: {
                 deleted_at: null,
@@ -45,13 +55,16 @@ class EscalationService {
             },
         });
         result.checkedEngagements = engagements.length;
+        // One query for the latest escalation of every engagement in the batch,
+        // instead of one findFirst per engagement.
+        const engagementLatest = await this._latestEscalationMap(workflow_enum_1.WorkflowEscalationEntityType.AuditEngagement, engagements.map((engagement) => engagement.id));
         for (const engagement of engagements) {
             try {
-                const latest = await this._getLatestEscalation(workflow_enum_1.WorkflowEscalationEntityType.AuditEngagement, engagement.id);
+                const latest = engagementLatest.get(engagement.id) ?? null;
                 const level = latest ? latest.escalation_level + 1 : 1;
                 if (level > 4)
                     continue;
-                const thresholds = await this._getPolicyThresholds(engagement.audit_type);
+                const thresholds = this._resolveThresholds(thresholdsByAuditType, engagement.audit_type);
                 const basis = latest?.notified_at ?? engagement.sla_deadline;
                 if (!(0, workflow_utility_1.hasElapsed)(basis, this._thresholdForLevel(thresholds, level), now))
                     continue;
@@ -68,10 +81,10 @@ class EscalationService {
             select: { id: true, created_at: true },
         });
         result.checkedApprovals = approvals.length;
-        const approvalThresholds = await this._getPolicyThresholds(workflow_enum_1.EscalationPolicyAuditType.All);
+        const approvalLatest = await this._latestEscalationMap(workflow_enum_1.WorkflowEscalationEntityType.WorkflowApproval, approvals.map((approval) => approval.id));
         for (const approval of approvals) {
             try {
-                const latest = await this._getLatestEscalation(workflow_enum_1.WorkflowEscalationEntityType.WorkflowApproval, approval.id);
+                const latest = approvalLatest.get(approval.id) ?? null;
                 const level = latest ? latest.escalation_level + 1 : 1;
                 if (level > 4)
                     continue;
@@ -93,9 +106,10 @@ class EscalationService {
             select: { id: true, created_at: true },
         });
         result.checkedRequests = pendingRequests.length;
+        const requestLatest = await this._latestEscalationMap(workflow_enum_1.WorkflowEscalationEntityType.WorkflowRequest, pendingRequests.map((request) => request.id));
         for (const request of pendingRequests) {
             try {
-                const latest = await this._getLatestEscalation(workflow_enum_1.WorkflowEscalationEntityType.WorkflowRequest, request.id);
+                const latest = requestLatest.get(request.id) ?? null;
                 const level = latest ? latest.escalation_level + 1 : 1;
                 if (level > 2)
                     continue;
@@ -333,33 +347,49 @@ class EscalationService {
             },
         });
     }
-    async _getLatestEscalation(entityType, entityId) {
-        return prisma_client_1.prisma.workflow_Escalation.findFirst({
-            where: { entity_type: entityType, entity_id: entityId },
-            select: { escalation_level: true, notified_at: true },
+    // Latest escalation per entity for a whole batch in a single query. Rows are
+    // ordered highest-level/most-recent first, so the first row seen per entity
+    // wins.
+    async _latestEscalationMap(entityType, entityIds) {
+        const map = new Map();
+        if (entityIds.length === 0)
+            return map;
+        const rows = await prisma_client_1.prisma.workflow_Escalation.findMany({
+            where: { entity_type: entityType, entity_id: { in: entityIds } },
+            select: { entity_id: true, escalation_level: true, notified_at: true },
             orderBy: [{ escalation_level: 'desc' }, { notified_at: 'desc' }],
         });
-    }
-    async _getPolicyThresholds(auditType) {
-        const policy = await prisma_client_1.prisma.escalation_Policy.findFirst({
-            where: { audit_type: auditType, is_active: true },
-        }) ?? await prisma_client_1.prisma.escalation_Policy.findFirst({
-            where: { audit_type: workflow_enum_1.EscalationPolicyAuditType.All, is_active: true },
-        });
-        if (!policy) {
-            return {
-                level1Hours: 24,
-                level2Hours: 72,
-                level3Hours: 120,
-                level4Hours: 168,
-            };
+        for (const row of rows) {
+            if (!map.has(row.entity_id)) {
+                map.set(row.entity_id, {
+                    escalation_level: row.escalation_level,
+                    notified_at: row.notified_at,
+                });
+            }
         }
-        return {
-            level1Hours: policy.level_1_hours,
-            level2Hours: policy.level_2_hours,
-            level3Hours: policy.level_3_hours,
-            level4Hours: policy.level_4_hours,
-        };
+        return map;
+    }
+    // All active policies loaded once into a map keyed by audit type, so the
+    // escalation sweep never re-queries the same policy per entity.
+    async _loadPolicyThresholds() {
+        const policies = await prisma_client_1.prisma.escalation_Policy.findMany({
+            where: { is_active: true },
+        });
+        const map = new Map();
+        for (const policy of policies) {
+            map.set(policy.audit_type, {
+                level1Hours: policy.level_1_hours,
+                level2Hours: policy.level_2_hours,
+                level3Hours: policy.level_3_hours,
+                level4Hours: policy.level_4_hours,
+            });
+        }
+        return map;
+    }
+    _resolveThresholds(byAuditType, auditType) {
+        return (byAuditType.get(auditType)
+            ?? byAuditType.get(workflow_enum_1.EscalationPolicyAuditType.All)
+            ?? DEFAULT_THRESHOLDS);
     }
     _thresholdForLevel(thresholds, level) {
         if (level === 1)
@@ -395,7 +425,9 @@ class EscalationService {
                 };
             }
         }
-        await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
+        // Runs inside the escalation batch — one bad recipient must not abort the
+        // rest, so enqueueSafe swallows and logs.
+        await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
             userId: target.id,
             title,
             body,
@@ -405,7 +437,7 @@ class EscalationService {
             eventKey,
             variables,
         });
-        await notification_queue_service_1.notificationQueueService.enqueue('email', {
+        await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
             to: target.email,
             subject: title,
             text: body,

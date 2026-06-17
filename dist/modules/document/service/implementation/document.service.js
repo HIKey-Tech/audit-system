@@ -115,6 +115,32 @@ class DocumentService {
             return (0, document_response_dto_1.mapDocumentToResponse)(doc, url);
         }));
     }
+    async listByEntityIds(entityType, entityIds) {
+        const grouped = new Map();
+        if (entityIds.length === 0)
+            return grouped;
+        // Single query for every entity in the batch — callers that previously
+        // looped over listByEntity collapse from N queries to 1.
+        const docs = await prisma_client_1.prisma.document.findMany({
+            where: { entity_type: entityType, entity_id: { in: entityIds }, deleted_at: null },
+            orderBy: { created_at: 'desc' },
+            include: uploaderInclude,
+        });
+        const mapped = await Promise.all(docs.map(async (doc) => ({
+            entityId: doc.entity_id,
+            dto: (0, document_response_dto_1.mapDocumentToResponse)(doc, await this._storageClient(doc.storage_provider).getUrl(doc.storage_path)),
+        })));
+        for (const { entityId, dto } of mapped) {
+            if (!entityId)
+                continue;
+            const bucket = grouped.get(entityId);
+            if (bucket)
+                bucket.push(dto);
+            else
+                grouped.set(entityId, [dto]);
+        }
+        return grouped;
+    }
     async getFileById(id) {
         const doc = await prisma_client_1.prisma.document.findUnique({
             where: { id, deleted_at: null },

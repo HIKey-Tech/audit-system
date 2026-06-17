@@ -29,6 +29,14 @@ interface StageConfig {
   icon: React.ComponentType<any>;
 }
 
+interface StageTask {
+  label: string;
+  done: boolean;
+  hint: string;
+  /** Optional tasks are surfaced for visibility but do not block the transition. */
+  optional?: boolean;
+}
+
 const STAGES: StageConfig[] = [
   {
     key: 'planned',
@@ -79,32 +87,40 @@ export const StatusStepper = ({
   const [isOpen, setIsOpen] = useState(true);
   const activeIndex = STAGES.findIndex((s) => s.key === engagement.status);
 
+  // Stats come from aggregates on the detail payload (the full arrays are
+  // fetched lazily per-tab and are not present here).
   // Computing stats for fieldwork checklist task
-  const checklists = engagement.checklists ?? [];
-  const totalChecklists = checklists.length;
-  const testedChecklists = checklists.filter((c) => c.result !== 'not_tested').length;
+  const checklistProgress = engagement.checklistProgress;
+  const totalChecklists = checklistProgress?.total ?? 0;
+  const testedChecklists = totalChecklists - (checklistProgress?.notTested ?? 0);
   const checklistsDone = totalChecklists > 0 && testedChecklists === totalChecklists;
 
   // Computing stats for working papers task
-  const wps = engagement.workingPapers ?? [];
-  const totalWps = wps.length;
-  const approvedWps = wps.filter((w) => w.status === 'approved').length;
+  const wpStats = engagement.workingPaperStats;
+  const totalWps = wpStats?.total ?? 0;
+  const approvedWps = wpStats?.approved ?? 0;
+  const rejectedWps = wpStats?.rejected ?? 0;
   const wpsDone = totalWps > 0 && approvedWps === totalWps;
 
   // Computing stats for reporting tasks
-  const report = engagement.report;
-  const reportExists = !!report;
-  const reportApproved = report?.status === 'approved' || report?.status === 'issued';
-  const reportIssued = report?.status === 'issued';
+  const reportStatus = engagement.reportStatus ?? null;
+  const reportExists = !!reportStatus;
+  const reportApproved = reportStatus === 'approved' || reportStatus === 'issued';
+  const reportIssued = reportStatus === 'issued';
 
   // Computing stats for remediation tasks
-  const findings = engagement.findings ?? [];
-  const totalFindings = findings.length;
-  const openFindings = findings.filter((f) => f.status !== 'closed' && f.status !== 'verified').length;
+  const findingStats = engagement.findingStats;
+  const totalFindings = findingStats?.total ?? 0;
+  const openResponseFindings = findingStats?.open ?? 0; // awaiting management response
+  const openFindings = findingStats?.unresolved ?? 0; // not yet verified/closed
   const findingsDone = totalFindings > 0 && openFindings === 0;
 
+  // Supporting fieldwork artefacts — surfaced for visibility, never blocking.
+  const evidenceCount = engagement.evidenceCount ?? 0;
+  const assetCount = engagement.assetCount ?? 0;
+
   // Generate dynamic tasks list based on current active status
-  const getActiveTasks = () => {
+  const getActiveTasks = (): StageTask[] => {
     switch (engagement.status) {
       case 'planned':
         return [
@@ -137,8 +153,20 @@ export const StatusStepper = ({
           },
           {
             label: 'Resolve open QA / manager review comments',
-            done: totalWps > 0 && wps.filter((w) => w.status === 'rejected').length === 0,
+            done: totalWps > 0 && rejectedWps === 0,
             hint: 'Ensure there are no rejected working papers awaiting revision.'
+          },
+          {
+            label: `Attach supporting evidence (${evidenceCount} attached)`,
+            done: evidenceCount > 0,
+            optional: true,
+            hint: 'Recommended: upload evidence backing your control tests and findings in the Evidence tab. Does not block review.'
+          },
+          {
+            label: `Link in-scope assets (${assetCount} linked)`,
+            done: assetCount > 0,
+            optional: true,
+            hint: 'Recommended: link the IT assets covered by this engagement in the Assets tab. Does not block review.'
           }
         ];
       case 'under_review':
@@ -151,8 +179,8 @@ export const StatusStepper = ({
           {
             label: 'Submit and obtain supervisor and CAE sign-off',
             done: reportApproved,
-            hint: reportExists 
-              ? `Current report status: ${humanizeStatus(report.status)}.` 
+            hint: reportExists
+              ? `Current report status: ${humanizeStatus(reportStatus)}.`
               : 'Submit draft report for approval chain reviews.'
           },
           {
@@ -167,8 +195,8 @@ export const StatusStepper = ({
         return [
           {
             label: 'Auditee submits remediation management action plans',
-            done: findings.length > 0 && findings.filter((f) => f.status === 'open').length === 0,
-            hint: `${findings.filter((f) => f.status === 'open').length}/${totalFindings} findings awaiting management response.`
+            done: totalFindings > 0 && openResponseFindings === 0,
+            hint: `${openResponseFindings}/${totalFindings} findings awaiting management response.`
           },
           {
             label: `Remediate and verify all raised findings (${totalFindings - openFindings}/${totalFindings} resolved)`,
@@ -185,7 +213,8 @@ export const StatusStepper = ({
   };
 
   const tasks = getActiveTasks();
-  const allTasksDone = tasks.length > 0 && tasks.every((t) => t.done);
+  const requiredTasks = tasks.filter((t) => !t.optional);
+  const allTasksDone = requiredTasks.length > 0 && requiredTasks.every((t) => t.done);
   const nextStatus = nextEngagementStatus(engagement.status);
   const progressPercent = Math.round((activeIndex / (STAGES.length - 1)) * 100);
 
@@ -288,14 +317,21 @@ export const StatusStepper = ({
                         'mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors',
                         task.done
                           ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : 'border-slate-300 dark:border-slate-600 bg-surface'
+                          : task.optional
+                            ? 'border-dashed border-slate-300 dark:border-slate-600 bg-surface'
+                            : 'border-slate-300 dark:border-slate-600 bg-surface'
                       )}
                     >
                       {task.done && <Check className="h-3 w-3 stroke-[3]" />}
                     </div>
                     <div className="flex flex-col min-w-0">
-                      <span className={cn('font-medium text-text-primary', task.done && 'line-through opacity-60')}>
+                      <span className={cn('font-medium text-text-primary flex items-center gap-1.5', task.done && 'line-through opacity-60')}>
                         {task.label}
+                        {task.optional && (
+                          <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-text-secondary no-underline">
+                            Optional
+                          </span>
+                        )}
                       </span>
                       {task.hint && (
                         <span className="text-[10px] text-text-secondary mt-0.5">
@@ -322,7 +358,7 @@ export const StatusStepper = ({
                     <span>Requires a finalized audit report to be approved by the CAE and issued to the auditee.</span>
                   )}
                   {engagement.status === 'reported' && (
-                    <span>Requires all findings ({totalFindings}) to be verified as resolved and closed before closing the engagement.</span>
+                    <span>Requires all findings ({totalFindings}) to complete closure approval before closing the engagement.</span>
                   )}
                 </div>
               </div>

@@ -48,6 +48,7 @@ const mapUserToResponse = (user) => {
         department: user.department,
         jobTitle: user.job_title,
         skills: parseSkills(user.skills),
+        maxConcurrentEngagements: user.max_concurrent_engagements,
         isActive: user.is_active,
         isSuperAdmin: user.is_super_admin,
         lastLoginAt: user.last_login_at?.toISOString() ?? null,

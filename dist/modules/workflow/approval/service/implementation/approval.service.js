@@ -33,6 +33,7 @@ const approvalInclude = client_1.Prisma.validator()({
 const ENGAGEMENT_MANAGER_PERMISSION = {
     [workflow_enum_1.WorkflowEntityType.AuditWorkingPaper]: 'working_paper:approve',
     [workflow_enum_1.WorkflowEntityType.AuditReport]: 'report:approve',
+    [workflow_enum_1.WorkflowEntityType.AuditFindingClosure]: 'finding:close',
 };
 class ApprovalService {
     approvalStatusService;
@@ -412,6 +413,8 @@ class ApprovalService {
                 return matrix.workingPaper;
             case workflow_enum_1.WorkflowEntityType.AuditReport:
                 return matrix.auditReport;
+            case workflow_enum_1.WorkflowEntityType.AuditFindingClosure:
+                return matrix.findingClosure;
             default:
                 return [];
         }
@@ -434,6 +437,15 @@ class ApprovalService {
             if (!report)
                 throw app_error_1.AppError.notFound('Audit report');
             return report.engagement.audit_manager_id;
+        }
+        if (entityType === workflow_enum_1.WorkflowEntityType.AuditFindingClosure) {
+            const finding = await db.audit_Finding.findFirst({
+                where: { id: entityId, deleted_at: null },
+                select: { engagement: { select: { audit_manager_id: true } } },
+            });
+            if (!finding)
+                throw app_error_1.AppError.notFound('Audit finding');
+            return finding.engagement.audit_manager_id;
         }
         if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan) {
             const plan = await db.audit_Plan.findFirst({ where: { id: entityId, deleted_at: null }, select: { id: true } });
@@ -549,6 +561,13 @@ class ApprovalService {
                 select: { title: true },
             });
             return wp?.title ?? entityId;
+        }
+        if (entityType === workflow_enum_1.WorkflowEntityType.AuditFindingClosure) {
+            const finding = await prisma_client_1.prisma.audit_Finding.findUnique({
+                where: { id: entityId },
+                select: { title: true, engagement: { select: { reference_number: true } } },
+            });
+            return finding ? `${finding.engagement.reference_number} - ${finding.title}` : entityId;
         }
         if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan) {
             const plan = await prisma_client_1.prisma.audit_Plan.findUnique({

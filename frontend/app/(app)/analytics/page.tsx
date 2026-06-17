@@ -6,29 +6,41 @@ import {
   Activity,
   AlertTriangle,
   BarChart3,
+  Building2,
+  Briefcase,
   CheckCircle2,
   Clock,
+  FileSearch,
   FileText,
   ShieldCheck,
-  TrendingUp,
   Inbox,
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
+import { Tooltip } from '@/components/ui/Tooltip';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { dashboardApi } from '@/lib/api/dashboard';
-import { formatDateTime, formatNumber, formatPercent } from '@/lib/utils/format';
+import { formatDateTime, formatNumber } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
+import { usePermissions, type AnalyticsScope } from '@/lib/hooks/usePermissions';
 
 const statusOrder = ['planned', 'in_progress', 'under_review', 'reported', 'closed'];
 
+// Auto-refresh cadence. Kept at 60s (and paused for hidden tabs by react-query's
+// default refetchIntervalInBackground=false) so the heavy analytics aggregation
+// endpoint is not hammered when many users leave the page open.
+const ANALYTICS_REFRESH_MS = 60_000;
+
 export default function AnalyticsPage(): JSX.Element {
+  const { analyticsScope } = usePermissions();
   const query = useQuery({
     queryKey: ['dashboard', 'analytics'],
     queryFn: dashboardApi.getAnalytics,
+    refetchInterval: ANALYTICS_REFRESH_MS,
+    staleTime: ANALYTICS_REFRESH_MS - 5_000,
   });
 
   if (query.isLoading) {
@@ -68,7 +80,16 @@ export default function AnalyticsPage(): JSX.Element {
     <div className="space-y-6">
       <PageHeader
         title="Analytics"
-        subtitle={`Audit lifecycle intelligence generated ${formatDateTime(data.generatedAt)}.`}
+        subtitle={analyticsScope.description}
+        actions={
+          <div className="flex flex-wrap items-center gap-2">
+            <ScopeBadge scope={analyticsScope} />
+            <LiveIndicator
+              generatedAt={data.generatedAt}
+              isRefreshing={query.isFetching}
+            />
+          </div>
+        }
       />
 
       <section className="space-y-6">
@@ -112,14 +133,14 @@ export default function AnalyticsPage(): JSX.Element {
             <CardHeader
               title={
                 <span className="flex items-center gap-2 text-lg font-semibold text-text-primary">
-                  <TrendingUp className="h-5 w-5 text-primary animate-pulse" />
-                  Lifecycle Pipeline
+                  <BarChart3 className="h-5 w-5 text-primary" />
+                  Engagements by Lifecycle Stage
                 </span>
               }
-              subtitle="Engagement volume progression from planning through closure."
+              subtitle="How many engagements currently sit at each stage of the audit lifecycle."
             />
             <div className="mt-2">
-              <LifecycleAreaChart data={data.lifecycle.byStatus} />
+              <LifecycleBarChart data={data.lifecycle.byStatus} />
             </div>
           </Card>
 
@@ -217,6 +238,51 @@ export default function AnalyticsPage(): JSX.Element {
 // ─────────────────────────────────────────────────────────────
 // Subcomponents
 // ─────────────────────────────────────────────────────────────
+
+const SCOPE_META: Record<
+  AnalyticsScope['key'],
+  { tone: 'green' | 'blue' | 'amber'; icon: React.ReactNode }
+> = {
+  org: { tone: 'green', icon: <Building2 className="h-3.5 w-3.5" /> },
+  engagements: { tone: 'blue', icon: <Briefcase className="h-3.5 w-3.5" /> },
+  findings: { tone: 'amber', icon: <FileSearch className="h-3.5 w-3.5" /> },
+};
+
+const ScopeBadge = ({ scope }: { scope: AnalyticsScope }): JSX.Element => {
+  const meta = SCOPE_META[scope.key];
+  return (
+    <Tooltip content={scope.description}>
+      <span className="inline-flex cursor-help">
+        <Badge tone={meta.tone} size="sm" className="gap-1.5 font-semibold">
+          {meta.icon}
+          {scope.label}
+        </Badge>
+      </span>
+    </Tooltip>
+  );
+};
+
+const LiveIndicator = ({
+  generatedAt,
+  isRefreshing,
+}: {
+  generatedAt: string;
+  isRefreshing: boolean;
+}): JSX.Element => (
+  <Tooltip content={`Auto-refreshes every minute. Last updated ${formatDateTime(generatedAt)}.`}>
+    <span className="inline-flex cursor-help items-center gap-1.5 rounded-full border border-border bg-surface-elevated px-2.5 py-1 text-2xs font-semibold text-text-secondary">
+      <span className="relative flex h-2 w-2" aria-hidden>
+        <span
+          className={`absolute inline-flex h-full w-full rounded-full bg-emerald-500 ${
+            isRefreshing ? 'animate-ping opacity-75' : 'opacity-0'
+          }`}
+        />
+        <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+      </span>
+      {isRefreshing ? 'Updating…' : 'Live'}
+    </span>
+  </Tooltip>
+);
 
 const MetricCard = ({
   icon,
@@ -448,96 +514,68 @@ const DonutChart = ({ data }: { data: Record<string, number> }): JSX.Element => 
   );
 };
 
-const LifecycleAreaChart = ({ data }: { data: Record<string, number> }): JSX.Element => {
-  const values = statusOrder.map((status) => data[status] ?? 0);
-  const maxVal = Math.max(...values, 1);
+// Distinct colour per lifecycle stage — a vertical bar chart for comparing
+// category counts (the data is categorical, not a time series, so a line/area
+// chart misrepresented it).
+const LIFECYCLE_BAR_COLORS: Record<string, string> = {
+  planned: 'bg-slate-400',
+  in_progress: 'bg-blue-500',
+  under_review: 'bg-amber-500',
+  reported: 'bg-violet-500',
+  closed: 'bg-emerald-500',
+};
 
-  const width = 500;
-  const height = 140;
-  const paddingX = 40;
-  const paddingY = 20;
+const LifecycleBarChart = ({ data }: { data: Record<string, number> }): JSX.Element => {
+  const bars = statusOrder.map((status) => ({
+    status,
+    label: humanizeStatus(status),
+    value: data[status] ?? 0,
+  }));
+  const maxVal = Math.max(...bars.map((bar) => bar.value), 1);
+  const total = bars.reduce((sum, bar) => sum + bar.value, 0);
 
-  const points = values.map((val, idx) => {
-    const x = paddingX + (idx * (width - paddingX * 2)) / (statusOrder.length - 1);
-    const y = height - paddingY - (val * (height - paddingY * 2)) / maxVal;
-    return { x, y, value: val, label: statusOrder[idx] };
-  });
+  if (total === 0) {
+    return (
+      <div className="flex h-64 items-center justify-center rounded-xl border border-border bg-surface-alt text-sm italic text-text-secondary">
+        No engagements found.
+      </div>
+    );
+  }
 
-  const linePath = points.map((p, idx) => `${idx === 0 ? 'M' : 'L'} ${p.x} ${p.y}`).join(' ');
-  const areaPath = `${linePath} L ${points[points.length - 1].x} ${height - paddingY} L ${points[0].x} ${height - paddingY} Z`;
+  const CHART_H = 200; // px — total bar area
+  const BAR_AREA = CHART_H - 28; // reserve room for the value label above each bar
+  const ariaLabel = `Engagements by lifecycle stage. ${bars
+    .map((bar) => `${bar.label}: ${bar.value}`)
+    .join(', ')}.`;
 
   return (
-    <div className="p-4 bg-surface-alt rounded-xl border border-border">
-      <div className="relative w-full overflow-hidden">
-        <svg viewBox={`0 0 ${width} ${height}`} className="w-full overflow-visible">
-          <defs>
-            <linearGradient id="areaGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0%" stopColor="#008751" stopOpacity="0.25" />
-              <stop offset="100%" stopColor="#008751" stopOpacity="0.0" />
-            </linearGradient>
-          </defs>
-
-          {/* Grid lines */}
-          {[0, 0.25, 0.5, 0.75, 1].map((ratio) => {
-            const y = paddingY + ratio * (height - paddingY * 2);
+    <div className="rounded-xl border border-border bg-surface-alt p-4">
+      <div role="img" aria-label={ariaLabel}>
+        <div className="flex items-end gap-3 sm:gap-5" style={{ height: CHART_H }}>
+          {bars.map((bar) => {
+            const barHeight = bar.value > 0
+              ? Math.max(Math.round((bar.value / maxVal) * BAR_AREA), 6)
+              : 0;
             return (
-              <line
-                key={ratio}
-                x1={paddingX}
-                y1={y}
-                x2={width - paddingX}
-                y2={y}
-                className="stroke-border"
-                strokeWidth="1"
-                strokeDasharray="4 4"
-              />
+              <div key={bar.status} className="flex flex-1 flex-col items-center justify-end">
+                <span className="mb-1 text-sm font-bold text-text-primary">{bar.value}</span>
+                <div
+                  title={`${bar.label}: ${bar.value}`}
+                  style={{ height: barHeight }}
+                  className={`mx-auto w-full max-w-[72px] rounded-t-md ${LIFECYCLE_BAR_COLORS[bar.status] ?? 'bg-primary'} shadow-sm transition-[height] duration-700 ease-out motion-reduce:transition-none`}
+                />
+              </div>
             );
           })}
-
-          {/* Area */}
-          <path d={areaPath} fill="url(#areaGrad)" />
-
-          {/* Line */}
-          <path
-            d={linePath}
-            fill="none"
-            className="stroke-primary"
-            strokeWidth="3.5"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          />
-
-          {/* Points */}
-          {points.map((p, idx) => (
-            <g key={idx} className="group/point cursor-pointer">
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r="4.5"
-                className="fill-white stroke-primary shadow-sm"
-                strokeWidth="3"
-              />
-              <circle
-                cx={p.x}
-                cy={p.y}
-                r="10"
-                className="fill-primary/10 opacity-0 group-hover/point:opacity-100 transition-opacity duration-150 pointer-events-none"
-              />
-            </g>
-          ))}
-        </svg>
-
-        {/* Labels & Data indicators */}
-        <div className="mt-4 flex justify-between px-2 text-2xs font-semibold text-text-secondary uppercase tracking-wider">
-          {points.map((p, idx) => (
-            <div key={idx} className="flex flex-col items-center gap-1 group/label">
-              <span className="text-text-primary font-bold text-sm bg-surface-elevated border border-border px-2.5 py-0.5 rounded-lg shadow-sm">
-                {p.value}
-              </span>
-              <span className="capitalize text-3xs font-semibold text-text-muted tracking-wide mt-0.5">
-                {humanizeStatus(p.label)}
-              </span>
-            </div>
+        </div>
+        <div className="mt-2 flex gap-3 border-t border-border pt-2 sm:gap-5">
+          {bars.map((bar) => (
+            <span
+              key={bar.status}
+              className="flex-1 text-center text-3xs font-semibold uppercase tracking-wide text-text-muted"
+            >
+              {bar.label}
+            </span>
           ))}
         </div>
       </div>

@@ -11,6 +11,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { DocumentService } from '../../../../document/service/implementation/document.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
+import { DocumentResponseDto } from '../../../../document/dto/response/document.response.dto';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { assertHasPermission } from '../../../utility/workflow.utility';
 import {
@@ -394,7 +395,7 @@ export class RequestService implements IRequestService {
       }),
     ]);
 
-    const mapped = await Promise.all(requests.map((r) => this._toDetail(r)));
+    const mapped = await this._toDetailMany(requests);
     return { requests: mapped, meta: buildPaginationMeta(total, page, pageSize) };
   }
 
@@ -419,7 +420,7 @@ export class RequestService implements IRequestService {
       .map((step) => step.request);
     const paged = requests.slice(skip, skip + take);
 
-    const mapped = await Promise.all(paged.map((r) => this._toDetail(r)));
+    const mapped = await this._toDetailMany(paged);
     return { requests: mapped, meta: buildPaginationMeta(requests.length, page, pageSize) };
   }
 
@@ -591,16 +592,32 @@ export class RequestService implements IRequestService {
     );
   }
 
-  private async _toDetail(request: RequestWithDetails): Promise<RequestResponseDto> {
-    const documents = await this.documentService.listByEntity(ATTACHMENT_ENTITY_TYPE, request.id);
-    const attachments: RequestAttachmentDto[] = documents.map((doc) => ({
+  private _toAttachments(documents: DocumentResponseDto[]): RequestAttachmentDto[] {
+    return documents.map((doc) => ({
       documentId: doc.id,
       originalName: doc.originalName,
       mimeType: doc.mimeType,
       fileSize: doc.fileSize,
       downloadUrl: doc.downloadUrl ?? '',
     }));
-    return mapRequestToResponse(request, attachments);
+  }
+
+  private async _toDetail(request: RequestWithDetails): Promise<RequestResponseDto> {
+    const documents = await this.documentService.listByEntity(ATTACHMENT_ENTITY_TYPE, request.id);
+    return mapRequestToResponse(request, this._toAttachments(documents));
+  }
+
+  // Batched detail mapping for list endpoints: loads every request's attachments
+  // in one query instead of one per request (avoids an N+1).
+  private async _toDetailMany(requests: RequestWithDetails[]): Promise<RequestResponseDto[]> {
+    if (requests.length === 0) return [];
+    const attachmentsByRequest = await this.documentService.listByEntityIds(
+      ATTACHMENT_ENTITY_TYPE,
+      requests.map((request) => request.id),
+    );
+    return requests.map((request) =>
+      mapRequestToResponse(request, this._toAttachments(attachmentsByRequest.get(request.id) ?? [])),
+    );
   }
 
   private async _loadRequest(requestId: string): Promise<RequestWithDetails> {

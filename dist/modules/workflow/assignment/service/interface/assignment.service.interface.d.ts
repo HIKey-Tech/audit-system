@@ -12,5 +12,7 @@ export interface IAssignmentService {
     }>;
     getUserWorkload(userId: string): Promise<WorkloadResponseDto>;
     getCandidates(engagementId: string): Promise<AssignmentCandidateDto[]>;
+    /** Active (unfinished) engagement count per user, keyed by user id. */
+    getActiveWorkloadMap(): Promise<Map<string, number>>;
 }
 //# sourceMappingURL=assignment.service.interface.d.ts.map

@@ -35,20 +35,37 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
     engagement.auditManagerId !== user.id &&
     engagement.auditeeId !== user.id;
 
-  const findingsBySeverity = (engagement.findings ?? []).reduce(
+  // Metrics come from aggregates on the detail payload — the full arrays are
+  // fetched lazily per-tab and are not present here.
+  const findingsBySeverity = (engagement.findingCounts ?? []).reduce(
     (acc, f) => {
-      acc[f.severity] = (acc[f.severity] ?? 0) + 1;
+      acc[f.severity] = (acc[f.severity] ?? 0) + f.count;
       return acc;
     },
     {} as Record<string, number>,
   );
+  const hasFindings = (engagement.findingStats?.total ?? 0) > 0;
 
-  const checklists = engagement.checklists ?? [];
-  const passed = checklists.filter((c) => c.result === 'passed').length;
-  const failed = checklists.filter((c) => c.result === 'failed').length;
-  const tested = checklists.filter((c) => c.result !== 'not_tested').length;
-  const total = checklists.length;
+  const progress = engagement.checklistProgress;
+  const passed = progress?.passed ?? 0;
+  const failed = progress?.failed ?? 0;
+  const total = progress?.total ?? 0;
+  const tested = total - (progress?.notTested ?? 0);
   const pct = total === 0 ? 0 : Math.round((tested / total) * 100);
+  const workingPaperTotal = engagement.workingPaperStats?.total ?? engagement.workingPaperCount ?? 0;
+
+  // Unified team: the three core roles plus any supporting assignees (deduped).
+  const coreIds = new Set(
+    [engagement.leadAuditorId, engagement.auditManagerId, engagement.auditeeId].filter(Boolean),
+  );
+  const team: { key: string; name: string; role: string }[] = [
+    ...(engagement.leadAuditorName ? [{ key: 'lead', name: engagement.leadAuditorName, role: 'Lead Auditor' }] : []),
+    ...(engagement.auditManagerName ? [{ key: 'manager', name: engagement.auditManagerName, role: 'Audit Manager' }] : []),
+    ...(engagement.auditeeName ? [{ key: 'auditee', name: engagement.auditeeName, role: 'Auditee' }] : []),
+    ...(assignments.data ?? [])
+      .filter((a) => !coreIds.has(a.userId))
+      .map((a) => ({ key: a.id, name: a.userName, role: humanizeStatus(a.role) })),
+  ];
 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
@@ -108,18 +125,6 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
             <dd className="mt-1 text-sm text-text-primary">{engagement.isAdhoc ? 'Yes' : 'No'}</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Lead auditor</dt>
-            <dd className="mt-1 text-sm text-text-primary">{engagement.leadAuditorName}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Audit manager</dt>
-            <dd className="mt-1 text-sm text-text-primary">{engagement.auditManagerName ?? '—'}</dd>
-          </div>
-          <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Auditee</dt>
-            <dd className="mt-1 text-sm text-text-primary">{engagement.auditeeName}</dd>
-          </div>
-          <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Auditable entity</dt>
             <dd className="mt-1 text-sm text-text-primary">{engagement.universeName ?? '—'}</dd>
           </div>
@@ -147,7 +152,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
       <div className="space-y-6">
         <Card>
           <CardHeader title="Findings" subtitle="By severity" />
-          {(engagement.findings ?? []).length === 0 ? (
+          {!hasFindings ? (
             <p className="text-xs text-text-muted">No findings raised yet.</p>
           ) : (
             <ul className="space-y-2">
@@ -167,7 +172,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
         <Card>
           <CardHeader title="Working papers" />
           <p className="text-3xl font-semibold tabular-nums text-text-primary">
-            {engagement.workingPapers?.length ?? 0}
+            {workingPaperTotal}
           </p>
           <p className="text-xs text-text-secondary mt-1">Total documents on file</p>
         </Card>
@@ -186,8 +191,8 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
 
         <Card>
           <CardHeader
-            title="Assigned staff"
-            subtitle={`${assignments.data?.length ?? 0} active`}
+            title="Team"
+            subtitle={`${team.length} ${team.length === 1 ? 'member' : 'members'}`}
             action={
               canManageAssignments ? (
                 <Button size="sm" variant="secondary" onClick={() => setShowAssignments(true)}>
@@ -196,23 +201,21 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
               ) : null
             }
           />
-          {assignments.isLoading ? (
-            <p className="text-xs text-text-muted">Loading…</p>
-          ) : !assignments.data || assignments.data.length === 0 ? (
-            <EmptyState compact icon={<Users className="h-4 w-4" />} title="No assignments yet" />
+          {team.length === 0 ? (
+            <EmptyState compact icon={<Users className="h-4 w-4" />} title="No team assigned yet" />
           ) : (
             <ul className="space-y-2">
-              {assignments.data.map((a) => (
-                <li key={a.id} className="flex items-center gap-2 text-xs">
+              {team.map((m) => (
+                <li key={m.key} className="flex items-center gap-2 text-xs">
                   <Avatar
-                    initials={initialsFromName(undefined, undefined, a.userName)}
+                    initials={initialsFromName(undefined, undefined, m.name)}
                     size="sm"
                     tone="slate"
                   />
                   <div className="min-w-0 flex-1">
-                    <p className="truncate font-medium text-text-primary">{a.userName}</p>
+                    <p className="truncate font-medium text-text-primary">{m.name}</p>
                     <p className="text-[10px] uppercase tracking-wider text-text-muted">
-                      {humanizeStatus(a.role)}
+                      {m.role}
                     </p>
                   </div>
                 </li>

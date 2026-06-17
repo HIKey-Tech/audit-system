@@ -13,6 +13,7 @@ export declare class AssignmentService implements IAssignmentService {
     }>;
     getUserWorkload(userId: string): Promise<WorkloadResponseDto>;
     getCandidates(engagementId: string): Promise<AssignmentCandidateDto[]>;
+    getActiveWorkloadMap(): Promise<Map<string, number>>;
 }
 export declare const workflowAssignmentService: AssignmentService;
 //# sourceMappingURL=assignment.service.d.ts.map

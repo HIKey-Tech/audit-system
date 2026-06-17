@@ -2,6 +2,7 @@ import { DashboardActorContext } from '../../domain/entity/dashboard.entity';
 import { ApprovalInboxSummaryResponseDto, AuditAnalyticsResponseDto, AuditSummaryResponseDto, EscalationOverviewResponseDto, FindingsSummaryResponseDto, MyWorkResponseDto, RecentActivityItemDto, RiskOverviewResponseDto } from '../../dto/response/dashboard.response.dto';
 export declare class DashboardService {
     getAuditAnalytics(actor: DashboardActorContext): Promise<AuditAnalyticsResponseDto>;
+    private _computeAuditAnalytics;
     getAuditSummary(actor: DashboardActorContext): Promise<AuditSummaryResponseDto>;
     getFindingsSummary(actor: DashboardActorContext): Promise<FindingsSummaryResponseDto>;
     getRiskOverview(_actor: DashboardActorContext): Promise<RiskOverviewResponseDto>;

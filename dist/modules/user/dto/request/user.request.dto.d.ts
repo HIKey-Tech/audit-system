@@ -8,6 +8,7 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     department: z.ZodOptional<z.ZodString>;
     jobTitle: z.ZodOptional<z.ZodString>;
     skills: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    maxConcurrentEngagements: z.ZodOptional<z.ZodNumber>;
     password: z.ZodOptional<z.ZodString>;
     roleIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
 }, "strip", z.ZodTypeAny, {
@@ -20,6 +21,7 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     password?: string | undefined;
     displayName?: string | undefined;
     jobTitle?: string | undefined;
+    maxConcurrentEngagements?: number | undefined;
     roleIds?: string[] | undefined;
 }, {
     email: string;
@@ -31,6 +33,7 @@ export declare const CreateUserRequestSchema: z.ZodObject<{
     password?: string | undefined;
     displayName?: string | undefined;
     jobTitle?: string | undefined;
+    maxConcurrentEngagements?: number | undefined;
     roleIds?: string[] | undefined;
 }>;
 export declare const UpdateUserRequestSchema: z.ZodObject<{
@@ -41,6 +44,7 @@ export declare const UpdateUserRequestSchema: z.ZodObject<{
     department: z.ZodOptional<z.ZodString>;
     jobTitle: z.ZodOptional<z.ZodString>;
     skills: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    maxConcurrentEngagements: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
 }, "strip", z.ZodTypeAny, {
     phone?: string | undefined;
     department?: string | undefined;
@@ -49,6 +53,7 @@ export declare const UpdateUserRequestSchema: z.ZodObject<{
     firstName?: string | undefined;
     lastName?: string | undefined;
     jobTitle?: string | undefined;
+    maxConcurrentEngagements?: number | null | undefined;
 }, {
     phone?: string | undefined;
     department?: string | undefined;
@@ -57,6 +62,7 @@ export declare const UpdateUserRequestSchema: z.ZodObject<{
     firstName?: string | undefined;
     lastName?: string | undefined;
     jobTitle?: string | undefined;
+    maxConcurrentEngagements?: number | null | undefined;
 }>;
 export declare const AssignRoleRequestSchema: z.ZodObject<{
     roleIds: z.ZodArray<z.ZodString, "many">;

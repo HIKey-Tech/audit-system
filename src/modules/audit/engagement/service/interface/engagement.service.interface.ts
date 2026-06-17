@@ -4,10 +4,11 @@ import { EngagementStatus } from '../../../domain/enum/audit.enum';
 import {
   CreateAdhocEngagementRequestDto,
   CreateEngagementFromPlanRequestDto,
+  EligibleUsersQueryDto,
   EngagementQueryDto,
   UpdateEngagementRequestDto,
 } from '../../dto/request/engagement.request.dto';
-import { EngagementResponseDto } from '../../dto/response/engagement.response.dto';
+import { EligibleUserDto, EngagementResponseDto } from '../../dto/response/engagement.response.dto';
 
 export interface IEngagementService {
   createFromPlanItem(planItemId: string, dto: CreateEngagementFromPlanRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;
@@ -16,4 +17,5 @@ export interface IEngagementService {
   updateStatus(id: string, newStatus: EngagementStatus, actor: ActorContext): Promise<EngagementResponseDto>;
   getEngagementById(id: string, actor: ActorContext): Promise<EngagementResponseDto>;
   listEngagements(query: EngagementQueryDto, actor: ActorContext): Promise<{ engagements: EngagementResponseDto[]; meta: PaginationMeta }>;
+  getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]>;
 }

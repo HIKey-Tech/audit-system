@@ -4,6 +4,7 @@ exports.EvidenceService = void 0;
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
+const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
@@ -100,6 +101,64 @@ class EvidenceService {
             orderBy: { uploaded_at: 'desc' },
         });
         return evidence.map(evidence_response_dto_1.mapEvidenceToResponse);
+    }
+    // ──────────── Centralized evidence repository (cross-engagement) ────────────
+    async listRepository(query, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:read');
+        const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const where = {
+            engagement: { deleted_at: null },
+            ...(query.engagementId && { engagement_id: query.engagementId }),
+            ...(query.findingId && { finding_id: query.findingId }),
+            ...(query.workingPaperId && { working_paper_id: query.workingPaperId }),
+            ...(query.uploadedById && { uploaded_by_id: query.uploadedById }),
+            ...(query.fileType && { file_type: query.fileType }),
+            ...(query.isDisputed !== undefined && { is_disputed: query.isDisputed }),
+            ...((query.uploadedFrom || query.uploadedTo) && {
+                uploaded_at: {
+                    ...(query.uploadedFrom && { gte: query.uploadedFrom }),
+                    ...(query.uploadedTo && { lte: query.uploadedTo }),
+                },
+            }),
+            ...(query.search && {
+                OR: [
+                    { file_name: { contains: query.search } },
+                    { engagement: { is: { reference_number: { contains: query.search } } } },
+                    { engagement: { is: { title: { contains: query.search } } } },
+                ],
+            }),
+        };
+        const [rows, total] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Evidence.findMany({
+                where,
+                include: evidence_response_dto_1.evidenceRepositoryInclude,
+                orderBy: { uploaded_at: 'desc' },
+                skip,
+                take,
+            }),
+            prisma_client_1.prisma.audit_Evidence.count({ where }),
+        ]);
+        return {
+            evidence: rows.map(evidence_response_dto_1.mapEvidenceToRepositoryResponse),
+            meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
+        };
+    }
+    async getRepositoryEvidence(evidenceId, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:read');
+        const evidence = await prisma_client_1.prisma.audit_Evidence.findFirst({
+            where: { id: evidenceId, engagement: { deleted_at: null } },
+            include: evidence_response_dto_1.evidenceRepositoryInclude,
+        });
+        if (!evidence)
+            throw app_error_1.AppError.notFound('Audit evidence');
+        return (0, evidence_response_dto_1.mapEvidenceToRepositoryResponse)(evidence);
+    }
+    async getDownloadUrl(evidenceId, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:read');
+        const evidence = await this._getEvidence(evidenceId);
+        const url = await this.documentService.getDownloadUrl(evidence.document_id);
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.download', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId });
+        return url;
     }
     async _assertEngagementInProgress(engagementId) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({

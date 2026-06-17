@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
+exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.setChecklistTemplateConfig = exports.getChecklistTemplateConfig = exports.CHECKLIST_TEMPLATE_CONFIG_KEY = exports.getEngagementControls = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
 const prisma_client_1 = require("../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../shared/utils/logger.util");
+const audit_enum_1 = require("../domain/enum/audit.enum");
 const audit_utility_1 = require("./audit.utility");
 exports.DEFAULT_AUDIT_LIFECYCLE_RULES = {
     requireAllChecklistsTestedBeforeUnderReview: true,
@@ -43,6 +44,83 @@ const getChecklistTemplateControls = async (auditType) => {
 };
 exports.getChecklistTemplateControls = getChecklistTemplateControls;
 /**
+ * Authoritative control source for populating an engagement's checklist.
+ *
+ * Prefers the structured compliance_controls library (active controls for the
+ * audit type); falls back to the legacy checklist_templates JSON / built-in
+ * CONTROL_SETS when the library has no controls for that type. Callers still
+ * snapshot the returned text onto the checklist row, so a populated engagement
+ * is unaffected by later edits to the library.
+ */
+const getEngagementControls = async (auditType) => {
+    const dbControls = await prisma_client_1.prisma.compliance_Control.findMany({
+        where: { audit_type: auditType, is_active: true, deleted_at: null },
+        orderBy: { control_reference: 'asc' },
+        select: { control_reference: true, control_description: true, test_procedure: true },
+    });
+    if (dbControls.length > 0) {
+        return dbControls.map((control) => ({
+            controlReference: control.control_reference,
+            controlDescription: control.control_description,
+            testProcedure: control.test_procedure,
+        }));
+    }
+    return (0, exports.getChecklistTemplateControls)(auditType);
+};
+exports.getEngagementControls = getEngagementControls;
+exports.CHECKLIST_TEMPLATE_CONFIG_KEY = 'checklist_templates';
+/**
+ * Full per-audit-type checklist template config: saved overrides for each audit
+ * type, falling back to the built-in CONTROL_SETS where nothing is configured.
+ */
+const getChecklistTemplateConfig = async () => {
+    const parsed = await getJsonConfig(exports.CHECKLIST_TEMPLATE_CONFIG_KEY, {});
+    const result = {};
+    for (const auditType of Object.values(audit_enum_1.AuditType)) {
+        const saved = parsed[auditType];
+        const controls = Array.isArray(saved) && saved.length > 0
+            ? saved.filter(isChecklistTemplateControl)
+            : (audit_utility_1.CONTROL_SETS[auditType] ?? []);
+        result[auditType] = controls.map((control) => ({
+            controlReference: control.controlReference,
+            controlDescription: control.controlDescription,
+            testProcedure: control.testProcedure,
+        }));
+    }
+    return result;
+};
+exports.getChecklistTemplateConfig = getChecklistTemplateConfig;
+/** Validates and persists (upserts) the full checklist template config. */
+const setChecklistTemplateConfig = async (config, actorId) => {
+    const clean = {};
+    for (const auditType of Object.values(audit_enum_1.AuditType)) {
+        const controls = config[auditType];
+        if (!controls)
+            continue;
+        clean[auditType] = controls
+            .filter(isChecklistTemplateControl)
+            .map((control) => ({
+            controlReference: control.controlReference.trim(),
+            controlDescription: control.controlDescription.trim(),
+            testProcedure: control.testProcedure.trim(),
+        }))
+            .filter((control) => control.controlReference.length > 0);
+    }
+    await prisma_client_1.prisma.system_Config.upsert({
+        where: { key: exports.CHECKLIST_TEMPLATE_CONFIG_KEY },
+        create: {
+            key: exports.CHECKLIST_TEMPLATE_CONFIG_KEY,
+            value: JSON.stringify(clean),
+            description: 'Per-audit-type checklist control templates used to populate engagement checklists.',
+            updated_by_id: actorId,
+        },
+        update: { value: JSON.stringify(clean), updated_by_id: actorId },
+    });
+    logger_util_1.logger.info('Checklist templates updated', { actorId });
+    return (0, exports.getChecklistTemplateConfig)();
+};
+exports.setChecklistTemplateConfig = setChecklistTemplateConfig;
+/**
  * Sentinel chain entry: resolve this level to the entity's assigned engagement
  * manager (a specific person) rather than to a permission holder.
  */
@@ -51,6 +129,7 @@ exports.DEFAULT_APPROVAL_MATRIX = {
     auditPlan: ['plan:approve'],
     workingPaper: [exports.ENGAGEMENT_MANAGER_APPROVER],
     auditReport: [exports.ENGAGEMENT_MANAGER_APPROVER, 'report:approve:oversight', 'report:approve:final'],
+    findingClosure: [exports.ENGAGEMENT_MANAGER_APPROVER],
 };
 /**
  * Reads the GBB-configurable approval matrix from system_config. Admins edit this

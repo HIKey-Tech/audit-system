@@ -6,6 +6,7 @@ const app_error_1 = require("../../../../shared/errors/app.error");
 const app_config_1 = require("../../../../shared/config/app.config");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
+const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
 const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
 const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
@@ -56,6 +57,7 @@ class UserService {
                 department: dto.department,
                 job_title: dto.jobTitle,
                 ...(dto.skills && { skills: JSON.stringify(dto.skills) }),
+                ...(dto.maxConcurrentEngagements !== undefined && { max_concurrent_engagements: dto.maxConcurrentEngagements }),
                 password_hash,
                 is_super_admin: assignedRoles.some((role) => role.name === 'super_admin'),
                 ...(dto.roleIds?.length
@@ -297,6 +299,7 @@ class UserService {
                 ...(dto.department !== undefined && { department: dto.department }),
                 ...(dto.jobTitle !== undefined && { job_title: dto.jobTitle }),
                 ...(dto.skills !== undefined && { skills: dto.skills ? JSON.stringify(dto.skills) : null }),
+                ...(dto.maxConcurrentEngagements !== undefined && { max_concurrent_engagements: dto.maxConcurrentEngagements }),
             },
             include: prisma_types_1.userWithRolesInclude,
         });
@@ -503,7 +506,7 @@ class UserService {
                 '</ul>',
                 '<p>Please sign in and change your password immediately.</p>',
             ].join(''),
-        });
+        }, { priority: notification_queue_service_interface_1.NOTIFICATION_PRIORITY.HIGH });
     }
 }
 exports.UserService = UserService;

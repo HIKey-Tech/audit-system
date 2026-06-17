@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EngagementQuerySchema = exports.UpdateEngagementStatusRequestSchema = exports.UpdateEngagementRequestSchema = exports.CreateAdhocEngagementRequestSchema = exports.CreateEngagementFromPlanRequestSchema = void 0;
+exports.EligibleUsersQuerySchema = exports.EngagementQuerySchema = exports.UpdateEngagementStatusRequestSchema = exports.UpdateEngagementRequestSchema = exports.CreateAdhocEngagementRequestSchema = exports.CreateEngagementFromPlanRequestSchema = void 0;
 const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const EngagementBaseSchema = zod_1.z.object({
@@ -46,5 +46,10 @@ exports.EngagementQuerySchema = zod_1.z.object({
     auditManagerId: zod_1.z.string().uuid().optional(),
     sortBy: zod_1.z.enum(['created_at', 'planned_start_date', 'sla_deadline', 'reference_number']).default('created_at'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
+});
+exports.EligibleUsersQuerySchema = zod_1.z.object({
+    role: zod_1.z.enum(['lead_auditor', 'audit_manager']),
+    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType).optional(),
+    priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority).optional(),
 });
 //# sourceMappingURL=engagement.request.dto.js.map

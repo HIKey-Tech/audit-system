@@ -30,4 +30,14 @@ export declare class AwsS3StorageClient implements IStorageClient {
     getUrl(storagePath: string): Promise<string>;
 }
 export declare const createStorageClient: (provider?: StorageProvider | string) => IStorageClient;
+/**
+ * Boot-time check that the configured storage backend is usable, so a
+ * misconfigured deployment fails fast instead of on the first upload.
+ *
+ * For the local provider this creates the upload directory if missing and
+ * confirms the process can write to it (the common VPS failure mode: wrong
+ * STORAGE_LOCAL_PATH or directory not owned by the Node user). Remote
+ * providers are left to surface auth/permission errors on first request.
+ */
+export declare const verifyStorageReady: (provider?: StorageProvider | string) => Promise<void>;
 //# sourceMappingURL=storage.client.d.ts.map
