@@ -24,8 +24,13 @@ import {
 } from '../../../domain/enum/workflow.enum';
 import { assertHasPermission } from '../../../utility/workflow.utility';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
-import { ApprovalResponseDto, mapApprovalToResponse } from '../../dto/response/approval.response.dto';
+import {
+  ApprovalResponseDto,
+  SignedApprovalDocumentDto,
+  mapApprovalToResponse,
+} from '../../dto/response/approval.response.dto';
 import { ApprovalActor, IApprovalService } from '../interface/approval.service.interface';
+import { userSignatureService } from '../../../../user/service/implementation/signature.service';
 
 const workflowUserSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -267,6 +272,9 @@ export class ApprovalService implements IApprovalService {
     const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
     const now = new Date();
 
+    // Approve & Sign: record the approver's active signature on the step (null if none).
+    const sigRef = await userSignatureService.getActiveSignatureRef(actor.id);
+
     const updated = await prisma.$transaction(async (tx) => {
       // Atomically claim the step: only succeeds while it is still pending, so two
       // concurrent approvers can't both act — the loser matches 0 rows and aborts.
@@ -277,6 +285,7 @@ export class ApprovalService implements IApprovalService {
           approver_id: actor.id,
           comment: comment ?? null,
           acted_at: now,
+          signature_id: sigRef?.id ?? null,
         },
       });
       if (claimed.count === 0) {
@@ -318,6 +327,12 @@ export class ApprovalService implements IApprovalService {
       });
     } else {
       void this._queueApprovalApprovedAsync(approval, actor.id, comment);
+      // Freeze the signed artifact once, post-commit. Dynamic import avoids the
+      // audit↔workflow module cycle (the audit generator imports this service);
+      // it resolves fine at runtime, long after startup. Fire-and-forget.
+      void import('../../../../audit/approval-signature/service/implementation/approval-signed-document.service')
+        .then((m) => m.approvalSignedDocumentService.generateForCompletedApproval(approvalId))
+        .catch((err: unknown) => logger.warn('Approval freeze enqueue failed', { approvalId, err }));
     }
 
     logger.info('Workflow approval step approved', { approvalId, approverId: actor.id });
@@ -448,6 +463,19 @@ export class ApprovalService implements IApprovalService {
       approvals: paged.map(mapApprovalToResponse),
       meta: buildPaginationMeta(approvals.length, page, pageSize),
     };
+  }
+
+  async listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]> {
+    const rows = await prisma.workflow_Approval_Signed_Document.findMany({
+      where: { approval_id: approvalId },
+      orderBy: { generated_at: 'asc' },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      signedDocumentId: r.signed_document_id,
+      downloadUrl: `/api/proxy/documents/${r.signed_document_id}/file`,
+      generatedAt: r.generated_at.toISOString(),
+    }));
   }
 
   async cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto> {

@@ -17,6 +17,8 @@ import {
   CheckCircle2,
   Clock,
   AlertTriangle,
+  Download,
+  FileCheck2,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -30,7 +32,9 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Avatar } from '@/components/ui/Avatar';
+import { SignaturePad } from '@/components/common/SignaturePad';
 import { requestsApi } from '@/lib/api/workflow';
+import { signatureApi } from '@/lib/api/signature';
 import { formatDateTime, formatRelative, formatFileSize, initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { useSession } from '@/components/providers/AuthProvider';
@@ -252,6 +256,9 @@ export default function RequestDetailPage(): JSX.Element {
             )}
           </Card>
 
+          {/* Signed documents (generated on completion) */}
+          {req.status === 'completed' && <SignedDocumentsCard requestId={id} />}
+
           {/* Activity timeline */}
           <Card>
             <CardHeader
@@ -427,6 +434,26 @@ const SignModal = ({
 }): JSX.Element => {
   const [affirmation, setAffirmation] = useState('');
   const [comment, setComment] = useState('');
+  const qc = useQueryClient();
+
+  // Inline signature setup: a stamped image is required before signing. If the user
+  // has none, they create one here (saved to their profile); the backend records the
+  // active signature's id at sign time — no extra payload needed.
+  const { data: sig, isLoading: sigLoading } = useQuery({
+    queryKey: ['signature'],
+    queryFn: () => signatureApi.get(),
+    enabled: open,
+  });
+
+  const saveSig = useMutation({
+    mutationFn: ({ blob, kind }: { blob: Blob; kind: 'drawn' | 'uploaded' }) =>
+      signatureApi.save(blob, kind),
+    onSuccess: () => {
+      toast.success('Signature saved');
+      qc.invalidateQueries({ queryKey: ['signature'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to save signature'),
+  });
 
   const sign = useMutation({
     mutationFn: () => requestsApi.sign(requestId, affirmation.trim(), comment.trim() || undefined),
@@ -454,7 +481,12 @@ const SignModal = ({
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button size="sm" disabled={!matches} isLoading={sign.isPending} onClick={() => sign.mutate()}>
+          <Button
+            size="sm"
+            disabled={!matches || !sig}
+            isLoading={sign.isPending}
+            onClick={() => sign.mutate()}
+          >
             Sign now
           </Button>
         </div>
@@ -475,6 +507,25 @@ const SignModal = ({
             audit trail and cannot be undone.
           </span>
         </div>
+
+        {/* Signature: preview if set up, else inline create */}
+        {sigLoading ? (
+          <Skeleton className="h-20 w-full" />
+        ) : sig ? (
+          <div className="rounded-md border border-border bg-white px-3 py-2">
+            <p className="mb-1 text-xs font-medium text-text-secondary">Signing as</p>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={sig.imageUrl} alt="Your signature" className="h-14 object-contain" />
+          </div>
+        ) : (
+          <div className="rounded-md border border-dashed border-border bg-surface-alt px-3 py-3">
+            <p className="mb-2 text-xs text-text-secondary">
+              You don’t have a signature yet. Draw or upload one — it’s saved to your profile and stamped
+              onto the signed document.
+            </p>
+            <SignaturePad onChange={(blob, kind) => saveSig.mutate({ blob, kind })} />
+          </div>
+        )}
 
         <FormField label={`Type your full name to affirm (${expectedName})`} required>
           <Input
@@ -498,6 +549,53 @@ const SignModal = ({
         </FormField>
       </div>
     </SlideOver>
+  );
+};
+
+const SignedDocumentsCard = ({ requestId }: { requestId: string }): JSX.Element | null => {
+  const { data, isLoading } = useQuery({
+    queryKey: ['request', requestId, 'signed'],
+    queryFn: () => requestsApi.signedDocuments(requestId),
+  });
+
+  if (isLoading) {
+    return (
+      <Card>
+        <CardHeader title="Signed documents" />
+        <Skeleton className="h-16 w-full" />
+      </Card>
+    );
+  }
+  if (!data || data.length === 0) return null;
+
+  return (
+    <Card>
+      <CardHeader
+        title="Signed documents"
+        subtitle="Downloadable copies with every signature stamped on a signature page. PDF attachments only."
+      />
+      <ul className="space-y-1.5">
+        {data.map((d) => (
+          <li
+            key={d.id}
+            className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+          >
+            <FileCheck2 className="h-4 w-4 shrink-0 text-success" />
+            <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+              {d.sourceName ?? 'Signature certificate'}
+            </span>
+            <a
+              href={d.downloadUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+            >
+              <Download className="h-3.5 w-3.5" /> Download
+            </a>
+          </li>
+        ))}
+      </ul>
+    </Card>
   );
 };
 

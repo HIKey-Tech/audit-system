@@ -43,6 +43,13 @@ export class ApprovalController {
     this.router.get('/:id', requirePermission('approval:read'), this._getApprovalById.bind(this));
 
     /**
+     * @route  GET /workflow/approvals/:id/signed-documents
+     * @desc   List frozen signed artifacts for a completed approval
+     * @access Private - approval:read
+     */
+    this.router.get('/:id/signed-documents', requirePermission('approval:read'), this._listSignedDocuments.bind(this));
+
+    /**
      * @route  POST /workflow/approvals/:id/approve
      * @desc   Approve current workflow approval step
      * @access Private - audit:write
@@ -86,6 +93,15 @@ export class ApprovalController {
     try {
       const approval = await this.approvalService.getApprovalById(req.params.id);
       res.status(200).json(buildResponse(approval));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listSignedDocuments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const docs = await this.approvalService.listSignedDocuments(req.params.id);
+      res.status(200).json(buildResponse(docs));
     } catch (err) {
       next(err);
     }

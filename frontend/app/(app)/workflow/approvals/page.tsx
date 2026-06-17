@@ -14,6 +14,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { workflowApi } from '@/lib/api/workflow';
+import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { formatRelative } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
@@ -22,20 +23,11 @@ export default function ApprovalsPage(): JSX.Element {
   const qc = useQueryClient();
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const pending = useQuery({
     queryKey: ['workflow', 'pending'],
     queryFn: () => workflowApi.listPending(),
-  });
-
-  const approve = useMutation({
-    mutationFn: (id: string) => workflowApi.approve(id),
-    onSuccess: () => {
-      toast.success('Approved');
-      qc.invalidateQueries({ queryKey: ['workflow'] });
-      qc.invalidateQueries({ queryKey: ['notifications'] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
   const reject = useMutation({
@@ -93,14 +85,35 @@ export default function ApprovalsPage(): JSX.Element {
                       {days}d waiting
                     </span>
                     <div className="flex gap-2">
-                      <Button size="sm" variant="success" onClick={() => approve.mutate(a.id)}>
-                        Approve
+                      <Button
+                        size="sm"
+                        variant="success"
+                        onClick={() => {
+                          setApprovingId((cur) => (cur === a.id ? null : a.id));
+                          setRejectingId(null);
+                        }}
+                      >
+                        Approve &amp; Sign
                       </Button>
-                      <Button size="sm" variant="danger" onClick={() => setRejectingId(a.id)}>
+                      <Button
+                        size="sm"
+                        variant="danger"
+                        onClick={() => {
+                          setRejectingId(a.id);
+                          setApprovingId(null);
+                        }}
+                      >
                         Reject
                       </Button>
                     </div>
                   </div>
+                  {approvingId === a.id && (
+                    <ApproveSignPanel
+                      approvalId={a.id}
+                      entityType={a.entityType}
+                      onDone={() => setApprovingId(null)}
+                    />
+                  )}
                   {rejectingId === a.id && (
                     <div className="mt-3 rounded-md border border-border bg-surface-alt p-3">
                       <FormField label="Reason" required>

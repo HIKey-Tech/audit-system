@@ -696,8 +696,16 @@ export interface WorkflowApprovalStep {
   approverName: string;
   status: string;
   comment: string | null;
+  signatureId: string | null;
   decidedAt: string | null;
   createdAt: string;
+}
+
+export interface SignedApprovalDocument {
+  id: string;
+  signedDocumentId: string;
+  downloadUrl: string;
+  generatedAt: string;
 }
 
 export interface WorkflowApproval {
@@ -1052,4 +1060,24 @@ export interface ScheduledJob {
   lastRunAt: string | null;
   lastRunStatus: string | null;
   createdAt: string;
+}
+
+// ============================================================
+// E-Signature (user signature + signed-PDF output)
+// ============================================================
+export interface UserSignature {
+  id: string;
+  kind: 'drawn' | 'uploaded';
+  documentId: string;
+  imageUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SignedDocument {
+  id: string;
+  sourceName: string | null;
+  signedDocumentId: string;
+  downloadUrl: string;
+  generatedAt: string;
 }

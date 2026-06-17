@@ -3,7 +3,7 @@ import { PaginationMeta, PaginationQuery } from '../../../../../shared/types/api
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { WorkflowEntityType } from '../../../domain/enum/workflow.enum';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
-import { ApprovalResponseDto } from '../../dto/response/approval.response.dto';
+import { ApprovalResponseDto, SignedApprovalDocumentDto } from '../../dto/response/approval.response.dto';
 
 /** Minimal actor shape needed to authorise an approval action by permission. */
 export interface ApprovalActor {
@@ -27,4 +27,5 @@ export interface IApprovalService {
     pagination: PaginationQuery,
   ): Promise<{ approvals: ApprovalResponseDto[]; meta: PaginationMeta }>;
   cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
+  listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]>;
 }

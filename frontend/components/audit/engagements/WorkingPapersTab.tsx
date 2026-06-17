@@ -16,6 +16,8 @@ import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { workingPapersApi } from '@/lib/api/audit';
 import { wpTemplatesApi } from '@/lib/api/settings';
+import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
+import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { formatRelative } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
 import type {
@@ -40,6 +42,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
   const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<AuditWorkingPaper | null>(null);
   const [rejecting, setRejecting] = useState<AuditWorkingPaper | null>(null);
+  const [approvingId, setApprovingId] = useState<string | null>(null);
 
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'working-papers'],
@@ -55,15 +58,6 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
     mutationFn: (id: string) => workingPapersApi.submit(id),
     onSuccess: () => {
       toast.success('Submitted for review');
-      refresh();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
-
-  const approveMut = useMutation({
-    mutationFn: (id: string) => workingPapersApi.approve(id),
-    onSuccess: () => {
-      toast.success('Working paper approved');
       refresh();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
@@ -163,9 +157,9 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                             size="sm"
                             variant="success"
                             leftIcon={<Check className="h-3.5 w-3.5" />}
-                            onClick={() => approveMut.mutate(wp.id)}
+                            onClick={() => setApprovingId((cur) => (cur === wp.id ? null : wp.id))}
                           >
-                            Approve
+                            Approve &amp; Sign
                           </Button>
                         )}
                         {canRejectWP && (
@@ -182,6 +176,22 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                     )}
                   </div>
                 </div>
+                {approvingId === wp.id && (
+                  <ApproveSignPanel
+                    entityType="audit_working_paper"
+                    showComment={false}
+                    approveFn={() => workingPapersApi.approve(wp.id)}
+                    onDone={() => {
+                      setApprovingId(null);
+                      refresh();
+                    }}
+                  />
+                )}
+                {wp.status === 'approved' && (
+                  <div className="mt-3">
+                    <SignedApprovalDocuments entityType="audit_working_paper" entityId={wp.id} />
+                  </div>
+                )}
               </li>
             ))}
           </ul>

@@ -341,9 +341,9 @@ Expected: FAIL (`UserSignatureService` not found).
 // src/modules/user/service/implementation/signature.service.ts
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../shared/utils/logger.util';
-import { AppError } from '../../../../shared/errors/app-error';
+import { AppError } from '../../../../shared/errors/app.error'; // FIX: file is app.error.ts, not app-error
 import { IDocumentService } from '../../../document/service/interface/document.service.interface';
-import { documentService } from '../../../document';
+import { DocumentService } from '../../../document'; // FIX: no documentService singleton export; instantiate the class
 import { SetSignatureDto } from '../../dto/request/signature.request.dto';
 import {
   UserSignatureResponseDto,
@@ -416,10 +416,10 @@ export class UserSignatureService implements IUserSignatureService {
   }
 }
 
-export const userSignatureService = new UserSignatureService(documentService);
+export const userSignatureService = new UserSignatureService(new DocumentService());
 ```
 
-> Verify the actual prisma client import path used elsewhere (e.g. `shared/prisma/prisma.client` vs `shared/prisma`) and the `documentService` singleton export from `src/modules/document/index.ts`; match them exactly.
+> FIX (verified against codebase): `src/modules/document/index.ts` does **not** export a `documentService` singleton — only the `DocumentService` class and `IDocumentService` type. Every consumer (e.g. `request.service.ts`) does `new DocumentService()`. The prisma client path is `shared/prisma/prisma.client` and the error class is `shared/errors/app.error`.
 
 - [ ] **Step 5: Run tests — expect PASS**
 
@@ -450,15 +450,17 @@ const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 2 *
 ```
 ```ts
 // inside _registerRoutes()
-this.router.get('/signature', authenticate, this._getSignature.bind(this));
-this.router.put(
+// NOTE: SettingsController already calls this.router.use(authenticate) globally,
+// so the per-route `authenticate` below is redundant but harmless.
+// FIX: route is POST, not PUT — the frontend api.upload() helper is POST-only.
+this.router.get('/signature', this._getSignature.bind(this));
+this.router.post(
   '/signature',
-  authenticate,
   upload.single('file'),
   validate(SetSignatureMetadataSchema),
   this._setSignature.bind(this),
 );
-this.router.delete('/signature', authenticate, this._removeSignature.bind(this));
+this.router.delete('/signature', this._removeSignature.bind(this));
 ```
 
 - [ ] **Step 2: Handlers**
@@ -841,7 +843,7 @@ import crypto from 'crypto';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
-import { documentService } from '../../../../document';
+import { DocumentService } from '../../../../document'; // FIX: instantiate the class; no singleton export
 import {
   appendSignaturePage,
   buildCertificatePdf,
@@ -882,7 +884,7 @@ export class SignedDocumentService implements ISignedDocumentService {
           manifestHash,
           entries,
         });
-        await this._store(requestId, null, request.reference_number, bytes);
+        await this._store(requestId, null, request.reference_number, bytes, request.initiator_id);
         return;
       }
 
@@ -897,7 +899,7 @@ export class SignedDocumentService implements ISignedDocumentService {
             entries,
           };
           const signed = await appendSignaturePage(file.buffer, data);
-          await this._store(requestId, att.id, att.originalName, signed);
+          await this._store(requestId, att.id, att.originalName, signed, request.initiator_id);
         } catch (err) {
           logger.warn('Signed-PDF generation failed for attachment', { requestId, documentId: att.id, err });
         }
@@ -951,10 +953,10 @@ export class SignedDocumentService implements ISignedDocumentService {
     return entries;
   }
 
-  private async _store(requestId: string, sourceId: string | null, baseName: string, bytes: Buffer): Promise<void> {
+  private async _store(requestId: string, sourceId: string | null, baseName: string, bytes: Buffer, uploadedById: string): Promise<void> {
     const signedName = baseName.replace(/\.pdf$/i, '') + ' (signed).pdf';
     const doc = await this.documents.upload({
-      uploadedById: 'system',
+      uploadedById, // FIX: Document.uploaded_by_id is a required FK to users; use the request initiator, not a fake 'system' id
       originalName: signedName,
       mimeType: 'application/pdf',
       fileSize: bytes.length,
@@ -970,10 +972,10 @@ export class SignedDocumentService implements ISignedDocumentService {
   }
 }
 
-export const signedDocumentService = new SignedDocumentService(documentService);
+export const signedDocumentService = new SignedDocumentService(new DocumentService());
 ```
 
-> Two integration details to verify against the codebase when implementing: (1) `documentService.getFileById` returns `ServedFileDto` — confirm its buffer field name (e.g. `buffer` vs `data`) in `document.response.dto.ts` and adjust. (2) `uploadedById: 'system'` — confirm whether a system user id exists; if `uploaded_by_id` must FK to a real user, use the request initiator's id instead.
+> Integration details verified against the codebase: (1) `getFileById` returns `ServedFileDto` whose buffer field is `buffer` (see `document.response.dto.ts`) — used as-is. (2) `uploaded_by_id` is a required FK to `users`, so the signed copy is uploaded as the request **initiator** (threaded in as `uploadedById`), not a fake `'system'` id.
 
 - [ ] **Step 5: Run tests — expect PASS**
 
@@ -1078,7 +1080,7 @@ export const signatureApi = {
     const fd = new FormData();
     fd.append('file', file, 'signature.png');
     fd.append('kind', kind);
-    return api.upload<UserSignature>('/settings/signature', fd, 'PUT');
+    return api.upload<UserSignature>('/settings/signature', fd); // FIX: api.upload is POST-only; route is POST
   },
   remove: () => api.delete('/settings/signature'),
 };

@@ -44,6 +44,8 @@ import {
   hashBuffer,
   hashManifest,
 } from '../../utility/signature.utility';
+import { userSignatureService } from '../../../../user/service/implementation/signature.service';
+import { signedDocumentService } from './signed-document.service';
 
 const RECEIVE_PERMISSION = 'request:receive';
 const ADMIN_PERMISSION = 'request:admin';
@@ -207,12 +209,17 @@ export class RequestService implements IRequestService {
     await this._assertAffirmation(actor.id, dto.affirmation);
 
     const { hash, manifest } = await this._buildSignature(request, actor.id);
+    // Record which stored signature image was used, so the signed-PDF generator can
+    // stamp the right image even if the user later changes their signature. Null is
+    // fine — the manifest-hash signature is unaffected when no image exists.
+    const sigRef = await userSignatureService.getActiveSignatureRef(actor.id);
 
     return this._advance(requestId, actor, RequestActionType.Sign, {
       stepStatus: RequestStepStatus.Signed,
       comment: dto.comment,
       signatureHash: hash,
       signatureManifest: manifest,
+      signatureId: sigRef?.id,
       preloaded: request,
     });
   }
@@ -487,6 +494,7 @@ export class RequestService implements IRequestService {
       comment?: string;
       signatureHash?: string;
       signatureManifest?: string;
+      signatureId?: string;
       preloaded?: RequestWithDetails;
     },
   ): Promise<RequestResponseDto> {
@@ -510,6 +518,7 @@ export class RequestService implements IRequestService {
           comment: opts.comment ?? null,
           signature_hash: opts.signatureHash ?? null,
           signature_manifest: opts.signatureManifest ?? null,
+          signature_id: opts.signatureId ?? null,
         },
       });
 
@@ -546,6 +555,11 @@ export class RequestService implements IRequestService {
         eventKey: 'workflow.request.completed',
         extraVariables: { requestTitle: updated.title, requestReference: updated.reference_number },
       });
+      // Generate visible signed-PDF copies once, on completion. Fire-and-forget and
+      // outside the transaction — it must never delay or fail the user's sign action.
+      void signedDocumentService
+        .generateForCompletedRequest(requestId)
+        .catch((err: unknown) => logger.warn('Signed-doc generation enqueue failed', { requestId, err }));
     }
 
     logger.info('Workflow request step actioned', { requestId, actionType, actorId: actor.id, completed: !nextStep });

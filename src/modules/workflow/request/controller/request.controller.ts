@@ -5,6 +5,7 @@ import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import { AppError } from '../../../../shared/errors/app.error';
 import { IRequestService } from '../service/interface/request.service.interface';
+import { signedDocumentService } from '../service/implementation/signed-document.service';
 import {
   ApproveRequestSchema,
   CommentRequestSchema,
@@ -77,6 +78,13 @@ export class RequestController {
      * @access Private - request:read
      */
     this.router.get('/:id/verify-signatures', requirePermission('request:read'), this._verifySignatures.bind(this));
+
+    /**
+     * @route  GET /workflow/requests/:id/signed-documents
+     * @desc   List generated signed-PDF copies for a completed request
+     * @access Private - request:read
+     */
+    this.router.get('/:id/signed-documents', requirePermission('request:read'), this._listSignedDocuments.bind(this));
 
     /**
      * @route  POST /workflow/requests/:id/approve
@@ -177,6 +185,15 @@ export class RequestController {
     try {
       const result = await this.requestService.verifySignatures(req.params.id, req.user!);
       res.status(200).json(buildResponse(result, 'Signature verification complete'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listSignedDocuments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const docs = await signedDocumentService.list(req.params.id);
+      res.status(200).json(buildResponse(docs, 'Signed documents retrieved'));
     } catch (err) {
       next(err);
     }

@@ -19,8 +19,16 @@ export interface ApprovalStepResponseDto {
   status: string;
   comment: string | null;
   actedAt: string | null;
+  signatureId: string | null;
   createdAt: string;
   approver?: WorkflowUserBrief;
+}
+
+export interface SignedApprovalDocumentDto {
+  id: string;
+  signedDocumentId: string;
+  downloadUrl: string;
+  generatedAt: string;
 }
 
 export interface ApprovalResponseDto {
@@ -57,6 +65,7 @@ export const mapApprovalStepToResponse = (step: {
   status: string;
   comment: string | null;
   acted_at: Date | null;
+  signature_id?: string | null;
   created_at: Date;
   approver?: WorkflowUserLike | null;
 }): ApprovalStepResponseDto => ({
@@ -68,6 +77,7 @@ export const mapApprovalStepToResponse = (step: {
   status: step.status,
   comment: step.comment,
   actedAt: step.acted_at?.toISOString() ?? null,
+  signatureId: step.signature_id ?? null,
   createdAt: step.created_at.toISOString(),
   approver: step.approver ? mapWorkflowUserBrief(step.approver) : undefined,
 });

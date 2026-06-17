@@ -14,9 +14,11 @@ import {
   PageNumber,
   convertInchesToTwip,
   ShadingType,
+  ImageRun,
 } from 'docx';
-import puppeteer from 'puppeteer';
+import type { Content, TableCell as PdfTableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import { format as formatDate } from 'date-fns';
+import { borderedTableLayout, hexColor, mm, renderPdf, severityBadge } from '../../../../../shared/utils/pdf.util';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
@@ -26,7 +28,12 @@ import { IApprovalService } from '../../../../workflow/approval/service/interfac
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ApprovalResponseDto } from '../../../../workflow/approval/dto/response/approval.response.dto';
 import { ReportTemplateResponseDto } from '../../../../settings/dto/response/settings.response.dto';
+import { DocumentService } from '../../../../document';
+import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
+
+/** Resolved approver signature images, keyed by approval step id. */
+type StepSignatureMap = Map<string, { buffer: Buffer; dataUrl: string; type: 'png' | 'jpg' }>;
 
 // ────────────────────────────────────────────────────────────
 // Local types
@@ -191,7 +198,42 @@ export class ReportGenerationService implements IReportGenerationService {
     private readonly reportTemplateService: IReportTemplateService,
     private readonly systemConfigService: ISystemConfigService,
     private readonly approvalService: IApprovalService,
+    private readonly documentService: IDocumentService = new DocumentService(),
   ) {}
+
+  /** Load each approved step's recorded signature image, keyed by step id. Never throws. */
+  private async _stepSignatures(approval: ApprovalResponseDto | null): Promise<StepSignatureMap> {
+    const map: StepSignatureMap = new Map();
+    for (const step of approval?.steps ?? []) {
+      if (step.status !== 'approved' || !step.signatureId) continue;
+      try {
+        const sig = await prisma.user_Signature.findUnique({ where: { id: step.signatureId } });
+        if (!sig) continue;
+        const file = await this.documentService.getFileById(sig.document_id);
+        map.set(step.id, {
+          buffer: file.buffer,
+          dataUrl: `data:${file.mimeType};base64,${file.buffer.toString('base64')}`,
+          type: file.mimeType === 'image/jpeg' ? 'jpg' : 'png',
+        });
+      } catch {
+        // Skip this approver's image; the text block still renders.
+      }
+    }
+    return map;
+  }
+
+  /** The first reviewer (lowest approved level) and final approver (highest approved level). */
+  private _signOffSteps(
+    approval: ApprovalResponseDto | null,
+  ): { reviewedStepId?: string; approvedStepId?: string } {
+    const approved = (approval?.steps ?? [])
+      .filter((s) => s.status === 'approved')
+      .sort((a, b) => a.level - b.level);
+    if (approved.length === 0) return {};
+    const approvedStepId = approved[approved.length - 1].id;
+    const reviewedStepId = approved.length > 1 ? approved[0].id : undefined;
+    return { reviewedStepId, approvedStepId };
+  }
 
   // ─────────── Data fetching ───────────
 
@@ -354,12 +396,18 @@ export class ReportGenerationService implements IReportGenerationService {
     } catch {
       approval = null;
     }
-    const doc = this._buildDocxDocument(data, config, approval);
+    const sigMap = await this._stepSignatures(approval);
+    const doc = this._buildDocxDocument(data, config, approval, sigMap);
     const uint8Array = await Packer.toBuffer(doc);
     return Buffer.from(uint8Array);
   }
 
-  private _buildDocxDocument(data: ReportData, config: TemplateConfig, approval: ApprovalResponseDto | null): Document {
+  private _buildDocxDocument(
+    data: ReportData,
+    config: TemplateConfig,
+    approval: ApprovalResponseDto | null,
+    sigMap: StepSignatureMap,
+  ): Document {
     const children: (Paragraph | Table)[] = [];
     const header = this._getHeaderConfig(config);
     const footerNotice = this._getFooterNotice(config);
@@ -389,7 +437,7 @@ export class ReportGenerationService implements IReportGenerationService {
     });
 
     // Signature block
-    children.push(this._buildDocxSignatureBlock(data, approval, config));
+    children.push(this._buildDocxSignatureBlock(data, approval, config, sigMap));
 
     // Footer notice
     children.push(
@@ -884,8 +932,26 @@ export class ReportGenerationService implements IReportGenerationService {
     });
   }
 
-  private _buildDocxSignatureBlock(data: ReportData, approval: ApprovalResponseDto | null, config: TemplateConfig): Table {
+  private _buildDocxSignatureBlock(
+    data: ReportData,
+    approval: ApprovalResponseDto | null,
+    config: TemplateConfig,
+    sigMap: StepSignatureMap,
+  ): Table {
     const labels = this._getSignatureLabels(config);
+    const { reviewedStepId, approvedStepId } = this._signOffSteps(approval);
+    const sigParagraphs = (stepId?: string): Paragraph[] => {
+      const entry = stepId ? sigMap.get(stepId) : undefined;
+      return entry
+        ? [
+            new Paragraph({
+              children: [
+                new ImageRun({ type: entry.type, data: entry.buffer, transformation: { width: 120, height: 42 } }),
+              ],
+            }),
+          ]
+        : [];
+    };
     const leadAuditorName =
       data.engagement.leadAuditor.displayName ??
       `${data.engagement.leadAuditor.firstName} ${data.engagement.leadAuditor.lastName}`.trim() ??
@@ -935,6 +1001,7 @@ export class ReportGenerationService implements IReportGenerationService {
                     new TextRun({ text: `${labels.reviewedBy}:`, bold: true, color: '003087' }),
                   ],
                 }),
+                ...sigParagraphs(reviewedStepId),
                 new Paragraph({ children: [new TextRun({ text: auditManagerName })] }),
                 new Paragraph({ children: [new TextRun({ text: auditManagerTitle })] }),
               ],
@@ -947,6 +1014,7 @@ export class ReportGenerationService implements IReportGenerationService {
                     new TextRun({ text: `${labels.approvedBy}:`, bold: true, color: '003087' }),
                   ],
                 }),
+                ...sigParagraphs(approvedStepId),
                 new Paragraph({ children: [new TextRun({ text: caeApproverName })] }),
               ],
               width: { size: 34, type: WidthType.PERCENTAGE },
@@ -977,48 +1045,51 @@ export class ReportGenerationService implements IReportGenerationService {
     } catch {
       approval = null;
     }
-    const html = this._buildPdfHtml(data, config, approval);
-    const footerNotice = this._getFooterNotice(config);
-    const browser = await puppeteer.launch({ headless: true });
-    try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: { top: '20mm', bottom: '25mm', left: '20mm', right: '20mm' },
-        displayHeaderFooter: true,
-        headerTemplate: '<div></div>',
-        footerTemplate: `<div style="font-size:9px;width:100%;text-align:center;color:#64748B;padding:0 20mm;">${this._escapeHtml(footerNotice)} - Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>`,
-      });
-      return Buffer.from(pdfBuffer);
-    } finally {
-      await browser.close();
-    }
+    const sigMap = await this._stepSignatures(approval);
+    return renderPdf(this._buildPdfDocDefinition(data, config, approval, sigMap));
   }
 
-  private _buildPdfHtml(data: ReportData, config: TemplateConfig, approval: ApprovalResponseDto | null): string {
+  private _buildPdfDocDefinition(
+    data: ReportData,
+    config: TemplateConfig,
+    approval: ApprovalResponseDto | null,
+    sigMap: StepSignatureMap,
+  ): TDocumentDefinitions {
     const header = this._getHeaderConfig(config);
     const footerNotice = this._getFooterNotice(config);
     const labels = this._getSignatureLabels(config);
+    const { reviewedStepId, approvedStepId } = this._signOffSteps(approval);
+    const primary = hexColor(header.primaryColor);
+    const accent = hexColor(header.accentColor);
+
+    const sigImg = (stepId?: string): Content | null => {
+      const entry = stepId ? sigMap.get(stepId) : undefined;
+      return entry ? { image: entry.dataUrl, fit: [120, 42], margin: [0, 4, 0, 4] } : null;
+    };
+
+    /** "Label: value" line with the label bolded in the brand colour. */
+    const labeled = (label: string, value: string): Content => ({
+      text: [{ text: `${label}: `, bold: true, color: primary }, value],
+      margin: [0, 3, 0, 3],
+    });
+
+    /** A label cell for the metadata / details tables. */
+    const labelCell = (text: string): PdfTableCell => ({ text, bold: true, color: primary, fillColor: '#F8F9FA' });
+
     const leadAuditorName =
-      this._escapeHtml(
-        data.engagement.leadAuditor.displayName ??
-          `${data.engagement.leadAuditor.firstName} ${data.engagement.leadAuditor.lastName}`.trim() ??
-          'N/A',
-      );
-    const leadAuditorTitle = this._escapeHtml(data.engagement.leadAuditor.jobTitle ?? '');
+      data.engagement.leadAuditor.displayName ??
+      `${data.engagement.leadAuditor.firstName} ${data.engagement.leadAuditor.lastName}`.trim() ??
+      'N/A';
+    const leadAuditorTitle = data.engagement.leadAuditor.jobTitle ?? '';
     const preparedDate = data.engagement.actualStartDate
       ? formatDate(data.engagement.actualStartDate, 'dd MMM yyyy')
       : '';
 
     const auditManagerName =
-      this._escapeHtml(
-        data.engagement.auditManager.displayName ??
-          `${data.engagement.auditManager.firstName} ${data.engagement.auditManager.lastName}`.trim() ??
-          'N/A',
-      );
-    const auditManagerTitle = this._escapeHtml(data.engagement.auditManager.jobTitle ?? '');
+      data.engagement.auditManager.displayName ??
+      `${data.engagement.auditManager.firstName} ${data.engagement.auditManager.lastName}`.trim() ??
+      'N/A';
+    const auditManagerTitle = data.engagement.auditManager.jobTitle ?? '';
 
     let caeApproverName = 'N/A';
     if (approval?.steps) {
@@ -1027,226 +1098,207 @@ export class ReportGenerationService implements IReportGenerationService {
         approvedSteps.length > 0
           ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
           : undefined;
-      caeApproverName = this._escapeHtml(highest?.approver?.displayName ?? 'N/A');
+      caeApproverName = highest?.approver?.displayName ?? 'N/A';
     }
 
-    const severityBadge = (severity: string) => {
-      const classes: Record<string, string> = {
-        critical: 'severity-critical',
-        high: 'severity-high',
-        medium: 'severity-medium',
-        low: 'severity-low',
-        informational: 'severity-informational',
-      };
-      return `<span class="${classes[severity.toLowerCase()] ?? 'severity-informational'}">${this._escapeHtml(severity.toUpperCase())}</span>`;
+    const findingsSummaryTable: Content = {
+      table: {
+        headerRows: 1,
+        widths: [22, '*', 80, 64, 70, 64],
+        body: [
+          ['No.', 'Finding Title', 'Category', 'Severity', 'Status', 'Due Date'].map(
+            (h): PdfTableCell => ({ text: h, bold: true, color: '#FFFFFF', fillColor: primary }),
+          ),
+          ...data.findings.map((f, idx): PdfTableCell[] => [
+            { text: String(idx + 1) },
+            { text: f.title },
+            { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category },
+            severityBadge(f.severity),
+            { text: FINDING_STATUS_LABEL[f.status] ?? f.status },
+            { text: formatDate(f.dueDate, 'dd MMM yyyy') },
+          ]),
+        ],
+      },
+      layout: borderedTableLayout,
+      margin: [0, 4, 0, 0],
     };
 
-    const findingsSummaryRows = data.findings
-      .map(
-        (f, idx) => `
-      <tr>
-        <td>${idx + 1}</td>
-        <td>${this._escapeHtml(f.title)}</td>
-        <td>${this._escapeHtml(FINDING_CATEGORY_LABEL[f.category] ?? f.category)}</td>
-        <td>${severityBadge(f.severity)}</td>
-        <td>${this._escapeHtml(FINDING_STATUS_LABEL[f.status] ?? f.status)}</td>
-        <td>${formatDate(f.dueDate, 'dd MMM yyyy')}</td>
-      </tr>
-    `,
-      )
-      .join('');
+    const detailedFindingsContent: Content[] = [];
+    data.findings.forEach((f, idx) => {
+      const auditeeName =
+        f.auditee.displayName ?? `${f.auditee.firstName} ${f.auditee.lastName}`.trim() ?? 'N/A';
 
-    const detailedFindingsHtml = data.findings
-      .map((f, idx) => {
-        const auditeeName =
-          this._escapeHtml(
-            f.auditee.displayName ??
-              `${f.auditee.firstName} ${f.auditee.lastName}`.trim() ??
-              'N/A',
-          );
+      detailedFindingsContent.push(
+        { text: `Finding ${idx + 1}: ${f.title}`, bold: true, fontSize: 12, margin: [0, 14, 0, 6] },
+        {
+          table: {
+            widths: [110, '*'],
+            body: [
+              [labelCell('Severity'), severityBadge(f.severity)],
+              [labelCell('Category'), { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category }],
+              [labelCell('Status'), { text: FINDING_STATUS_LABEL[f.status] ?? f.status }],
+              [labelCell('Due Date'), { text: formatDate(f.dueDate, 'dd MMM yyyy') }],
+              [labelCell('Auditee'), { text: auditeeName }],
+            ],
+          },
+          layout: borderedTableLayout,
+          margin: [0, 0, 0, 6],
+        },
+        labeled('Description', f.description),
+        labeled('Root Cause', f.rootCause),
+        labeled('Risk Implication', f.riskImplication),
+        labeled('Recommendation', f.recommendation),
+      );
 
-        let managementResponseHtml = '';
-        if (f.followUp?.managementResponse) {
-          const responder = f.followUp.managementResponseBy;
-          const responderName =
-            this._escapeHtml(
-              responder?.displayName ??
-                `${responder?.firstName ?? ''} ${responder?.lastName ?? ''}`.trim() ??
-                'N/A',
-            );
-          const responseDate = f.followUp.managementResponseAt
-            ? formatDate(f.followUp.managementResponseAt, 'dd MMM yyyy')
-            : '';
-          managementResponseHtml = `
-            <p><span class="label">Management Response:</span> ${this._escapeHtml(f.followUp.managementResponse)}</p>
-            <p class="meta">Submitted by: ${responderName} on ${responseDate}</p>
-          `;
-        }
+      if (f.followUp?.managementResponse) {
+        const responder = f.followUp.managementResponseBy;
+        const responderName =
+          responder?.displayName ??
+          `${responder?.firstName ?? ''} ${responder?.lastName ?? ''}`.trim() ??
+          'N/A';
+        const responseDate = f.followUp.managementResponseAt
+          ? formatDate(f.followUp.managementResponseAt, 'dd MMM yyyy')
+          : '';
+        detailedFindingsContent.push(
+          labeled('Management Response', f.followUp.managementResponse),
+          { text: `Submitted by: ${responderName} on ${responseDate}`, italics: true, fontSize: 10, color: '#64748B', margin: [0, 0, 0, 3] },
+        );
+      }
 
-        let verificationHtml = '';
-        if (f.followUp?.verifiedAt) {
-          const verifier = f.followUp.verifiedBy;
-          const verifierName =
-            this._escapeHtml(
-              verifier?.displayName ??
-                `${verifier?.firstName ?? ''} ${verifier?.lastName ?? ''}`.trim() ??
-                'N/A',
-            );
-          const verifyDate = f.followUp.verifiedAt
-            ? formatDate(f.followUp.verifiedAt, 'dd MMM yyyy')
-            : '';
-          verificationHtml = `
-            <p><span class="label">Verification Status:</span> ${this._escapeHtml(f.followUp.verificationStatus)}</p>
-            <p class="meta">Verified by: ${verifierName} on ${verifyDate}</p>
-            <p><span class="label">Verification Notes:</span> ${this._escapeHtml(f.followUp.verificationNotes ?? 'N/A')}</p>
-          `;
-        }
+      if (f.followUp?.verifiedAt) {
+        const verifier = f.followUp.verifiedBy;
+        const verifierName =
+          verifier?.displayName ??
+          `${verifier?.firstName ?? ''} ${verifier?.lastName ?? ''}`.trim() ??
+          'N/A';
+        const verifyDate = formatDate(f.followUp.verifiedAt, 'dd MMM yyyy');
+        detailedFindingsContent.push(
+          labeled('Verification Status', f.followUp.verificationStatus),
+          { text: `Verified by: ${verifierName} on ${verifyDate}`, italics: true, fontSize: 10, color: '#64748B', margin: [0, 0, 0, 3] },
+          labeled('Verification Notes', f.followUp.verificationNotes ?? 'N/A'),
+        );
+      }
 
-        return `
-          <div class="finding">
-            <div class="finding-heading">Finding ${idx + 1}: ${this._escapeHtml(f.title)}</div>
-            <table class="details-table">
-              <tr><td class="label">Severity</td><td>${severityBadge(f.severity)}</td></tr>
-              <tr><td class="label">Category</td><td>${this._escapeHtml(FINDING_CATEGORY_LABEL[f.category] ?? f.category)}</td></tr>
-              <tr><td class="label">Status</td><td>${this._escapeHtml(FINDING_STATUS_LABEL[f.status] ?? f.status)}</td></tr>
-              <tr><td class="label">Due Date</td><td>${formatDate(f.dueDate, 'dd MMM yyyy')}</td></tr>
-              <tr><td class="label">Auditee</td><td>${auditeeName}</td></tr>
-            </table>
-            <p><span class="label">Description:</span> ${this._escapeHtml(f.description)}</p>
-            <p><span class="label">Root Cause:</span> ${this._escapeHtml(f.rootCause)}</p>
-            <p><span class="label">Risk Implication:</span> ${this._escapeHtml(f.riskImplication)}</p>
-            <p><span class="label">Recommendation:</span> ${this._escapeHtml(f.recommendation)}</p>
-            ${managementResponseHtml}
-            ${verificationHtml}
-          </div>
-          ${idx < data.findings.length - 1 ? '<div class="separator"></div>' : ''}
-        `;
-      })
-      .join('');
+      if (idx < data.findings.length - 1) {
+        detailedFindingsContent.push({
+          canvas: [{ type: 'line', x1: 0, y1: 0, x2: 482, y2: 0, lineWidth: 1, lineColor: '#cccccc' }],
+          margin: [0, 10, 0, 10],
+        });
+      }
+    });
 
-    const sectionsHtml = config.template.sections
-      .map((section, idx) => {
-        const sectionNumber = idx + 1;
-        let content = '';
-        switch (section.key) {
-          case 'executive_summary':
-            content = `<p>${this._escapeHtml(data.report.executiveSummary)}</p>`;
-            break;
-          case 'background':
-            content = `<p>Refer to engagement details above.</p>`;
-            break;
-          case 'objectives':
-            content = `<p>${this._escapeHtml(data.report.scope)}</p>`;
-            break;
-          case 'methodology':
-            content = `<p>${this._escapeHtml(data.report.methodology)}</p>`;
-            break;
-          case 'findings_summary':
-            content = `
-              <table class="data-table">
-                <thead>
-                  <tr><th>No.</th><th>Finding Title</th><th>Category</th><th>Severity</th><th>Status</th><th>Due Date</th></tr>
-                </thead>
-                <tbody>${findingsSummaryRows}</tbody>
-              </table>
-            `;
-            break;
-          case 'detailed_findings':
-            content = detailedFindingsHtml;
-            break;
-          case 'conclusion':
-            content = `<p>See findings and recommendations above.</p>`;
-            break;
-          default:
-            content = `<p></p>`;
-        }
-        return `
-          <div class="section">
-            <div class="section-title">${sectionNumber}. ${this._escapeHtml(section.title)}</div>
-            ${content}
-          </div>
-        `;
-      })
-      .join('');
+    const sectionsContent: Content[] = [];
+    config.template.sections.forEach((section, idx) => {
+      sectionsContent.push({ text: `${idx + 1}. ${section.title}`, style: 'sectionTitle', margin: [0, 18, 0, 8] });
+      switch (section.key) {
+        case 'executive_summary':
+          sectionsContent.push({ text: data.report.executiveSummary });
+          break;
+        case 'background':
+          sectionsContent.push({ text: 'Refer to engagement details above.' });
+          break;
+        case 'objectives':
+          sectionsContent.push({ text: data.report.scope });
+          break;
+        case 'methodology':
+          sectionsContent.push({ text: data.report.methodology });
+          break;
+        case 'findings_summary':
+          sectionsContent.push(findingsSummaryTable);
+          break;
+        case 'detailed_findings':
+          sectionsContent.push(...detailedFindingsContent);
+          break;
+        case 'conclusion':
+          sectionsContent.push({ text: 'See findings and recommendations above.' });
+          break;
+        default:
+          break;
+      }
+    });
 
-    return `<!DOCTYPE html>
-<html>
-<head>
-  <meta charset="UTF-8">
-  <style>
-    @page { margin: 20mm; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; font-size: 11pt; line-height: 1.5; color: #1a1a1a; margin: 0; padding: 0; }
-    .header { text-align: center; margin-bottom: 20px; border-bottom: 2px solid #${header.accentColor}; padding-bottom: 10px; }
-    .org-name { font-size: 14pt; color: #${header.primaryColor}; font-weight: bold; }
-    .report-title { font-size: 18pt; font-weight: bold; text-transform: uppercase; margin: 10px 0; color: #${header.primaryColor}; }
-    .org-address { font-size: 10pt; color: #64748B; }
-    table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-    th, td { border: 1px solid #ccc; padding: 8px 10px; text-align: left; }
-    th { background-color: #${header.primaryColor}; color: white; font-weight: 600; }
-    .section-title { font-size: 14pt; font-weight: bold; color: #${header.primaryColor}; margin-top: 25px; margin-bottom: 10px; }
-    .finding-heading { font-size: 12pt; font-weight: bold; margin-top: 20px; color: #1a1a1a; }
-    .label { font-weight: bold; color: #${header.primaryColor}; }
-    .severity-critical { background-color: #DC2626; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
-    .severity-high { background-color: #EA580C; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
-    .severity-medium { background-color: #CA8A04; color: black; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
-    .severity-low { background-color: #16A34A; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
-    .severity-informational { background-color: #64748B; color: white; padding: 2px 8px; border-radius: 3px; font-weight: bold; display: inline-block; }
-    .signature-table td { border: none; vertical-align: top; width: 33%; padding: 10px; }
-    .signature-table .sig-label { font-weight: bold; color: #${header.primaryColor}; margin-bottom: 5px; display: block; }
-    .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 9pt; color: #64748B; text-align: center; }
-    .separator { border-top: 1px solid #ccc; margin: 15px 0; }
-    .meta { font-style: italic; font-size: 10pt; color: #64748B; }
-    .finding { margin-bottom: 10px; }
-    .details-table { margin: 10px 0; }
-    .details-table td { border: 1px solid #ccc; padding: 6px 10px; }
-    .details-table td:first-child { width: 20%; font-weight: bold; color: #${header.primaryColor}; background-color: #f8f9fa; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="org-name">${this._escapeHtml(header.orgName)}</div>
-    <div class="report-title">${this._escapeHtml(header.reportTitle)}</div>
-    <div class="org-address">${this._escapeHtml(header.orgAddress)}</div>
-  </div>
+    const reviewedSig = sigImg(reviewedStepId);
+    const approvedSig = sigImg(approvedStepId);
+    const signatureColumns: Content = {
+      columns: [
+        {
+          width: '*',
+          stack: [
+            { text: `${labels.preparedBy}:`, bold: true, color: primary, margin: [0, 0, 0, 4] },
+            { text: leadAuditorName },
+            { text: leadAuditorTitle },
+            { text: preparedDate },
+          ],
+        },
+        {
+          width: '*',
+          stack: [
+            { text: `${labels.reviewedBy}:`, bold: true, color: primary, margin: [0, 0, 0, 4] },
+            ...(reviewedSig ? [reviewedSig] : []),
+            { text: auditManagerName },
+            { text: auditManagerTitle },
+          ],
+        },
+        {
+          width: '*',
+          stack: [
+            { text: `${labels.approvedBy}:`, bold: true, color: primary, margin: [0, 0, 0, 4] },
+            ...(approvedSig ? [approvedSig] : []),
+            { text: caeApproverName },
+          ],
+        },
+      ],
+      columnGap: 10,
+      margin: [0, 30, 0, 0],
+    };
 
-  <table class="data-table">
-    <tr><td class="label">Report Reference</td><td>${this._escapeHtml(data.engagement.referenceNumber)}</td></tr>
-    <tr><td class="label">Audit Type</td><td>${this._escapeHtml(AUDIT_TYPE_LABEL[data.engagement.auditType] ?? data.engagement.auditType)}</td></tr>
-    <tr><td class="label">Audited Entity</td><td>${this._escapeHtml(data.engagement.universe.name)}</td></tr>
-    <tr><td class="label">Audit Period</td><td>${formatDate(data.engagement.plannedStartDate, 'dd MMM yyyy')} to ${formatDate(data.engagement.plannedEndDate, 'dd MMM yyyy')}</td></tr>
-    <tr><td class="label">Report Date</td><td>${data.report.issuedAt ? formatDate(data.report.issuedAt, 'dd MMMM yyyy') : 'Not yet issued'}</td></tr>
-    <tr><td class="label">Classification</td><td><strong>${this._escapeHtml(header.classification)}</strong></td></tr>
-  </table>
-
-  ${sectionsHtml}
-
-  <div style="margin-top: 30px;">
-    <table class="signature-table">
-      <tr>
-        <td>
-          <span class="sig-label">${this._escapeHtml(labels.preparedBy)}:</span>
-          ${leadAuditorName}<br>
-          ${leadAuditorTitle}<br>
-          ${preparedDate}
-        </td>
-        <td>
-          <span class="sig-label">${this._escapeHtml(labels.reviewedBy)}:</span>
-          ${auditManagerName}<br>
-          ${auditManagerTitle}
-        </td>
-        <td>
-          <span class="sig-label">${this._escapeHtml(labels.approvedBy)}:</span>
-          ${caeApproverName}
-        </td>
-      </tr>
-    </table>
-  </div>
-
-  <div class="footer">
-    ${this._escapeHtml(footerNotice)}
-  </div>
-</body>
-</html>`;
+    return {
+      pageSize: 'A4',
+      pageMargins: [mm(20), mm(20), mm(20), mm(25)],
+      footer: (currentPage, pageCount) => ({
+        text: `${footerNotice} - Page ${currentPage} of ${pageCount}`,
+        alignment: 'center',
+        fontSize: 9,
+        color: '#64748B',
+        margin: [mm(20), 8, mm(20), 0],
+      }),
+      content: [
+        { text: header.orgName, style: 'orgName', alignment: 'center' },
+        { text: header.reportTitle.toUpperCase(), style: 'reportTitle', alignment: 'center', margin: [0, 6, 0, 4] },
+        { text: header.orgAddress, alignment: 'center', fontSize: 10, color: '#64748B' },
+        {
+          canvas: [{ type: 'line', x1: 0, y1: 0, x2: 482, y2: 0, lineWidth: 2, lineColor: accent }],
+          margin: [0, 8, 0, 14],
+        },
+        {
+          table: {
+            widths: [140, '*'],
+            body: [
+              [labelCell('Report Reference'), { text: data.engagement.referenceNumber }],
+              [labelCell('Audit Type'), { text: AUDIT_TYPE_LABEL[data.engagement.auditType] ?? data.engagement.auditType }],
+              [labelCell('Audited Entity'), { text: data.engagement.universe.name }],
+              [
+                labelCell('Audit Period'),
+                { text: `${formatDate(data.engagement.plannedStartDate, 'dd MMM yyyy')} to ${formatDate(data.engagement.plannedEndDate, 'dd MMM yyyy')}` },
+              ],
+              [
+                labelCell('Report Date'),
+                { text: data.report.issuedAt ? formatDate(data.report.issuedAt, 'dd MMMM yyyy') : 'Not yet issued' },
+              ],
+              [labelCell('Classification'), { text: header.classification, bold: true }],
+            ],
+          },
+          layout: borderedTableLayout,
+        },
+        ...sectionsContent,
+        signatureColumns,
+      ],
+      styles: {
+        orgName: { fontSize: 14, bold: true, color: primary },
+        reportTitle: { fontSize: 18, bold: true, color: primary },
+        sectionTitle: { fontSize: 14, bold: true, color: primary },
+      },
+    };
   }
 
   private _getHeaderConfig(config: TemplateConfig): RenderHeaderConfig {

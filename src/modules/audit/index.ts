@@ -49,6 +49,7 @@ export const createAuditModule = (): Router => {
     reportTemplateService,
     systemConfigService,
     workflowApprovalService,
+    documentService,
   );
   const reportService = new ReportService(followUpService, documentService, reportGenerationService, reportTemplateService);
   const repositoryService = new RepositoryService(documentService);

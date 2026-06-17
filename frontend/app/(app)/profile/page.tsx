@@ -40,6 +40,7 @@ import { Input } from '@/components/ui/Input';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
+import { SignatureCard } from '@/components/common/SignatureCard';
 
 const ProfileSchema = z.object({
   displayName: z.string().max(200).optional(),
@@ -267,6 +268,7 @@ export default function ProfilePage(): JSX.Element {
               onChange={setActiveTab}
               tabs={[
                 { key: 'profile', label: 'Profile' },
+                { key: 'signature', label: 'Signature' },
                 { key: 'security', label: 'Security' },
                 { key: 'access', label: 'Access' },
               ]}
@@ -346,6 +348,8 @@ export default function ProfilePage(): JSX.Element {
                   </div>
                 </form>
               )}
+
+              {activeTab === 'signature' && <SignatureCard />}
 
               {activeTab === 'security' && (
                 <div className="space-y-6">

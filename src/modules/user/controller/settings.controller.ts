@@ -1,14 +1,24 @@
 // src/modules/user/controller/settings.controller.ts
 import { Router, Request, Response, NextFunction } from 'express';
+import multer from 'multer';
 import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
+import { AppError } from '../../../shared/errors/app.error';
 import { IUserService } from '../service/interface/user.service.interface';
 import {
   CreateRoleRequestSchema,
   UpdateRoleRequestSchema,
   ReplaceRolePermissionsRequestSchema,
 } from '../dto/request/user.request.dto';
+import { SetSignatureMetadataSchema } from '../dto/request/signature.request.dto';
+import { userSignatureService } from '../service/implementation/signature.service';
+
+// Signature image upload: single in-memory file, 2 MB cap (PNG/JPG validated in the service).
+const signatureUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 export class SettingsController {
   public readonly router: Router;
@@ -100,6 +110,69 @@ export class SettingsController {
       requirePermission('settings:read'),
       this._listPermissionsGroupedByModule.bind(this),
     );
+
+    // ── Self-service e-signature (no special permission; authenticate is applied globally above) ──
+
+    /**
+     * @route  GET /settings/signature
+     * @desc   Get the caller's active signature (or null)
+     * @access Private - authenticated
+     */
+    this.router.get('/signature', this._getSignature.bind(this));
+
+    /**
+     * @route  POST /settings/signature
+     * @desc   Create or replace the caller's active signature (multipart "file" + "kind")
+     * @access Private - authenticated
+     */
+    this.router.post(
+      '/signature',
+      signatureUpload.single('file'),
+      validate(SetSignatureMetadataSchema),
+      this._setSignature.bind(this),
+    );
+
+    /**
+     * @route  DELETE /settings/signature
+     * @desc   Soft-delete the caller's active signature
+     * @access Private - authenticated
+     */
+    this.router.delete('/signature', this._removeSignature.bind(this));
+  }
+
+  private async _getSignature(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const sig = await userSignatureService.getActiveSignature(req.user!.id);
+      res.status(200).json(buildResponse(sig));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _setSignature(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      if (!req.file) throw AppError.badRequest('Signature image file is required (multipart field "file")');
+      const sig = await userSignatureService.setSignature({
+        userId: req.user!.id,
+        kind: req.body.kind as 'drawn' | 'uploaded',
+        originalName: req.file.originalname,
+        mimeType: req.file.mimetype,
+        fileSize: req.file.size,
+        buffer: req.file.buffer,
+      });
+      res.status(200).json(buildResponse(sig, 'Signature saved'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _removeSignature(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      await userSignatureService.removeSignature(req.user!.id);
+      res.status(200).json(buildResponse(null, 'Signature removed'));
+    } catch (err) {
+      next(err);
+    }
   }
 
   private async _listRoles(_req: Request, res: Response, next: NextFunction): Promise<void> {

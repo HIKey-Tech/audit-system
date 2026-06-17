@@ -101,6 +101,7 @@ model User {
   report_templates_created        Report_Template[]        @relation("ReportTemplateCreatedBy")
   report_templates_updated        Report_Template[]        @relation("ReportTemplateUpdatedBy")
   system_configs_updated          System_Config[]          @relation("SystemConfigUpdatedBy")
+  signatures                      User_Signature[]         @relation("UserSignatureOwner")
 
   @@map("users")
 }
@@ -360,6 +361,10 @@ model Document {
   evidence    Audit_Evidence[]
   reports     Audit_Report[]
   working_paper_sources Audit_Working_Paper[] @relation("WorkingPaperSourceDocument")
+  signature_uses     User_Signature[]                   @relation("UserSignatureImage")
+  signed_doc_sources Workflow_Request_Signed_Document[] @relation("SignedDocSource")
+  signed_doc_outputs Workflow_Request_Signed_Document[] @relation("SignedDocOutput")
+  approval_signed_outputs Workflow_Approval_Signed_Document[] @relation("ApprovalSignedDocOutput")
 
   @@index([entity_type, entity_id])
   @@map("documents")
@@ -1123,8 +1128,9 @@ model Workflow_Approval {
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
 
-  submitted_by User                     @relation("WorkflowApprovalSubmittedBy", fields: [submitted_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  steps        Workflow_Approval_Step[]
+  submitted_by     User                                @relation("WorkflowApprovalSubmittedBy", fields: [submitted_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  steps            Workflow_Approval_Step[]
+  signed_documents Workflow_Approval_Signed_Document[] @relation("ApprovalSignedDocs")
 
   @@index([entity_type])
   @@index([entity_id])
@@ -1145,10 +1151,12 @@ model Workflow_Approval_Step {
   status              String    @default("pending") // pending | approved | rejected
   comment             String?   @db.NVarChar(Max)
   acted_at            DateTime?
+  signature_id        String? // FK -> user_signatures.id, set on approve when the approver has a signature
   created_at          DateTime  @default(now())
 
-  approval Workflow_Approval @relation(fields: [approval_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  approver User?             @relation("WorkflowApprovalStepApprover", fields: [approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approval  Workflow_Approval @relation(fields: [approval_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  approver  User?             @relation("WorkflowApprovalStepApprover", fields: [approver_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  signature User_Signature?   @relation("ApprovalStepSignature", fields: [signature_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([approval_id])
   @@index([approver_id])
@@ -1156,6 +1164,19 @@ model Workflow_Approval_Step {
   @@index([status])
   @@index([level])
   @@map("workflow_approval_steps")
+}
+
+model Workflow_Approval_Signed_Document {
+  id                 String   @id @default(uuid())
+  approval_id        String
+  signed_document_id String
+  generated_at       DateTime @default(now())
+
+  approval        Workflow_Approval @relation("ApprovalSignedDocs", fields: [approval_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  signed_document Document          @relation("ApprovalSignedDocOutput", fields: [signed_document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([approval_id])
+  @@map("workflow_approval_signed_documents")
 }
 
 model Workflow_Assignment {
@@ -1245,9 +1266,10 @@ model Workflow_Request {
   created_at       DateTime  @default(now())
   updated_at       DateTime  @updatedAt
 
-  initiator User                      @relation("WorkflowRequestInitiator", fields: [initiator_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  steps     Workflow_Request_Step[]
-  actions   Workflow_Request_Action[]
+  initiator        User                               @relation("WorkflowRequestInitiator", fields: [initiator_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  steps            Workflow_Request_Step[]
+  actions          Workflow_Request_Action[]
+  signed_documents Workflow_Request_Signed_Document[] @relation("RequestSignedDocs")
 
   @@index([initiator_id])
   @@index([status])
@@ -1284,17 +1306,52 @@ model Workflow_Request_Action {
   comment            String?  @db.NVarChar(Max)
   signature_hash     String? // SHA-256 hex, set only when action_type = sign
   signature_manifest String?  @db.NVarChar(Max) // canonical JSON that was hashed
+  signature_id       String? // FK -> user_signatures.id, set only when action_type = sign
   created_at         DateTime @default(now())
 
-  request Workflow_Request       @relation(fields: [request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  step    Workflow_Request_Step? @relation(fields: [step_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
-  actor   User                   @relation("WorkflowRequestActionActor", fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  request   Workflow_Request       @relation(fields: [request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  step      Workflow_Request_Step? @relation(fields: [step_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actor     User                   @relation("WorkflowRequestActionActor", fields: [actor_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  signature User_Signature?        @relation("ActionSignature", fields: [signature_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([request_id])
   @@index([step_id])
   @@index([actor_id])
   @@index([action_type])
   @@map("workflow_request_actions")
+}
+
+model User_Signature {
+  id          String    @id @default(uuid())
+  user_id     String
+  document_id String
+  kind        String // drawn | uploaded
+  created_at  DateTime  @default(now())
+  updated_at  DateTime  @updatedAt
+  deleted_at  DateTime?
+
+  user     User     @relation("UserSignatureOwner", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  document Document @relation("UserSignatureImage", fields: [document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  actions        Workflow_Request_Action[]  @relation("ActionSignature")
+  approval_steps Workflow_Approval_Step[]   @relation("ApprovalStepSignature")
+
+  @@index([user_id])
+  @@map("user_signatures")
+}
+
+model Workflow_Request_Signed_Document {
+  id                 String   @id @default(uuid())
+  request_id         String
+  source_document_id String? // null = standalone certificate
+  signed_document_id String
+  generated_at       DateTime @default(now())
+
+  request         Workflow_Request @relation("RequestSignedDocs", fields: [request_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  source_document Document?        @relation("SignedDocSource", fields: [source_document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  signed_document Document         @relation("SignedDocOutput", fields: [signed_document_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([request_id])
+  @@map("workflow_request_signed_documents")
 }
 
 // ============================================================

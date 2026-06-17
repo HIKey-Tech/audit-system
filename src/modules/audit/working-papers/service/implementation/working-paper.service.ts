@@ -35,10 +35,11 @@ import {
 } from '../../utility/working-paper-import.utility';
 import {
   WorkingPaperPdfData,
-  buildWorkingPaperHtml,
+  WorkingPaperSignOff,
+  buildWorkingPaperDocDefinition,
   parseWorkingPaperSections,
 } from '../../utility/working-paper.utility';
-import puppeteer from 'puppeteer';
+import { renderPdf } from '../../../../../shared/utils/pdf.util';
 
 export class WorkingPaperService implements IWorkingPaperService {
   constructor(
@@ -275,6 +276,7 @@ export class WorkingPaperService implements IWorkingPaperService {
             version: String(paper.version_number),
             date: exportDate,
             sections: parseWorkingPaperSections(paper.content),
+            signOff: await this._buildSignOff(id),
           })
         : await this.documentService.renderDocxTemplate('working_paper', {
             title: paper.title,
@@ -299,25 +301,45 @@ export class WorkingPaperService implements IWorkingPaperService {
     };
   }
 
-  private async _renderWorkingPaperPdf(data: WorkingPaperPdfData): Promise<Buffer> {
-    const html = buildWorkingPaperHtml(data);
-    const browser = await puppeteer.launch({ headless: true });
+  /** Build sign-off entries (approver name/role/date + signature image) from the WP's approval. */
+  private async _buildSignOff(workingPaperId: string): Promise<WorkingPaperSignOff[]> {
+    let approval;
     try {
-      const page = await browser.newPage();
-      await page.setContent(html, { waitUntil: 'networkidle0' });
-      const pdfBuffer = await page.pdf({
-        format: 'A4',
-        printBackground: true,
-        margin: { top: '20mm', bottom: '20mm', left: '18mm', right: '18mm' },
-        displayHeaderFooter: true,
-        headerTemplate: '<div></div>',
-        footerTemplate:
-          '<div style="font-size:9px;width:100%;text-align:center;color:#64748B;padding:0 18mm;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
-      });
-      return Buffer.from(pdfBuffer);
-    } finally {
-      await browser.close();
+      approval = await this.approvalService.getApprovalByEntity(
+        WorkflowEntityType.AuditWorkingPaper,
+        workingPaperId,
+      );
+    } catch {
+      return [];
     }
+
+    const out: WorkingPaperSignOff[] = [];
+    for (const step of approval.steps ?? []) {
+      if (step.status !== 'approved' || !step.approver) continue;
+      let imageDataUrl: string | undefined;
+      if (step.signatureId) {
+        try {
+          const sig = await prisma.user_Signature.findUnique({ where: { id: step.signatureId } });
+          if (sig) {
+            const file = await this.documentService.getFileById(sig.document_id);
+            imageDataUrl = `data:${file.mimeType};base64,${file.buffer.toString('base64')}`;
+          }
+        } catch {
+          // Skip this approver's image; the text entry still renders.
+        }
+      }
+      out.push({
+        name: step.approver.displayName ?? '',
+        role: step.approver.jobTitle ?? '',
+        date: step.actedAt ? step.actedAt.slice(0, 10) : '',
+        imageDataUrl,
+      });
+    }
+    return out;
+  }
+
+  private async _renderWorkingPaperPdf(data: WorkingPaperPdfData): Promise<Buffer> {
+    return renderPdf(buildWorkingPaperDocDefinition(data));
   }
 
   private async _assertEngagementInProgress(engagementId: string): Promise<void> {

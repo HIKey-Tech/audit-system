@@ -9,6 +9,8 @@ import type {
   RequestAttachment,
   RequestCandidate,
   SignatureVerification,
+  SignedDocument,
+  SignedApprovalDocument,
   RequestStatus,
 } from '../types/domain';
 import type { PaginatedResult } from '../types/api';
@@ -44,6 +46,10 @@ export const workflowApi = {
     api.get<AssignmentCandidateDto[]>(
       `/workflow/assignments/candidates/${engagementId}`,
     ),
+
+  // approval signed documents (frozen on completion)
+  signedApprovalDocuments: (approvalId: string) =>
+    api.get<SignedApprovalDocument[]>(`/workflow/approvals/${approvalId}/signed-documents`),
 
   // escalations
   listByEntity: (entityType: string, entityId: string) =>
@@ -90,6 +96,8 @@ export const requestsApi = {
   cancel: (id: string) => api.post<WorkflowRequest>(`/workflow/requests/${id}/cancel`),
   verifySignatures: (id: string) =>
     api.get<SignatureVerification[]>(`/workflow/requests/${id}/verify-signatures`),
+  signedDocuments: (id: string) =>
+    api.get<SignedDocument[]>(`/workflow/requests/${id}/signed-documents`),
 };
 
 export type RequestListResult = PaginatedResult<WorkflowRequest>;

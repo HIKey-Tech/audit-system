@@ -21,6 +21,8 @@ import { InfoHint } from '@/components/ui/InfoHint';
 import { reportTemplatesApi } from '@/lib/api/settings';
 import { reportsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
+import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
+import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { formatRelative, formatDate } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
 import { useSession } from '@/components/providers/AuthProvider';
@@ -88,11 +90,6 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const submitMut = useMutation({
     mutationFn: () => reportsApi.submit(report.data!.id),
     onSuccess: () => { toast.success('Submitted for approval'); refresh(); },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
-  const approveMut = useMutation({
-    mutationFn: () => workflowApi.approve(approval.data!.id),
-    onSuccess: () => { toast.success('Approved'); refresh(); },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
   const rejectMut = useMutation({
@@ -261,6 +258,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     return s ? `${index + 1}. ${s.title}` : fallback;
   };
 
+  const [approveOpen, setApproveOpen] = useState(false);
   const currentStep = approval.data?.steps?.find((step) => step.level === approval.data?.currentLevel);
   const canActOnCurrentApproval =
     approval.data?.status === 'pending' &&
@@ -357,8 +355,8 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             {r.status === 'submitted' && canActOnCurrentApproval && (
               <>
                 {canApproveApproval && (
-                <Button variant="success" size="sm" leftIcon={<Check className="h-4 w-4" />} onClick={() => approveMut.mutate()} isLoading={approveMut.isPending}>
-                  Approve
+                <Button variant="success" size="sm" leftIcon={<Check className="h-4 w-4" />} onClick={() => setApproveOpen((v) => !v)}>
+                  Approve &amp; Sign
                 </Button>
                 )}
                 {canRejectApproval && (
@@ -382,7 +380,22 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             <p className="mt-0.5 whitespace-pre-wrap">{r.rejectionReason}</p>
           </div>
         )}
+
+        {approveOpen && approval.data && canActOnCurrentApproval && (
+          <ApproveSignPanel
+            approvalId={approval.data.id}
+            entityType="audit_report"
+            onDone={() => {
+              setApproveOpen(false);
+              refresh();
+            }}
+          />
+        )}
       </Card>
+
+      {approval.data && approval.data.status === 'approved' && (
+        <SignedApprovalDocuments approvalId={approval.data.id} />
+      )}
 
       {activeView === 'cards' ? (
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">

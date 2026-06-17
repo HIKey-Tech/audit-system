@@ -1,8 +1,19 @@
+import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
+import { borderedTableLayout, mm } from '../../../../shared/utils/pdf.util';
+
 export { WP_REVIEWABLE_STATUSES } from '../../utility/audit.utility';
 
 export interface WorkingPaperSection {
   title: string;
   content: string;
+}
+
+export interface WorkingPaperSignOff {
+  name: string;
+  role: string;
+  date: string;
+  /** data:image/...;base64 URL of the approver's signature, when one was recorded. */
+  imageDataUrl?: string;
 }
 
 export interface WorkingPaperPdfData {
@@ -15,6 +26,7 @@ export interface WorkingPaperPdfData {
   version: string;
   date: string;
   sections: WorkingPaperSection[];
+  signOff?: WorkingPaperSignOff[];
 }
 
 /**
@@ -54,79 +66,99 @@ export const parseWorkingPaperSections = (content: string | null | undefined): W
   return [{ title: '', content: raw }];
 };
 
-const renderSectionBody = (content: string): string => {
+/** Brand navy used across the working-paper PDF. */
+const BRAND = '#1E3A8A';
+
+/** Split a section's free text into pdfmake paragraph blocks. */
+const renderSectionBody = (content: string): Content[] => {
   const paragraphs = content
     .split(/\n{2,}/)
     .map((paragraph) => paragraph.trim())
     .filter(Boolean);
 
-  if (paragraphs.length === 0) return '';
-
-  return paragraphs
-    .map((paragraph) => `<p>${escapeHtml(paragraph).replace(/\n/g, '<br>')}</p>`)
-    .join('');
+  // pdfmake renders single '\n' as a line break inside a text node, so each
+  // paragraph keeps its internal line breaks without extra handling.
+  return paragraphs.map((paragraph) => ({ text: paragraph, margin: [0, 3, 0, 3] }));
 };
 
 /**
- * Build a self-contained, print-ready HTML document for a working paper.
- * Rendered to PDF via puppeteer in the service layer.
+ * Build a pdfmake document definition for a working paper.
+ * Rendered to a PDF Buffer via `renderPdf` in the service layer.
  */
-export const buildWorkingPaperHtml = (data: WorkingPaperPdfData): string => {
-  const sectionsHtml =
+export const buildWorkingPaperDocDefinition = (data: WorkingPaperPdfData): TDocumentDefinitions => {
+  const sectionsContent: Content[] =
     data.sections.length === 0
-      ? '<p class="empty">This working paper has no content.</p>'
-      : data.sections
-          .map((section, idx) => {
-            const heading = section.title || `Section ${idx + 1}`;
-            return `
-            <div class="section">
-              <div class="section-title">${escapeHtml(heading)}</div>
-              ${renderSectionBody(section.content)}
-            </div>`;
-          })
-          .join('');
+      ? [{ text: 'This working paper has no content.', italics: true, color: '#64748B', margin: [0, 8, 0, 0] }]
+      : data.sections.flatMap((section, idx) => {
+          const heading = section.title || `Section ${idx + 1}`;
+          return [
+            { text: heading, style: 'sectionTitle', margin: [0, 16, 0, 6] },
+            ...renderSectionBody(section.content),
+          ];
+        });
 
-  return `<!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="utf-8">
-  <style>
-    * { box-sizing: border-box; }
-    body { font-family: 'Segoe UI', Arial, sans-serif; color: #1a1a1a; font-size: 11pt; line-height: 1.5; margin: 0; }
-    .header { text-align: center; border-bottom: 3px solid #1E3A8A; padding-bottom: 12px; margin-bottom: 20px; }
-    .org-name { font-size: 16pt; font-weight: bold; color: #1E3A8A; }
-    .doc-title { font-size: 13pt; font-weight: 600; margin-top: 4px; }
-    table.meta-table { width: 100%; border-collapse: collapse; margin: 15px 0; }
-    table.meta-table td { border: 1px solid #ccc; padding: 7px 10px; text-align: left; vertical-align: top; }
-    table.meta-table td.label { width: 25%; font-weight: bold; color: #1E3A8A; background-color: #f8f9fa; }
-    .section { margin-top: 22px; }
-    .section-title { font-size: 13pt; font-weight: bold; color: #1E3A8A; margin-bottom: 8px; border-bottom: 1px solid #e2e8f0; padding-bottom: 4px; }
-    .section p { margin: 6px 0; }
-    .empty { font-style: italic; color: #64748B; }
-    .footer { margin-top: 30px; padding-top: 10px; border-top: 1px solid #ccc; font-size: 9pt; color: #64748B; text-align: center; }
-  </style>
-</head>
-<body>
-  <div class="header">
-    <div class="org-name">Galaxy Backbone Limited</div>
-    <div class="doc-title">Audit Working Paper</div>
-  </div>
+  const metaRow = (label: string, value: string): TableCell[] => [
+    { text: label, bold: true, color: BRAND, fillColor: '#F8F9FA' },
+    { text: value },
+  ];
 
-  <table class="meta-table">
-    <tr><td class="label">Title</td><td>${escapeHtml(data.title)}</td></tr>
-    <tr><td class="label">Engagement</td><td>${escapeHtml(data.engagementReference)} — ${escapeHtml(data.engagementTitle)}</td></tr>
-    <tr><td class="label">Working Paper Type</td><td>${escapeHtml(data.workingPaperType)}</td></tr>
-    <tr><td class="label">Prepared By</td><td>${escapeHtml(data.auditorName)}</td></tr>
-    <tr><td class="label">Status</td><td>${escapeHtml(data.status)}</td></tr>
-    <tr><td class="label">Version</td><td>${escapeHtml(data.version)}</td></tr>
-    <tr><td class="label">Exported On</td><td>${escapeHtml(data.date)}</td></tr>
-  </table>
+  const content: Content[] = [
+    { text: 'Galaxy Backbone Limited', style: 'orgName', alignment: 'center' },
+    { text: 'Audit Working Paper', style: 'docTitle', alignment: 'center', margin: [0, 2, 0, 8] },
+    {
+      canvas: [{ type: 'line', x1: 0, y1: 0, x2: 493, y2: 0, lineWidth: 2, lineColor: BRAND }],
+      margin: [0, 0, 0, 14],
+    },
+    {
+      table: {
+        widths: [130, '*'],
+        body: [
+          metaRow('Title', data.title),
+          metaRow('Engagement', `${data.engagementReference} — ${data.engagementTitle}`),
+          metaRow('Working Paper Type', data.workingPaperType),
+          metaRow('Prepared By', data.auditorName),
+          metaRow('Status', data.status),
+          metaRow('Version', data.version),
+          metaRow('Exported On', data.date),
+        ],
+      },
+      layout: borderedTableLayout,
+    },
+    ...sectionsContent,
+  ];
 
-  ${sectionsHtml}
+  if (data.signOff && data.signOff.length > 0) {
+    content.push({ text: 'Approvals & Signatures', style: 'sectionTitle', margin: [0, 22, 0, 8] });
+    content.push({
+      columns: data.signOff.map((s) => ({
+        width: '*',
+        stack: [
+          s.imageDataUrl
+            ? { image: s.imageDataUrl, fit: [120, 40], margin: [0, 0, 0, 2] }
+            : { text: ' ', margin: [0, 0, 0, 24] },
+          { text: s.role ? `${s.name} — ${s.role}` : s.name, bold: true },
+          { text: `Approved & signed ${s.date}`, color: '#64748B', fontSize: 9 },
+        ],
+      })),
+      columnGap: 8,
+    });
+  }
 
-  <div class="footer">
-    Galaxy Backbone Limited — Internal Audit Management System. This document is confidential.
-  </div>
-</body>
-</html>`;
+  return {
+    pageSize: 'A4',
+    pageMargins: [mm(18), mm(20), mm(18), mm(20)],
+    footer: (currentPage, pageCount) => ({
+      text: `Page ${currentPage} of ${pageCount}`,
+      alignment: 'center',
+      fontSize: 9,
+      color: '#64748B',
+      margin: [0, 10, 0, 0],
+    }),
+    content,
+    styles: {
+      orgName: { fontSize: 16, bold: true, color: BRAND },
+      docTitle: { fontSize: 13, bold: true },
+      sectionTitle: { fontSize: 13, bold: true, color: BRAND },
+    },
+  };
 };

@@ -25,6 +25,8 @@ import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { AddPlanItemSlideOver } from '@/components/audit/plans/AddPlanItemSlideOver';
 import { CreateEngagementSlideOver } from '@/components/audit/plans/CreateEngagementSlideOver';
+import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
+import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import type { AuditPlanItem, AuditPlanApprovalStep } from '@/lib/types/domain';
 
 export default function PlanDetailPage(): JSX.Element {
@@ -38,6 +40,7 @@ export default function PlanDetailPage(): JSX.Element {
   const [createEngOpen, setCreateEngOpen] = useState<{ itemId: string; title: string } | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
+  const [approveOpen, setApproveOpen] = useState(false);
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['plans', id],
@@ -49,15 +52,6 @@ export default function PlanDetailPage(): JSX.Element {
     mutationFn: () => plansApi.submit(id),
     onSuccess: () => {
       toast.success('Plan submitted for approval');
-      qc.invalidateQueries({ queryKey: ['plans', id] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
-
-  const approveMut = useMutation({
-    mutationFn: () => plansApi.approve(id),
-    onSuccess: () => {
-      toast.success('Plan approved');
       qc.invalidateQueries({ queryKey: ['plans', id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
@@ -193,10 +187,9 @@ export default function PlanDetailPage(): JSX.Element {
                 <Button
                   variant="success"
                   leftIcon={<Check className="h-4 w-4" />}
-                  onClick={() => approveMut.mutate()}
-                  isLoading={approveMut.isPending}
+                  onClick={() => setApproveOpen((v) => !v)}
                 >
-                  Approve
+                  Approve &amp; Sign
                 </Button>
                 <Button
                   variant="danger"
@@ -210,6 +203,26 @@ export default function PlanDetailPage(): JSX.Element {
           </div>
         }
       />
+
+      {approveOpen && data.status === 'submitted' && isAdmin && (
+        <div className="mb-6">
+          <ApproveSignPanel
+            entityType="audit_plan"
+            showComment={false}
+            approveFn={() => plansApi.approve(id)}
+            onDone={() => {
+              setApproveOpen(false);
+              qc.invalidateQueries({ queryKey: ['plans', id] });
+            }}
+          />
+        </div>
+      )}
+
+      {data.status === 'approved' && (
+        <div className="mb-6">
+          <SignedApprovalDocuments entityType="audit_plan" entityId={id} />
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
