@@ -315,16 +315,51 @@ export class EngagementService implements IEngagementService {
     };
   }
 
+  /**
+   * Active-approver access: a user with a pending approval step they may act on,
+   * against one of this engagement's reports / working papers / findings, can open
+   * the engagement while that step is open — you can't approve what you can't read.
+   */
+  private async _hasActiveApprovalAccess(engagementId: string, actor: ActorContext): Promise<boolean> {
+    const [reports, papers, findings] = await prisma.$transaction([
+      prisma.audit_Report.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+      prisma.audit_Working_Paper.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+      prisma.audit_Finding.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+    ]);
+    const entityIds = [...reports, ...papers, ...findings].map((r) => r.id);
+    if (entityIds.length === 0) return false;
+
+    const orConditions: Prisma.Workflow_Approval_StepWhereInput[] = [{ approver_id: actor.id }];
+    if (actor.permissions.length > 0) {
+      orConditions.push({ approver_id: null, required_permission: { in: actor.permissions } });
+    }
+
+    const step = await prisma.workflow_Approval_Step.findFirst({
+      where: {
+        status: 'pending',
+        approval: { status: 'pending', entity_id: { in: entityIds } },
+        OR: orConditions,
+      },
+      select: { id: true, level: true, approval: { select: { current_level: true } } },
+    });
+    return step !== null && step.level === step.approval.current_level;
+  }
+
   async getEngagementById(id: string, actor: ActorContext): Promise<EngagementResponseDto> {
     const scope = this._actorScope(actor);
-    const engagement = await prisma.audit_Engagement.findFirst({
-      where: {
-        id,
-        deleted_at: null,
-        ...(scope ?? {}),
-      },
+    let engagement = await prisma.audit_Engagement.findFirst({
+      where: { id, deleted_at: null, ...(scope ?? {}) },
       include: engagementInclude,
     });
+
+    // Not an involved party / oversight — allow if they hold a live approval step on it.
+    if (!engagement && scope && (await this._hasActiveApprovalAccess(id, actor))) {
+      engagement = await prisma.audit_Engagement.findFirst({
+        where: { id, deleted_at: null },
+        include: engagementInclude,
+      });
+    }
+
     if (!engagement) throw AppError.notFound('Audit engagement');
     return this._withMetrics(engagement);
   }
