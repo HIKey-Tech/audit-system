@@ -3,8 +3,7 @@
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -17,7 +16,6 @@ import { ErrorState } from '@/components/ui/ErrorState';
 
 import { engagementsApi } from '@/lib/api/audit';
 import { usePermissions } from '@/lib/hooks/usePermissions';
-import { nextEngagementStatus } from '@/lib/utils/status';
 import { OverviewTab } from '@/components/audit/engagements/OverviewTab';
 import { WorkingPapersTab } from '@/components/audit/engagements/WorkingPapersTab';
 import { EvidenceTab } from '@/components/audit/engagements/EvidenceTab';
@@ -60,20 +58,7 @@ export default function EngagementDetailPage(): JSX.Element {
     enabled: Boolean(id),
   });
 
-  const qc = useQueryClient();
-  const { hasPermission, canReadAssets } = usePermissions();
-  const canAdvanceEngagement = hasPermission('engagement:update');
-
-  const advanceMutation = useMutation({
-    mutationFn: (status: string) => engagementsApi.updateStatus(id, status),
-    onSuccess: () => {
-      toast.success('Status updated');
-      qc.invalidateQueries({ queryKey: ['engagements', id] });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
-
-  const nextStatus = data ? nextEngagementStatus(data.status) : null;
+  const { canReadAssets } = usePermissions();
 
   if (isError) {
     return (
@@ -155,12 +140,7 @@ export default function EngagementDetailPage(): JSX.Element {
         )}
       </div>
 
-      <StatusStepper
-        engagement={data}
-        onAdvance={nextStatus ? () => advanceMutation.mutate(nextStatus) : undefined}
-        isAdvancing={advanceMutation.isPending}
-        canAdvance={canAdvanceEngagement && Boolean(nextStatus)}
-      />
+      <StatusStepper engagement={data} />
 
       <div className="mb-6">
         <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />

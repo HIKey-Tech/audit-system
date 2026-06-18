@@ -10,15 +10,13 @@ import {
   ClipboardCheck,
   FileText,
   FolderCheck,
-  AlertTriangle,
-  Info
 } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
-import { Button } from '@/components/ui/Button';
-import { humanizeStatus, nextEngagementStatus } from '@/lib/utils/status';
+import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
+import { WhatsNextPanel } from './WhatsNextPanel';
 
 type StageKey = 'planned' | 'in_progress' | 'under_review' | 'reported' | 'closed';
 
@@ -27,14 +25,6 @@ interface StageConfig {
   label: string;
   description: string;
   icon: React.ComponentType<any>;
-}
-
-interface StageTask {
-  label: string;
-  done: boolean;
-  hint: string;
-  /** Optional tasks are surfaced for visibility but do not block the transition. */
-  optional?: boolean;
 }
 
 const STAGES: StageConfig[] = [
@@ -53,7 +43,7 @@ const STAGES: StageConfig[] = [
   {
     key: 'under_review',
     label: 'Quality Review',
-    description: 'Perform supervisory review and obtain report sign-offs.',
+    description: 'Review fieldwork and obtain report sign-offs.',
     icon: ClipboardCheck
   },
   {
@@ -70,152 +60,13 @@ const STAGES: StageConfig[] = [
   }
 ];
 
-
 interface StatusStepperProps {
   engagement: AuditEngagementDetail;
-  onAdvance?: () => void;
-  isAdvancing?: boolean;
-  canAdvance?: boolean;
 }
 
-export const StatusStepper = ({
-  engagement,
-  onAdvance,
-  isAdvancing = false,
-  canAdvance = false,
-}: StatusStepperProps): JSX.Element => {
+export const StatusStepper = ({ engagement }: StatusStepperProps): JSX.Element => {
   const [isOpen, setIsOpen] = useState(true);
   const activeIndex = STAGES.findIndex((s) => s.key === engagement.status);
-
-  // Stats come from aggregates on the detail payload (the full arrays are
-  // fetched lazily per-tab and are not present here).
-  // Computing stats for fieldwork checklist task
-  const checklistProgress = engagement.checklistProgress;
-  const totalChecklists = checklistProgress?.total ?? 0;
-  const testedChecklists = totalChecklists - (checklistProgress?.notTested ?? 0);
-  const checklistsDone = totalChecklists > 0 && testedChecklists === totalChecklists;
-
-  // Computing stats for working papers task
-  const wpStats = engagement.workingPaperStats;
-  const totalWps = wpStats?.total ?? 0;
-  const approvedWps = wpStats?.approved ?? 0;
-  const rejectedWps = wpStats?.rejected ?? 0;
-  const wpsDone = totalWps > 0 && approvedWps === totalWps;
-
-  // Computing stats for reporting tasks
-  const reportStatus = engagement.reportStatus ?? null;
-  const reportExists = !!reportStatus;
-  const reportApproved = reportStatus === 'approved' || reportStatus === 'issued';
-  const reportIssued = reportStatus === 'issued';
-
-  // Computing stats for remediation tasks
-  const findingStats = engagement.findingStats;
-  const totalFindings = findingStats?.total ?? 0;
-  const openResponseFindings = findingStats?.open ?? 0; // awaiting management response
-  const openFindings = findingStats?.unresolved ?? 0; // not yet verified/closed
-  const findingsDone = totalFindings > 0 && openFindings === 0;
-
-  // Supporting fieldwork artefacts — surfaced for visibility, never blocking.
-  const evidenceCount = engagement.evidenceCount ?? 0;
-  const assetCount = engagement.assetCount ?? 0;
-
-  // Generate dynamic tasks list based on current active status
-  const getActiveTasks = (): StageTask[] => {
-    switch (engagement.status) {
-      case 'planned':
-        return [
-          {
-            label: 'Assign Lead Auditor, Audit Manager, and Auditee',
-            done: !!(engagement.leadAuditorId && engagement.auditManagerId && engagement.auditeeId),
-            hint: `Lead: ${engagement.leadAuditorName ?? 'None'}, Manager: ${engagement.auditManagerName ?? 'None'}, Auditee: ${engagement.auditeeName ?? 'None'}`
-          },
-          {
-            label: 'Define scope start date, end date, and SLA deadline',
-            done: !!(engagement.plannedStartDate && engagement.plannedEndDate && engagement.slaDeadline),
-            hint: `Start: ${engagement.plannedStartDate ? new Date(engagement.plannedStartDate).toLocaleDateString() : 'None'}, SLA: ${engagement.slaDeadline ? new Date(engagement.slaDeadline).toLocaleDateString() : 'None'}`
-          },
-        ];
-      case 'in_progress':
-        return [
-          {
-            label: `Test all compliance control checklists (${testedChecklists}/${totalChecklists} completed)`,
-            done: checklistsDone,
-            hint: totalChecklists === 0 
-              ? 'No checklists are populated. Ensure checklists are initialized for this engagement type.' 
-              : 'Complete testing of every control reference in the Checklists tab.'
-          },
-          {
-            label: `Submit and approve all working papers (${approvedWps}/${totalWps} approved)`,
-            done: wpsDone,
-            hint: totalWps === 0
-              ? 'At least one working paper is required to progress. Create one in the Working Papers tab.'
-              : 'Submit draft working papers for manager approval.'
-          },
-          {
-            label: 'Resolve open QA / manager review comments',
-            done: totalWps > 0 && rejectedWps === 0,
-            hint: 'Ensure there are no rejected working papers awaiting revision.'
-          },
-          {
-            label: `Attach supporting evidence (${evidenceCount} attached)`,
-            done: evidenceCount > 0,
-            optional: true,
-            hint: 'Recommended: upload evidence backing your control tests and findings in the Evidence tab. Does not block review.'
-          },
-          {
-            label: `Link in-scope assets (${assetCount} linked)`,
-            done: assetCount > 0,
-            optional: true,
-            hint: 'Recommended: link the IT assets covered by this engagement in the Assets tab. Does not block review.'
-          }
-        ];
-      case 'under_review':
-        return [
-          {
-            label: 'Create the Audit Report draft',
-            done: reportExists,
-            hint: reportExists ? 'Report draft has been created.' : 'Generate the draft report in the Report tab.'
-          },
-          {
-            label: 'Submit and obtain supervisor and CAE sign-off',
-            done: reportApproved,
-            hint: reportExists
-              ? `Current report status: ${humanizeStatus(reportStatus)}.`
-              : 'Submit draft report for approval chain reviews.'
-          },
-          {
-            label: 'Formally issue final report to auditees',
-            done: reportIssued,
-            hint: reportApproved 
-              ? 'CAE must click "Issue Report" to distribute it to the auditee.' 
-              : 'The report must be approved before it can be issued.'
-          }
-        ];
-      case 'reported':
-        return [
-          {
-            label: 'Auditee submits remediation management action plans',
-            done: totalFindings > 0 && openResponseFindings === 0,
-            hint: `${openResponseFindings}/${totalFindings} findings awaiting management response.`
-          },
-          {
-            label: `Remediate and verify all raised findings (${totalFindings - openFindings}/${totalFindings} resolved)`,
-            done: findingsDone,
-            hint: openFindings > 0 
-              ? 'Auditee must upload remediation evidence, and auditor must verify and close the findings.' 
-              : 'All findings resolved.'
-          },
-        ];
-      case 'closed':
-      default:
-        return [];
-    }
-  };
-
-  const tasks = getActiveTasks();
-  const requiredTasks = tasks.filter((t) => !t.optional);
-  const allTasksDone = requiredTasks.length > 0 && requiredTasks.every((t) => t.done);
-  const nextStatus = nextEngagementStatus(engagement.status);
   const progressPercent = Math.round((activeIndex / (STAGES.length - 1)) * 100);
 
   return (
@@ -292,7 +143,7 @@ export const StatusStepper = ({
         </div>
       </div>
 
-      {/* Guide Panel */}
+      {/* What's next */}
       {isOpen && (
         <div className="mt-4 pt-3 border-t border-border/80 transition-all duration-300 animate-fadeIn">
           {engagement.status === 'closed' ? (
@@ -304,89 +155,7 @@ export const StatusStepper = ({
               </div>
             </div>
           ) : (
-            <div>
-              <h4 className="text-xs font-semibold text-text-primary flex items-center gap-1.5 mb-2.5">
-                <Info className="h-3.5 w-3.5 text-primary" />
-                Task List for {STAGES[activeIndex]?.label}
-              </h4>
-              <ul className="space-y-2.5 pl-1">
-                {tasks.map((task, idx) => (
-                  <li key={idx} className="flex items-start gap-2.5 text-xs">
-                    <div
-                      className={cn(
-                        'mt-0.5 h-4 w-4 rounded border flex items-center justify-center shrink-0 transition-colors',
-                        task.done
-                          ? 'bg-emerald-500 border-emerald-500 text-white'
-                          : task.optional
-                            ? 'border-dashed border-slate-300 dark:border-slate-600 bg-surface'
-                            : 'border-slate-300 dark:border-slate-600 bg-surface'
-                      )}
-                    >
-                      {task.done && <Check className="h-3 w-3 stroke-[3]" />}
-                    </div>
-                    <div className="flex flex-col min-w-0">
-                      <span className={cn('font-medium text-text-primary flex items-center gap-1.5', task.done && 'line-through opacity-60')}>
-                        {task.label}
-                        {task.optional && (
-                          <span className="rounded bg-slate-100 dark:bg-slate-800 px-1.5 py-px text-[9px] font-semibold uppercase tracking-wide text-text-secondary no-underline">
-                            Optional
-                          </span>
-                        )}
-                      </span>
-                      {task.hint && (
-                        <span className="text-[10px] text-text-secondary mt-0.5">
-                          {task.hint}
-                        </span>
-                      )}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-
-              {/* Transition Enforcements Banner */}
-              <div className="mt-4 p-2.5 rounded-lg bg-amber-50 dark:bg-amber-950/10 border border-amber-200/40 text-[11px] text-amber-800 dark:text-amber-300 flex gap-2">
-                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-600 dark:text-amber-500" />
-                <div>
-                  <span className="font-semibold">Status Transition Rules:</span>{' '}
-                  {engagement.status === 'planned' && (
-                    <span>Requires complete team assignment and timeline settings before starting the fieldwork phase.</span>
-                  )}
-                  {engagement.status === 'in_progress' && (
-                    <span>Requires all checklists tested ({testedChecklists}/{totalChecklists}) and all working papers approved ({approvedWps}/{totalWps}) before you can submit the engagement for Quality Review.</span>
-                  )}
-                  {engagement.status === 'under_review' && (
-                    <span>Requires a finalized audit report to be approved by the CAE and issued to the auditee.</span>
-                  )}
-                  {engagement.status === 'reported' && (
-                    <span>Requires all findings ({totalFindings}) to complete closure approval before closing the engagement.</span>
-                  )}
-                </div>
-              </div>
-
-              {/* Lifecycle Transition Button */}
-              {canAdvance && nextStatus && onAdvance && (
-                <div className="mt-4">
-                  <Button
-                    className="w-full"
-                    onClick={onAdvance}
-                    isLoading={isAdvancing}
-                    disabled={!allTasksDone && !isAdvancing}
-                    title={
-                      !allTasksDone
-                        ? 'Complete all tasks above before advancing'
-                        : undefined
-                    }
-                  >
-                    Move to {humanizeStatus(nextStatus)}
-                  </Button>
-                  {!allTasksDone && (
-                    <p className="mt-1.5 text-center text-[11px] text-text-muted">
-                      Complete all tasks above to unlock this action.
-                    </p>
-                  )}
-                </div>
-              )}
-            </div>
+            <WhatsNextPanel engagement={engagement} />
           )}
         </div>
       )}
