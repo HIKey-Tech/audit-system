@@ -21,6 +21,7 @@ export const JOB_KEYS = {
   AUDIT_FINDING_OVERDUE_DAILY: 'BG:AUDIT:FINDING_OVERDUE:DAILY',
   MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
   WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
+  AUDIT_RECONCILE_STATUS_HOURLY: 'BG:AUDIT:RECONCILE:STATUS:HOURLY',
   LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
   REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
   DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
@@ -426,6 +427,46 @@ export const registerAllJobs = (): void => {
     handler: async () => {
       const result = await workflowEscalationService.checkAndEscalate();
       logger.info('Workflow escalation job completed', result);
+    },
+  });
+
+  // BG:AUDIT:RECONCILE:STATUS:HOURLY — safety-net re-run of engagement status reconcile
+  // for any in-request reconcile that may have been skipped (e.g. due to a transient error).
+  schedulerService.register({
+    key: JOB_KEYS.AUDIT_RECONCILE_STATUS_HOURLY,
+    name: 'Engagement Status Reconcile',
+    description: 'Re-runs status reconcile across all non-closed engagements as a safety net',
+    cronExpression: '0 * * * *', // Every hour
+    handler: async () => {
+      const { reconcileEngagementStatus } = await import(
+        '../../../audit/engagement/service/implementation/engagement-status.reconciler'
+      );
+
+      const engagements = await prisma.audit_Engagement.findMany({
+        where: {
+          deleted_at: null,
+          status: { in: ['in_progress', 'under_review', 'reported'] },
+        },
+        select: { id: true },
+      });
+
+      let reconciled = 0;
+      for (const engagement of engagements) {
+        try {
+          await reconcileEngagementStatus(engagement.id, 'system');
+          reconciled += 1;
+        } catch (err) {
+          logger.error('Engagement status reconcile failed', {
+            err,
+            engagementId: engagement.id,
+          });
+        }
+      }
+
+      logger.info('Engagement status reconcile job completed', {
+        engagementsFound: engagements.length,
+        reconciled,
+      });
     },
   });
 
