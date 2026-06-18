@@ -15,6 +15,7 @@ import {
 import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto, UpdateChecklistTemplatesRequestDto } from '../../dto/request/checklist.request.dto';
 import { ChecklistResponseDto, mapChecklistToResponse } from '../../dto/response/checklist.response.dto';
 import { IChecklistService } from '../interface/checklist.service.interface';
+import { reconcileEngagementStatus } from '../../../engagement/service/implementation/engagement-status.reconciler';
 
 export class ChecklistService implements IChecklistService {
   async populateChecklists(engagementId: string, actorId: string): Promise<void> {
@@ -108,6 +109,10 @@ export class ChecklistService implements IChecklistService {
       entityId: id,
       newValues: mapChecklistToResponse(item),
     });
+
+    // A tested control may complete the fieldwork gate — let the engagement advance itself.
+    await reconcileEngagementStatus(item.engagement_id, actor.id);
+
     return mapChecklistToResponse(item);
   }
 

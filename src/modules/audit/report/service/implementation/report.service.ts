@@ -20,6 +20,7 @@ import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report
 import { ReportResponseDto, mapReportToResponse } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
+import { reconcileEngagementStatus } from '../../../engagement/service/implementation/engagement-status.reconciler';
 
 const reportInclude = {
   engagement: {
@@ -289,6 +290,9 @@ export class ReportService implements IReportService {
         entityId: id,
       });
     }).catch((err) => logger.warn('DOCX generation failed after issue', { err, reportId: id }));
+
+    // Issuing the report is the human act; the engagement follows into "reported".
+    await reconcileEngagementStatus(report.engagement_id, actor.id);
 
     return mapReportToResponse(updated);
   }
