@@ -12,6 +12,7 @@ import type {
   AuditFinding,
   AuditChecklistItem,
   ChecklistTemplateConfig,
+  ChecklistTemplateControl,
   AuditReport,
   AuditFollowUp,
   EligibleUserDto,
@@ -113,6 +114,13 @@ export interface EngagementsListQuery {
   search?: string;
 }
 
+/** Customisable checklist control set chosen at engagement creation. */
+export interface ChecklistControlInput {
+  controlReference: string;
+  controlDescription: string;
+  testProcedure: string;
+}
+
 export interface CreateEngagementFromPlanDto {
   title: string;
   leadAuditorId: string;
@@ -125,6 +133,7 @@ export interface CreateEngagementFromPlanDto {
   universeId?: string;
   auditType?: string;
   priority?: string;
+  checklistControls?: ChecklistControlInput[];
 }
 
 export interface CreateAdhocEngagementDto {
@@ -139,6 +148,7 @@ export interface CreateAdhocEngagementDto {
   auditType: string;
   priority: string;
   adhocReason: string;
+  checklistControls?: ChecklistControlInput[];
 }
 
 export interface UpdateEngagementDto {
@@ -223,8 +233,29 @@ export const workingPapersApi = {
     api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/approve`, { comment }),
   reject: (id: string, reason: string) =>
     api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/reject`, { reason }),
-  exportDocx: (id: string) =>
-    api.get<{ buffer: string; fileName: string }>(`/audit/working-papers/${id}/export`),
+  exportFile: async (
+    id: string,
+    format: 'pdf' | 'docx' = 'docx',
+  ): Promise<{ blob: Blob; fileName: string }> => {
+    const res = await fetch(`/api/proxy/audit/working-papers/${id}/export?format=${format}`, {
+      credentials: 'include',
+    });
+    if (!res.ok) {
+      let msg = `Export failed (${res.status})`;
+      try {
+        const body = (await res.json()) as { message?: string };
+        if (body.message) msg = body.message;
+      } catch { /* ignore */ }
+      throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('content-disposition') ?? '';
+    const match = /filename[^;=\n]*=["']?([^"';\n]+)["']?/i.exec(disposition);
+    const fileName =
+      (match?.[1] ? decodeURIComponent(match[1].trim()) : null) ??
+      `working-paper-${id}.${format}`;
+    return { blob, fileName };
+  },
 };
 
 // ============================================================
@@ -312,6 +343,9 @@ export const checklistsApi = {
   getTemplates: () => api.get<ChecklistTemplateConfig>('/audit/checklist-templates'),
   updateTemplates: (templates: ChecklistTemplateConfig) =>
     api.put<ChecklistTemplateConfig>('/audit/checklist-templates', { templates }),
+  /** Controls that would populate an engagement of this audit type — pre-fills the wizard. */
+  previewControls: (auditType: string) =>
+    api.get<ChecklistTemplateControl[]>(`/audit/checklist-controls/${auditType}`),
 };
 
 // ============================================================

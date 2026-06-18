@@ -1,7 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
 import { toast } from 'sonner';
@@ -38,9 +37,9 @@ const linkedToLabel = (entityType: string | null): string => {
 };
 
 export default function DocumentsPage(): JSX.Element | null {
-  const router = useRouter();
   const qc = useQueryClient();
-  const canRead = usePermission('document:read');
+  // Personal storage: every authenticated user can view their own documents, so
+  // viewing is not gated on a permission. Upload/delete remain permission-gated.
   const canWrite = usePermission('document:write');
   const canDelete = usePermission('document:delete');
 
@@ -49,12 +48,6 @@ export default function DocumentsPage(): JSX.Element | null {
   const [entityType, setEntityType] = useState('');
   const [pendingDelete, setPendingDelete] = useState<DocumentDto | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    if (!canRead) {
-      router.replace('/dashboard');
-    }
-  }, [canRead, router]);
 
   const list = useQuery({
     queryKey: ['documents', { page, search, entityType }],
@@ -65,7 +58,6 @@ export default function DocumentsPage(): JSX.Element | null {
         search: search.trim() || undefined,
         entityType: entityType || undefined,
       }),
-    enabled: canRead,
   });
 
   const upload = useMutation({
@@ -92,8 +84,6 @@ export default function DocumentsPage(): JSX.Element | null {
       documentsApi.download(id, fileName),
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to download'),
   });
-
-  if (!canRead) return null;
 
   const columns: Column<DocumentDto>[] = [
     {
@@ -170,7 +160,7 @@ export default function DocumentsPage(): JSX.Element | null {
     <div>
       <PageHeader
         title="Documents"
-        subtitle="All files uploaded across engagements, working papers, findings, and evidence."
+        subtitle="Your uploaded files. Only you can see the documents listed here."
         actions={
           canWrite ? (
             <Button

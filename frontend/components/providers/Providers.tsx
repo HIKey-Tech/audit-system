@@ -4,6 +4,7 @@ import { ReactNode, useState } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Toaster } from 'sonner';
 import * as RadixTooltip from '@radix-ui/react-tooltip';
+import { ApiError } from '@/lib/api-client';
 
 export const Providers = ({ children }: { children: ReactNode }): JSX.Element => {
   const [client] = useState(
@@ -15,6 +16,10 @@ export const Providers = ({ children }: { children: ReactNode }): JSX.Element =>
             refetchOnWindowFocus: false,
             retry: (failureCount, error) => {
               if (error instanceof Error && error.message.toLowerCase().includes('session expired')) {
+                return false;
+              }
+              // Retrying a rate-limited request just burns another rejected call.
+              if (error instanceof ApiError && error.status === 429) {
                 return false;
               }
               return failureCount < 1;

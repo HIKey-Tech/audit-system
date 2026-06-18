@@ -1,6 +1,17 @@
 import { z } from 'zod';
 import { AuditPriority, AuditType, EngagementStatus } from '../../../domain/enum/audit.enum';
 
+/**
+ * A single checklist control the engagement creator can customise before the
+ * engagement starts. Snapshotted onto the engagement; used to populate its
+ * checklist instead of the global per-audit-type template when provided.
+ */
+export const ChecklistControlSchema = z.object({
+  controlReference: z.string().min(1).max(100),
+  controlDescription: z.string().min(1).max(2000),
+  testProcedure: z.string().min(1).max(4000),
+});
+
 const EngagementBaseSchema = z.object({
   title: z.string().min(1).max(200),
   leadAuditorId: z.string().uuid(),
@@ -9,6 +20,7 @@ const EngagementBaseSchema = z.object({
   plannedStartDate: z.string().datetime(),
   plannedEndDate: z.string().datetime(),
   slaDeadline: z.string().datetime(),
+  checklistControls: z.array(ChecklistControlSchema).max(200).optional(),
 });
 
 const EngagementScopeSchema = z.object({

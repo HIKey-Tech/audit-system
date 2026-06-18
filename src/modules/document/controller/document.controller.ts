@@ -132,7 +132,10 @@ export class DocumentController {
      */
     this.router.get(
       '/',
-      requirePermission('document:read'),
+      // Personal storage: the listing is scoped to the authenticated user's own
+      // uploads (see DocumentService.list ownerId), so no permission is required
+      // to view your own documents — only authentication.
+      // requirePermission('document:read'),
       validate(DocumentListQuerySchema, 'query'),
       this._list.bind(this),
     );
@@ -273,7 +276,7 @@ export class DocumentController {
 
   private async _getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const document = await this.documentService.getById(req.params.id);
+      const document = await this.documentService.getById(req.params.id, req.user!.id);
       res.status(200).json(buildResponse(document));
     } catch (err) {
       next(err);
@@ -282,6 +285,7 @@ export class DocumentController {
 
   private async _getDownloadUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      await this.documentService.assertCanUserAccess(req.params.id, req.user!.id);
       const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
       res.status(200).json(buildResponse({ downloadUrl }));
     } catch (err) {
@@ -312,7 +316,10 @@ export class DocumentController {
 
   private async _list(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { documents, meta } = await this.documentService.list(req.query as never);
+      const { documents, meta } = await this.documentService.list(
+        req.query as never,
+        req.user!.id,
+      );
       res.status(200).json({ ...buildResponse(documents), meta });
     } catch (err) {
       next(err);
@@ -321,7 +328,7 @@ export class DocumentController {
 
   private async _serve(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const file = await this.documentService.serveFile(req.params.storedName);
+      const file = await this.documentService.serveFile(req.params.storedName, req.user!.id);
       this._sendFile(res, file);
     } catch (err) {
       next(err);
@@ -330,6 +337,7 @@ export class DocumentController {
 
   private async _getFileById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      await this.documentService.assertCanUserAccess(req.params.id, req.user!.id);
       const file = await this.documentService.getFileById(req.params.id);
       this._sendFile(res, file);
     } catch (err) {
@@ -378,7 +386,7 @@ export class DocumentController {
 
   private async _listVersions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const versions = await this.documentService.listVersions(req.params.id);
+      const versions = await this.documentService.listVersions(req.params.id, req.user!.id);
       res.status(200).json(buildResponse(versions));
     } catch (err) {
       next(err);
@@ -391,7 +399,11 @@ export class DocumentController {
       if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
         throw AppError.badRequest('Version must be a positive integer');
       }
-      const version = await this.documentService.getVersion(req.params.id, versionNumber);
+      const version = await this.documentService.getVersion(
+        req.params.id,
+        versionNumber,
+        req.user!.id,
+      );
       res.status(200).json(buildResponse(version));
     } catch (err) {
       next(err);
@@ -407,6 +419,7 @@ export class DocumentController {
       const downloadUrl = await this.documentService.getVersionDownloadUrl(
         req.params.id,
         versionNumber,
+        req.user!.id,
       );
       res.status(200).json(buildResponse({ downloadUrl }));
     } catch (err) {

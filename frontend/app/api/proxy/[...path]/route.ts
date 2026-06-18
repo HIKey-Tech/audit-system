@@ -46,6 +46,18 @@ const proxy = async (
     headers.set('Authorization', `Bearer ${accessToken}`);
   }
 
+  // Preserve the originating client IP. Node's fetch() does not append to
+  // X-Forwarded-For, so without this every user collapses to this proxy's IP and
+  // the backend's per-IP rate limiter (and audit logs) can't tell them apart.
+  const clientIp =
+    req.headers.get('x-forwarded-for')?.split(',')[0]?.trim() ||
+    req.headers.get('x-real-ip') ||
+    '';
+  if (clientIp) {
+    headers.set('x-forwarded-for', clientIp);
+    headers.set('x-real-ip', clientIp);
+  }
+
   const init: RequestInit = {
     method: req.method,
     headers,

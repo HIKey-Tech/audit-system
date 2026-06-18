@@ -108,6 +108,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const exportMenuRef = useRef<HTMLDivElement>(null);
   const [activeView, setActiveView] = useState<'cards' | 'preview'>('cards');
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
+  const [approveOpen, setApproveOpen] = useState(false);
 
   useEffect(() => {
     if (!showExportMenu) return;
@@ -258,7 +259,6 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     return s ? `${index + 1}. ${s.title}` : fallback;
   };
 
-  const [approveOpen, setApproveOpen] = useState(false);
   const currentStep = approval.data?.steps?.find((step) => step.level === approval.data?.currentLevel);
   const canActOnCurrentApproval =
     approval.data?.status === 'pending' &&

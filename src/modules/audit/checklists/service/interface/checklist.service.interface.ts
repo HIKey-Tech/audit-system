@@ -12,5 +12,6 @@ export interface IChecklistService {
   getChecklists(engagementId: string): Promise<Record<string, ChecklistResponseDto[]>>;
   getChecklistProgress(engagementId: string): Promise<ChecklistProgress>;
   getChecklistTemplates(): Promise<Record<AuditType, ChecklistTemplateControl[]>>;
+  previewControlsForAuditType(auditType: AuditType): Promise<ChecklistTemplateControl[]>;
   updateChecklistTemplates(dto: UpdateChecklistTemplatesRequestDto, actor: ActorContext): Promise<Record<AuditType, ChecklistTemplateControl[]>>;
 }

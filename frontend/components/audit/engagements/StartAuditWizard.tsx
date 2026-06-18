@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Award, Check } from 'lucide-react';
+import { Award, Check, Plus, Trash2, ListChecks } from 'lucide-react';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -15,11 +15,11 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Badge } from '@/components/ui/Badge';
 import { UserSelect } from '@/components/common/UserSelect';
 import { ScoredUserSelect } from '@/components/common/ScoredUserSelect';
-import { engagementsApi, plansApi, universeApi } from '@/lib/api/audit';
+import { checklistsApi, engagementsApi, plansApi, universeApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { usersApi } from '@/lib/api/users';
 import { getMatchScore, isRelevantSkill } from './assignment-matching';
-import type { AuditEngagement } from '@/lib/types/domain';
+import type { AuditEngagement, ChecklistTemplateControl } from '@/lib/types/domain';
 
 type Mode = 'plan' | 'ad_hoc';
 type AuditType = 'it' | 'financial' | 'compliance' | 'systems';
@@ -66,6 +66,9 @@ export const StartAuditWizard = ({
   const [end, setEnd] = useState('');
   const [sla, setSla] = useState('');
   const [slaTouched, setSlaTouched] = useState(false);
+  // per-engagement checklist controls (customisable, pre-filled from the template)
+  const [checklistControls, setChecklistControls] = useState<ChecklistTemplateControl[]>([]);
+  const [checklistTouched, setChecklistTouched] = useState(false);
   // created
   const [created, setCreated] = useState<AuditEngagement | null>(null);
 
@@ -88,6 +91,8 @@ export const StartAuditWizard = ({
     setEnd('');
     setSla('');
     setSlaTouched(false);
+    setChecklistControls([]);
+    setChecklistTouched(false);
     setCreated(null);
   };
 
@@ -146,6 +151,40 @@ export const StartAuditWizard = ({
     return auditType;
   }, [mode, planDetail.data, planItemId, auditType]);
 
+  // Checklist controls that would populate this engagement — pulled once we reach
+  // the Review step and the audit type is known, used to pre-fill the editor.
+  const controlsPreview = useQuery({
+    queryKey: ['checklist-controls', effectiveAuditType],
+    queryFn: () => checklistsApi.previewControls(effectiveAuditType),
+    enabled: open && step === 3 && Boolean(effectiveAuditType),
+    staleTime: 5 * 60_000,
+  });
+
+  // Changing the audit type discards prior edits so the correct template loads.
+  useEffect(() => {
+    setChecklistTouched(false);
+  }, [effectiveAuditType]);
+
+  // Seed the editor from the template until the creator edits it.
+  useEffect(() => {
+    if (step === 3 && !checklistTouched && controlsPreview.data) {
+      setChecklistControls(controlsPreview.data);
+    }
+  }, [step, checklistTouched, controlsPreview.data]);
+
+  const updateControl = (idx: number, field: keyof ChecklistTemplateControl, value: string) => {
+    setChecklistTouched(true);
+    setChecklistControls((prev) => prev.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
+  };
+  const removeControl = (idx: number) => {
+    setChecklistTouched(true);
+    setChecklistControls((prev) => prev.filter((_, i) => i !== idx));
+  };
+  const addControl = () => {
+    setChecklistTouched(true);
+    setChecklistControls((prev) => [...prev, { controlReference: '', controlDescription: '', testProcedure: '' }]);
+  };
+
   // Supporting-auditor candidates: active users (excluding the core roles), ranked by skill match.
   const supportingCandidates = useMemo(() => {
     const coreIds = [leadAuditorId, auditManagerId, auditeeId];
@@ -166,6 +205,17 @@ export const StartAuditWizard = ({
 
   const create = useMutation({
     mutationFn: async (): Promise<AuditEngagement> => {
+      // Only send controls that are fully filled in; an empty list lets the
+      // backend fall back to the global per-audit-type template.
+      const cleanedControls = checklistControls
+        .map((c) => ({
+          controlReference: c.controlReference.trim(),
+          controlDescription: c.controlDescription.trim(),
+          testProcedure: c.testProcedure.trim(),
+        }))
+        .filter((c) => c.controlReference && c.controlDescription && c.testProcedure);
+      const checklistControlsArg = cleanedControls.length > 0 ? cleanedControls : undefined;
+
       const eng = mode === 'plan'
         ? await engagementsApi.createFromPlan({
             title: title.trim(),
@@ -176,6 +226,7 @@ export const StartAuditWizard = ({
             plannedEndDate: toISO(end),
             slaDeadline: toISO(sla),
             planItemId,
+            checklistControls: checklistControlsArg,
           })
         : await engagementsApi.createAdhoc({
             title: title.trim(),
@@ -189,6 +240,7 @@ export const StartAuditWizard = ({
             auditType,
             priority,
             adhocReason: adhocReason.trim(),
+            checklistControls: checklistControlsArg,
           });
 
       // Assign the supporting auditors picked in step 2.
@@ -524,21 +576,85 @@ export const StartAuditWizard = ({
 
       {/* Step 3 — Review */}
       {step === 3 && (
-        <dl className="space-y-3 text-sm">
-          <Row label="Mode" value={mode === 'plan' ? 'From plan item' : 'Ad-hoc'} />
-          {mode === 'ad_hoc' && <Row label="Entity" value={selectedEntity?.name ?? '—'} />}
-          {mode === 'ad_hoc' && <Row label="Audit type" value={auditType} />}
-          {mode === 'ad_hoc' && <Row label="Priority" value={priority} />}
-          <Row label="Title" value={title} />
-          <Row label="Lead auditor" value={userName(leadAuditorId)} />
-          <Row label="Audit manager" value={userName(auditManagerId)} />
-          <Row label="Auditee" value={userName(auditeeId)} />
-          <Row
-            label="Supporting auditors"
-            value={supportingIds.length > 0 ? supportingIds.map(userName).join(', ') : 'None'}
-          />
-          <Row label="Schedule" value={`${start} → ${end} (SLA ${sla})`} />
-        </dl>
+        <div className="space-y-6">
+          <dl className="space-y-3 text-sm">
+            <Row label="Mode" value={mode === 'plan' ? 'From plan item' : 'Ad-hoc'} />
+            {mode === 'ad_hoc' && <Row label="Entity" value={selectedEntity?.name ?? '—'} />}
+            {mode === 'ad_hoc' && <Row label="Audit type" value={auditType} />}
+            {mode === 'ad_hoc' && <Row label="Priority" value={priority} />}
+            <Row label="Title" value={title} />
+            <Row label="Lead auditor" value={userName(leadAuditorId)} />
+            <Row label="Audit manager" value={userName(auditManagerId)} />
+            <Row label="Auditee" value={userName(auditeeId)} />
+            <Row
+              label="Supporting auditors"
+              value={supportingIds.length > 0 ? supportingIds.map(userName).join(', ') : 'None'}
+            />
+            <Row label="Schedule" value={`${start} → ${end} (SLA ${sla})`} />
+          </dl>
+
+          {/* Per-engagement checklist controls */}
+          <div>
+            <div className="mb-1 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1.5">
+                <ListChecks className="h-4 w-4 text-primary" />
+                <h3 className="text-sm font-semibold text-text-primary">
+                  Checklist controls{checklistControls.length > 0 ? ` (${checklistControls.length})` : ''}
+                </h3>
+              </div>
+              <Button type="button" size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={addControl}>
+                Add control
+              </Button>
+            </div>
+            <p className="mb-3 text-xs text-text-secondary">
+              Prefilled from the {effectiveAuditType} template. Edit, add or remove controls — the audit team
+              will test exactly this list for this engagement. Leave empty to use the standard template.
+            </p>
+
+            {controlsPreview.isLoading ? (
+              <p className="text-xs text-text-muted">Loading template…</p>
+            ) : checklistControls.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border bg-surface-alt px-3 py-4 text-center text-xs text-text-muted">
+                No controls. The engagement will fall back to the standard {effectiveAuditType} template — or add controls above.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {checklistControls.map((c, idx) => (
+                  <div key={idx} className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                    <div className="flex items-start gap-2">
+                      <Input
+                        value={c.controlReference}
+                        onChange={(e) => updateControl(idx, 'controlReference', e.target.value)}
+                        placeholder="Control reference (e.g. ISO27001-A.9.2)"
+                      />
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => removeControl(idx)}
+                        aria-label="Remove control"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                    <Textarea
+                      rows={2}
+                      value={c.controlDescription}
+                      onChange={(e) => updateControl(idx, 'controlDescription', e.target.value)}
+                      placeholder="Control description"
+                    />
+                    <Textarea
+                      rows={2}
+                      value={c.testProcedure}
+                      onChange={(e) => updateControl(idx, 'testProcedure', e.target.value)}
+                      placeholder="Test procedure"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
       )}
 
       {/* Step 4 — Launch */}

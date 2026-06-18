@@ -25,11 +25,11 @@ export class WorkingPaperTemplateController {
     /**
      * @route  GET /settings/working-paper-templates
      * @desc   List working paper templates
-     * @access Private - settings:read
+     * @access Private - working_paper:read (templates feed working-paper creation)
      */
     this.router.get(
       '/',
-      requirePermission('settings:read'),
+      requirePermission('working_paper:read'),
       validate(WorkingPaperTemplateQuerySchema, 'query'),
       this._listTemplates.bind(this),
     );
@@ -37,22 +37,22 @@ export class WorkingPaperTemplateController {
     /**
      * @route  GET /settings/working-paper-templates/default/:auditType
      * @desc   Get default working paper template for an audit type
-     * @access Private - settings:read
+     * @access Private - working_paper:read (templates feed working-paper creation)
      */
     this.router.get(
       '/default/:auditType',
-      requirePermission('settings:read'),
+      requirePermission('working_paper:read'),
       this._getDefaultTemplate.bind(this),
     );
 
     /**
      * @route  GET /settings/working-paper-templates/:id
      * @desc   Get working paper template by ID
-     * @access Private - settings:read
+     * @access Private - working_paper:read (templates feed working-paper creation)
      */
     this.router.get(
       '/:id',
-      requirePermission('settings:read'),
+      requirePermission('working_paper:read'),
       this._getTemplateById.bind(this),
     );
 

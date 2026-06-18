@@ -3,6 +3,7 @@ import { authenticate, requirePermission } from '../../../../shared/middleware/a
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import { CreateChecklistItemRequestSchema, UpdateChecklistItemRequestSchema, UpdateChecklistTemplatesRequestSchema } from '../dto/request/checklist.request.dto';
+import { AuditType } from '../../domain/enum/audit.enum';
 import { IChecklistService } from '../service/interface/checklist.service.interface';
 
 export class ChecklistController {
@@ -22,6 +23,15 @@ export class ChecklistController {
      * @access Private - settings:read
      */
     this.router.get('/checklist-templates', requirePermission('settings:read'), this._getChecklistTemplates.bind(this));
+
+    /**
+     * @route  GET /audit/checklist-controls/:auditType
+     * @desc   Preview the control set that would populate an engagement of this
+     *         audit type — used by the create-engagement wizard to pre-fill the
+     *         customisable per-engagement checklist.
+     * @access Private - engagement:create
+     */
+    this.router.get('/checklist-controls/:auditType', requirePermission('engagement:create'), this._previewChecklistControls.bind(this));
 
     /**
      * @route  PUT /audit/checklist-templates
@@ -79,6 +89,15 @@ export class ChecklistController {
     try {
       const templates = await this.checklistService.updateChecklistTemplates(req.body, req.user!);
       res.status(200).json(buildResponse(templates, 'Checklist templates updated'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _previewChecklistControls(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const controls = await this.checklistService.previewControlsForAuditType(req.params.auditType as AuditType);
+      res.status(200).json(buildResponse(controls));
     } catch (err) {
       next(err);
     }

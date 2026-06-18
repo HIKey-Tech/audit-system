@@ -73,12 +73,13 @@ export class DocumentService implements IDocumentService {
     }
   }
 
-  async getById(id: string): Promise<DocumentResponseDto> {
+  async getById(id: string, requesterId: string): Promise<DocumentResponseDto> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },
       include: uploaderInclude,
     });
     if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, requesterId);
     const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
     return mapDocumentToResponse(doc, url);
   }
@@ -97,6 +98,7 @@ export class DocumentService implements IDocumentService {
       where: { id, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, actorId);
 
     await prisma.document.update({
       where: { id },
@@ -109,11 +111,15 @@ export class DocumentService implements IDocumentService {
 
   async list(
     query: DocumentListQueryDto,
+    ownerId: string,
   ): Promise<{ documents: DocumentResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
 
+    // Personal storage: only the documents this user uploaded. Other users'
+    // uploads are never visible from the standalone Documents listing.
     const where: Prisma.DocumentWhereInput = {
       deleted_at: null,
+      uploaded_by_id: ownerId,
       ...(query.entityType && { entity_type: query.entityType }),
       ...(query.search && {
         original_name: { contains: query.search },
@@ -193,6 +199,23 @@ export class DocumentService implements IDocumentService {
     return grouped;
   }
 
+  /**
+   * Personal-isolation guard for the generic by-id routes (`GET /documents/:id/file`
+   * and `/download`). Those service reads are also used internally to assemble
+   * engagement/signature PDFs, so the check lives here and is invoked from the
+   * controller rather than inside the read methods. Entity-attached documents
+   * (engagement evidence, attachments, signatures, …) are exempt, so every party
+   * linked to an engagement keeps access to its shared documents.
+   */
+  async assertCanUserAccess(documentId: string, requesterId: string): Promise<void> {
+    const doc = await prisma.document.findUnique({
+      where: { id: documentId, deleted_at: null },
+      select: { entity_type: true, uploaded_by_id: true },
+    });
+    if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, requesterId);
+  }
+
   async getFileById(id: string): Promise<ServedFileDto> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },
@@ -215,13 +238,20 @@ export class DocumentService implements IDocumentService {
     };
   }
 
-  async serveFile(storedName: string): Promise<ServedFileDto> {
+  async serveFile(storedName: string, requesterId: string): Promise<ServedFileDto> {
     // Resolve the storage key to an owning record. Current versions live on
     // the Document row; historical versions live on Document_Version. Either
     // must exist and not belong to a soft-deleted document.
     const doc = await prisma.document.findFirst({
       where: { storage_path: storedName, deleted_at: null },
-      select: { mime_type: true, original_name: true, file_size: true, storage_provider: true },
+      select: {
+        mime_type: true,
+        original_name: true,
+        file_size: true,
+        storage_provider: true,
+        entity_type: true,
+        uploaded_by_id: true,
+      },
     });
 
     let mimeType: string;
@@ -230,6 +260,7 @@ export class DocumentService implements IDocumentService {
     let storageProvider: string;
 
     if (doc) {
+      this._assertCanAccess(doc, requesterId);
       mimeType = doc.mime_type;
       originalName = doc.original_name;
       fileSize = doc.file_size;
@@ -240,9 +271,17 @@ export class DocumentService implements IDocumentService {
           storage_path: storedName,
           document: { deleted_at: null },
         },
-        select: { mime_type: true, original_name: true, file_size: true, storage_provider: true },
+        select: {
+          mime_type: true,
+          original_name: true,
+          file_size: true,
+          storage_provider: true,
+          // A historical version inherits its parent document's access rules.
+          document: { select: { entity_type: true, uploaded_by_id: true } },
+        },
       });
       if (!version) throw AppError.notFound('File');
+      this._assertCanAccess(version.document, requesterId);
       mimeType = version.mime_type;
       originalName = version.original_name;
       fileSize = version.file_size;
@@ -267,6 +306,7 @@ export class DocumentService implements IDocumentService {
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, dto.uploadedById);
 
     const newVersionNumber = doc.version_number + 1;
     let storedName: string | undefined;
@@ -356,11 +396,13 @@ export class DocumentService implements IDocumentService {
 
   async listVersions(
     documentId: string,
+    requesterId: string,
   ): Promise<DocumentVersionResponseDto[]> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, requesterId);
 
     const history = await prisma.document_Version.findMany({
       where: { document_id: documentId },
@@ -392,11 +434,13 @@ export class DocumentService implements IDocumentService {
   async getVersion(
     documentId: string,
     versionNumber: number,
+    requesterId: string,
   ): Promise<DocumentVersionResponseDto> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, requesterId);
 
     if (versionNumber === doc.version_number) {
       const currentVersion = await prisma.document_Version.findUnique({
@@ -432,12 +476,20 @@ export class DocumentService implements IDocumentService {
   async getVersionDownloadUrl(
     documentId: string,
     versionNumber: number,
+    requesterId: string,
   ): Promise<string> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
-      select: { storage_path: true, storage_provider: true, version_number: true },
+      select: {
+        storage_path: true,
+        storage_provider: true,
+        version_number: true,
+        entity_type: true,
+        uploaded_by_id: true,
+      },
     });
     if (!doc) throw AppError.notFound('Document');
+    this._assertCanAccess(doc, requesterId);
 
     if (versionNumber === doc.version_number) {
       return this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
@@ -697,6 +749,27 @@ export class DocumentService implements IDocumentService {
 
   private _storageClient(provider: string = config.storage.provider) {
     return createStorageClient(provider);
+  }
+
+  /**
+   * Enforce per-person isolation for standalone (personal) documents.
+   *
+   * A personal document has no entity attachment (`entity_type === null`) and
+   * is private to whoever uploaded it. Entity-attached documents (audit
+   * evidence, working papers, reports, request attachments, signatures, …) are
+   * governed by their owning module's access rules and stay shared with the
+   * audit/workflow team, so they are exempt from this check.
+   *
+   * Throws `notFound` rather than `forbidden` so a non-owner can't even
+   * confirm that another user's personal document exists.
+   */
+  private _assertCanAccess(
+    doc: { entity_type: string | null; uploaded_by_id: string },
+    requesterId: string,
+  ): void {
+    if (doc.entity_type === null && doc.uploaded_by_id !== requesterId) {
+      throw AppError.notFound('Document');
+    }
   }
 
   private async _assertTemplateExists(id: string): Promise<void> {

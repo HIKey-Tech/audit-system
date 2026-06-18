@@ -213,3 +213,47 @@ const isChecklistTemplateControl = (value: unknown): value is ChecklistTemplateC
     && typeof record.controlDescription === 'string'
     && typeof record.testProcedure === 'string';
 };
+
+/**
+ * Serialize a per-engagement checklist control set for storage on the engagement.
+ * Returns null when there is nothing to store (so populate falls back to the
+ * global per-audit-type template).
+ */
+export const serializeChecklistControls = (
+  controls: ChecklistTemplateControl[] | undefined | null,
+): string | null => {
+  if (!Array.isArray(controls) || controls.length === 0) return null;
+  const clean = controls
+    .filter(isChecklistTemplateControl)
+    .map((control) => ({
+      controlReference: control.controlReference.trim(),
+      controlDescription: control.controlDescription.trim(),
+      testProcedure: control.testProcedure.trim(),
+    }))
+    .filter((control) => control.controlReference.length > 0);
+  return clean.length > 0 ? JSON.stringify(clean) : null;
+};
+
+/**
+ * Parse a per-engagement checklist control snapshot stored on the engagement.
+ * Returns null when absent or invalid, signalling callers to fall back to the
+ * global per-audit-type template.
+ */
+export const parseChecklistTemplateSnapshot = (
+  value: string | null | undefined,
+): ChecklistTemplateControl[] | null => {
+  if (!value) return null;
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    return null;
+  }
+  if (!Array.isArray(parsed)) return null;
+  const controls = parsed.filter(isChecklistTemplateControl).map((control) => ({
+    controlReference: control.controlReference,
+    controlDescription: control.controlDescription,
+    testProcedure: control.testProcedure,
+  }));
+  return controls.length > 0 ? controls : null;
+};

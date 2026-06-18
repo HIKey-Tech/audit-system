@@ -9,6 +9,7 @@ import {
   ChecklistTemplateControl,
   getChecklistTemplateConfig,
   getEngagementControls,
+  parseChecklistTemplateSnapshot,
   setChecklistTemplateConfig,
 } from '../../../utility/audit-config.utility';
 import { CreateChecklistItemRequestDto, UpdateChecklistItemRequestDto, UpdateChecklistTemplatesRequestDto } from '../../dto/request/checklist.request.dto';
@@ -19,7 +20,7 @@ export class ChecklistService implements IChecklistService {
   async populateChecklists(engagementId: string, actorId: string): Promise<void> {
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
-      select: { id: true, audit_type: true },
+      select: { id: true, audit_type: true, checklist_template: true },
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
 
@@ -27,7 +28,11 @@ export class ChecklistService implements IChecklistService {
     if (existing > 0) return;
 
     const auditType = engagement.audit_type as AuditType;
-    const controls = await getEngagementControls(auditType);
+    // Prefer the engagement's own checklist snapshot (chosen at creation); fall
+    // back to the global per-audit-type control set when none was customised.
+    const controls =
+      parseChecklistTemplateSnapshot(engagement.checklist_template) ??
+      (await getEngagementControls(auditType));
     await prisma.audit_Checklist.createMany({
       data: controls.map((control) => ({
         engagement_id: engagementId,
@@ -178,6 +183,13 @@ export class ChecklistService implements IChecklistService {
 
   async getChecklistTemplates(): Promise<Record<AuditType, ChecklistTemplateControl[]>> {
     return getChecklistTemplateConfig();
+  }
+
+  async previewControlsForAuditType(auditType: AuditType): Promise<ChecklistTemplateControl[]> {
+    if (!Object.values(AuditType).includes(auditType)) {
+      throw AppError.badRequest('Invalid audit type');
+    }
+    return getEngagementControls(auditType);
   }
 
   async updateChecklistTemplates(

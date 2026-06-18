@@ -800,6 +800,10 @@ model Audit_Engagement {
   sla_deadline       DateTime
   is_adhoc           Boolean   @default(false)
   adhoc_reason       String?   @db.NVarChar(Max)
+  // Optional per-engagement checklist control set chosen at creation, as a JSON
+  // array of { controlReference, controlDescription, testProcedure }. When set,
+  // populateChecklists uses this instead of the global per-audit-type template.
+  checklist_template String?   @db.NVarChar(Max)
   created_by_id      String
   deleted_at         DateTime?
   created_at         DateTime  @default(now())

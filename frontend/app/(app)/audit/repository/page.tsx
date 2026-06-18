@@ -3,9 +3,10 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Archive, Download, FileText, Search } from 'lucide-react';
+import { Archive, Download, FileText, Plus, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { AddEvidenceDialog } from '@/components/audit/repository/AddEvidenceDialog';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
@@ -42,10 +43,12 @@ const CATEGORY_TONES: Record<RepositoryCategory, 'green' | 'blue' | 'purple' | '
 export default function RepositoryPage(): JSX.Element | null {
   const router = useRouter();
   const canRead = usePermission('engagement:read');
+  const canUpload = usePermission('evidence:upload');
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState<RepositoryCategoryFilter>('all');
+  const [addOpen, setAddOpen] = useState(false);
 
   useEffect(() => {
     if (!canRead) router.replace('/dashboard');
@@ -147,14 +150,23 @@ export default function RepositoryPage(): JSX.Element | null {
         title="Evidence Repository"
         subtitle="Central, secure store of all audit records, supporting documents, and evidence — searchable across every engagement."
         actions={
-          list.data ? (
-            <div className="text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Total items</p>
-              <p className="text-lg font-semibold tabular-nums text-text-primary">{formatNumber(list.data.meta.total)}</p>
-            </div>
-          ) : null
+          <div className="flex items-center gap-5">
+            {list.data ? (
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Total items</p>
+                <p className="text-lg font-semibold tabular-nums text-text-primary">{formatNumber(list.data.meta.total)}</p>
+              </div>
+            ) : null}
+            {canUpload && (
+              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setAddOpen(true)}>
+                Add evidence
+              </Button>
+            )}
+          </div>
         }
       />
+
+      <AddEvidenceDialog open={addOpen} onClose={() => setAddOpen(false)} />
 
       <Card padded className="mb-4">
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">

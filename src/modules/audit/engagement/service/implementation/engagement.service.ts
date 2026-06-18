@@ -13,7 +13,7 @@ import {
   buildReferenceNumber,
   parseReferenceSequence,
 } from '../../../utility/audit.utility';
-import { getAuditLifecycleRules } from '../../../utility/audit-config.utility';
+import { getAuditLifecycleRules, serializeChecklistControls } from '../../../utility/audit-config.utility';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
 import { IUserService } from '../../../../user';
 import { UserQueryDto } from '../../../../user/dto/request/user.request.dto';
@@ -166,6 +166,7 @@ export class EngagementService implements IEngagementService {
           planned_start_date: new Date(dto.plannedStartDate),
           planned_end_date: new Date(dto.plannedEndDate),
           sla_deadline: new Date(dto.slaDeadline),
+          checklist_template: serializeChecklistControls(dto.checklistControls),
           created_by_id: actor.id,
         },
         include: engagementInclude,
@@ -206,6 +207,7 @@ export class EngagementService implements IEngagementService {
         sla_deadline: new Date(dto.slaDeadline),
         is_adhoc: true,
         adhoc_reason: dto.adhocReason,
+        checklist_template: serializeChecklistControls(dto.checklistControls),
         created_by_id: actor.id,
       },
       include: engagementInclude,

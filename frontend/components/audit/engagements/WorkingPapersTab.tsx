@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2 } from 'lucide-react';
+import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -73,6 +73,21 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
+  const exportMut = useMutation({
+    mutationFn: (id: string) => workingPapersApi.exportFile(id, 'docx'),
+    onSuccess: ({ blob, fileName }) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Export failed'),
+  });
+
   const canCreate = canCreateWP && engagement.status === 'in_progress';
 
   return (
@@ -139,6 +154,15 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                   <div className="flex flex-wrap items-center gap-2">
                     <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setEditing(wp)}>
                       View
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      leftIcon={<Download className="h-3.5 w-3.5" />}
+                      onClick={() => exportMut.mutate(wp.id)}
+                      isLoading={exportMut.isPending && exportMut.variables === wp.id}
+                    >
+                      Export
                     </Button>
                     {canSubmitWP && (wp.status === 'draft' || wp.status === 'rejected') && (
                       <Button

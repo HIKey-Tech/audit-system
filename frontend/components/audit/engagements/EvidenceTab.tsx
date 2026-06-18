@@ -30,11 +30,19 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
     queryFn: () => evidenceApi.listByEngagement(engagement.id),
   });
 
+  // Evidence upload/dispute change the engagement's evidence aggregate, so refresh
+  // both the evidence list AND the engagement detail (the StatusStepper reads
+  // engagement.evidenceCount from the detail payload).
+  const refreshEvidence = () => {
+    qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'evidence'] });
+    qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+  };
+
   const upload = useMutation({
     mutationFn: (file: File) => evidenceApi.upload(engagement.id, file),
     onSuccess: () => {
       toast.success('Evidence uploaded');
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'evidence'] });
+      refreshEvidence();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to upload'),
   });
@@ -44,7 +52,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
       evidenceApi.dispute(id, reason),
     onSuccess: () => {
       toast.success('Evidence disputed');
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'evidence'] });
+      refreshEvidence();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
