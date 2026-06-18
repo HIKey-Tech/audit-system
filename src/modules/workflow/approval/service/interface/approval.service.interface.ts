@@ -4,6 +4,7 @@ import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { WorkflowEntityType } from '../../../domain/enum/workflow.enum';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
 import { ApprovalResponseDto, SignedApprovalDocumentDto } from '../../dto/response/approval.response.dto';
+import { ResolvedApprovalChainDto } from '../../dto/response/approval-chain.response.dto';
 
 /** Minimal actor shape needed to authorise an approval action by permission. */
 export interface ApprovalActor {
@@ -28,4 +29,5 @@ export interface IApprovalService {
   ): Promise<{ approvals: ApprovalResponseDto[]; meta: PaginationMeta }>;
   cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
   listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]>;
+  resolveChainForEntity(entityType: WorkflowEntityType, entityId: string): Promise<ResolvedApprovalChainDto>;
 }

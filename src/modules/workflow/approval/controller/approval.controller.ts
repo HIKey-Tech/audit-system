@@ -2,6 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
+import { WorkflowEntityType } from '../../domain/enum/workflow.enum';
 import {
   ApprovalActionRequestSchema,
   ApprovalEntityParamsSchema,
@@ -34,6 +35,13 @@ export class ApprovalController {
      * @access Private - audit:read
      */
     this.router.get('/entity/:type/:id', requirePermission('approval:read'), validate(ApprovalEntityParamsSchema, 'params'), this._getApprovalByEntity.bind(this));
+
+    /**
+     * @route  GET /workflow/approvals/chain/:entityType/:entityId
+     * @desc   Resolve an entity's approval chain to named people for display
+     * @access Private - audit:read
+     */
+    this.router.get('/chain/:entityType/:entityId', requirePermission('audit:read'), this._getChain.bind(this));
 
     /**
      * @route  GET /workflow/approvals/:id
@@ -84,6 +92,16 @@ export class ApprovalController {
     try {
       const approval = await this.approvalService.getApprovalByEntity(req.params.type as never, req.params.id);
       res.status(200).json(buildResponse(approval));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getChain(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { entityType, entityId } = req.params;
+      const chain = await this.approvalService.resolveChainForEntity(entityType as WorkflowEntityType, entityId);
+      res.status(200).json(buildResponse(chain, 'Approval chain resolved'));
     } catch (err) {
       next(err);
     }

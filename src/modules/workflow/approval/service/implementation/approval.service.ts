@@ -16,7 +16,7 @@ import {
 } from '../../../../audit/approval-status/service/interface/approval-status.service.interface';
 import { approvalStatusService as defaultApprovalStatusService } from '../../../../audit/approval-status/service/implementation/approval-status.service';
 import { ApprovalMatrix, ENGAGEMENT_MANAGER_APPROVER, getApprovalMatrix } from '../../../../audit/utility/audit-config.utility';
-import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
+import { WorkflowActorContext, WorkflowUserBrief } from '../../../domain/entity/workflow.entity';
 import {
   WorkflowApprovalStatus,
   WorkflowApprovalStepStatus,
@@ -28,7 +28,12 @@ import {
   ApprovalResponseDto,
   SignedApprovalDocumentDto,
   mapApprovalToResponse,
+  mapWorkflowUserBrief,
 } from '../../dto/response/approval.response.dto';
+import {
+  ResolvedApprovalChainDto,
+  ResolvedApprovalLevelDto,
+} from '../../dto/response/approval-chain.response.dto';
 import { ApprovalActor, IApprovalService } from '../interface/approval.service.interface';
 import { userSignatureService } from '../../../../user/service/implementation/signature.service';
 
@@ -537,6 +542,77 @@ export class ApprovalService implements IApprovalService {
     return mapApprovalToResponse(updated);
   }
 
+  async resolveChainForEntity(
+    entityType: WorkflowEntityType,
+    entityId: string,
+  ): Promise<ResolvedApprovalChainDto> {
+    const approval = await prisma.workflow_Approval.findFirst({
+      where: { entity_type: entityType, entity_id: entityId },
+      include: approvalInclude,
+      orderBy: { created_at: 'desc' },
+    });
+
+    // Case A: an approval exists — render its actual steps as people.
+    if (approval) {
+      const levels: ResolvedApprovalLevelDto[] = [];
+      for (const step of approval.steps) {
+        const acted = step.status === 'approved' || step.status === 'rejected';
+        const status: ResolvedApprovalLevelDto['status'] = acted
+          ? (step.status as 'approved' | 'rejected')
+          : approval.status === 'pending' && step.level === approval.current_level
+            ? 'pending'
+            : 'upcoming';
+
+        if (step.approver) {
+          // Pinned, or already acted by a specific person.
+          levels.push({
+            level: step.level, kind: 'person', status,
+            requiredPermission: step.required_permission,
+            resolvedApprover: mapWorkflowUserBrief(step.approver), candidates: [],
+          });
+        } else {
+          // Open permission pool, not yet acted — show candidate holders.
+          const candidates = step.required_permission ? await this._activeHoldersBrief(step.required_permission) : [];
+          levels.push({
+            level: step.level, kind: 'permission', status,
+            requiredPermission: step.required_permission, resolvedApprover: null, candidates,
+          });
+        }
+      }
+      return {
+        entityType, entityId, exists: true,
+        status: approval.status, currentLevel: approval.current_level, levels,
+      };
+    }
+
+    // Case B: no approval yet — render the prospective chain from the matrix.
+    const matrix = await getApprovalMatrix();
+    const chain = this._chainForEntity(matrix, entityType);
+    const managerId = await this._resolveEngagementManager(prisma, entityType, entityId).catch(() => null);
+    const levels: ResolvedApprovalLevelDto[] = [];
+    let level = 1;
+    for (const entry of chain) {
+      if (entry === ENGAGEMENT_MANAGER_APPROVER) {
+        const manager = managerId
+          ? await prisma.user.findUnique({ where: { id: managerId }, select: workflowUserSelect })
+          : null;
+        levels.push({
+          level, kind: 'person', status: 'upcoming',
+          requiredPermission: ENGAGEMENT_MANAGER_PERMISSION[entityType] ?? null,
+          resolvedApprover: manager ? mapWorkflowUserBrief(manager) : null, candidates: [],
+        });
+      } else {
+        levels.push({
+          level, kind: 'permission', status: 'upcoming',
+          requiredPermission: entry, resolvedApprover: null,
+          candidates: await this._activeHoldersBrief(entry),
+        });
+      }
+      level += 1;
+    }
+    return { entityType, entityId, exists: false, status: null, currentLevel: null, levels };
+  }
+
   private async _resolveApproverChain(
     db: Prisma.TransactionClient | typeof prisma,
     entityType: WorkflowEntityType,
@@ -660,6 +736,16 @@ export class ApprovalService implements IApprovalService {
         },
       },
     };
+  }
+
+  /** All active users who currently hold a permission, resolved to display-ready briefs. */
+  private async _activeHoldersBrief(permissionSlug: string): Promise<WorkflowUserBrief[]> {
+    const users = await prisma.user.findMany({
+      where: this._activeHolderWhere(permissionSlug),
+      select: workflowUserSelect,
+      orderBy: { display_name: 'asc' },
+    });
+    return users.map(mapWorkflowUserBrief);
   }
 
   private async _getPendingApproval(approvalId: string): Promise<ApprovalWithDetails> {
