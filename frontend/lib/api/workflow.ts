@@ -12,6 +12,7 @@ import type {
   SignedDocument,
   SignedApprovalDocument,
   RequestStatus,
+  ResolvedApprovalChain,
 } from '../types/domain';
 import type { PaginatedResult } from '../types/api';
 
@@ -24,6 +25,10 @@ export const workflowApi = {
   getApprovalByEntity: (entityType: string, entityId: string) =>
     api.get<WorkflowApproval>(
       `/workflow/approvals/entity/${entityType}/${entityId}`,
+    ),
+  getApprovalChain: (entityType: string, entityId: string) =>
+    api.get<ResolvedApprovalChain>(
+      `/workflow/approvals/chain/${entityType}/${entityId}`,
     ),
   approve: (id: string, comment?: string) =>
     api.post<WorkflowApproval>(`/workflow/approvals/${id}/approve`, { comment }),

@@ -387,6 +387,39 @@ export interface AuditEngagementDetail extends AuditEngagement {
   reportStatus?: string | null;
   evidenceCount?: number;
   assetCount?: number;
+  viewerContext?: ViewerContext;
+}
+
+export interface ViewerContext {
+  role: 'oversight' | 'team' | 'auditee';
+  canViewWorkingPapers: boolean;
+  canViewInternalEvidence: boolean;
+  canViewChecklists: boolean;
+  canViewDraftFindings: boolean;
+}
+
+export interface ApprovalUserBrief {
+  id: string;
+  displayName: string;
+  jobTitle: string | null;
+}
+
+export interface ResolvedApprovalLevel {
+  level: number;
+  kind: 'person' | 'permission';
+  status: 'pending' | 'approved' | 'rejected' | 'upcoming';
+  requiredPermission: string | null;
+  resolvedApprover: ApprovalUserBrief | null;
+  candidates: ApprovalUserBrief[];
+}
+
+export interface ResolvedApprovalChain {
+  entityType: string;
+  entityId: string;
+  exists: boolean;
+  status: string | null;
+  currentLevel: number | null;
+  levels: ResolvedApprovalLevel[];
 }
 
 export interface AuditAssignment {
