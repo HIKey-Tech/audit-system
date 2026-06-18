@@ -133,7 +133,7 @@ export class EvidenceController {
 
   private async _listEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const evidence = await this.evidenceService.listEvidence(req.params.id, req.query as never);
+      const evidence = await this.evidenceService.listEvidence(req.params.id, req.query as never, req.user!);
       res.status(200).json(buildResponse(evidence));
     } catch (err) {
       next(err);

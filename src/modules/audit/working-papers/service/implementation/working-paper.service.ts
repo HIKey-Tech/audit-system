@@ -11,6 +11,7 @@ import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.en
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
 import { WP_REVIEWABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
+import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateWorkingPaperRequestDto,
   ImportWorkingPaperMetadataDto,
@@ -229,16 +230,18 @@ export class WorkingPaperService implements IWorkingPaperService {
     return mapWorkingPaperToResponse(updated);
   }
 
-  async getWorkingPaperById(id: string): Promise<WorkingPaperResponseDto> {
+  async getWorkingPaperById(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
     const paper = await prisma.audit_Working_Paper.findFirst({
       where: { id, deleted_at: null },
       include: { evidence: true },
     });
     if (!paper) throw AppError.notFound('Audit working paper');
+    await assertCanViewInternalArtifacts(paper.engagement_id, actor);
     return mapWorkingPaperToResponse(paper);
   }
 
-  async listWorkingPapers(engagementId: string): Promise<WorkingPaperResponseDto[]> {
+  async listWorkingPapers(engagementId: string, actor: ActorContext): Promise<WorkingPaperResponseDto[]> {
+    await assertCanViewInternalArtifacts(engagementId, actor);
     const papers = await prisma.audit_Working_Paper.findMany({
       where: { engagement_id: engagementId, deleted_at: null },
       orderBy: { updated_at: 'desc' },

@@ -8,6 +8,7 @@ import { IDocumentService } from '../../../../document/service/interface/documen
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
 import { assertHasPermission } from '../../../utility/audit.utility';
+import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
 import { EvidenceQueryDto, EvidenceRepositoryQueryDto, UploadEvidenceDto } from '../../dto/request/evidence.request.dto';
 import {
   EvidenceResponseDto,
@@ -106,7 +107,8 @@ export class EvidenceService implements IEvidenceService {
     return mapEvidenceToResponse(updated);
   }
 
-  async listEvidence(engagementId: string, query: EvidenceQueryDto): Promise<EvidenceResponseDto[]> {
+  async listEvidence(engagementId: string, query: EvidenceQueryDto, actor: ActorContext): Promise<EvidenceResponseDto[]> {
+    await assertCanViewInternalArtifacts(engagementId, actor);
     const evidence = await prisma.audit_Evidence.findMany({
       where: {
         engagement_id: engagementId,

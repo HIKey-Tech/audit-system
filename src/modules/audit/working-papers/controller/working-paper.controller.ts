@@ -168,7 +168,7 @@ export class WorkingPaperController {
 
   private async _getWorkingPaperById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const paper = await this.workingPaperService.getWorkingPaperById(req.params.id);
+      const paper = await this.workingPaperService.getWorkingPaperById(req.params.id, req.user!);
       res.status(200).json(buildResponse(paper));
     } catch (err) {
       next(err);
@@ -177,7 +177,7 @@ export class WorkingPaperController {
 
   private async _listWorkingPapers(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const papers = await this.workingPaperService.listWorkingPapers(req.params.id);
+      const papers = await this.workingPaperService.listWorkingPapers(req.params.id, req.user!);
       res.status(200).json(buildResponse(papers));
     } catch (err) {
       next(err);

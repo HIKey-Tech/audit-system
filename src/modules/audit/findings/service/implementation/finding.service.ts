@@ -11,6 +11,7 @@ import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.en
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus } from '../../../domain/enum/audit.enum';
 import { FINDING_TRANSITIONS, assertHasPermission, assertTransition } from '../../../utility/audit.utility';
+import { resolveViewerContext } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateFindingRequestDto,
   FindingQueryDto,
@@ -229,6 +230,20 @@ export class FindingService implements IFindingService {
   }
 
   async listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]> {
+    const eng = await prisma.audit_Engagement.findFirst({
+      where: { id: engagementId, deleted_at: null },
+      select: { status: true, lead_auditor_id: true, audit_manager_id: true, auditee_id: true },
+    });
+    if (!eng) throw AppError.notFound('Audit engagement');
+    const viewer = await resolveViewerContext(engagementId, eng, actor);
+
+    // A pure auditee only sees findings once the report has been issued
+    // (engagement is reported/closed); before that, findings are still draft/internal.
+    const reportIssued = eng.status === EngagementStatus.Reported || eng.status === EngagementStatus.Closed;
+    if (viewer.role === 'auditee' && !reportIssued) {
+      return [];
+    }
+
     const findings = await prisma.audit_Finding.findMany({
       where: {
         ...this._buildFindingWhere(query, actor),

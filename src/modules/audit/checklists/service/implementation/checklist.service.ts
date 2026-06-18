@@ -5,6 +5,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { ActorContext, ChecklistProgress } from '../../../domain/entity/audit.entity';
 import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
 import { assertHasPermission, emptyChecklistProgress } from '../../../utility/audit.utility';
+import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
 import {
   ChecklistTemplateControl,
   getChecklistTemplateConfig,
@@ -151,7 +152,8 @@ export class ChecklistService implements IChecklistService {
     return mapChecklistToResponse(updated);
   }
 
-  async getChecklists(engagementId: string): Promise<Record<string, ChecklistResponseDto[]>> {
+  async getChecklists(engagementId: string, actor: ActorContext): Promise<Record<string, ChecklistResponseDto[]>> {
+    await assertCanViewInternalArtifacts(engagementId, actor);
     const items = await prisma.audit_Checklist.findMany({
       where: { engagement_id: engagementId },
       orderBy: [{ audit_type: 'asc' }, { control_reference: 'asc' }],
@@ -165,7 +167,8 @@ export class ChecklistService implements IChecklistService {
     }, {});
   }
 
-  async getChecklistProgress(engagementId: string): Promise<ChecklistProgress> {
+  async getChecklistProgress(engagementId: string, actor: ActorContext): Promise<ChecklistProgress> {
+    await assertCanViewInternalArtifacts(engagementId, actor);
     const grouped = await prisma.audit_Checklist.groupBy({
       by: ['result'],
       where: { engagement_id: engagementId },
