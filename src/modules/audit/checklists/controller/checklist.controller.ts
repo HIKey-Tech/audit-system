@@ -114,7 +114,7 @@ export class ChecklistController {
 
   private async _getChecklistProgress(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const progress = await this.checklistService.getChecklistProgress(req.params.id, req.user!);
+      const progress = await this.checklistService.getChecklistProgress(req.params.id);
       res.status(200).json(buildResponse(progress));
     } catch (err) {
       next(err);

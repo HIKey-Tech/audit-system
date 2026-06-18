@@ -167,8 +167,7 @@ export class ChecklistService implements IChecklistService {
     }, {});
   }
 
-  async getChecklistProgress(engagementId: string, actor: ActorContext): Promise<ChecklistProgress> {
-    await assertCanViewInternalArtifacts(engagementId, actor);
+  async getChecklistProgress(engagementId: string): Promise<ChecklistProgress> {
     const grouped = await prisma.audit_Checklist.groupBy({
       by: ['result'],
       where: { engagement_id: engagementId },
