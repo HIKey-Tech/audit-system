@@ -333,6 +333,21 @@ export class ApprovalService implements IApprovalService {
       void import('../../../../audit/approval-signature/service/implementation/approval-signed-document.service')
         .then((m) => m.approvalSignedDocumentService.generateForCompletedApproval(approvalId))
         .catch((err: unknown) => logger.warn('Approval freeze enqueue failed', { approvalId, err }));
+
+      // A final working-paper / finding-closure approval may complete an engagement
+      // gate — reconcile its status post-commit. Dynamic import avoids the
+      // audit↔workflow module cycle (same pattern as the signed-document freeze).
+      if (
+        approval.entity_type === WorkflowEntityType.AuditWorkingPaper ||
+        approval.entity_type === WorkflowEntityType.AuditFindingClosure
+      ) {
+        const reconcileEntityType = approval.entity_type === WorkflowEntityType.AuditWorkingPaper
+          ? 'audit_working_paper'
+          : 'audit_finding_closure';
+        void import('../../../../audit/engagement/service/implementation/engagement-status.reconciler')
+          .then((m) => m.reconcileEngagementForApprovalEntity(reconcileEntityType, approval.entity_id, actor.id))
+          .catch((err: unknown) => logger.warn('Engagement reconcile after approval failed', { approvalId, err }));
+      }
     }
 
     logger.info('Workflow approval step approved', { approvalId, approverId: actor.id });
