@@ -1,6 +1,5 @@
 'use client';
 
-import Link from 'next/link';
 import { Check, ArrowRight, Info } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -17,7 +16,13 @@ interface Blocker {
   action?: React.ReactNode;
 }
 
-export const WhatsNextPanel = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
+export const WhatsNextPanel = ({
+  engagement,
+  onNavigateTab,
+}: {
+  engagement: AuditEngagementDetail;
+  onNavigateTab?: (tab: string) => void;
+}): JSX.Element => {
   const qc = useQueryClient();
   const { hasPermission } = usePermissions();
   const canManage = hasPermission('engagement:update');
@@ -31,7 +36,7 @@ export const WhatsNextPanel = ({ engagement }: { engagement: AuditEngagementDeta
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to start fieldwork'),
   });
 
-  const blockers = buildBlockers(engagement, { canManage, startFieldwork });
+  const blockers = buildBlockers(engagement, { canManage, startFieldwork, onNavigateTab });
 
   return (
     <Card className="p-0 border-0 shadow-none bg-transparent">
@@ -65,7 +70,11 @@ export const WhatsNextPanel = ({ engagement }: { engagement: AuditEngagementDeta
 
 function buildBlockers(
   e: AuditEngagementDetail,
-  ctx: { canManage: boolean; startFieldwork: { mutate: () => void; isPending: boolean } },
+  ctx: {
+    canManage: boolean;
+    startFieldwork: { mutate: () => void; isPending: boolean };
+    onNavigateTab?: (tab: string) => void;
+  },
 ): Blocker[] {
   const lead = e.leadAuditorName ?? 'the lead auditor';
   const manager = e.auditManagerName ?? 'the audit manager';
@@ -109,9 +118,9 @@ function buildBlockers(
           {
             text: 'Report approved and ready to issue to the auditee.',
             action: (
-              <Link href={`/audit/engagements/${e.id}?tab=report`}>
-                <Button size="sm" variant="secondary">Go to report</Button>
-              </Link>
+              <Button size="sm" variant="secondary" onClick={() => ctx.onNavigateTab?.('report')}>
+                Go to report
+              </Button>
             ),
           },
         ];

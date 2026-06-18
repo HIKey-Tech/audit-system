@@ -62,9 +62,10 @@ const STAGES: StageConfig[] = [
 
 interface StatusStepperProps {
   engagement: AuditEngagementDetail;
+  onNavigateTab?: (tab: string) => void;
 }
 
-export const StatusStepper = ({ engagement }: StatusStepperProps): JSX.Element => {
+export const StatusStepper = ({ engagement, onNavigateTab }: StatusStepperProps): JSX.Element => {
   const [isOpen, setIsOpen] = useState(true);
   const activeIndex = STAGES.findIndex((s) => s.key === engagement.status);
   const progressPercent = Math.round((activeIndex / (STAGES.length - 1)) * 100);
@@ -86,11 +87,11 @@ export const StatusStepper = ({ engagement }: StatusStepperProps): JSX.Element =
         >
           {isOpen ? (
             <>
-              Hide Guide <ChevronUp className="h-3.5 w-3.5" />
+              Hide details <ChevronUp className="h-3.5 w-3.5" />
             </>
           ) : (
             <>
-              Show Guide <ChevronDown className="h-3.5 w-3.5" />
+              Show details <ChevronDown className="h-3.5 w-3.5" />
             </>
           )}
         </button>
@@ -155,7 +156,7 @@ export const StatusStepper = ({ engagement }: StatusStepperProps): JSX.Element =
               </div>
             </div>
           ) : (
-            <WhatsNextPanel engagement={engagement} />
+            <WhatsNextPanel engagement={engagement} onNavigateTab={onNavigateTab} />
           )}
         </div>
       )}

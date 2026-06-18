@@ -140,7 +140,7 @@ export default function EngagementDetailPage(): JSX.Element {
         )}
       </div>
 
-      <StatusStepper engagement={data} />
+      <StatusStepper engagement={data} onNavigateTab={(k) => setTab(k as TabKey)} />
 
       <div className="mb-6">
         <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
