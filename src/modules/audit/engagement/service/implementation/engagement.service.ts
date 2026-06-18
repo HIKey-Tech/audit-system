@@ -14,6 +14,7 @@ import {
   parseReferenceSequence,
 } from '../../../utility/audit.utility';
 import { getAuditLifecycleRules, serializeChecklistControls } from '../../../utility/audit-config.utility';
+import { resolveViewerContext } from '../../utility/engagement-visibility.util';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
 import { IUserService } from '../../../../user';
 import { UserQueryDto } from '../../../../user/dto/request/user.request.dto';
@@ -295,7 +296,7 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Audit engagement status updated', { engagementId: id, status: newStatus, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, newValues: { status: newStatus } });
-    return this._withMetrics(updated);
+    return this._withMetrics(updated, actor);
   }
 
   /**
@@ -361,7 +362,7 @@ export class EngagementService implements IEngagementService {
     }
 
     if (!engagement) throw AppError.notFound('Audit engagement');
-    return this._withMetrics(engagement);
+    return this._withMetrics(engagement, actor);
   }
 
   async listEngagements(query: EngagementQueryDto, actor: ActorContext): Promise<{ engagements: EngagementResponseDto[]; meta: PaginationMeta }> {
@@ -408,7 +409,10 @@ export class EngagementService implements IEngagementService {
     if (!engagement) throw AppError.notFound('Audit engagement');
   }
 
-  private async _withMetrics(engagement: Parameters<typeof mapEngagementToResponse>[0]): Promise<EngagementResponseDto> {
+  private async _withMetrics(
+    engagement: Parameters<typeof mapEngagementToResponse>[0],
+    actor: ActorContext,
+  ): Promise<EngagementResponseDto> {
     const [findingGroups, workingPaperGroups, checklistProgress, report, evidenceCount, assetCount] = await Promise.all([
       prisma.audit_Finding.groupBy({
         by: ['severity'],
@@ -460,7 +464,17 @@ export class EngagementService implements IEngagementService {
       unresolved: findingTotal - resolvedFindings,
     };
 
-    return mapEngagementToResponse(engagement, {
+    const viewerContext = await resolveViewerContext(
+      engagement.id,
+      {
+        lead_auditor_id: engagement.lead_auditor_id,
+        audit_manager_id: engagement.audit_manager_id,
+        auditee_id: engagement.auditee_id,
+      },
+      actor,
+    );
+
+    const dto = mapEngagementToResponse(engagement, {
       findingCounts,
       workingPaperCount,
       checklistProgress: progress,
@@ -470,6 +484,8 @@ export class EngagementService implements IEngagementService {
       evidenceCount,
       assetCount,
     });
+    dto.viewerContext = viewerContext;
+    return dto;
   }
 
   private async _assertLifecycleGate(id: string, newStatus: EngagementStatus): Promise<void> {

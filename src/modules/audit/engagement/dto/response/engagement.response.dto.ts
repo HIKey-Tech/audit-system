@@ -27,6 +27,14 @@ export interface EligibleUserDto {
   overCapacity: boolean;
 }
 
+export interface ViewerContext {
+  role: 'oversight' | 'team' | 'auditee';
+  canViewWorkingPapers: boolean;
+  canViewInternalEvidence: boolean;
+  canViewChecklists: boolean;
+  canViewDraftFindings: boolean;
+}
+
 export interface EngagementResponseDto {
   id: string;
   referenceNumber: string;
@@ -62,6 +70,7 @@ export interface EngagementResponseDto {
   reportStatus?: string | null;
   evidenceCount?: number;
   assetCount?: number;
+  viewerContext?: ViewerContext;
 }
 
 export const mapEngagementToResponse = (
