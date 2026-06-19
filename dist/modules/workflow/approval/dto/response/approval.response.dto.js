@@ -20,6 +20,7 @@ const mapApprovalStepToResponse = (step) => ({
     status: step.status,
     comment: step.comment,
     actedAt: step.acted_at?.toISOString() ?? null,
+    signatureId: step.signature_id ?? null,
     createdAt: step.created_at.toISOString(),
     approver: step.approver ? (0, exports.mapWorkflowUserBrief)(step.approver) : undefined,
 });

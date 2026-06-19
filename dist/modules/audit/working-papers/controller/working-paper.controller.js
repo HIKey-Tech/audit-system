@@ -144,7 +144,7 @@ class WorkingPaperController {
     }
     async _getWorkingPaperById(req, res, next) {
         try {
-            const paper = await this.workingPaperService.getWorkingPaperById(req.params.id);
+            const paper = await this.workingPaperService.getWorkingPaperById(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(paper));
         }
         catch (err) {
@@ -153,7 +153,7 @@ class WorkingPaperController {
     }
     async _listWorkingPapers(req, res, next) {
         try {
-            const papers = await this.workingPaperService.listWorkingPapers(req.params.id);
+            const papers = await this.workingPaperService.listWorkingPapers(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(papers));
         }
         catch (err) {

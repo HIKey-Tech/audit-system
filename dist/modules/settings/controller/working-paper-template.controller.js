@@ -21,21 +21,21 @@ class WorkingPaperTemplateController {
         /**
          * @route  GET /settings/working-paper-templates
          * @desc   List working paper templates
-         * @access Private - settings:read
+         * @access Private - working_paper:read (templates feed working-paper creation)
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('settings:read'), (0, validate_middleware_1.validate)(settings_request_dto_1.WorkingPaperTemplateQuerySchema, 'query'), this._listTemplates.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('working_paper:read'), (0, validate_middleware_1.validate)(settings_request_dto_1.WorkingPaperTemplateQuerySchema, 'query'), this._listTemplates.bind(this));
         /**
          * @route  GET /settings/working-paper-templates/default/:auditType
          * @desc   Get default working paper template for an audit type
-         * @access Private - settings:read
+         * @access Private - working_paper:read (templates feed working-paper creation)
          */
-        this.router.get('/default/:auditType', (0, auth_middleware_1.requirePermission)('settings:read'), this._getDefaultTemplate.bind(this));
+        this.router.get('/default/:auditType', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._getDefaultTemplate.bind(this));
         /**
          * @route  GET /settings/working-paper-templates/:id
          * @desc   Get working paper template by ID
-         * @access Private - settings:read
+         * @access Private - working_paper:read (templates feed working-paper creation)
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('settings:read'), this._getTemplateById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._getTemplateById.bind(this));
         /**
          * @route  POST /settings/working-paper-templates
          * @desc   Create working paper template

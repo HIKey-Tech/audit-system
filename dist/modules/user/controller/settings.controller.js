@@ -1,12 +1,24 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.SettingsController = void 0;
 // src/modules/user/controller/settings.controller.ts
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const auth_middleware_1 = require("../../../shared/middleware/auth.middleware");
 const validate_middleware_1 = require("../../../shared/middleware/validate.middleware");
 const api_response_type_1 = require("../../../shared/types/api-response.type");
+const app_error_1 = require("../../../shared/errors/app.error");
 const user_request_dto_1 = require("../dto/request/user.request.dto");
+const signature_request_dto_1 = require("../dto/request/signature.request.dto");
+const signature_service_1 = require("../service/implementation/signature.service");
+// Signature image upload: single in-memory file, 2 MB cap (PNG/JPG validated in the service).
+const signatureUpload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 2 * 1024 * 1024 },
+});
 class SettingsController {
     userService;
     router;
@@ -59,6 +71,61 @@ class SettingsController {
          * @access Private - settings:read
          */
         this.router.get('/permissions', (0, auth_middleware_1.requirePermission)('settings:read'), this._listPermissionsGroupedByModule.bind(this));
+        // ── Self-service e-signature (no special permission; authenticate is applied globally above) ──
+        /**
+         * @route  GET /settings/signature
+         * @desc   Get the caller's active signature (or null)
+         * @access Private - authenticated
+         */
+        this.router.get('/signature', this._getSignature.bind(this));
+        /**
+         * @route  POST /settings/signature
+         * @desc   Create or replace the caller's active signature (multipart "file" + "kind")
+         * @access Private - authenticated
+         */
+        this.router.post('/signature', signatureUpload.single('file'), (0, validate_middleware_1.validate)(signature_request_dto_1.SetSignatureMetadataSchema), this._setSignature.bind(this));
+        /**
+         * @route  DELETE /settings/signature
+         * @desc   Soft-delete the caller's active signature
+         * @access Private - authenticated
+         */
+        this.router.delete('/signature', this._removeSignature.bind(this));
+    }
+    async _getSignature(req, res, next) {
+        try {
+            const sig = await signature_service_1.userSignatureService.getActiveSignature(req.user.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(sig));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _setSignature(req, res, next) {
+        try {
+            if (!req.file)
+                throw app_error_1.AppError.badRequest('Signature image file is required (multipart field "file")');
+            const sig = await signature_service_1.userSignatureService.setSignature({
+                userId: req.user.id,
+                kind: req.body.kind,
+                originalName: req.file.originalname,
+                mimeType: req.file.mimetype,
+                fileSize: req.file.size,
+                buffer: req.file.buffer,
+            });
+            res.status(200).json((0, api_response_type_1.buildResponse)(sig, 'Signature saved'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _removeSignature(req, res, next) {
+        try {
+            await signature_service_1.userSignatureService.removeSignature(req.user.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(null, 'Signature removed'));
+        }
+        catch (err) {
+            next(err);
+        }
     }
     async _listRoles(_req, res, next) {
         try {

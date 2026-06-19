@@ -65,9 +65,18 @@ const buildTotpUri = (email, secret) => (0, otplib_1.generateURI)({
 });
 exports.buildTotpUri = buildTotpUri;
 const verifyTotp = (token, secret) => {
-    // ±30s tolerance (one time step either side) absorbs minor clock drift.
-    const result = (0, otplib_1.verifySync)({ token: token.trim(), secret, epochTolerance: 30 });
-    return Boolean(result?.valid);
+    try {
+        // ±30s tolerance (one time step either side) absorbs minor clock drift.
+        const result = (0, otplib_1.verifySync)({ token: token.trim(), secret, epochTolerance: 30 });
+        return Boolean(result?.valid);
+    }
+    catch {
+        // otplib throws TokenLengthError / TokenFormatError for any token that isn't
+        // exactly 6 digits (e.g. a backup code like "a1b2c-3d4e5"). Treat a malformed
+        // token as "not a TOTP match" so verifyChallenge falls through to the
+        // backup-code check instead of surfacing a 500.
+        return false;
+    }
 };
 exports.verifyTotp = verifyTotp;
 // ── TOTP secret encryption at rest (AES-256-GCM) ──────────────

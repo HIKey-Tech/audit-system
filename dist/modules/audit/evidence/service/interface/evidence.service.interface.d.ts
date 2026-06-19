@@ -7,7 +7,7 @@ export interface IEvidenceService {
     linkToWorkingPaper(evidenceId: string, workingPaperId: string, actor: ActorContext): Promise<EvidenceResponseDto>;
     linkToFinding(evidenceId: string, findingId: string, actor: ActorContext): Promise<EvidenceResponseDto>;
     disputeEvidence(evidenceId: string, reason: string, actor: ActorContext): Promise<EvidenceResponseDto>;
-    listEvidence(engagementId: string, query: EvidenceQueryDto): Promise<EvidenceResponseDto[]>;
+    listEvidence(engagementId: string, query: EvidenceQueryDto, actor: ActorContext): Promise<EvidenceResponseDto[]>;
     listRepository(query: EvidenceRepositoryQueryDto, actor: ActorContext): Promise<{
         evidence: RepositoryEvidenceResponseDto[];
         meta: PaginationMeta;

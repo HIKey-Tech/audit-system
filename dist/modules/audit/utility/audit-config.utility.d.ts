@@ -67,4 +67,16 @@ export declare const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix;
  * manager), never to a hardcoded role.
  */
 export declare const getApprovalMatrix: () => Promise<ApprovalMatrix>;
+/**
+ * Serialize a per-engagement checklist control set for storage on the engagement.
+ * Returns null when there is nothing to store (so populate falls back to the
+ * global per-audit-type template).
+ */
+export declare const serializeChecklistControls: (controls: ChecklistTemplateControl[] | undefined | null) => string | null;
+/**
+ * Parse a per-engagement checklist control snapshot stored on the engagement.
+ * Returns null when absent or invalid, signalling callers to fall back to the
+ * global per-audit-type template.
+ */
+export declare const parseChecklistTemplateSnapshot: (value: string | null | undefined) => ChecklistTemplateControl[] | null;
 //# sourceMappingURL=audit-config.utility.d.ts.map

@@ -13,6 +13,7 @@ const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum"
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const report_response_dto_1 = require("../../dto/response/report.response.dto");
+const engagement_status_reconciler_1 = require("../../../engagement/service/implementation/engagement-status.reconciler");
 const reportInclude = {
     engagement: {
         include: {
@@ -261,6 +262,8 @@ class ReportService {
                 entityId: id,
             });
         }).catch((err) => logger_util_1.logger.warn('DOCX generation failed after issue', { err, reportId: id }));
+        // Issuing the report is the human act; the engagement follows into "reported".
+        await (0, engagement_status_reconciler_1.reconcileEngagementStatus)(report.engagement_id, actor.id);
         return (0, report_response_dto_1.mapReportToResponse)(updated);
     }
     async getReport(engagementId) {

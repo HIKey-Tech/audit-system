@@ -7,7 +7,9 @@ export declare class ApprovalController {
     private _registerRoutes;
     private _getPendingApprovals;
     private _getApprovalByEntity;
+    private _getChain;
     private _getApprovalById;
+    private _listSignedDocuments;
     private _approve;
     private _reject;
     private _cancel;

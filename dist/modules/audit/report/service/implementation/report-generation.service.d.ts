@@ -2,6 +2,7 @@ import { IReportTemplateService } from '../../../../settings/service/interface/r
 import { ISystemConfigService } from '../../../../settings/service/interface/system-config.service.interface';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { ReportTemplateResponseDto } from '../../../../settings/dto/response/settings.response.dto';
+import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
 interface ReportUserBrief {
     displayName: string | null;
@@ -83,7 +84,12 @@ export declare class ReportGenerationService implements IReportGenerationService
     private readonly reportTemplateService;
     private readonly systemConfigService;
     private readonly approvalService;
-    constructor(reportTemplateService: IReportTemplateService, systemConfigService: ISystemConfigService, approvalService: IApprovalService);
+    private readonly documentService;
+    constructor(reportTemplateService: IReportTemplateService, systemConfigService: ISystemConfigService, approvalService: IApprovalService, documentService?: IDocumentService);
+    /** Load each approved step's recorded signature image, keyed by step id. Never throws. */
+    private _stepSignatures;
+    /** The first reviewer (lowest approved level) and final approver (highest approved level). */
+    private _signOffSteps;
     fetchReportData(reportId: string): Promise<ReportData>;
     fetchTemplateAndConfig(templateId?: string | null): Promise<TemplateConfig>;
     generateDocx(reportId: string): Promise<Buffer>;
@@ -99,7 +105,7 @@ export declare class ReportGenerationService implements IReportGenerationService
     private _buildDocxFindingDetailsTable;
     private _buildDocxSignatureBlock;
     generatePdf(reportId: string): Promise<Buffer>;
-    private _buildPdfHtml;
+    private _buildPdfDocDefinition;
     private _getHeaderConfig;
     private _getFooterNotice;
     private _getSignatureLabels;

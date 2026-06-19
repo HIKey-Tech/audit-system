@@ -13,4 +13,4 @@ export declare class NotificationController {
     private _markAllRead;
     private _getQueueStats;
 }
-//# sourceMappingURL=notification.controller.d.ts.map finihshed
+//# sourceMappingURL=notification.controller.d.ts.map

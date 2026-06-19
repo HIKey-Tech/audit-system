@@ -29,11 +29,23 @@ class ApprovalController {
          */
         this.router.get('/entity/:type/:id', (0, auth_middleware_1.requirePermission)('approval:read'), (0, validate_middleware_1.validate)(approval_request_dto_1.ApprovalEntityParamsSchema, 'params'), this._getApprovalByEntity.bind(this));
         /**
+         * @route  GET /workflow/approvals/chain/:entityType/:entityId
+         * @desc   Resolve an entity's approval chain to named people for display
+         * @access Private - audit:read
+         */
+        this.router.get('/chain/:entityType/:entityId', (0, auth_middleware_1.requirePermission)('audit:read'), this._getChain.bind(this));
+        /**
          * @route  GET /workflow/approvals/:id
          * @desc   Get workflow approval
          * @access Private - audit:read
          */
         this.router.get('/:id', (0, auth_middleware_1.requirePermission)('approval:read'), this._getApprovalById.bind(this));
+        /**
+         * @route  GET /workflow/approvals/:id/signed-documents
+         * @desc   List frozen signed artifacts for a completed approval
+         * @access Private - approval:read
+         */
+        this.router.get('/:id/signed-documents', (0, auth_middleware_1.requirePermission)('approval:read'), this._listSignedDocuments.bind(this));
         /**
          * @route  POST /workflow/approvals/:id/approve
          * @desc   Approve current workflow approval step
@@ -71,10 +83,29 @@ class ApprovalController {
             next(err);
         }
     }
+    async _getChain(req, res, next) {
+        try {
+            const { entityType, entityId } = req.params;
+            const chain = await this.approvalService.resolveChainForEntity(entityType, entityId);
+            res.status(200).json((0, api_response_type_1.buildResponse)(chain, 'Approval chain resolved'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
     async _getApprovalById(req, res, next) {
         try {
             const approval = await this.approvalService.getApprovalById(req.params.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(approval));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listSignedDocuments(req, res, next) {
+        try {
+            const docs = await this.approvalService.listSignedDocuments(req.params.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(docs));
         }
         catch (err) {
             next(err);

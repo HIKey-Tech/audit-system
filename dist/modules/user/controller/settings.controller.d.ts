@@ -5,6 +5,9 @@ export declare class SettingsController {
     readonly router: Router;
     constructor(userService: IUserService);
     private _registerRoutes;
+    private _getSignature;
+    private _setSignature;
+    private _removeSignature;
     private _listRoles;
     private _getRoleById;
     private _createRole;

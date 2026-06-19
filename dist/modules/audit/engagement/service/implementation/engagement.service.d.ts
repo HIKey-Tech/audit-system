@@ -25,6 +25,12 @@ export declare class EngagementService implements IEngagementService {
      * workflow assignee. Returns undefined for unrestricted (read_all) access.
      */
     private _actorScope;
+    /**
+     * Active-approver access: a user with a pending approval step they may act on,
+     * against one of this engagement's reports / working papers / findings, can open
+     * the engagement while that step is open — you can't approve what you can't read.
+     */
+    private _hasActiveApprovalAccess;
     getEngagementById(id: string, actor: ActorContext): Promise<EngagementResponseDto>;
     listEngagements(query: EngagementQueryDto, actor: ActorContext): Promise<{
         engagements: EngagementResponseDto[];

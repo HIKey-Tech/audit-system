@@ -15,8 +15,8 @@ export interface IWorkingPaperService {
     submitWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     approveWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
-    getWorkingPaperById(id: string): Promise<WorkingPaperResponseDto>;
-    listWorkingPapers(engagementId: string): Promise<WorkingPaperResponseDto[]>;
+    getWorkingPaperById(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
+    listWorkingPapers(engagementId: string, actor: ActorContext): Promise<WorkingPaperResponseDto[]>;
     exportWorkingPaper(id: string, format: WorkingPaperExportFormat): Promise<ExportedAuditFile>;
 }
 //# sourceMappingURL=working-paper.service.interface.d.ts.map

@@ -82,7 +82,12 @@ class DocumentController {
          * @desc   List documents (paginated, optional entityType + search filters)
          * @access Private — document:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('document:read'), (0, validate_middleware_1.validate)(document_request_dto_1.DocumentListQuerySchema, 'query'), this._list.bind(this));
+        this.router.get('/', 
+        // Personal storage: the listing is scoped to the authenticated user's own
+        // uploads (see DocumentService.list ownerId), so no permission is required
+        // to view your own documents — only authentication.
+        // requirePermission('document:read'),
+        (0, validate_middleware_1.validate)(document_request_dto_1.DocumentListQuerySchema, 'query'), this._list.bind(this));
         /**
          * @route  POST /documents
          * @desc   Upload a new document (multipart/form-data, field "file")
@@ -167,7 +172,7 @@ class DocumentController {
     }
     async _getById(req, res, next) {
         try {
-            const document = await this.documentService.getById(req.params.id);
+            const document = await this.documentService.getById(req.params.id, req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(document));
         }
         catch (err) {
@@ -176,6 +181,7 @@ class DocumentController {
     }
     async _getDownloadUrl(req, res, next) {
         try {
+            await this.documentService.assertCanUserAccess(req.params.id, req.user.id);
             const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
             res.status(200).json((0, api_response_type_1.buildResponse)({ downloadUrl }));
         }
@@ -203,7 +209,7 @@ class DocumentController {
     }
     async _list(req, res, next) {
         try {
-            const { documents, meta } = await this.documentService.list(req.query);
+            const { documents, meta } = await this.documentService.list(req.query, req.user.id);
             res.status(200).json({ ...(0, api_response_type_1.buildResponse)(documents), meta });
         }
         catch (err) {
@@ -212,7 +218,7 @@ class DocumentController {
     }
     async _serve(req, res, next) {
         try {
-            const file = await this.documentService.serveFile(req.params.storedName);
+            const file = await this.documentService.serveFile(req.params.storedName, req.user.id);
             this._sendFile(res, file);
         }
         catch (err) {
@@ -221,6 +227,7 @@ class DocumentController {
     }
     async _getFileById(req, res, next) {
         try {
+            await this.documentService.assertCanUserAccess(req.params.id, req.user.id);
             const file = await this.documentService.getFileById(req.params.id);
             this._sendFile(res, file);
         }
@@ -260,7 +267,7 @@ class DocumentController {
     }
     async _listVersions(req, res, next) {
         try {
-            const versions = await this.documentService.listVersions(req.params.id);
+            const versions = await this.documentService.listVersions(req.params.id, req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(versions));
         }
         catch (err) {
@@ -273,7 +280,7 @@ class DocumentController {
             if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
                 throw app_error_1.AppError.badRequest('Version must be a positive integer');
             }
-            const version = await this.documentService.getVersion(req.params.id, versionNumber);
+            const version = await this.documentService.getVersion(req.params.id, versionNumber, req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(version));
         }
         catch (err) {
@@ -286,7 +293,7 @@ class DocumentController {
             if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
                 throw app_error_1.AppError.badRequest('Version must be a positive integer');
             }
-            const downloadUrl = await this.documentService.getVersionDownloadUrl(req.params.id, versionNumber);
+            const downloadUrl = await this.documentService.getVersionDownloadUrl(req.params.id, versionNumber, req.user.id);
             res.status(200).json((0, api_response_type_1.buildResponse)({ downloadUrl }));
         }
         catch (err) {

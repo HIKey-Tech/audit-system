@@ -9,6 +9,7 @@ const audit_log_service_1 = require("../../../../logging/service/implementation/
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const audit_config_utility_1 = require("../../../utility/audit-config.utility");
+const engagement_visibility_util_1 = require("../../utility/engagement-visibility.util");
 const assignment_matching_util_1 = require("../../../../workflow/assignment/utility/assignment-matching.util");
 const engagement_response_dto_1 = require("../../dto/response/engagement.response.dto");
 /**
@@ -124,6 +125,7 @@ class EngagementService {
                     planned_start_date: new Date(dto.plannedStartDate),
                     planned_end_date: new Date(dto.plannedEndDate),
                     sla_deadline: new Date(dto.slaDeadline),
+                    checklist_template: (0, audit_config_utility_1.serializeChecklistControls)(dto.checklistControls),
                     created_by_id: actor.id,
                 },
                 include: engagementInclude,
@@ -160,6 +162,7 @@ class EngagementService {
                 sla_deadline: new Date(dto.slaDeadline),
                 is_adhoc: true,
                 adhoc_reason: dto.adhocReason,
+                checklist_template: (0, audit_config_utility_1.serializeChecklistControls)(dto.checklistControls),
                 created_by_id: actor.id,
             },
             include: engagementInclude,
@@ -239,7 +242,7 @@ class EngagementService {
         }
         logger_util_1.logger.info('Audit engagement status updated', { engagementId: id, status: newStatus, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, newValues: { status: newStatus } });
-        return this._withMetrics(updated);
+        return this._withMetrics(updated, actor);
     }
     /**
      * Access scope: unless the actor can read ALL engagements, they may only see
@@ -258,19 +261,50 @@ class EngagementService {
             ],
         };
     }
+    /**
+     * Active-approver access: a user with a pending approval step they may act on,
+     * against one of this engagement's reports / working papers / findings, can open
+     * the engagement while that step is open — you can't approve what you can't read.
+     */
+    async _hasActiveApprovalAccess(engagementId, actor) {
+        const [reports, papers, findings] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Report.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+            prisma_client_1.prisma.audit_Working_Paper.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+            prisma_client_1.prisma.audit_Finding.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+        ]);
+        const entityIds = [...reports, ...papers, ...findings].map((r) => r.id);
+        if (entityIds.length === 0)
+            return false;
+        const orConditions = [{ approver_id: actor.id }];
+        if (actor.permissions.length > 0) {
+            orConditions.push({ approver_id: null, required_permission: { in: actor.permissions } });
+        }
+        const step = await prisma_client_1.prisma.workflow_Approval_Step.findFirst({
+            where: {
+                status: 'pending',
+                approval: { status: 'pending', entity_id: { in: entityIds } },
+                OR: orConditions,
+            },
+            select: { id: true, level: true, approval: { select: { current_level: true } } },
+        });
+        return step !== null && step.level === step.approval.current_level;
+    }
     async getEngagementById(id, actor) {
         const scope = this._actorScope(actor);
-        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
-            where: {
-                id,
-                deleted_at: null,
-                ...(scope ?? {}),
-            },
+        let engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id, deleted_at: null, ...(scope ?? {}) },
             include: engagementInclude,
         });
+        // Not an involved party / oversight — allow if they hold a live approval step on it.
+        if (!engagement && scope && (await this._hasActiveApprovalAccess(id, actor))) {
+            engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+                where: { id, deleted_at: null },
+                include: engagementInclude,
+            });
+        }
         if (!engagement)
             throw app_error_1.AppError.notFound('Audit engagement');
-        return this._withMetrics(engagement);
+        return this._withMetrics(engagement, actor);
     }
     async listEngagements(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
@@ -312,7 +346,7 @@ class EngagementService {
         if (!engagement)
             throw app_error_1.AppError.notFound('Audit engagement');
     }
-    async _withMetrics(engagement) {
+    async _withMetrics(engagement, actor) {
         const [findingGroups, workingPaperGroups, checklistProgress, report, evidenceCount, assetCount] = await Promise.all([
             prisma_client_1.prisma.audit_Finding.groupBy({
                 by: ['severity'],
@@ -357,7 +391,12 @@ class EngagementService {
             open: findingCountByStatus('open'),
             unresolved: findingTotal - resolvedFindings,
         };
-        return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement, {
+        const viewerContext = await (0, engagement_visibility_util_1.resolveViewerContext)(engagement.id, {
+            lead_auditor_id: engagement.lead_auditor_id,
+            audit_manager_id: engagement.audit_manager_id,
+            auditee_id: engagement.auditee_id,
+        }, actor);
+        const dto = (0, engagement_response_dto_1.mapEngagementToResponse)(engagement, {
             findingCounts,
             workingPaperCount,
             checklistProgress: progress,
@@ -367,6 +406,8 @@ class EngagementService {
             evidenceCount,
             assetCount,
         });
+        dto.viewerContext = viewerContext;
+        return dto;
     }
     async _assertLifecycleGate(id, newStatus) {
         const lifecycleRules = await (0, audit_config_utility_1.getAuditLifecycleRules)();

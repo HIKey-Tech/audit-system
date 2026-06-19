@@ -119,7 +119,7 @@ class EvidenceController {
     }
     async _listEvidence(req, res, next) {
         try {
-            const evidence = await this.evidenceService.listEvidence(req.params.id, req.query);
+            const evidence = await this.evidenceService.listEvidence(req.params.id, req.query, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(evidence));
         }
         catch (err) {

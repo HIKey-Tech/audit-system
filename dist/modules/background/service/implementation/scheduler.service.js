@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
@@ -26,6 +59,7 @@ exports.JOB_KEYS = {
     AUDIT_FINDING_OVERDUE_DAILY: 'BG:AUDIT:FINDING_OVERDUE:DAILY',
     MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
     WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
+    AUDIT_RECONCILE_STATUS_HOURLY: 'BG:AUDIT:RECONCILE:STATUS:HOURLY',
     LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
     REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
     DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
@@ -367,6 +401,41 @@ const registerAllJobs = () => {
         handler: async () => {
             const result = await escalation_service_1.workflowEscalationService.checkAndEscalate();
             logger_util_1.logger.info('Workflow escalation job completed', result);
+        },
+    });
+    // BG:AUDIT:RECONCILE:STATUS:HOURLY — safety-net re-run of engagement status reconcile
+    // for any in-request reconcile that may have been skipped (e.g. due to a transient error).
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.AUDIT_RECONCILE_STATUS_HOURLY,
+        name: 'Engagement Status Reconcile',
+        description: 'Re-runs status reconcile across all non-closed engagements as a safety net',
+        cronExpression: '0 * * * *', // Every hour
+        handler: async () => {
+            const { reconcileEngagementStatus } = await Promise.resolve().then(() => __importStar(require('../../../audit/engagement/service/implementation/engagement-status.reconciler')));
+            const engagements = await prisma_client_1.prisma.audit_Engagement.findMany({
+                where: {
+                    deleted_at: null,
+                    status: { in: ['in_progress', 'under_review', 'reported'] },
+                },
+                select: { id: true },
+            });
+            let reconciled = 0;
+            for (const engagement of engagements) {
+                try {
+                    await reconcileEngagementStatus(engagement.id, 'system');
+                    reconciled += 1;
+                }
+                catch (err) {
+                    logger_util_1.logger.error('Engagement status reconcile failed', {
+                        err,
+                        engagementId: engagement.id,
+                    });
+                }
+            }
+            logger_util_1.logger.info('Engagement status reconcile job completed', {
+                engagementsFound: engagements.length,
+                reconciled,
+            });
         },
     });
     // BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE - process queued notifications.

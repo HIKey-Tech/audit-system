@@ -16,9 +16,11 @@ export declare class WorkingPaperService implements IWorkingPaperService {
     submitWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     approveWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
-    getWorkingPaperById(id: string): Promise<WorkingPaperResponseDto>;
-    listWorkingPapers(engagementId: string): Promise<WorkingPaperResponseDto[]>;
+    getWorkingPaperById(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
+    listWorkingPapers(engagementId: string, actor: ActorContext): Promise<WorkingPaperResponseDto[]>;
     exportWorkingPaper(id: string, format: WorkingPaperExportFormat): Promise<ExportedAuditFile>;
+    /** Build sign-off entries (approver name/role/date + signature image) from the WP's approval. */
+    private _buildSignOff;
     private _renderWorkingPaperPdf;
     private _assertEngagementInProgress;
     private _getEngagementForWorkingPaperImport;

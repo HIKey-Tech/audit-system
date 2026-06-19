@@ -23,6 +23,14 @@ class ChecklistController {
          */
         this.router.get('/checklist-templates', (0, auth_middleware_1.requirePermission)('settings:read'), this._getChecklistTemplates.bind(this));
         /**
+         * @route  GET /audit/checklist-controls/:auditType
+         * @desc   Preview the control set that would populate an engagement of this
+         *         audit type — used by the create-engagement wizard to pre-fill the
+         *         customisable per-engagement checklist.
+         * @access Private - engagement:create
+         */
+        this.router.get('/checklist-controls/:auditType', (0, auth_middleware_1.requirePermission)('engagement:create'), this._previewChecklistControls.bind(this));
+        /**
          * @route  PUT /audit/checklist-templates
          * @desc   Replace the per-audit-type checklist control templates
          * @access Private - settings:manage
@@ -77,9 +85,18 @@ class ChecklistController {
             next(err);
         }
     }
+    async _previewChecklistControls(req, res, next) {
+        try {
+            const controls = await this.checklistService.previewControlsForAuditType(req.params.auditType);
+            res.status(200).json((0, api_response_type_1.buildResponse)(controls));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
     async _getChecklists(req, res, next) {
         try {
-            const checklists = await this.checklistService.getChecklists(req.params.id);
+            const checklists = await this.checklistService.getChecklists(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(checklists));
         }
         catch (err) {

@@ -1,4 +1,37 @@
 "use strict";
+var __createBinding = (this && this.__createBinding) || (Object.create ? (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    var desc = Object.getOwnPropertyDescriptor(m, k);
+    if (!desc || ("get" in desc ? !m.__esModule : desc.writable || desc.configurable)) {
+      desc = { enumerable: true, get: function() { return m[k]; } };
+    }
+    Object.defineProperty(o, k2, desc);
+}) : (function(o, m, k, k2) {
+    if (k2 === undefined) k2 = k;
+    o[k2] = m[k];
+}));
+var __setModuleDefault = (this && this.__setModuleDefault) || (Object.create ? (function(o, v) {
+    Object.defineProperty(o, "default", { enumerable: true, value: v });
+}) : function(o, v) {
+    o["default"] = v;
+});
+var __importStar = (this && this.__importStar) || (function () {
+    var ownKeys = function(o) {
+        ownKeys = Object.getOwnPropertyNames || function (o) {
+            var ar = [];
+            for (var k in o) if (Object.prototype.hasOwnProperty.call(o, k)) ar[ar.length] = k;
+            return ar;
+        };
+        return ownKeys(o);
+    };
+    return function (mod) {
+        if (mod && mod.__esModule) return mod;
+        var result = {};
+        if (mod != null) for (var k = ownKeys(mod), i = 0; i < k.length; i++) if (k[i] !== "default") __createBinding(result, mod, k[i]);
+        __setModuleDefault(result, mod);
+        return result;
+    };
+})();
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.workflowApprovalService = exports.ApprovalService = void 0;
 const client_1 = require("@prisma/client");
@@ -13,6 +46,7 @@ const audit_config_utility_1 = require("../../../../audit/utility/audit-config.u
 const workflow_enum_1 = require("../../../domain/enum/workflow.enum");
 const workflow_utility_1 = require("../../../utility/workflow.utility");
 const approval_response_dto_1 = require("../../dto/response/approval.response.dto");
+const signature_service_1 = require("../../../../user/service/implementation/signature.service");
 const workflowUserSelect = client_1.Prisma.validator()({
     id: true,
     email: true,
@@ -184,6 +218,8 @@ class ApprovalService {
         const currentStep = this._getActionableStep(approval, actor);
         const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
         const now = new Date();
+        // Approve & Sign: record the approver's active signature on the step (null if none).
+        const sigRef = await signature_service_1.userSignatureService.getActiveSignatureRef(actor.id);
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
             // Atomically claim the step: only succeeds while it is still pending, so two
             // concurrent approvers can't both act — the loser matches 0 rows and aborts.
@@ -194,6 +230,7 @@ class ApprovalService {
                     approver_id: actor.id,
                     comment: comment ?? null,
                     acted_at: now,
+                    signature_id: sigRef?.id ?? null,
                 },
             });
             if (claimed.count === 0) {
@@ -228,6 +265,22 @@ class ApprovalService {
         }
         else {
             void this._queueApprovalApprovedAsync(approval, actor.id, comment);
+            // Freeze the signed artifact once, post-commit. Dynamic import avoids the
+            // audit↔workflow module cycle (the audit generator imports this service);
+            // it resolves fine at runtime, long after startup. Fire-and-forget.
+            void Promise.resolve().then(() => __importStar(require('../../../../audit/approval-signature/service/implementation/approval-signed-document.service'))).then((m) => m.approvalSignedDocumentService.generateForCompletedApproval(approvalId))
+                .catch((err) => logger_util_1.logger.warn('Approval freeze enqueue failed', { approvalId, err }));
+            // A final working-paper / finding-closure approval may complete an engagement
+            // gate — reconcile its status post-commit. Dynamic import avoids the
+            // audit↔workflow module cycle (same pattern as the signed-document freeze).
+            if (approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper ||
+                approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditFindingClosure) {
+                const reconcileEntityType = approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper
+                    ? 'audit_working_paper'
+                    : 'audit_finding_closure';
+                void Promise.resolve().then(() => __importStar(require('../../../../audit/engagement/service/implementation/engagement-status.reconciler'))).then((m) => m.reconcileEngagementForApprovalEntity(reconcileEntityType, approval.entity_id, actor.id))
+                    .catch((err) => logger_util_1.logger.warn('Engagement reconcile after approval failed', { approvalId, err }));
+            }
         }
         logger_util_1.logger.info('Workflow approval step approved', { approvalId, approverId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
@@ -335,6 +388,18 @@ class ApprovalService {
             meta: (0, api_response_type_1.buildPaginationMeta)(approvals.length, page, pageSize),
         };
     }
+    async listSignedDocuments(approvalId) {
+        const rows = await prisma_client_1.prisma.workflow_Approval_Signed_Document.findMany({
+            where: { approval_id: approvalId },
+            orderBy: { generated_at: 'asc' },
+        });
+        return rows.map((r) => ({
+            id: r.id,
+            signedDocumentId: r.signed_document_id,
+            downloadUrl: `/api/proxy/documents/${r.signed_document_id}/file`,
+            generatedAt: r.generated_at.toISOString(),
+        }));
+    }
     async cancelApproval(approvalId, cancelledBy) {
         (0, workflow_utility_1.assertHasPermission)(cancelledBy.permissions, 'approval:cancel');
         const approval = await this._getPendingApproval(approvalId);
@@ -371,6 +436,72 @@ class ApprovalService {
             newValues: { approvalId },
         });
         return (0, approval_response_dto_1.mapApprovalToResponse)(updated);
+    }
+    async resolveChainForEntity(entityType, entityId) {
+        const approval = await prisma_client_1.prisma.workflow_Approval.findFirst({
+            where: { entity_type: entityType, entity_id: entityId },
+            include: approvalInclude,
+            orderBy: { created_at: 'desc' },
+        });
+        // Case A: an approval exists — render its actual steps as people.
+        if (approval) {
+            const levels = [];
+            for (const step of approval.steps) {
+                const acted = step.status === 'approved' || step.status === 'rejected';
+                const status = acted
+                    ? step.status
+                    : approval.status === 'pending' && step.level === approval.current_level
+                        ? 'pending'
+                        : 'upcoming';
+                if (step.approver) {
+                    // Pinned, or already acted by a specific person.
+                    levels.push({
+                        level: step.level, kind: 'person', status,
+                        requiredPermission: step.required_permission,
+                        resolvedApprover: (0, approval_response_dto_1.mapWorkflowUserBrief)(step.approver), candidates: [],
+                    });
+                }
+                else {
+                    // Open permission pool, not yet acted — show candidate holders.
+                    const candidates = step.required_permission ? await this._activeHoldersBrief(step.required_permission) : [];
+                    levels.push({
+                        level: step.level, kind: 'permission', status,
+                        requiredPermission: step.required_permission, resolvedApprover: null, candidates,
+                    });
+                }
+            }
+            return {
+                entityType, entityId, exists: true,
+                status: approval.status, currentLevel: approval.current_level, levels,
+            };
+        }
+        // Case B: no approval yet — render the prospective chain from the matrix.
+        const matrix = await (0, audit_config_utility_1.getApprovalMatrix)();
+        const chain = this._chainForEntity(matrix, entityType);
+        const managerId = await this._resolveEngagementManager(prisma_client_1.prisma, entityType, entityId).catch(() => null);
+        const levels = [];
+        let level = 1;
+        for (const entry of chain) {
+            if (entry === audit_config_utility_1.ENGAGEMENT_MANAGER_APPROVER) {
+                const manager = managerId
+                    ? await prisma_client_1.prisma.user.findUnique({ where: { id: managerId }, select: workflowUserSelect })
+                    : null;
+                levels.push({
+                    level, kind: 'person', status: 'upcoming',
+                    requiredPermission: ENGAGEMENT_MANAGER_PERMISSION[entityType] ?? null,
+                    resolvedApprover: manager ? (0, approval_response_dto_1.mapWorkflowUserBrief)(manager) : null, candidates: [],
+                });
+            }
+            else {
+                levels.push({
+                    level, kind: 'permission', status: 'upcoming',
+                    requiredPermission: entry, resolvedApprover: null,
+                    candidates: await this._activeHoldersBrief(entry),
+                });
+            }
+            level += 1;
+        }
+        return { entityType, entityId, exists: false, status: null, currentLevel: null, levels };
     }
     async _resolveApproverChain(db, entityType, entityId) {
         const matrix = await (0, audit_config_utility_1.getApprovalMatrix)();
@@ -483,6 +614,15 @@ class ApprovalService {
                 },
             },
         };
+    }
+    /** All active users who currently hold a permission, resolved to display-ready briefs. */
+    async _activeHoldersBrief(permissionSlug) {
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: this._activeHolderWhere(permissionSlug),
+            select: workflowUserSelect,
+            orderBy: { display_name: 'asc' },
+        });
+        return users.map(approval_response_dto_1.mapWorkflowUserBrief);
     }
     async _getPendingApproval(approvalId) {
         const approval = await prisma_client_1.prisma.workflow_Approval.findUnique({

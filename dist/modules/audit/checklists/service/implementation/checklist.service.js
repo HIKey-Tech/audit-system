@@ -7,13 +7,15 @@ const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const checklist_response_dto_1 = require("../../dto/response/checklist.response.dto");
+const engagement_status_reconciler_1 = require("../../../engagement/service/implementation/engagement-status.reconciler");
 class ChecklistService {
     async populateChecklists(engagementId, actorId) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
-            select: { id: true, audit_type: true },
+            select: { id: true, audit_type: true, checklist_template: true },
         });
         if (!engagement)
             throw app_error_1.AppError.notFound('Audit engagement');
@@ -21,7 +23,10 @@ class ChecklistService {
         if (existing > 0)
             return;
         const auditType = engagement.audit_type;
-        const controls = await (0, audit_config_utility_1.getEngagementControls)(auditType);
+        // Prefer the engagement's own checklist snapshot (chosen at creation); fall
+        // back to the global per-audit-type control set when none was customised.
+        const controls = (0, audit_config_utility_1.parseChecklistTemplateSnapshot)(engagement.checklist_template) ??
+            (await (0, audit_config_utility_1.getEngagementControls)(auditType));
         await prisma_client_1.prisma.audit_Checklist.createMany({
             data: controls.map((control) => ({
                 engagement_id: engagementId,
@@ -90,6 +95,8 @@ class ChecklistService {
             entityId: id,
             newValues: (0, checklist_response_dto_1.mapChecklistToResponse)(item),
         });
+        // A tested control may complete the fieldwork gate — let the engagement advance itself.
+        await (0, engagement_status_reconciler_1.reconcileEngagementStatus)(item.engagement_id, actor.id);
         return (0, checklist_response_dto_1.mapChecklistToResponse)(item);
     }
     async linkEvidenceToChecklistItem(checklistItemId, evidenceId, actor) {
@@ -124,7 +131,8 @@ class ChecklistService {
         });
         return (0, checklist_response_dto_1.mapChecklistToResponse)(updated);
     }
-    async getChecklists(engagementId) {
+    async getChecklists(engagementId, actor) {
+        await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(engagementId, actor);
         const items = await prisma_client_1.prisma.audit_Checklist.findMany({
             where: { engagement_id: engagementId },
             orderBy: [{ audit_type: 'asc' }, { control_reference: 'asc' }],
@@ -156,6 +164,12 @@ class ChecklistService {
     }
     async getChecklistTemplates() {
         return (0, audit_config_utility_1.getChecklistTemplateConfig)();
+    }
+    async previewControlsForAuditType(auditType) {
+        if (!Object.values(audit_enum_1.AuditType).includes(auditType)) {
+            throw app_error_1.AppError.badRequest('Invalid audit type');
+        }
+        return (0, audit_config_utility_1.getEngagementControls)(auditType);
     }
     async updateChecklistTemplates(dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'settings:manage');

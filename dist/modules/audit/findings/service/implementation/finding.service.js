@@ -11,6 +11,7 @@ const approval_service_1 = require("../../../../workflow/approval/service/implem
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const finding_response_dto_1 = require("../../dto/response/finding.response.dto");
 const findingInclude = {
     engagement: { select: { reference_number: true } },
@@ -204,6 +205,19 @@ class FindingService {
         };
     }
     async listFindings(engagementId, query, actor) {
+        const eng = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { status: true, lead_auditor_id: true, audit_manager_id: true, auditee_id: true },
+        });
+        if (!eng)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        const viewer = await (0, engagement_visibility_util_1.resolveViewerContext)(engagementId, eng, actor);
+        // A pure auditee only sees findings once the report has been issued
+        // (engagement is reported/closed); before that, findings are still draft/internal.
+        const reportIssued = eng.status === audit_enum_1.EngagementStatus.Reported || eng.status === audit_enum_1.EngagementStatus.Closed;
+        if (viewer.role === 'auditee' && !reportIssued) {
+            return [];
+        }
         const findings = await prisma_client_1.prisma.audit_Finding.findMany({
             where: {
                 ...this._buildFindingWhere(query, actor),

@@ -4,7 +4,8 @@ import { IApprovalStatusService } from '../../../../audit/approval-status/servic
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
 import { WorkflowEntityType } from '../../../domain/enum/workflow.enum';
 import { CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
-import { ApprovalResponseDto } from '../../dto/response/approval.response.dto';
+import { ApprovalResponseDto, SignedApprovalDocumentDto } from '../../dto/response/approval.response.dto';
+import { ResolvedApprovalChainDto } from '../../dto/response/approval-chain.response.dto';
 import { ApprovalActor, IApprovalService } from '../interface/approval.service.interface';
 export declare class ApprovalService implements IApprovalService {
     private readonly approvalStatusService;
@@ -22,7 +23,9 @@ export declare class ApprovalService implements IApprovalService {
         approvals: ApprovalResponseDto[];
         meta: PaginationMeta;
     }>;
+    listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]>;
     cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
+    resolveChainForEntity(entityType: WorkflowEntityType, entityId: string): Promise<ResolvedApprovalChainDto>;
     private _resolveApproverChain;
     private _chainForEntity;
     private _resolveEngagementManager;
@@ -30,6 +33,8 @@ export declare class ApprovalService implements IApprovalService {
     /** All active users who currently hold a permission — the pool that can act on a pool level. */
     private _stepRecipientIds;
     private _activeHolderWhere;
+    /** All active users who currently hold a permission, resolved to display-ready briefs. */
+    private _activeHoldersBrief;
     private _getPendingApproval;
     private _getActionableStep;
     private _notifyUser;

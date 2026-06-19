@@ -1,7 +1,4 @@
 "use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.WorkingPaperService = void 0;
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
@@ -13,10 +10,11 @@ const approval_service_1 = require("../../../../workflow/approval/service/implem
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const working_paper_response_dto_1 = require("../../dto/response/working-paper.response.dto");
 const working_paper_import_utility_1 = require("../../utility/working-paper-import.utility");
 const working_paper_utility_1 = require("../../utility/working-paper.utility");
-const puppeteer_1 = __importDefault(require("puppeteer"));
+const pdf_util_1 = require("../../../../../shared/utils/pdf.util");
 class WorkingPaperService {
     documentService;
     templateService;
@@ -182,16 +180,18 @@ class WorkingPaperService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.reject', module: 'audit', entityType: 'audit_working_paper', entityId: id, newValues: { reason } });
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
     }
-    async getWorkingPaperById(id) {
+    async getWorkingPaperById(id, actor) {
         const paper = await prisma_client_1.prisma.audit_Working_Paper.findFirst({
             where: { id, deleted_at: null },
             include: { evidence: true },
         });
         if (!paper)
             throw app_error_1.AppError.notFound('Audit working paper');
+        await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(paper.engagement_id, actor);
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper);
     }
-    async listWorkingPapers(engagementId) {
+    async listWorkingPapers(engagementId, actor) {
+        await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(engagementId, actor);
         const papers = await prisma_client_1.prisma.audit_Working_Paper.findMany({
             where: { engagement_id: engagementId, deleted_at: null },
             orderBy: { updated_at: 'desc' },
@@ -225,6 +225,7 @@ class WorkingPaperService {
                 version: String(paper.version_number),
                 date: exportDate,
                 sections: (0, working_paper_utility_1.parseWorkingPaperSections)(paper.content),
+                signOff: await this._buildSignOff(id),
             })
             : await this.documentService.renderDocxTemplate('working_paper', {
                 title: paper.title,
@@ -245,25 +246,43 @@ class WorkingPaperService {
             buffer,
         };
     }
-    async _renderWorkingPaperPdf(data) {
-        const html = (0, working_paper_utility_1.buildWorkingPaperHtml)(data);
-        const browser = await puppeteer_1.default.launch({ headless: true });
+    /** Build sign-off entries (approver name/role/date + signature image) from the WP's approval. */
+    async _buildSignOff(workingPaperId) {
+        let approval;
         try {
-            const page = await browser.newPage();
-            await page.setContent(html, { waitUntil: 'networkidle0' });
-            const pdfBuffer = await page.pdf({
-                format: 'A4',
-                printBackground: true,
-                margin: { top: '20mm', bottom: '20mm', left: '18mm', right: '18mm' },
-                displayHeaderFooter: true,
-                headerTemplate: '<div></div>',
-                footerTemplate: '<div style="font-size:9px;width:100%;text-align:center;color:#64748B;padding:0 18mm;">Page <span class="pageNumber"></span> of <span class="totalPages"></span></div>',
+            approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditWorkingPaper, workingPaperId);
+        }
+        catch {
+            return [];
+        }
+        const out = [];
+        for (const step of approval.steps ?? []) {
+            if (step.status !== 'approved' || !step.approver)
+                continue;
+            let imageDataUrl;
+            if (step.signatureId) {
+                try {
+                    const sig = await prisma_client_1.prisma.user_Signature.findUnique({ where: { id: step.signatureId } });
+                    if (sig) {
+                        const file = await this.documentService.getFileById(sig.document_id);
+                        imageDataUrl = `data:${file.mimeType};base64,${file.buffer.toString('base64')}`;
+                    }
+                }
+                catch {
+                    // Skip this approver's image; the text entry still renders.
+                }
+            }
+            out.push({
+                name: step.approver.displayName ?? '',
+                role: step.approver.jobTitle ?? '',
+                date: step.actedAt ? step.actedAt.slice(0, 10) : '',
+                imageDataUrl,
             });
-            return Buffer.from(pdfBuffer);
         }
-        finally {
-            await browser.close();
-        }
+        return out;
+    }
+    async _renderWorkingPaperPdf(data) {
+        return (0, pdf_util_1.renderPdf)((0, working_paper_utility_1.buildWorkingPaperDocDefinition)(data));
     }
     async _assertEngagementInProgress(engagementId) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({

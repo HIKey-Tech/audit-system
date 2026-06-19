@@ -7,6 +7,7 @@ export declare class ChecklistController {
     private _registerRoutes;
     private _getChecklistTemplates;
     private _updateChecklistTemplates;
+    private _previewChecklistControls;
     private _getChecklists;
     private _getChecklistProgress;
     private _createChecklistItem;

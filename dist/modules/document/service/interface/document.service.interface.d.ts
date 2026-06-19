@@ -3,10 +3,23 @@ import { DocumentResponseDto, DocumentVersionResponseDto, DocumentTemplateRespon
 import { UploadDocumentDto, UploadVersionDto, CreateTemplateRequestDto, UpdateTemplateRequestDto, TemplateQueryDto, DocumentListQueryDto } from '../../dto/request/document.request.dto';
 export interface IDocumentService {
     upload(dto: UploadDocumentDto): Promise<DocumentResponseDto>;
-    getById(id: string): Promise<DocumentResponseDto>;
+    getById(id: string, requesterId: string): Promise<DocumentResponseDto>;
     getDownloadUrl(id: string): Promise<string>;
     delete(id: string, actorId: string): Promise<void>;
-    list(query: DocumentListQueryDto): Promise<{
+    /**
+     * Personal-isolation guard for the generic by-id download routes. Standalone
+     * (personal) documents are visible only to their uploader; entity-attached
+     * documents (engagement evidence, attachments, signatures) are exempt so all
+     * parties on an engagement keep access. Throws notFound for both missing and
+     * non-owned personal documents.
+     */
+    assertCanUserAccess(documentId: string, requesterId: string): Promise<void>;
+    /**
+     * List documents owned by `ownerId` only. The standalone Documents page is
+     * personal storage — a user must never see another user's uploads here.
+     * Entity-attached documents are surfaced separately via {@link listByEntity}.
+     */
+    list(query: DocumentListQueryDto, ownerId: string): Promise<{
         documents: DocumentResponseDto[];
         meta: PaginationMeta;
     }>;
@@ -17,12 +30,12 @@ export interface IDocumentService {
      * calling listByEntity in a loop to avoid N+1 queries on list endpoints.
      */
     listByEntityIds(entityType: string, entityIds: string[]): Promise<Map<string, DocumentResponseDto[]>>;
-    serveFile(storedName: string): Promise<ServedFileDto>;
+    serveFile(storedName: string, requesterId: string): Promise<ServedFileDto>;
     getFileById(id: string): Promise<ServedFileDto>;
     uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;
-    listVersions(documentId: string): Promise<DocumentVersionResponseDto[]>;
-    getVersion(documentId: string, versionNumber: number): Promise<DocumentVersionResponseDto>;
-    getVersionDownloadUrl(documentId: string, versionNumber: number): Promise<string>;
+    listVersions(documentId: string, requesterId: string): Promise<DocumentVersionResponseDto[]>;
+    getVersion(documentId: string, versionNumber: number, requesterId: string): Promise<DocumentVersionResponseDto>;
+    getVersionDownloadUrl(documentId: string, versionNumber: number, requesterId: string): Promise<string>;
     createTemplate(dto: CreateTemplateRequestDto, actorId: string): Promise<DocumentTemplateResponseDto>;
     getTemplateById(id: string): Promise<DocumentTemplateResponseDto>;
     listTemplates(query: TemplateQueryDto): Promise<{

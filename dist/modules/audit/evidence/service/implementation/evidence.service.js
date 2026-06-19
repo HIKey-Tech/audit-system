@@ -8,6 +8,7 @@ const api_response_type_1 = require("../../../../../shared/types/api-response.ty
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const evidence_response_dto_1 = require("../../dto/response/evidence.response.dto");
 class EvidenceService {
     documentService;
@@ -91,7 +92,8 @@ class EvidenceService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.dispute', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId, newValues: { reason } });
         return (0, evidence_response_dto_1.mapEvidenceToResponse)(updated);
     }
-    async listEvidence(engagementId, query) {
+    async listEvidence(engagementId, query, actor) {
+        await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(engagementId, actor);
         const evidence = await prisma_client_1.prisma.audit_Evidence.findMany({
             where: {
                 engagement_id: engagementId,

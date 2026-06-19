@@ -134,7 +134,12 @@ exports.config = {
     },
     rateLimit: {
         windowMs: parseInt(optionalEnv('RATE_LIMIT_WINDOW_MS', '900000'), 10),
-        max: parseInt(optionalEnv('RATE_LIMIT_MAX_REQUESTS', '100'), 10),
+        // A single dashboard load fans out ~9 requests; 100/15min throttled normal
+        // SPA usage. 600/15min (~40 req/min sustained) is realistic per client.
+        max: parseInt(optionalEnv('RATE_LIMIT_MAX_REQUESTS', '600'), 10),
+        // Strict cap on credential/OTP endpoints — counts FAILED attempts only, so
+        // legitimate users are never throttled while brute force is blocked.
+        authMax: parseInt(optionalEnv('RATE_LIMIT_AUTH_MAX', '10'), 10),
     },
     logging: {
         level: optionalEnv('LOG_LEVEL', 'info'),

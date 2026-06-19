@@ -1,8 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.EligibleUsersQuerySchema = exports.EngagementQuerySchema = exports.UpdateEngagementStatusRequestSchema = exports.UpdateEngagementRequestSchema = exports.CreateAdhocEngagementRequestSchema = exports.CreateEngagementFromPlanRequestSchema = void 0;
+exports.EligibleUsersQuerySchema = exports.EngagementQuerySchema = exports.UpdateEngagementStatusRequestSchema = exports.UpdateEngagementRequestSchema = exports.CreateAdhocEngagementRequestSchema = exports.CreateEngagementFromPlanRequestSchema = exports.ChecklistControlSchema = void 0;
 const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
+/**
+ * A single checklist control the engagement creator can customise before the
+ * engagement starts. Snapshotted onto the engagement; used to populate its
+ * checklist instead of the global per-audit-type template when provided.
+ */
+exports.ChecklistControlSchema = zod_1.z.object({
+    controlReference: zod_1.z.string().min(1).max(100),
+    controlDescription: zod_1.z.string().min(1).max(2000),
+    testProcedure: zod_1.z.string().min(1).max(4000),
+});
 const EngagementBaseSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200),
     leadAuditorId: zod_1.z.string().uuid(),
@@ -11,6 +21,7 @@ const EngagementBaseSchema = zod_1.z.object({
     plannedStartDate: zod_1.z.string().datetime(),
     plannedEndDate: zod_1.z.string().datetime(),
     slaDeadline: zod_1.z.string().datetime(),
+    checklistControls: zod_1.z.array(exports.ChecklistControlSchema).max(200).optional(),
 });
 const EngagementScopeSchema = zod_1.z.object({
     universeId: zod_1.z.string().uuid(),

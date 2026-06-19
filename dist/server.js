@@ -1,13 +1,14 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
+Object.defineProperty(exports, "__esModule", { value: true });
 // src/server.ts
 //
 // IAMS — Application entry point.
 // Boot order: validate config → connect DB → wire Express → start HTTP server → start scheduler.
 // Shutdown order: stop accepting connections → stop scheduler → disconnect DB → exit.
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
+//implement
 const http_1 = __importDefault(require("http"));
 const express_1 = __importDefault(require("express"));
 const helmet_1 = __importDefault(require("helmet"));
@@ -57,11 +58,43 @@ const buildApp = () => {
     };
     app.use((0, morgan_1.default)(app_config_1.config.app.isDev ? 'dev' : 'combined', { stream: morganStream }));
     app.use(request_logger_middleware_1.requestAuditLogger);
+    // Respond to rate-limited requests with the app's standard JSON envelope (the
+    // library default is plain text, which the frontend can't parse) plus a
+    // Retry-After hint so the UI can tell the user how long to wait.
+    const rateLimitHandler = (message) => (req, res) => {
+        const { rateLimit: info } = req;
+        const resetMs = info?.resetTime?.getTime() ?? Date.now();
+        const retryAfter = Math.max(1, Math.ceil((resetMs - Date.now()) / 1000));
+        res.setHeader('Retry-After', String(retryAfter));
+        res.status(429).json({
+            success: false,
+            message: `${message} Please try again in ${retryAfter} second${retryAfter === 1 ? '' : 's'}.`,
+            errors: { retryAfterSeconds: retryAfter },
+            timestamp: new Date().toISOString(),
+        });
+    };
     const apiLimiter = (0, express_rate_limit_1.default)({
         windowMs: app_config_1.config.rateLimit.windowMs,
         max: app_config_1.config.rateLimit.max,
         standardHeaders: true,
         legacyHeaders: false,
+        handler: rateLimitHandler('Too many requests.'),
+        // Skip in development: local traffic is a single trusted client behind the
+        // Next BFF proxy (one IP), so the per-IP limit just throttles the developer.
+        skip: () => app_config_1.config.app.isDev,
+    });
+    // Brute-force guard for credential/OTP endpoints. skipSuccessfulRequests means
+    // only failed attempts count toward the cap, so a real user logging in (even
+    // after the dashboard burns through requests) is never locked out — only
+    // repeated wrong passwords / OTP codes are throttled.
+    const authLimiter = (0, express_rate_limit_1.default)({
+        windowMs: app_config_1.config.rateLimit.windowMs,
+        max: app_config_1.config.rateLimit.authMax,
+        standardHeaders: true,
+        legacyHeaders: false,
+        skipSuccessfulRequests: true,
+        handler: rateLimitHandler('Too many failed attempts.'),
+        skip: () => app_config_1.config.app.isDev,
     });
     const apiPrefix = `/api/${app_config_1.config.app.apiVersion}`;
     app.get('/health', (_req, res) => {
@@ -80,6 +113,11 @@ const buildApp = () => {
         customSiteTitle: `${app_config_1.config.app.name} — API Docs`,
         swaggerOptions: { persistAuthorization: true },
     }));
+    // Strict limiter on credential/OTP surfaces (before the general limiter so the
+    // tighter cap applies there); general limiter for everything else.
+    app.use(`${apiPrefix}/auth/login`, authLimiter);
+    app.use(`${apiPrefix}/auth/2fa`, authLimiter);
+    app.use(`${apiPrefix}/auth/reset-password`, authLimiter);
     app.use(apiPrefix, apiLimiter);
     app.use(apiPrefix, (0, user_1.createUserModule)());
     app.use(apiPrefix, (0, document_1.createDocumentModule)());

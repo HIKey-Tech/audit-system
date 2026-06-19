@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.setChecklistTemplateConfig = exports.getChecklistTemplateConfig = exports.CHECKLIST_TEMPLATE_CONFIG_KEY = exports.getEngagementControls = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
+exports.parseChecklistTemplateSnapshot = exports.serializeChecklistControls = exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.setChecklistTemplateConfig = exports.getChecklistTemplateConfig = exports.CHECKLIST_TEMPLATE_CONFIG_KEY = exports.getEngagementControls = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
 const prisma_client_1 = require("../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../shared/utils/logger.util");
 const audit_enum_1 = require("../domain/enum/audit.enum");
@@ -165,4 +165,48 @@ const isChecklistTemplateControl = (value) => {
         && typeof record.controlDescription === 'string'
         && typeof record.testProcedure === 'string';
 };
+/**
+ * Serialize a per-engagement checklist control set for storage on the engagement.
+ * Returns null when there is nothing to store (so populate falls back to the
+ * global per-audit-type template).
+ */
+const serializeChecklistControls = (controls) => {
+    if (!Array.isArray(controls) || controls.length === 0)
+        return null;
+    const clean = controls
+        .filter(isChecklistTemplateControl)
+        .map((control) => ({
+        controlReference: control.controlReference.trim(),
+        controlDescription: control.controlDescription.trim(),
+        testProcedure: control.testProcedure.trim(),
+    }))
+        .filter((control) => control.controlReference.length > 0);
+    return clean.length > 0 ? JSON.stringify(clean) : null;
+};
+exports.serializeChecklistControls = serializeChecklistControls;
+/**
+ * Parse a per-engagement checklist control snapshot stored on the engagement.
+ * Returns null when absent or invalid, signalling callers to fall back to the
+ * global per-audit-type template.
+ */
+const parseChecklistTemplateSnapshot = (value) => {
+    if (!value)
+        return null;
+    let parsed;
+    try {
+        parsed = JSON.parse(value);
+    }
+    catch {
+        return null;
+    }
+    if (!Array.isArray(parsed))
+        return null;
+    const controls = parsed.filter(isChecklistTemplateControl).map((control) => ({
+        controlReference: control.controlReference,
+        controlDescription: control.controlDescription,
+        testProcedure: control.testProcedure,
+    }));
+    return controls.length > 0 ? controls : null;
+};
+exports.parseChecklistTemplateSnapshot = parseChecklistTemplateSnapshot;
 //# sourceMappingURL=audit-config.utility.js.map

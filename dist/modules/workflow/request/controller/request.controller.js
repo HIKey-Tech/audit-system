@@ -10,6 +10,7 @@ const auth_middleware_1 = require("../../../../shared/middleware/auth.middleware
 const validate_middleware_1 = require("../../../../shared/middleware/validate.middleware");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const app_error_1 = require("../../../../shared/errors/app.error");
+const signed_document_service_1 = require("../service/implementation/signed-document.service");
 const request_request_dto_1 = require("../dto/request/request.request.dto");
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 const upload = (0, multer_1.default)({ storage: multer_1.default.memoryStorage(), limits: { fileSize: MAX_UPLOAD_BYTES } });
@@ -65,6 +66,12 @@ class RequestController {
          * @access Private - request:read
          */
         this.router.get('/:id/verify-signatures', (0, auth_middleware_1.requirePermission)('request:read'), this._verifySignatures.bind(this));
+        /**
+         * @route  GET /workflow/requests/:id/signed-documents
+         * @desc   List generated signed-PDF copies for a completed request
+         * @access Private - request:read
+         */
+        this.router.get('/:id/signed-documents', (0, auth_middleware_1.requirePermission)('request:read'), this._listSignedDocuments.bind(this));
         /**
          * @route  POST /workflow/requests/:id/approve
          * @access Private - request:act
@@ -156,6 +163,15 @@ class RequestController {
         try {
             const result = await this.requestService.verifySignatures(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(result, 'Signature verification complete'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listSignedDocuments(req, res, next) {
+        try {
+            const docs = await signed_document_service_1.signedDocumentService.list(req.params.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(docs, 'Signed documents retrieved'));
         }
         catch (err) {
             next(err);

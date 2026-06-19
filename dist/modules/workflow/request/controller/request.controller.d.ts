@@ -12,6 +12,7 @@ export declare class RequestController {
     private _addAttachment;
     private _getById;
     private _verifySignatures;
+    private _listSignedDocuments;
     private _approve;
     private _sign;
     private _reject;

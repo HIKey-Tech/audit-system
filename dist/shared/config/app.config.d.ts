@@ -85,6 +85,7 @@ export declare const config: {
     readonly rateLimit: {
         readonly windowMs: number;
         readonly max: number;
+        readonly authMax: number;
     };
     readonly logging: {
         readonly level: string;

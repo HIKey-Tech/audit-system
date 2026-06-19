@@ -1,5 +1,23 @@
 import { z } from 'zod';
 import { AuditPriority, AuditType, EngagementStatus } from '../../../domain/enum/audit.enum';
+/**
+ * A single checklist control the engagement creator can customise before the
+ * engagement starts. Snapshotted onto the engagement; used to populate its
+ * checklist instead of the global per-audit-type template when provided.
+ */
+export declare const ChecklistControlSchema: z.ZodObject<{
+    controlReference: z.ZodString;
+    controlDescription: z.ZodString;
+    testProcedure: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    controlReference: string;
+    controlDescription: string;
+    testProcedure: string;
+}, {
+    controlReference: string;
+    controlDescription: string;
+    testProcedure: string;
+}>;
 export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     title: z.ZodString;
     leadAuditorId: z.ZodString;
@@ -8,6 +26,19 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     slaDeadline: z.ZodString;
+    checklistControls: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        controlReference: z.ZodString;
+        controlDescription: z.ZodString;
+        testProcedure: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }, {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }>, "many">>;
 } & {
     planItemId: z.ZodString;
 } & {
@@ -26,6 +57,11 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
     auditType?: AuditType | undefined;
+    checklistControls?: {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }[] | undefined;
 }, {
     title: string;
     slaDeadline: string;
@@ -38,6 +74,11 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
     auditType?: AuditType | undefined;
+    checklistControls?: {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }[] | undefined;
 }>;
 export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     title: z.ZodString;
@@ -47,6 +88,19 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     slaDeadline: z.ZodString;
+    checklistControls: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        controlReference: z.ZodString;
+        controlDescription: z.ZodString;
+        testProcedure: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }, {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }>, "many">>;
 } & {
     universeId: z.ZodString;
     auditType: z.ZodNativeEnum<typeof AuditType>;
@@ -65,6 +119,11 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     auditManagerId: string;
     auditeeId: string;
     adhocReason: string;
+    checklistControls?: {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }[] | undefined;
 }, {
     title: string;
     priority: AuditPriority;
@@ -77,6 +136,11 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     auditManagerId: string;
     auditeeId: string;
     adhocReason: string;
+    checklistControls?: {
+        controlReference: string;
+        controlDescription: string;
+        testProcedure: string;
+    }[] | undefined;
 }>;
 export declare const UpdateEngagementRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
