@@ -84,18 +84,28 @@ export default function EngagementDetailPage(): JSX.Element {
     );
   }
 
-  const tabs: TabItem[] = TAB_DEFS.filter((t) => t.key !== 'assets' || canReadAssets).map((t) => ({
-    key: t.key,
-    label: t.label,
-    count:
-      t.key === 'findings'
-        ? data.findings?.length ?? 0
-        : t.key === 'working-papers'
-          ? data.workingPapers?.length ?? 0
-          : t.key === 'evidence'
-            ? data.evidence?.length ?? 0
-            : null,
-  }));
+  const vc = data.viewerContext;
+  const tabs: TabItem[] = TAB_DEFS
+    .filter((t) => t.key !== 'assets' || canReadAssets)
+    .filter((t) => {
+      if (!vc) return true;
+      if (t.key === 'working-papers') return vc.canViewWorkingPapers;
+      if (t.key === 'evidence') return vc.canViewInternalEvidence;
+      if (t.key === 'checklists') return vc.canViewChecklists;
+      return true;
+    })
+    .map((t) => ({
+      key: t.key,
+      label: t.label,
+      count:
+        t.key === 'findings'
+          ? data.findings?.length ?? 0
+          : t.key === 'working-papers'
+            ? data.workingPapers?.length ?? 0
+            : t.key === 'evidence'
+              ? data.evidence?.length ?? 0
+              : null,
+    }));
 
   return (
     <div>
@@ -147,11 +157,11 @@ export default function EngagementDetailPage(): JSX.Element {
       </div>
 
       {tab === 'overview' && <OverviewTab engagement={data} />}
-      {tab === 'working-papers' && <WorkingPapersTab engagement={data} />}
-      {tab === 'evidence' && <EvidenceTab engagement={data} />}
+      {tab === 'working-papers' && vc?.canViewWorkingPapers !== false && <WorkingPapersTab engagement={data} />}
+      {tab === 'evidence' && vc?.canViewInternalEvidence !== false && <EvidenceTab engagement={data} />}
       {tab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
       {tab === 'findings' && <FindingsTab engagement={data} />}
-      {tab === 'checklists' && <ChecklistsTab engagement={data} />}
+      {tab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}
       {tab === 'report' && <ReportTab engagement={data} />}
       {tab === 'follow-up' && <FollowUpTab engagement={data} />}
     </div>
