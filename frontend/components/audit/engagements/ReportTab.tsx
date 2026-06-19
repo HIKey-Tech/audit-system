@@ -23,6 +23,7 @@ import { reportsApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
+import { ApprovalChain } from '@/components/audit/engagements/ApprovalChain';
 import { formatRelative, formatDate } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
 import { useSession } from '@/components/providers/AuthProvider';
@@ -550,9 +551,9 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                       const highest = approvedSteps.length > 0
                         ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
                         : undefined;
-                      return highest?.approverName || 'Chief Audit Executive';
+                      return highest?.approverName || '—';
                     }
-                    return 'Chief Audit Executive';
+                    return '—';
                   })()}
                 </div>
               </div>
@@ -567,26 +568,10 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
         </div>
       )}
 
-      {approval.data?.steps && approval.data.steps.length > 0 && (
-        <Card>
-          <CardHeader title="Approval chain" />
-          <ol className="space-y-2 text-xs">
-            {approval.data.steps.map((step) => (
-              <li key={step.id} className="flex items-center justify-between rounded-md border border-border px-3 py-2">
-                <div>
-                  <p className="font-medium text-text-primary">
-                    Level {step.level} · {step.approverName}
-                  </p>
-                  {step.comment && (
-                    <p className="text-text-secondary mt-0.5">{step.comment}</p>
-                  )}
-                </div>
-                <StatusBadge status={step.status} />
-              </li>
-            ))}
-          </ol>
-        </Card>
-      )}
+      <Card>
+        <CardHeader title="Approval chain" />
+        <ApprovalChain entityType="audit_report" entityId={r.id} />
+      </Card>
 
       <ReasonDialog
         open={isRejectModalOpen}
