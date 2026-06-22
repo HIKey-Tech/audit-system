@@ -180,6 +180,22 @@ export class AuthService implements IAuthService {
   ): Promise<AuthResponseDto> {
     const result = await this.oidcClient.handleCallback(code, state);
 
+    // Trust the IdP for MFA (no IAMS double-prompt on SSO), but verify it
+    // actually happened when policy requires it: the `amr` claim must include
+    // "mfa". Otherwise reject the login.
+    if (config.oidc.requireIdpMfa) {
+      const amr = result.profile.authMethods ?? [];
+      if (!amr.includes('mfa')) {
+        logger.warn('SSO login rejected — IdP did not assert MFA', {
+          oid: result.profile.oid,
+          amr,
+        });
+        throw AppError.unauthorized(
+          'Multi-factor authentication is required. Please complete MFA with your identity provider.',
+        );
+      }
+    }
+
     // Provision or sync the user
     const userDto = await this.userService.syncFromAzureAd(
       result.profile.oid,

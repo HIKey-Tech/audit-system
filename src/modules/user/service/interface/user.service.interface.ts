@@ -95,4 +95,5 @@ export interface AzureAdProfile {
   mobilePhone?: string;
   groups?: string[];
   groupsOverage?: boolean; // true when Azure omitted groups due to the >150/200 limit
+  authMethods?: string[]; // `amr` claim — e.g. ["pwd","mfa"]
 }

@@ -105,6 +105,7 @@ export class AzureAdOidcClient implements IOidcClient {
         groups: Array.isArray(groupsClaim) ? (groupsClaim as string[]) : undefined,
         // Azure sets _claim_names.groups when membership overflows the token
         groupsOverage: Boolean(claimNames && 'groups' in claimNames),
+        authMethods: Array.isArray(claims['amr']) ? (claims['amr'] as string[]) : undefined,
       };
 
       return {
