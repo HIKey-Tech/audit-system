@@ -116,6 +116,7 @@ model Role {
 
   user_roles       User_Role[]
   role_permissions Role_Permission[]
+  directory_group_mappings Directory_Group_Mapping[]
 
   @@map("roles")
 }
@@ -141,6 +142,7 @@ model User_Role {
   assigned_by String?
   assigned_at DateTime  @default(now())
   expires_at  DateTime?
+  source      String    @default("manual") // "manual" | "azure_ad"
 
   user User @relation(fields: [user_id], references: [id], onDelete: Cascade)
   role Role @relation(fields: [role_id], references: [id], onDelete: Cascade)
@@ -160,6 +162,24 @@ model Role_Permission {
 
   @@unique([role_id, permission_id])
   @@map("role_permissions")
+}
+
+model Directory_Group_Mapping {
+  id            String   @id @default(uuid())
+  ad_group_id   String   // Azure AD security-group Object ID (GUID)
+  ad_group_name String   // cached for display only
+  role_id       String
+  is_active     Boolean  @default(true)
+  created_by    String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  role Role @relation(fields: [role_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([ad_group_id, role_id])
+  @@index([ad_group_id])
+  @@index([is_active])
+  @@map("directory_group_mappings")
 }
 
 model Refresh_Token {
