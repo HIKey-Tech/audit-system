@@ -1,6 +1,11 @@
 import { NextResponse } from 'next/server';
 import { buildBackendUrl } from '@/lib/backend';
 
+// Each SSO start must get a fresh authorization URL (unique state + PKCE).
+// Never cache this route or its upstream fetch.
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 interface SsoUrlData {
   authorizationUrl: string;
   state: string;
@@ -22,6 +27,7 @@ export async function GET(): Promise<NextResponse> {
     const backendRes = await fetch(buildBackendUrl('/auth/sso'), {
       method: 'GET',
       headers: { Accept: 'application/json' },
+      cache: 'no-store',
     });
     const json = (await backendRes.json().catch(() => null)) as
       | BackendResponse<SsoUrlData>

@@ -35,6 +35,9 @@ interface BackendResponse<T> {
   data?: T;
 }
 
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+
 const baseUrl = (): string => process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001';
 
 /**
@@ -60,7 +63,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   try {
     backendRes = await fetch(
       buildBackendUrl('/auth/callback', new URLSearchParams({ code, state })),
-      { method: 'GET', headers: { Accept: 'application/json' } },
+      { method: 'GET', headers: { Accept: 'application/json' }, cache: 'no-store' },
     );
   } catch {
     return NextResponse.redirect(new URL('/login?error=sso_unreachable', baseUrl()));
