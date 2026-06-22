@@ -7,6 +7,8 @@ import { logger } from '../../../../shared/utils/logger.util';
 import { PaginationMeta, parsePagination, buildPaginationMeta } from '../../../../shared/types/api-response.type';
 import { INotificationQueueService, NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
+import { directoryMappingService } from '../../../integration/service/implementation/directory-mapping.service';
+import { createGraphDirectoryClient } from '../../../integration/service/client/graph.client';
 import {
   IUserService,
   AzureAdProfile,
@@ -547,15 +549,17 @@ export class UserService implements IUserService {
         include: userWithRolesInclude,
       });
 
+      await this._applyDirectoryRoles(updated.id, profile);
+      const refreshed = await prisma.user.findUniqueOrThrow({
+        where: { id: updated.id },
+        include: userWithRolesInclude,
+      });
       logger.info('User synced from Azure AD', { userId: existing.id });
-      return mapUserToResponse(updated);
+      return mapUserToResponse(refreshed);
     }
 
-    // JIT provisioning: create on first SSO login
-    const defaultRole = await prisma.role.findFirst({
-      where: { name: 'viewer' },
-    });
-
+    // JIT provisioning: create on first SSO login. Roles come from Azure
+    // group→role mapping (applied below); unmapped users get zero roles.
     const created = await prisma.user.create({
       data: {
         azure_oid: azureOid,
@@ -566,19 +570,37 @@ export class UserService implements IUserService {
         job_title: profile.jobTitle,
         department: profile.department,
         email_verified: true,
-        ...(defaultRole
-          ? {
-              user_roles: {
-                create: [{ role_id: defaultRole.id }],
-              },
-            }
-          : {}),
       },
       include: userWithRolesInclude,
     });
 
+    await this._applyDirectoryRoles(created.id, profile);
+    const provisioned = await prisma.user.findUniqueOrThrow({
+      where: { id: created.id },
+      include: userWithRolesInclude,
+    });
     logger.info('User JIT-provisioned from Azure AD', { userId: created.id });
-    return mapUserToResponse(created);
+    return mapUserToResponse(provisioned);
+  }
+
+  /**
+   * Applies Azure AD group→role mappings to a user on SSO login. Falls back
+   * to a Microsoft Graph lookup when the token omitted groups (overage).
+   * Never throws — a role-sync failure must not block login.
+   */
+  private async _applyDirectoryRoles(
+    userId: string,
+    profile: AzureAdProfile,
+  ): Promise<void> {
+    try {
+      let groupIds = profile.groups ?? [];
+      if (profile.groupsOverage) {
+        groupIds = await createGraphDirectoryClient().getUserGroupIds(profile.oid);
+      }
+      await directoryMappingService.applyAdRolesToUser(userId, groupIds);
+    } catch (err) {
+      logger.error('Directory role apply failed during SSO login', { userId, err });
+    }
   }
 
   private async _assertUserExists(id: string): Promise<void> {

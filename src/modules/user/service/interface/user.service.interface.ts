@@ -93,4 +93,6 @@ export interface AzureAdProfile {
   jobTitle?: string;
   department?: string;
   mobilePhone?: string;
+  groups?: string[];
+  groupsOverage?: boolean; // true when Azure omitted groups due to the >150/200 limit
 }

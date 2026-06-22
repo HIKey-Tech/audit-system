@@ -88,6 +88,9 @@ export class AzureAdOidcClient implements IOidcClient {
 
       const claims = tokenResponse.idTokenClaims as Record<string, unknown>;
 
+      const groupsClaim = claims['groups'];
+      const claimNames = claims['_claim_names'] as Record<string, unknown> | undefined;
+
       const profile: AzureAdProfile = {
         oid: claims['oid'] as string,
         email:
@@ -99,6 +102,9 @@ export class AzureAdOidcClient implements IOidcClient {
         displayName: claims['name'] as string | undefined,
         jobTitle: claims['jobTitle'] as string | undefined,
         department: claims['department'] as string | undefined,
+        groups: Array.isArray(groupsClaim) ? (groupsClaim as string[]) : undefined,
+        // Azure sets _claim_names.groups when membership overflows the token
+        groupsOverage: Boolean(claimNames && 'groups' in claimNames),
       };
 
       return {
