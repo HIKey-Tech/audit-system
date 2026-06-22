@@ -34,6 +34,7 @@ import { createWorkflowModule } from './modules/workflow';
 import { createMessagingModule } from './modules/messaging';
 import { createDashboardModule } from './modules/dashboard';
 import { createSettingsModule } from './modules/settings';
+import { createIntegrationModule } from './modules/integration';
 import {
   createBackgroundModule,
   schedulerService,
@@ -154,6 +155,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createBackgroundModule());
   app.use(apiPrefix, createDashboardModule());
   app.use(apiPrefix, createSettingsModule());
+  app.use(apiPrefix, createIntegrationModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);
