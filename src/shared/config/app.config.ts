@@ -105,6 +105,16 @@ export const config = {
     },
   },
 
+  directorySync: {
+    // Reuses the Azure AD app registration; needs Graph application
+    // permissions User.Read.All + GroupMember.Read.All (admin-consented).
+    enabled: optionalEnv('DIRECTORY_SYNC_ENABLED', 'false') === 'true',
+    tenantId: optionalEnv('AZURE_AD_TENANT_ID'),
+    clientId: optionalEnv('AZURE_AD_CLIENT_ID'),
+    clientSecret: optionalEnv('AZURE_AD_CLIENT_SECRET'),
+    graphBaseUrl: optionalEnv('GRAPH_BASE_URL', 'https://graph.microsoft.com/v1.0'),
+  },
+
   redis: {
     url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
     password: optionalEnv('REDIS_PASSWORD'),
