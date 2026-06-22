@@ -203,7 +203,7 @@ See [`docs/PROJECT_STATE.md`](./docs/PROJECT_STATE.md) for the live snapshot of 
 Record these against any ambiguous requirement — don't guess:
 
 - Exact SQL engine on-prem (schema currently targets SQL Server, confirmation pending).
-- Final identity system: on-prem AD vs Azure AD vs other.
+- ~~Final identity system: on-prem AD vs Azure AD vs other.~~ **Resolved — Entra ID (Azure AD) via OIDC for login + Microsoft Graph (app-only) for nightly directory sync. Azure security groups map to IAMS roles via `directory_group_mappings`; `user_roles.source` distinguishes AD-driven from manual assignments.**
 - Dynafin & IMOC — live pull on demand vs periodic sync.
 - API documentation for each internal system.
 - Whether GBB DBA owns schema migrations.

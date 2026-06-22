@@ -2,7 +2,9 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-06-19 (rev 30)
+> Last updated: 2026-06-22 (rev 31)
+
+> **rev 31 changelog:** Azure AD (Entra) group→role integration — new `integration/` module (backend). Identity/membership stays Azure's authority; roles→permissions stay IAMS's; bridged by an admin-managed `directory_group_mappings` table (Azure security-group Object ID → IAMS role). New `user_roles.source` column (`'manual'` | `'azure_ad'`) makes AD-driven and manual role assignments coexist — reconciliation only ever touches `azure_ad` rows, so local accounts and manual grants are never disturbed. Pure `reconcileAdRoles()` util (unit-tested, the repo's first Jest test + a minimal `jest.config.js`). `GraphDirectoryClient` (real + stub + factory, read-only) calls Microsoft Graph app-only. `DirectoryMappingService` owns mapping CRUD + `applyAdRolesToUser` + `runFullDirectorySync`. SSO login (`syncFromAzureAd`) now applies group→role from the token's `groups` claim with a Graph overage fallback; **unmapped SSO users now get zero roles (was auto-`viewer`)**. New nightly job `BG:INTEGRATION:DIRECTORY:SYNC:DAILY` reconciles + deprovisions (disabled-in-Azure → deactivated), gated by `DIRECTORY_SYNC_ENABLED`. Routes under `/api/v1/integration/directory/*` (`settings:read`/`settings:manage`). Migration `20260622145209_add_directory_group_mapping`. Backend build + reconciler test pass. **Frontend Settings "Directory" tab not built yet.**
 
 > **rev 30 changelog:** Engagement flow redesign. **Status is now derived, not toggled.** A cycle-free reconciler (`engagement-status.reconciler.ts` + `engagement-gates.ts`) auto-advances an engagement forward whenever the next stage's configurable lifecycle gates are satisfied; the only manual acts left are **Start fieldwork** (`planned → in_progress`) and **Issue report**. Reconciliation fires after a checklist test, after report issuance, after final working-paper / finding-closure approval (via dynamic import to avoid the audit↔workflow cycle), and hourly via `BG:AUDIT:RECONCILE:STATUS:HOURLY` as a safety net. Forward-only — never auto-regresses, never auto-issues, never auto-starts fieldwork. **Three-tier visibility:** oversight (`engagement:read_all`), involved parties (lead/manager/auditee/assignee), and active approvers (a user with a live pending approval step on one of the engagement's report/working-paper/finding entities can open the detail while that step is open). **Restricted auditee view:** engagement detail now carries a per-viewer `viewerContext`; a pure auditee is blocked (API-enforced, not just hidden tabs) from working papers, internal evidence, checklists, and pre-issue/draft findings. **Approval chain shown as people:** new `GET /workflow/approvals/chain/:entityType/:entityId` resolves each level to the signed/pinned person or candidate permission holders (no role names); frontend `StatusStepper` guide replaced by a names-based **What's next** panel, and the Report tab + detail page render the chain by name and hide internal tabs from auditees. No "Move to next stage" button anywhere. Backend + frontend builds pass.
 
@@ -652,7 +654,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 
 ### 4.2 Modules entirely missing
 
-- `integration/` — Dynafin, IMOC, Active Directory, Project Plus, Shared Drive adapters.
+- `integration/` — **partially built (rev 31):** Azure AD (Entra) directory sync — group→role mapping, Graph client, login + nightly reconcile — is done. Dynafin, IMOC, Project Plus, and Shared Drive adapters are still missing; the frontend Directory-mappings tab is not built yet.
 - `predictive/` — risk model, anomaly detection, NLP.
 
 ### 4.3 Tests
