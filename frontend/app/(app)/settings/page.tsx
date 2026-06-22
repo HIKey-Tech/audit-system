@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Shield, FileText, BookOpen, SlidersHorizontal, Workflow, ListChecks } from 'lucide-react';
+import { Shield, FileText, BookOpen, SlidersHorizontal, Workflow, ListChecks, Network } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { RoleManagementTab } from '@/components/settings/roles/RoleManagementTab';
@@ -10,8 +10,9 @@ import { ReportTemplatesTab } from '@/components/settings/reports/ReportTemplate
 import { ChecklistTemplatesTab } from '@/components/settings/checklists/ChecklistTemplatesTab';
 import { SystemConfigTab } from '@/components/settings/config/SystemConfigTab';
 import { AuditCustomizationTab } from '@/components/settings/customization/AuditCustomizationTab';
+import { DirectoryMappingsTab } from '@/components/settings/directory/DirectoryMappingsTab';
 
-type TabKey = 'roles' | 'wp-templates' | 'report-templates' | 'checklist-templates' | 'customization' | 'config';
+type TabKey = 'roles' | 'wp-templates' | 'report-templates' | 'checklist-templates' | 'customization' | 'directory' | 'config';
 
 const TABS: TabItem[] = [
   { key: 'roles', label: <span className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Role Management</span> },
@@ -19,6 +20,7 @@ const TABS: TabItem[] = [
   { key: 'report-templates', label: <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Report Templates</span> },
   { key: 'checklist-templates', label: <span className="flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5" />Checklist Templates</span> },
   { key: 'customization', label: <span className="flex items-center gap-1.5"><Workflow className="h-3.5 w-3.5" />Audit Customization</span> },
+  { key: 'directory', label: <span className="flex items-center gap-1.5"><Network className="h-3.5 w-3.5" />Directory</span> },
   { key: 'config', label: <span className="flex items-center gap-1.5"><SlidersHorizontal className="h-3.5 w-3.5" />System Configuration</span> },
 ];
 
@@ -44,6 +46,7 @@ export default function SettingsPage(): JSX.Element {
       {activeTab === 'report-templates' && <ReportTemplatesTab />}
       {activeTab === 'checklist-templates' && <ChecklistTemplatesTab />}
       {activeTab === 'customization' && <AuditCustomizationTab />}
+      {activeTab === 'directory' && <DirectoryMappingsTab />}
       {activeTab === 'config' && <SystemConfigTab />}
     </div>
   );
