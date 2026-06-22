@@ -19,12 +19,30 @@ const LoginSchema = z.object({
 
 type LoginInput = z.infer<typeof LoginSchema>;
 
+/** Maps an SSO callback `?error=` code to a friendly message. */
+const ssoErrorMessage = (code: string | null | undefined): string | null => {
+  switch (code) {
+    case 'sso_denied':
+      return 'Microsoft sign-in was cancelled or denied.';
+    case 'sso_unavailable':
+      return 'Microsoft sign-in is not available right now. Please try again or use your email and password.';
+    case 'sso_invalid':
+    case 'sso_failed':
+    case 'sso_unreachable':
+      return 'Could not complete Microsoft sign-in. Please try again or use your email and password.';
+    default:
+      return null;
+  }
+};
+
 const LoginInner = (): JSX.Element => {
   const router = useRouter();
   const params = useSearchParams();
   const next = params?.get('next') ?? '/dashboard';
   const [showPassword, setShowPassword] = useState(false);
-  const [serverError, setServerError] = useState<string | null>(null);
+  const [serverError, setServerError] = useState<string | null>(
+    ssoErrorMessage(params?.get('error')),
+  );
 
   const {
     register,
@@ -182,6 +200,27 @@ const LoginInner = (): JSX.Element => {
               {isSubmitting ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
+
+          <div className="my-5 flex items-center gap-3">
+            <span className="h-px flex-1 bg-border" />
+            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
+              or
+            </span>
+            <span className="h-px flex-1 bg-border" />
+          </div>
+
+          <a
+            href="/api/auth/sso"
+            className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/40"
+          >
+            <svg viewBox="0 0 21 21" className="h-4 w-4" aria-hidden="true">
+              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
+              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
+              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
+              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
+            </svg>
+            Sign in with Microsoft
+          </a>
         </div>
       </div>
     </div>
