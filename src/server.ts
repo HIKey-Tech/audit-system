@@ -3,7 +3,7 @@
 // IAMS — Application entry point.
 // Boot order: validate config → connect DB → wire Express → start HTTP server → start scheduler.
 // Shutdown order: stop accepting connections → stop scheduler → disconnect DB → exit.
-//implement
+//implement done
 import http from 'http';
 import express, { Application, Request, Response } from 'express';
 import helmet from 'helmet';
@@ -76,18 +76,18 @@ const buildApp = (): Application => {
   // Retry-After hint so the UI can tell the user how long to wait.
   const rateLimitHandler =
     (message: string) =>
-    (req: Request, res: Response): void => {
-      const { rateLimit: info } = req as Request & { rateLimit?: { resetTime?: Date } };
-      const resetMs = info?.resetTime?.getTime() ?? Date.now();
-      const retryAfter = Math.max(1, Math.ceil((resetMs - Date.now()) / 1000));
-      res.setHeader('Retry-After', String(retryAfter));
-      res.status(429).json({
-        success: false,
-        message: `${message} Please try again in ${retryAfter} second${retryAfter === 1 ? '' : 's'}.`,
-        errors: { retryAfterSeconds: retryAfter },
-        timestamp: new Date().toISOString(),
-      });
-    };
+      (req: Request, res: Response): void => {
+        const { rateLimit: info } = req as Request & { rateLimit?: { resetTime?: Date } };
+        const resetMs = info?.resetTime?.getTime() ?? Date.now();
+        const retryAfter = Math.max(1, Math.ceil((resetMs - Date.now()) / 1000));
+        res.setHeader('Retry-After', String(retryAfter));
+        res.status(429).json({
+          success: false,
+          message: `${message} Please try again in ${retryAfter} second${retryAfter === 1 ? '' : 's'}.`,
+          errors: { retryAfterSeconds: retryAfter },
+          timestamp: new Date().toISOString(),
+        });
+      };
 
   const apiLimiter = rateLimit({
     windowMs: config.rateLimit.windowMs,
@@ -194,7 +194,7 @@ const startServer = async (): Promise<http.Server> => {
   if (config.rateLimit.disabled) {
     logger.warn(
       'Rate limiting is DISABLED (RATE_LIMIT_DISABLED=true in a non-production env). ' +
-        'Brute-force protection is off — never use this configuration in production.',
+      'Brute-force protection is off — never use this configuration in production.',
     );
   }
 
