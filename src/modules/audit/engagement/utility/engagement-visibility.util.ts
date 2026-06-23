@@ -1,3 +1,4 @@
+import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { ActorContext } from '../../domain/entity/audit.entity';
 import { ViewerContext } from '../dto/response/engagement.response.dto';
@@ -14,6 +15,27 @@ const isAssignee = async (engagementId: string, userId: string): Promise<boolean
     select: { id: true },
   });
   return a !== null;
+};
+
+/**
+ * Engagements whose documents an actor may see in the central audit repository.
+ * The repository holds internal auditor material only — working papers,
+ * supporting documents, engagement and follow-up evidence, reports — so a
+ * *pure auditee* gets nothing here (the auditee branch is deliberately omitted),
+ * mirroring `assertCanViewInternalArtifacts`. Oversight (`engagement:read_all`)
+ * is unrestricted. Returns `undefined` for unrestricted access.
+ */
+export const repositoryEngagementScope = (
+  actor: ActorContext,
+): Prisma.Audit_EngagementWhereInput | undefined => {
+  if (actor.permissions.includes('engagement:read_all')) return undefined;
+  return {
+    OR: [
+      { lead_auditor_id: actor.id },
+      { audit_manager_id: actor.id },
+      { workflow_assignments: { some: { user_id: actor.id } } },
+    ],
+  };
 };
 
 /** A "pure auditee" is the auditee and nothing else — not team, not oversight. */
