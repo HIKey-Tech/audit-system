@@ -41,10 +41,12 @@ exports.registerAllJobs = exports.schedulerService = exports.JOB_KEYS = void 0;
 const node_cron_1 = __importDefault(require("node-cron"));
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
+const app_config_1 = require("../../../../shared/config/app.config");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
 const escalation_service_1 = require("../../../workflow/escalation/service/implementation/escalation.service");
 const document_service_1 = require("../../../document/service/implementation/document.service");
+const directory_mapping_service_1 = require("../../../integration/service/implementation/directory-mapping.service");
 /**
  * Job Key Naming Convention:
  *   BG:<MODULE>:<ACTION>:<FREQUENCY>
@@ -63,6 +65,7 @@ exports.JOB_KEYS = {
     LOG_ARCHIVE_WEEKLY: 'BG:LOG:ARCHIVE:WEEKLY',
     REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
     DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
+    INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
 };
 class SchedulerService {
     jobs = [];
@@ -199,6 +202,21 @@ exports.schedulerService = new SchedulerService();
 // Register all background jobs here
 // ──────────────────────────────────────────────
 const registerAllJobs = () => {
+    // BG:INTEGRATION:DIRECTORY:SYNC:DAILY — reconcile Azure AD group→role + deprovision
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.INTEGRATION_DIRECTORY_SYNC_DAILY,
+        name: 'Azure AD Directory Sync',
+        description: 'Pulls users + group memberships from Microsoft Graph, reconciles azure_ad roles, and deactivates users disabled in Azure AD',
+        cronExpression: '0 2 * * *', // every day at 02:00
+        handler: async () => {
+            if (!app_config_1.config.directorySync.enabled) {
+                logger_util_1.logger.info('Directory sync skipped (DIRECTORY_SYNC_ENABLED=false)');
+                return;
+            }
+            const result = await directory_mapping_service_1.directoryMappingService.runFullDirectorySync();
+            logger_util_1.logger.info('Directory sync job finished', result);
+        },
+    });
     // BG:TOKEN:CLEANUP:HOURLY — purge expired refresh tokens
     exports.schedulerService.register({
         key: exports.JOB_KEYS.TOKEN_CLEANUP_HOURLY,

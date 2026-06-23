@@ -31,6 +31,12 @@ export declare class UserService implements IUserService {
     removeRole(userId: string, roleId: string, actorId: string): Promise<UserResponseDto>;
     changePassword(userId: string, dto: ChangePasswordRequestDto): Promise<void>;
     syncFromAzureAd(azureOid: string, profile: AzureAdProfile): Promise<UserResponseDto>;
+    /**
+     * Applies Azure AD group→role mappings to a user on SSO login. Falls back
+     * to a Microsoft Graph lookup when the token omitted groups (overage).
+     * Never throws — a role-sync failure must not block login.
+     */
+    private _applyDirectoryRoles;
     private _assertUserExists;
     private _assertPermissionsExist;
     private _syncUserSuperAdminFlag;

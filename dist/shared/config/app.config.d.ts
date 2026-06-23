@@ -35,6 +35,7 @@ export declare const config: {
     };
     readonly oidc: {
         readonly provider: "azure_ad" | "generic";
+        readonly requireIdpMfa: boolean;
         readonly azureAd: {
             readonly tenantId: string;
             readonly clientId: string;
@@ -50,6 +51,14 @@ export declare const config: {
             readonly redirectUri: string;
             readonly scopes: string[];
         };
+    };
+    readonly directorySync: {
+        readonly enabled: boolean;
+        readonly tenantId: string;
+        readonly clientId: string;
+        readonly clientSecret: string;
+        readonly graphBaseUrl: string;
+        readonly defaultRoleName: string;
     };
     readonly redis: {
         readonly url: string;

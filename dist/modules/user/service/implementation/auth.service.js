@@ -119,6 +119,19 @@ class AuthService {
     }
     async handleOidcCallback(code, state, ipAddress, userAgent) {
         const result = await this.oidcClient.handleCallback(code, state);
+        // Trust the IdP for MFA (no IAMS double-prompt on SSO), but verify it
+        // actually happened when policy requires it: the `amr` claim must include
+        // "mfa". Otherwise reject the login.
+        if (app_config_1.config.oidc.requireIdpMfa) {
+            const amr = result.profile.authMethods ?? [];
+            if (!amr.includes('mfa')) {
+                logger_util_1.logger.warn('SSO login rejected — IdP did not assert MFA', {
+                    oid: result.profile.oid,
+                    amr,
+                });
+                throw app_error_1.AppError.unauthorized('Multi-factor authentication is required. Please complete MFA with your identity provider.');
+            }
+        }
         // Provision or sync the user
         const userDto = await this.userService.syncFromAzureAd(result.profile.oid, result.profile);
         const user = await prisma_client_1.prisma.user.findUniqueOrThrow({

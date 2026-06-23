@@ -62,6 +62,8 @@ class AzureAdOidcClient {
                 throw app_error_1.AppError.unauthorized('No token response from Azure AD');
             }
             const claims = tokenResponse.idTokenClaims;
+            const groupsClaim = claims['groups'];
+            const claimNames = claims['_claim_names'];
             const profile = {
                 oid: claims['oid'],
                 email: claims['preferred_username'] ||
@@ -72,6 +74,10 @@ class AzureAdOidcClient {
                 displayName: claims['name'],
                 jobTitle: claims['jobTitle'],
                 department: claims['department'],
+                groups: Array.isArray(groupsClaim) ? groupsClaim : undefined,
+                // Azure sets _claim_names.groups when membership overflows the token
+                groupsOverage: Boolean(claimNames && 'groups' in claimNames),
+                authMethods: Array.isArray(claims['amr']) ? claims['amr'] : undefined,
             };
             return {
                 profile,

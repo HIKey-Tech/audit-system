@@ -80,6 +80,10 @@ exports.config = {
     },
     oidc: {
         provider: optionalEnv('OIDC_PROVIDER', 'azure_ad'),
+        // When true, an SSO login is only accepted if the IdP token proves MFA
+        // was performed (the `amr` claim contains "mfa"). Lets Entra Conditional
+        // Access own MFA for SSO users without IAMS double-prompting them.
+        requireIdpMfa: optionalEnv('SSO_REQUIRE_IDP_MFA', 'false') === 'true',
         // Azure AD specific
         azureAd: {
             tenantId: optionalEnv('AZURE_AD_TENANT_ID'),
@@ -97,6 +101,18 @@ exports.config = {
             redirectUri: optionalEnv('OIDC_REDIRECT_URI', 'http://localhost:3000/api/v1/auth/callback'),
             scopes: optionalEnv('OIDC_SCOPES', 'openid profile email').split(' '),
         },
+    },
+    directorySync: {
+        // Reuses the Azure AD app registration; needs Graph application
+        // permissions User.Read.All + GroupMember.Read.All (admin-consented).
+        enabled: optionalEnv('DIRECTORY_SYNC_ENABLED', 'false') === 'true',
+        tenantId: optionalEnv('AZURE_AD_TENANT_ID'),
+        clientId: optionalEnv('AZURE_AD_CLIENT_ID'),
+        clientSecret: optionalEnv('AZURE_AD_CLIENT_SECRET'),
+        graphBaseUrl: optionalEnv('GRAPH_BASE_URL', 'https://graph.microsoft.com/v1.0'),
+        // Baseline role granted to every SSO user on top of any group-mapped roles
+        // (so all employees get at least read access). Empty disables it.
+        defaultRoleName: optionalEnv('SSO_DEFAULT_ROLE', 'viewer'),
     },
     redis: {
         url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),

@@ -37,5 +37,8 @@ export interface AzureAdProfile {
     jobTitle?: string;
     department?: string;
     mobilePhone?: string;
+    groups?: string[];
+    groupsOverage?: boolean;
+    authMethods?: string[];
 }
 //# sourceMappingURL=user.service.interface.d.ts.map
