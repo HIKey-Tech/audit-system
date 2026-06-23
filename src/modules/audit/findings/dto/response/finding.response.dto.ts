@@ -20,6 +20,8 @@ export interface FindingResponseDto {
   recommendation: string;
   auditeeId: string;
   auditeeName?: string;
+  /** Co-responders beyond the primary auditee (empty when the include is absent). */
+  additionalAuditees?: Array<{ id: string; name?: string }>;
   status: string;
   dueDate: string;
   createdById: string;
@@ -61,6 +63,7 @@ export const mapFindingToResponse = (finding: {
   recommendation: string;
   auditee_id: string;
   auditee?: Parameters<typeof formatUserName>[0];
+  responders?: Array<{ user_id: string; user?: Parameters<typeof formatUserName>[0] }>;
   status: string;
   due_date: Date;
   created_by_id: string;
@@ -90,6 +93,7 @@ export const mapFindingToResponse = (finding: {
   recommendation: finding.recommendation,
   auditeeId: finding.auditee_id,
   auditeeName: formatUserName(finding.auditee),
+  additionalAuditees: finding.responders?.map((r) => ({ id: r.user_id, name: formatUserName(r.user) })),
   status: finding.status,
   dueDate: finding.due_date.toISOString(),
   createdById: finding.created_by_id,

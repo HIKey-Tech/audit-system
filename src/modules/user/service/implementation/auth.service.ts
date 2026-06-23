@@ -28,6 +28,7 @@ import {
 import { generateScopedToken } from '../../utility/mfa.utility';
 import { createOidcClient, IOidcClient } from '../client/oidc.client';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
+import { revokeUserSessions } from '../../../../shared/security/session-guard';
 
 
 export class AuthService implements IAuthService {
@@ -356,6 +357,8 @@ export class AuthService implements IAuthService {
       where: { user_id: userId, revoked_at: null },
       data: { revoked_at: new Date() },
     });
+    // Also invalidate outstanding access tokens, not just refresh tokens.
+    await revokeUserSessions(userId);
     logger.info('All refresh tokens revoked', { userId });
   }
 

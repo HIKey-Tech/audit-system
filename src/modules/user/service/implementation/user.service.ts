@@ -12,6 +12,7 @@ import { createGraphDirectoryClient } from '../../../integration/service/client/
 import {
   IUserService,
   AzureAdProfile,
+  RoleManagementActor,
 } from '../interface/user.service.interface';
 import {
   CreateUserRequestDto,
@@ -35,6 +36,10 @@ import {
 } from '../../dto/response/user.response.dto';
 import { hashPassword, comparePassword, generateTemporaryPassword } from '../../utility/token.utility';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
+import {
+  revokeUserSessions,
+  setUserActiveSnapshot,
+} from '../../../../shared/security/session-guard';
 
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => {
@@ -61,8 +66,9 @@ export class UserService implements IUserService {
 
   async createUser(
     dto: CreateUserRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<UserResponseDto> {
+    const actorId = actor.id;
     const existing = await prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -78,6 +84,8 @@ export class UserService implements IUserService {
     if (dto.roleIds?.length && assignedRoles.length !== dto.roleIds.length) {
       throw AppError.badRequest('One or more role IDs are invalid');
     }
+
+    await this._assertCanGrantRoles(dto.roleIds ?? [], actor);
 
     const initialPassword = dto.password ?? generateTemporaryPassword();
     const password_hash = await hashPassword(initialPassword);
@@ -410,6 +418,11 @@ export class UserService implements IUserService {
       include: userWithRolesInclude,
     }) as UserWithRoles;
 
+    // Reflect the change in the session guard: refresh the liveness snapshot and,
+    // on deactivation, invalidate the user's outstanding access tokens now.
+    await setUserActiveSnapshot(id, isActive);
+    if (!isActive) await revokeUserSessions(id);
+
     logger.info(isActive ? 'User activated' : 'User deactivated', {
       userId: id,
       actorId,
@@ -429,14 +442,19 @@ export class UserService implements IUserService {
       data: { deleted_at: new Date(), is_active: false },
     });
 
+    // Lock the deleted user out of any live session immediately.
+    await setUserActiveSnapshot(id, false);
+    await revokeUserSessions(id);
+
     logger.info('User soft-deleted', { userId: id, actorId });
   }
 
   async assignRoles(
     userId: string,
     dto: AssignRoleRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<UserResponseDto> {
+    const actorId = actor.id;
     await this._assertUserExists(userId);
 
     // Verify all roles exist
@@ -447,6 +465,8 @@ export class UserService implements IUserService {
     if (roles.length !== dto.roleIds.length) {
       throw AppError.badRequest('One or more role IDs are invalid');
     }
+
+    await this._assertCanGrantRoles(dto.roleIds, actor);
 
     // Upsert each role assignment
     await prisma.$transaction(
@@ -469,20 +489,31 @@ export class UserService implements IUserService {
 
     logger.info('Roles assigned', { userId, roleIds: dto.roleIds, actorId });
     await this._syncUserSuperAdminFlag(userId);
+    // Force the next request to pick up the new authority: the current access
+    // token (with stale permissions) is rejected and silently refreshed.
+    await revokeUserSessions(userId);
     return this.getUserById(userId);
   }
 
   async removeRole(
     userId: string,
     roleId: string,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<UserResponseDto> {
+    const actorId = actor.id;
+
+    // Removing super_admin is itself a privileged action — only a super admin
+    // may do it (prevents a lesser admin from manipulating it).
+    await this._assertCanGrantRoles([roleId], actor);
+
     await prisma.user_Role.deleteMany({
       where: { user_id: userId, role_id: roleId },
     });
 
     logger.info('Role removed from user', { userId, roleId, actorId });
     await this._syncUserSuperAdminFlag(userId);
+    // Revoke the stale-permission access token; the next refresh reflects the change.
+    await revokeUserSessions(userId);
     return this.getUserById(userId);
   }
 
@@ -517,6 +548,13 @@ export class UserService implements IUserService {
       data: { password_hash: newHash },
     });
 
+    // A password change invalidates sessions opened with the old credential.
+    await prisma.refresh_Token.updateMany({
+      where: { user_id: userId, revoked_at: null },
+      data: { revoked_at: new Date() },
+    });
+    await revokeUserSessions(userId);
+
     logger.info('Password changed', { userId });
   }
 
@@ -524,13 +562,38 @@ export class UserService implements IUserService {
     azureOid: string,
     profile: AzureAdProfile,
   ): Promise<UserResponseDto> {
-    const existing = await prisma.user.findFirst({
-      where: {
-        OR: [{ azure_oid: azureOid }, { email: profile.email }],
-        deleted_at: null,
-      },
+    // Resolve strictly by the immutable subject id first. Email is only used as
+    // a fallback to link a pre-existing local account, and never to silently
+    // take over an account already bound to a different identity.
+    let existing = await prisma.user.findFirst({
+      where: { azure_oid: azureOid, deleted_at: null },
       include: userWithRolesInclude,
     });
+
+    if (!existing) {
+      const byEmail = await prisma.user.findFirst({
+        where: { email: profile.email, deleted_at: null },
+        include: userWithRolesInclude,
+      });
+
+      if (byEmail) {
+        if (byEmail.azure_oid && byEmail.azure_oid !== azureOid) {
+          // The email belongs to an account already linked to a different IdP
+          // subject — refuse rather than hijack it.
+          logger.warn('SSO email collides with a different linked account', {
+            userId: byEmail.id,
+            attemptedOid: azureOid,
+          });
+          throw AppError.unauthorized('This account cannot be linked via single sign-on.');
+        }
+        if (!profile.emailVerified) {
+          // Don't link a local account on the strength of an unverified email.
+          logger.warn('SSO link refused — unverified email', { email: profile.email });
+          throw AppError.unauthorized('Your identity provider did not verify this email address.');
+        }
+        existing = byEmail;
+      }
+    }
 
     if (existing) {
       // Sync latest profile data from IdP
@@ -600,6 +663,41 @@ export class UserService implements IUserService {
       await directoryMappingService.applyAdRolesToUser(userId, groupIds);
     } catch (err) {
       logger.error('Directory role apply failed during SSO login', { userId, err });
+    }
+  }
+
+  /**
+   * Least-privilege guard for granting/removing roles. A super admin may manage
+   * any role. Everyone else:
+   *   - may never grant or remove the `super_admin` role, and
+   *   - may only assign roles whose permission set is a subset of their own
+   *     (you cannot hand out authority you do not hold — blocks self/lateral
+   *     privilege escalation through `role:assign` / `user:create`).
+   */
+  private async _assertCanGrantRoles(
+    roleIds: string[],
+    actor: RoleManagementActor,
+  ): Promise<void> {
+    if (actor.isSuperAdmin || roleIds.length === 0) return;
+
+    const roles = await prisma.role.findMany({
+      where: { id: { in: roleIds } },
+      include: { role_permissions: { include: { permission: true } } },
+    });
+
+    if (roles.some((r) => r.name === 'super_admin')) {
+      throw AppError.forbidden('Only a super admin can grant or remove the super admin role');
+    }
+
+    const actorPerms = new Set(actor.permissions);
+    for (const role of roles) {
+      for (const rp of role.role_permissions) {
+        if (!actorPerms.has(rp.permission.slug)) {
+          throw AppError.forbidden(
+            'You cannot assign a role that grants permissions you do not hold',
+          );
+        }
+      }
     }
   }
 

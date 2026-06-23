@@ -6,7 +6,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Plus, AlertTriangle } from 'lucide-react';
+import { Plus, AlertTriangle, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -19,6 +19,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { UserSelect } from '@/components/common/UserSelect';
 import { findingsApi } from '@/lib/api/audit';
+import { usersApi } from '@/lib/api/users';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
@@ -39,6 +40,7 @@ const Schema = z.object({
   riskImplication: z.string().min(1, 'Risk implication is required'),
   recommendation: z.string().min(1, 'Recommendation is required'),
   auditeeId: z.string().min(1),
+  additionalAuditeeIds: z.array(z.string()).optional(),
   dueDate: z.string().min(1),
 });
 
@@ -75,9 +77,21 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
       riskImplication: '',
       recommendation: '',
       auditeeId: engagement.auditeeId,
+      additionalAuditeeIds: [],
       dueDate: '',
     },
   });
+
+  // Names for the co-responder chips.
+  const usersList = useQuery({
+    queryKey: ['users', 'all'],
+    queryFn: () => usersApi.list({ pageSize: 100 }),
+    staleTime: 5 * 60_000,
+  });
+  const userName = (id: string): string => {
+    const u = usersList.data?.items.find((x) => x.id === id);
+    return u ? u.displayName || `${u.firstName} ${u.lastName}` : id;
+  };
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
@@ -90,6 +104,7 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
         riskImplication: v.riskImplication,
         recommendation: v.recommendation,
         auditeeId: v.auditeeId,
+        additionalAuditeeIds: v.additionalAuditeeIds,
         dueDate: toISODatetime(v.dueDate),
       }),
     onSuccess: () => {
@@ -105,6 +120,18 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
 
   const onSubmit = handleSubmit((v) => create.mutate(v));
   const auditeeId = watch('auditeeId');
+  const additionalAuditeeIds = watch('additionalAuditeeIds') ?? [];
+
+  const addResponder = (id: string): void => {
+    if (!id || id === auditeeId || additionalAuditeeIds.includes(id)) return;
+    setValue('additionalAuditeeIds', [...additionalAuditeeIds, id]);
+  };
+  const removeResponder = (id: string): void => {
+    setValue(
+      'additionalAuditeeIds',
+      additionalAuditeeIds.filter((x) => x !== id),
+    );
+  };
 
   return (
     <div>
@@ -234,6 +261,34 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
               <Input type="date" error={errors.dueDate?.message} {...register('dueDate')} />
             </FormField>
           </div>
+          <FormField label="Additional auditees">
+            <UserSelect
+              value=""
+              placeholder="Add a co-responder…"
+              excludeIds={[auditeeId, ...additionalAuditeeIds]}
+              onChange={addResponder}
+            />
+            {additionalAuditeeIds.length > 0 && (
+              <div className="mt-2 flex flex-wrap gap-1.5">
+                {additionalAuditeeIds.map((id) => (
+                  <span
+                    key={id}
+                    className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs text-text-primary"
+                  >
+                    {userName(id)}
+                    <button
+                      type="button"
+                      onClick={() => removeResponder(id)}
+                      className="text-text-muted hover:text-danger"
+                      aria-label={`Remove ${userName(id)}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </span>
+                ))}
+              </div>
+            )}
+          </FormField>
         </form>
       </SlideOver>
     </div>

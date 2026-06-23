@@ -86,6 +86,24 @@ export interface RiskOverviewResponseDto {
 }
 
 // =============================================================
+// Risk matrix (likelihood × impact heat map)
+// =============================================================
+
+export interface RiskMatrixCellDto {
+  likelihood: number; // 1-5
+  impact: number;     // 1-5
+  score: number;      // likelihood × impact
+  count: number;      // active risks in this cell
+}
+
+export interface RiskMatrixResponseDto {
+  // Flat 25-cell list (likelihood 1-5 × impact 1-5). The frontend lays these
+  // out as a grid; a flat list keeps the contract simple and order-independent.
+  cells: RiskMatrixCellDto[];
+  totalPlotted: number;
+}
+
+// =============================================================
 // Recent activity
 // =============================================================
 

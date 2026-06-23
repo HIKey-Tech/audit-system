@@ -54,6 +54,17 @@ export class DashboardController {
     );
 
     /**
+     * @route  GET /dashboard/risk-matrix
+     * @desc   Risk heat map (5×5 likelihood × impact cell counts)
+     * @access Private — dashboard:read
+     */
+    this.router.get(
+      '/risk-matrix',
+      requirePermission('dashboard:read'),
+      this._getRiskMatrix.bind(this),
+    );
+
+    /**
      * @route  GET /dashboard/activity
      * @desc   Recent audit-trail activity across audit, workflow, risk, document, user
      * @access Private — audit:read
@@ -144,6 +155,19 @@ export class DashboardController {
     try {
       const overview = await this.dashboardService.getRiskOverview(req.user!);
       res.status(200).json(buildResponse(overview));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getRiskMatrix(
+    _req: Request,
+    res: Response,
+    next: NextFunction,
+  ): Promise<void> {
+    try {
+      const matrix = await this.dashboardService.getRiskMatrix();
+      res.status(200).json(buildResponse(matrix));
     } catch (err) {
       next(err);
     }

@@ -160,7 +160,7 @@ export class AuthController {
       res.status(200).json(
         buildResponse(
           null,
-          'A password reset link has been sent to that email address.',
+          'If an account exists for that email address, a password reset link has been sent.',
         ),
       );
     } catch (err) {

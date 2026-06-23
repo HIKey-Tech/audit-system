@@ -61,7 +61,7 @@ export class UserController {
      */
     this.router.get(
       '/',
-      requirePermission('role:read'),
+      requirePermission('user:read'),
       validate(UserQuerySchema, 'query'),
       this._listUsers.bind(this),
     );
@@ -69,11 +69,11 @@ export class UserController {
     /**
      * @route  GET /users/roles
      * @desc   List all roles with permissions (paginated)
-     * @access Private — user:read
+     * @access Private — role:read
      */
     this.router.get(
       '/roles',
-      requirePermission('permission:read'),
+      requirePermission('role:read'),
       validate(RoleQuerySchema, 'query'),
       this._listRoles.bind(this),
     );
@@ -81,11 +81,11 @@ export class UserController {
     /**
      * @route  GET /users/permissions
      * @desc   List all permissions
-     * @access Private — user:read
+     * @access Private — permission:read
      */
     this.router.get(
       '/permissions',
-      requirePermission('user:read'),
+      requirePermission('permission:read'),
       this._listPermissions.bind(this),
     );
 
@@ -241,7 +241,7 @@ export class UserController {
 
   private async _createUser(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const user = await this.userService.createUser(req.body, req.user!.id);
+      const user = await this.userService.createUser(req.body, req.user!);
       res.status(201).json(buildResponse(user, 'User created successfully'));
     } catch (err) {
       next(err);
@@ -310,7 +310,7 @@ export class UserController {
       const user = await this.userService.assignRoles(
         req.params.id,
         req.body,
-        req.user!.id,
+        req.user!,
       );
       res.status(200).json(buildResponse(user, 'Roles assigned'));
     } catch (err) {
@@ -323,7 +323,7 @@ export class UserController {
       const user = await this.userService.removeRole(
         req.params.id,
         req.params.roleId,
-        req.user!.id,
+        req.user!,
       );
       res.status(200).json(buildResponse(user, 'Role removed'));
     } catch (err) {

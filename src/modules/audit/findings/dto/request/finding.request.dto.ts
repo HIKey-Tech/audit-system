@@ -13,6 +13,8 @@ export const CreateFindingRequestSchema = z.object({
   riskImplication: z.string().min(1),
   recommendation: z.string().min(1),
   auditeeId: z.string().uuid(),
+  /** Co-responders who may also answer this finding alongside the primary auditee. */
+  additionalAuditeeIds: z.array(z.string().uuid()).optional(),
   dueDate: z.string().datetime(),
 });
 
@@ -28,6 +30,8 @@ export const UpdateFindingRequestSchema = z.object({
   riskImplication: z.string().min(1).optional(),
   recommendation: z.string().min(1).optional(),
   auditeeId: z.string().uuid().optional(),
+  /** When provided, replaces the full set of co-responders for this finding. */
+  additionalAuditeeIds: z.array(z.string().uuid()).optional(),
   dueDate: z.string().datetime().optional(),
 });
 

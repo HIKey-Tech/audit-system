@@ -8,12 +8,14 @@ import type {
   MyWork,
   ApprovalInboxSummary,
   AuditAnalytics,
+  RiskMatrix,
 } from '../types/domain';
 
 export const dashboardApi = {
   getSummary: () => api.get<AuditSummary>('/dashboard/summary'),
   getFindings: () => api.get<FindingsSummary>('/dashboard/findings'),
   getRisks: () => api.get<RiskOverview>('/dashboard/risks'),
+  getRiskMatrix: () => api.get<RiskMatrix>('/dashboard/risk-matrix'),
   getActivity: (limit = 20) =>
     api.get<RecentActivityItem[]>('/dashboard/activity', { limit }),
   getEscalations: () => api.get<EscalationOverview>('/dashboard/escalations'),

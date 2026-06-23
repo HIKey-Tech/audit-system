@@ -3,6 +3,7 @@ import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/app.config';
 import { AppError } from '../errors/app.error';
+import { assertSessionValid } from '../security/session-guard';
 
 export interface AuthenticatedUser {
   id: string;
@@ -54,7 +55,9 @@ export const authenticate = async (
 
     let payload: JwtPayload & { scope?: string };
     try {
-      payload = jwt.verify(token, config.jwt.secret) as JwtPayload & { scope?: string };
+      payload = jwt.verify(token, config.jwt.secret, {
+        algorithms: ['HS256'],
+      }) as JwtPayload & { scope?: string };
     } catch (err) {
       if (err instanceof jwt.TokenExpiredError) {
         throw new AppError('Token expired', 401, 'TOKEN_EXPIRED' as never);
@@ -66,6 +69,11 @@ export const authenticate = async (
     if (payload.scope) {
       throw AppError.unauthorized('Invalid token');
     }
+
+    // Enforce server-side revocation: a deactivated/deleted user, or a token
+    // issued before a logout-all / password change / role change, is rejected
+    // even though the JWT itself is still cryptographically valid.
+    await assertSessionValid(payload.sub, payload.iat);
 
     req.user = {
       id: payload.sub,
@@ -98,7 +106,9 @@ export const requireMfaToken = (scope: 'mfa_enroll' | 'mfa_challenge') =>
 
       let payload: { sub: string; email: string; scope?: string };
       try {
-        payload = jwt.verify(token, config.jwt.secret) as {
+        payload = jwt.verify(token, config.jwt.secret, {
+          algorithms: ['HS256'],
+        }) as {
           sub: string;
           email: string;
           scope?: string;
@@ -140,7 +150,9 @@ export const requireEnrollmentContext = (
 
     let payload: { sub: string; email: string; scope?: string };
     try {
-      payload = jwt.verify(token, config.jwt.secret) as {
+      payload = jwt.verify(token, config.jwt.secret, {
+        algorithms: ['HS256'],
+      }) as {
         sub: string;
         email: string;
         scope?: string;

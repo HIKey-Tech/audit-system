@@ -19,6 +19,7 @@ import {
   FindingsSummaryResponseDto,
   MyWorkResponseDto,
   RecentActivityItemDto,
+  RiskMatrixResponseDto,
   RiskOverviewResponseDto,
 } from '../../dto/response/dashboard.response.dto';
 
@@ -426,6 +427,45 @@ export class DashboardService {
       topFiveRisks,
       staleRisks,
     };
+  }
+
+  // =============================================================
+  // Risk matrix (likelihood × impact heat map)
+  // =============================================================
+  async getRiskMatrix(): Promise<RiskMatrixResponseDto> {
+    // Org-wide and shared across all viewers (risk data is not actor-scoped),
+    // so a single cached entry serves every dashboard load. Short TTL keeps it
+    // near-real-time; the cache never throws, so a miss just recomputes.
+    return cache.getOrSet('dashboard:risk-matrix:org', 30, () =>
+      this._computeRiskMatrix(),
+    );
+  }
+
+  private async _computeRiskMatrix(): Promise<RiskMatrixResponseDto> {
+    // Only active risks are plotted — closed/accepted ones are no longer "live"
+    // exposure and would distort the heat map.
+    const groups = await prisma.risk_Register.groupBy({
+      by: ['likelihood', 'impact'],
+      where: { deleted_at: null, status: { in: ['open', 'mitigated'] } },
+      _count: { _all: true },
+    });
+
+    const counts = new Map<string, number>();
+    for (const group of groups) {
+      counts.set(`${group.likelihood}:${group.impact}`, extractCount(group._count));
+    }
+
+    const cells: RiskMatrixResponseDto['cells'] = [];
+    let totalPlotted = 0;
+    for (let likelihood = 1; likelihood <= 5; likelihood += 1) {
+      for (let impact = 1; impact <= 5; impact += 1) {
+        const count = counts.get(`${likelihood}:${impact}`) ?? 0;
+        totalPlotted += count;
+        cells.push({ likelihood, impact, score: likelihood * impact, count });
+      }
+    }
+
+    return { cells, totalPlotted };
   }
 
   // =============================================================

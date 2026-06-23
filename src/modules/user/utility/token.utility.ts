@@ -33,6 +33,7 @@ export const generateAccessToken = (payload: {
 }): string => {
   return jwt.sign(payload, config.jwt.secret, {
     expiresIn: config.jwt.expiresIn,
+    algorithm: 'HS256',
   } as jwt.SignOptions);
 };
 

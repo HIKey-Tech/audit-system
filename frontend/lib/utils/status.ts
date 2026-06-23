@@ -163,6 +163,52 @@ export const riskScoreLabel = (score: number): string => {
   return 'Low';
 };
 
+// ─────────────────────────────────────────────────────────────
+// RAG (Red / Amber / Green) status for target-based KPIs.
+// Thresholds follow standard internal-audit committee reporting:
+// green = on target, amber = watch, red = off target.
+// ─────────────────────────────────────────────────────────────
+export type RagLevel = 'green' | 'amber' | 'red';
+
+interface RagStyle {
+  level: RagLevel;
+  label: string;
+  dot: string;   // solid bg for the traffic-light dot
+  text: string;  // text colour for the value/hint
+  bar: string;   // solid bg for progress/gauge fill
+  track: string; // faint track behind the gauge
+}
+
+const RAG_STYLES: Record<RagLevel, RagStyle> = {
+  green: { level: 'green', label: 'On target', dot: 'bg-emerald-500', text: 'text-emerald-700', bar: 'bg-emerald-500', track: 'bg-emerald-100' },
+  amber: { level: 'amber', label: 'Watch', dot: 'bg-amber-500', text: 'text-amber-700', bar: 'bg-amber-500', track: 'bg-amber-100' },
+  red: { level: 'red', label: 'Off target', dot: 'bg-red-500', text: 'text-red-700', bar: 'bg-red-500', track: 'bg-red-100' },
+};
+
+/**
+ * RAG for a "higher is better" percentage KPI (e.g. completion / coverage rate).
+ * Defaults to the audit-committee standard: ≥85 green, 70–85 amber, <70 red.
+ */
+export const ragForRate = (
+  value: number,
+  green = 85,
+  amber = 70,
+): RagStyle => {
+  if (value >= green) return RAG_STYLES.green;
+  if (value >= amber) return RAG_STYLES.amber;
+  return RAG_STYLES.red;
+};
+
+/**
+ * RAG for a "lower is better" count KPI (e.g. overdue items): 0 is green,
+ * up to `amberMax` is amber, anything more is red.
+ */
+export const ragForCount = (value: number, amberMax = 3): RagStyle => {
+  if (value <= 0) return RAG_STYLES.green;
+  if (value <= amberMax) return RAG_STYLES.amber;
+  return RAG_STYLES.red;
+};
+
 export type StatusEntity =
   | 'engagement'
   | 'finding'

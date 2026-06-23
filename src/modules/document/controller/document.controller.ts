@@ -1,4 +1,5 @@
 // src/modules/document/controller/document.controller.ts
+import path from 'path';
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
 import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
@@ -17,9 +18,48 @@ import {
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 
+// Allowlist of document/evidence file types. Anything else (HTML, SVG, scripts,
+// executables, …) is rejected up front. This is the first gate only — it does
+// not inspect file contents; deep magic-byte validation and malware scanning
+// remain recommended defence-in-depth for ingested third-party evidence.
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.zip',
+]);
+
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  'application/pdf',
+  'application/msword',
+  'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'application/vnd.ms-powerpoint',
+  'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'text/csv',
+  'text/plain',
+  'image/png',
+  'image/jpeg',
+  'image/gif',
+  'image/webp',
+  'application/zip',
+  'application/x-zip-compressed',
+  // Some clients send a generic type; the extension gate still constrains it.
+  'application/octet-stream',
+]);
+
+const uploadFileFilter: multer.Options['fileFilter'] = (_req, file, cb) => {
+  const ext = path.extname(file.originalname).toLowerCase();
+  if (ALLOWED_UPLOAD_EXTENSIONS.has(ext) && ALLOWED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
+    cb(null, true);
+    return;
+  }
+  cb(AppError.badRequest(`Unsupported file type: "${file.originalname}"`));
+};
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: MAX_UPLOAD_BYTES },
+  fileFilter: uploadFileFilter,
 });
 
 export class DocumentController {
@@ -276,7 +316,7 @@ export class DocumentController {
 
   private async _getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const document = await this.documentService.getById(req.params.id, req.user!.id);
+      const document = await this.documentService.getById(req.params.id, req.user!);
       res.status(200).json(buildResponse(document));
     } catch (err) {
       next(err);
@@ -285,7 +325,7 @@ export class DocumentController {
 
   private async _getDownloadUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await this.documentService.assertCanUserAccess(req.params.id, req.user!.id);
+      await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
       res.status(200).json(buildResponse({ downloadUrl }));
     } catch (err) {
@@ -295,7 +335,7 @@ export class DocumentController {
 
   private async _delete(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await this.documentService.delete(req.params.id, req.user!.id);
+      await this.documentService.delete(req.params.id, req.user!);
       res.status(200).json(buildResponse(null, 'Document deleted'));
     } catch (err) {
       next(err);
@@ -304,9 +344,10 @@ export class DocumentController {
 
   private async _listByEntity(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const documents = await this.documentService.listByEntity(
+      const documents = await this.documentService.listByEntityForActor(
         req.params.entityType,
         req.params.entityId,
+        req.user!,
       );
       res.status(200).json(buildResponse(documents));
     } catch (err) {
@@ -328,7 +369,7 @@ export class DocumentController {
 
   private async _serve(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const file = await this.documentService.serveFile(req.params.storedName, req.user!.id);
+      const file = await this.documentService.serveFile(req.params.storedName, req.user!);
       this._sendFile(res, file);
     } catch (err) {
       next(err);
@@ -337,7 +378,7 @@ export class DocumentController {
 
   private async _getFileById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      await this.documentService.assertCanUserAccess(req.params.id, req.user!.id);
+      await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       const file = await this.documentService.getFileById(req.params.id);
       this._sendFile(res, file);
     } catch (err) {
@@ -386,7 +427,7 @@ export class DocumentController {
 
   private async _listVersions(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const versions = await this.documentService.listVersions(req.params.id, req.user!.id);
+      const versions = await this.documentService.listVersions(req.params.id, req.user!);
       res.status(200).json(buildResponse(versions));
     } catch (err) {
       next(err);
@@ -402,7 +443,7 @@ export class DocumentController {
       const version = await this.documentService.getVersion(
         req.params.id,
         versionNumber,
-        req.user!.id,
+        req.user!,
       );
       res.status(200).json(buildResponse(version));
     } catch (err) {
@@ -419,7 +460,7 @@ export class DocumentController {
       const downloadUrl = await this.documentService.getVersionDownloadUrl(
         req.params.id,
         versionNumber,
-        req.user!.id,
+        req.user!,
       );
       res.status(200).json(buildResponse({ downloadUrl }));
     } catch (err) {

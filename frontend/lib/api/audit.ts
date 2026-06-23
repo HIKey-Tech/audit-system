@@ -301,6 +301,8 @@ export interface CreateFindingDto {
   riskImplication: string;
   recommendation: string;
   auditeeId: string;
+  /** Co-responders who may also answer this finding alongside the primary auditee. */
+  additionalAuditeeIds?: string[];
   dueDate: string;
   workingPaperId?: string;
 }

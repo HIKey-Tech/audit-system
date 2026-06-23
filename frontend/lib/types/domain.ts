@@ -114,6 +114,18 @@ export interface RiskOverview {
   staleRisks: number;
 }
 
+export interface RiskMatrixCell {
+  likelihood: number;
+  impact: number;
+  score: number;
+  count: number;
+}
+
+export interface RiskMatrix {
+  cells: RiskMatrixCell[];
+  totalPlotted: number;
+}
+
 export interface RecentActivityItem {
   id: string;
   action: string;
@@ -506,6 +518,8 @@ export interface AuditFinding {
   recommendation: string | null;
   auditeeId: string;
   auditeeName: string;
+  /** Co-responders beyond the primary auditee. */
+  additionalAuditees?: Array<{ id: string; name?: string }>;
   dueDate: string;
   createdById: string;
   createdByName: string;

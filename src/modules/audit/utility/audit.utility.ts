@@ -20,6 +20,26 @@ export const assertHasPermission = (
   }
 };
 
+/**
+ * How a viewer is scoped when reading findings. Mirrors the dashboard's
+ * isRestrictedAuditee/isRestrictedAuditor semantics so finding visibility and
+ * dashboard metrics agree.
+ *
+ * - oversight (`finding:read_all`)         → every finding
+ * - auditee (this helper)                  → only findings assigned to them
+ * - field auditor (neither of the above)   → engagements they lead / are assigned to
+ *
+ * An auditee is identified by `followup:respond` (auditee-exclusive) OR a lack
+ * of engagement visibility — NOT by the absence of `engagement:read` alone,
+ * because the seeded `auditee` role does hold `engagement:read`.
+ */
+export const isFindingOversight = (permissions: string[]): boolean =>
+  permissions.includes('finding:read_all');
+
+export const isFindingAuditee = (permissions: string[]): boolean =>
+  !permissions.includes('finding:read_all') &&
+  (permissions.includes('followup:respond') || !permissions.includes('engagement:read'));
+
 export const assertTransition = <TStatus extends string>(
   current: TStatus,
   next: TStatus,

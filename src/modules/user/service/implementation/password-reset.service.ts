@@ -10,6 +10,7 @@ import {
   hashToken,
   hashPassword,
 } from '../../utility/token.utility';
+import { revokeUserSessions } from '../../../../shared/security/session-guard';
 
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => {
@@ -44,21 +45,23 @@ export class PasswordResetService implements IPasswordResetService {
       },
     });
 
+    // Account enumeration guard: never reveal whether the address exists, is
+    // active, or is SSO-only. For any non-eligible account we log the real
+    // reason server-side and return silently; the controller always responds
+    // with the same generic "if an account exists, a link was sent" message.
     if (!user) {
       logger.info('Password reset requested for non-eligible account', { email });
-      throw AppError.notFound('Account');
+      return;
     }
 
     if (!user.is_active) {
       logger.info('Password reset requested for inactive account', { userId: user.id });
-      throw AppError.forbidden('This account is inactive. Contact an administrator.');
+      return;
     }
 
     if (!user.password_hash) {
       logger.info('Password reset requested for SSO-only account', { userId: user.id });
-      throw AppError.badRequest(
-        'This account uses single sign-on. Reset your password through your identity provider.',
-      );
+      return;
     }
 
     // Invalidate any prior unused tokens so only the newest link works.
@@ -123,6 +126,9 @@ export class PasswordResetService implements IPasswordResetService {
         data: { revoked_at: new Date() },
       });
     });
+
+    // Invalidate any outstanding access tokens too.
+    await revokeUserSessions(stored.user_id);
 
     logger.info('Password reset completed', { userId: stored.user_id });
   }

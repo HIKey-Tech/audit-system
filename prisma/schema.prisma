@@ -65,6 +65,7 @@ model User {
   working_papers_reviewed         Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
   evidence_uploaded               Audit_Evidence[]         @relation("EvidenceUploadedBy")
   findings_as_auditee             Audit_Finding[]          @relation("FindingAuditee")
+  finding_responder_for           Audit_Finding_Responder[] @relation("FindingResponderUser")
   findings_created                Audit_Finding[]          @relation("FindingCreatedBy")
   findings_closed                 Audit_Finding[]          @relation("FindingClosedBy")
   reports_created                 Audit_Report[]           @relation("ReportCreatedBy")
@@ -951,6 +952,7 @@ model Audit_Finding {
   evidence      Audit_Evidence[]
   follow_up     Audit_Follow_Up?
   asset_links   Audit_Finding_Asset[]
+  responders    Audit_Finding_Responder[]
 
   @@index([engagement_id])
   @@index([severity])
@@ -961,6 +963,23 @@ model Audit_Finding {
   @@index([checklist_id])
   @@index([risk_id])
   @@map("audit_findings")
+}
+
+// Additional auditees who may respond to a finding alongside the primary
+// `auditee_id`. The primary stays on Audit_Finding for back-compat; this table
+// holds the co-responders so a finding can be owned by several people.
+model Audit_Finding_Responder {
+  id         String   @id @default(uuid())
+  finding_id String
+  user_id    String
+  created_at DateTime @default(now())
+
+  finding Audit_Finding @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  user    User          @relation("FindingResponderUser", fields: [user_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([finding_id, user_id])
+  @@index([user_id])
+  @@map("audit_finding_responders")
 }
 
 model Audit_Report {

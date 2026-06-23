@@ -41,7 +41,7 @@ export class FollowUpService implements IFollowUpService {
 
   async submitManagementResponse(findingId: string, dto: ManagementResponseRequestDto, actor: ActorContext): Promise<FollowUpResponseDto> {
     const finding = await this._getFinding(findingId);
-    if (finding.auditee_id !== actor.id) throw AppError.forbidden('Only the assigned auditee can submit a management response');
+    this._assertResponder(finding, actor.id);
 
     const followUp = await prisma.$transaction(async (tx) => {
       await tx.audit_Finding.update({
@@ -80,7 +80,7 @@ export class FollowUpService implements IFollowUpService {
 
   async submitRemediationEvidence(findingId: string, evidenceId: string, actor: ActorContext): Promise<FollowUpResponseDto> {
     const finding = await this._getFinding(findingId);
-    if (finding.auditee_id !== actor.id) throw AppError.forbidden('Only the assigned auditee can submit remediation evidence');
+    this._assertResponder(finding, actor.id);
 
     const evidence = await prisma.audit_Evidence.findUnique({
       where: { id: evidenceId },
@@ -130,7 +130,7 @@ export class FollowUpService implements IFollowUpService {
     if (!this.documentService) throw AppError.internal('Document service is not configured for follow-up evidence upload');
 
     const finding = await this._getFinding(findingId);
-    if (finding.auditee_id !== actor.id) throw AppError.forbidden('Only the assigned auditee can submit remediation evidence');
+    this._assertResponder(finding, actor.id);
 
     const document = await this.documentService.upload({
       uploadedById: actor.id,
@@ -191,31 +191,26 @@ export class FollowUpService implements IFollowUpService {
     });
 
     const isVerified = dto.verificationStatus === VerificationStatus.Verified;
+    // Notify the primary auditee and every co-responder.
+    const recipients = this._responders(finding);
     if (isVerified) {
-      const [auditee, auditor] = await Promise.all([
-        prisma.user.findUnique({
-          where: { id: finding.auditee_id },
-          select: { email: true, display_name: true, first_name: true, last_name: true },
-        }),
-        prisma.user.findUnique({
-          where: { id: actor.id },
-          select: { display_name: true, first_name: true, last_name: true },
-        }),
-      ]);
-
-      const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
+      const auditor = await prisma.user.findUnique({
+        where: { id: actor.id },
+        select: { display_name: true, first_name: true, last_name: true },
+      });
       const auditorName = auditor?.display_name ?? `${auditor?.first_name ?? ''} ${auditor?.last_name ?? ''}`.trim();
-      const verifiedVariables = {
-        auditeeName,
-        auditorName,
-        findingTitle: finding.title,
-        verificationNotes: dto.verificationNotes ?? '',
-      };
 
-      await notificationQueueService.enqueueSafe(
-        'in_app',
-        {
-          userId: finding.auditee_id,
+      for (const recipient of recipients) {
+        const auditeeName = recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+        const verifiedVariables = {
+          auditeeName,
+          auditorName,
+          findingTitle: finding.title,
+          verificationNotes: dto.verificationNotes ?? '',
+        };
+
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: recipient.id,
           title: 'Remediation verified',
           body: `Remediation for "${finding.title}" has been verified.`,
           type: 'success',
@@ -223,37 +218,29 @@ export class FollowUpService implements IFollowUpService {
           referenceId: findingId,
           eventKey: 'audit.followup.verified',
           variables: verifiedVariables,
-        },
-      );
+        });
 
-      if (auditee?.email) {
-        await notificationQueueService.enqueueSafe(
-          'email',
-          {
-            to: auditee.email,
+        if (recipient.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: recipient.email,
             subject: `Finding Verified: ${finding.title}`,
             text: `Remediation for "${finding.title}" has been verified.`,
             eventKey: 'audit.followup.verified',
             variables: verifiedVariables,
-          },
-        );
+          });
+        }
       }
     } else {
-      const auditee = await prisma.user.findUnique({
-        where: { id: finding.auditee_id },
-        select: { email: true, display_name: true, first_name: true, last_name: true },
-      });
-      const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
-      const rejectedVariables = {
-        auditeeName,
-        findingTitle: finding.title,
-        verificationNotes: dto.verificationNotes ?? '',
-      };
+      for (const recipient of recipients) {
+        const auditeeName = recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+        const rejectedVariables = {
+          auditeeName,
+          findingTitle: finding.title,
+          verificationNotes: dto.verificationNotes ?? '',
+        };
 
-      await notificationQueueService.enqueueSafe(
-        'in_app',
-        {
-          userId: finding.auditee_id,
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: recipient.id,
           title: 'Remediation rejected',
           body: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
           type: 'warning',
@@ -261,20 +248,17 @@ export class FollowUpService implements IFollowUpService {
           referenceId: findingId,
           eventKey: 'audit.followup.rejected',
           variables: rejectedVariables,
-        },
-      );
+        });
 
-      if (auditee?.email) {
-        await notificationQueueService.enqueueSafe(
-          'email',
-          {
-            to: auditee.email,
+        if (recipient.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: recipient.email,
             subject: `Remediation Rejected: ${finding.title}`,
             text: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
             eventKey: 'audit.followup.rejected',
             variables: rejectedVariables,
-          },
-        );
+          });
+        }
       }
     }
 
@@ -305,6 +289,7 @@ export class FollowUpService implements IFollowUpService {
   }
 
   private async _getFinding(findingId: string) {
+    const responderSelect = { id: true, email: true, display_name: true, first_name: true, last_name: true };
     const finding = await prisma.audit_Finding.findFirst({
       where: { id: findingId, deleted_at: null },
       select: {
@@ -312,6 +297,8 @@ export class FollowUpService implements IFollowUpService {
         engagement_id: true,
         auditee_id: true,
         title: true,
+        auditee: { select: responderSelect },
+        responders: { select: { user: { select: responderSelect } } },
         engagement: {
           select: {
             reference_number: true,
@@ -324,6 +311,18 @@ export class FollowUpService implements IFollowUpService {
     });
     if (!finding) throw AppError.notFound('Audit finding');
     return finding;
+  }
+
+  /** A finding may be acted on by its primary auditee or any co-responder. */
+  private _assertResponder(finding: Awaited<ReturnType<FollowUpService['_getFinding']>>, actorId: string): void {
+    const allowed = finding.auditee_id === actorId || finding.responders.some((r) => r.user.id === actorId);
+    if (!allowed) throw AppError.forbidden('Only an assigned auditee can submit a response for this finding');
+  }
+
+  /** Primary auditee plus co-responders, de-duplicated by user id. */
+  private _responders(finding: Awaited<ReturnType<FollowUpService['_getFinding']>>) {
+    const all = [finding.auditee, ...finding.responders.map((r) => r.user)];
+    return all.filter((u, i) => all.findIndex((o) => o.id === u.id) === i);
   }
 
   /**

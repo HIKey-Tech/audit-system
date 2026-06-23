@@ -10,7 +10,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus } from '../../../domain/enum/audit.enum';
-import { FINDING_TRANSITIONS, assertHasPermission, assertTransition } from '../../../utility/audit.utility';
+import { FINDING_TRANSITIONS, assertHasPermission, assertTransition, isFindingAuditee, isFindingOversight } from '../../../utility/audit.utility';
 import { resolveViewerContext } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateFindingRequestDto,
@@ -26,6 +26,12 @@ const findingInclude = {
   risk: { select: { title: true } },
   auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
   created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+  responders: {
+    select: {
+      user_id: true,
+      user: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+    },
+  },
 };
 
 export class FindingService implements IFindingService {
@@ -98,6 +104,38 @@ export class FindingService implements IFindingService {
         variables: findingVariables,
       }, { tx });
 
+      // Co-responders: persist the join rows and alert each one, same as the
+      // primary auditee, so a finding can be owned by several people.
+      const extraIds = [...new Set(dto.additionalAuditeeIds ?? [])].filter((uid) => uid !== created.auditee_id);
+      for (const uid of extraIds) {
+        const responder = await tx.audit_Finding_Responder.create({
+          data: { finding_id: created.id, user_id: uid },
+          include: { user: { select: { display_name: true, first_name: true, last_name: true, email: true } } },
+        });
+        const responderName =
+          responder.user.display_name ?? `${responder.user.first_name} ${responder.user.last_name}`.trim();
+        const responderVariables = { ...findingVariables, auditeeName: responderName };
+
+        await notificationQueueService.enqueue('in_app', {
+          userId: uid,
+          title: 'New audit finding assigned',
+          body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
+          type: 'warning',
+          referenceType: 'audit_finding',
+          referenceId: created.id,
+          eventKey: 'audit.finding.assigned',
+          variables: responderVariables,
+        }, { tx });
+
+        await notificationQueueService.enqueue('email', {
+          to: responder.user.email,
+          subject: `New Audit Finding: ${created.title}`,
+          text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
+          eventKey: 'audit.finding.assigned',
+          variables: responderVariables,
+        }, { tx });
+      }
+
       return created;
     });
 
@@ -121,23 +159,37 @@ export class FindingService implements IFindingService {
       await this._assertRiskExists(dto.riskId);
     }
 
-    const updated = await prisma.audit_Finding.update({
-      where: { id },
-      data: {
-        ...(dto.workingPaperId !== undefined && { working_paper_id: dto.workingPaperId }),
-        ...(dto.checklistId !== undefined && { checklist_id: dto.checklistId }),
-        ...(dto.riskId !== undefined && { risk_id: dto.riskId }),
-        ...(dto.title !== undefined && { title: dto.title }),
-        ...(dto.description !== undefined && { description: dto.description }),
-        ...(dto.category !== undefined && { category: dto.category }),
-        ...(dto.severity !== undefined && { severity: dto.severity }),
-        ...(dto.rootCause !== undefined && { root_cause: dto.rootCause }),
-        ...(dto.riskImplication !== undefined && { risk_implication: dto.riskImplication }),
-        ...(dto.recommendation !== undefined && { recommendation: dto.recommendation }),
-        ...(dto.auditeeId !== undefined && { auditee_id: dto.auditeeId }),
-        ...(dto.dueDate !== undefined && { due_date: new Date(dto.dueDate) }),
-      },
-      include: findingInclude,
+    const findingData: Prisma.Audit_FindingUncheckedUpdateInput = {
+      ...(dto.workingPaperId !== undefined && { working_paper_id: dto.workingPaperId }),
+      ...(dto.checklistId !== undefined && { checklist_id: dto.checklistId }),
+      ...(dto.riskId !== undefined && { risk_id: dto.riskId }),
+      ...(dto.title !== undefined && { title: dto.title }),
+      ...(dto.description !== undefined && { description: dto.description }),
+      ...(dto.category !== undefined && { category: dto.category }),
+      ...(dto.severity !== undefined && { severity: dto.severity }),
+      ...(dto.rootCause !== undefined && { root_cause: dto.rootCause }),
+      ...(dto.riskImplication !== undefined && { risk_implication: dto.riskImplication }),
+      ...(dto.recommendation !== undefined && { recommendation: dto.recommendation }),
+      ...(dto.auditeeId !== undefined && { auditee_id: dto.auditeeId }),
+      ...(dto.dueDate !== undefined && { due_date: new Date(dto.dueDate) }),
+    };
+
+    const updated = await prisma.$transaction(async (tx) => {
+      const result = await tx.audit_Finding.update({ where: { id }, data: findingData, include: findingInclude });
+
+      // Co-responders are replaced wholesale when the caller sends the array.
+      if (dto.additionalAuditeeIds !== undefined) {
+        const primaryId = dto.auditeeId ?? finding.auditee_id;
+        const extraIds = [...new Set(dto.additionalAuditeeIds)].filter((uid) => uid !== primaryId);
+        await tx.audit_Finding_Responder.deleteMany({ where: { finding_id: id } });
+        if (extraIds.length > 0) {
+          await tx.audit_Finding_Responder.createMany({
+            data: extraIds.map((uid) => ({ finding_id: id, user_id: uid })),
+          });
+        }
+        return tx.audit_Finding.findUniqueOrThrow({ where: { id }, include: findingInclude });
+      }
+      return result;
     });
 
     logger.info('Audit finding updated', { findingId: id, actorId: actor.id });
@@ -191,12 +243,12 @@ export class FindingService implements IFindingService {
   }
 
   async getFindingById(id: string, actor: ActorContext): Promise<FindingResponseDto> {
-    const isAuditee = !actor.permissions.includes('engagement:read');
+    const isAuditee = isFindingAuditee(actor.permissions);
     const finding = await prisma.audit_Finding.findFirst({
       where: {
         id,
         deleted_at: null,
-        ...(isAuditee && { auditee_id: actor.id }),
+        ...(isAuditee && this._auditeeMatch(actor.id)),
       },
       include: {
         ...findingInclude,
@@ -256,8 +308,36 @@ export class FindingService implements IFindingService {
   }
 
   private _buildFindingWhere(query: FindingQueryDto, actor: ActorContext): Prisma.Audit_FindingWhereInput {
-    const isOversight = actor.permissions.includes('finding:read_all');
-    const isAuditee = !actor.permissions.includes('engagement:read');
+    const isOversight = isFindingOversight(actor.permissions);
+    const isAuditee = isFindingAuditee(actor.permissions);
+
+    // OR-based clauses are collected into AND so they never overwrite each other.
+    const and: Prisma.Audit_FindingWhereInput[] = [];
+    if (query.auditeeId) {
+      and.push(this._auditeeMatch(query.auditeeId));
+    }
+    if (query.search) {
+      and.push({
+        OR: [
+          { title: { contains: query.search } },
+          { description: { contains: query.search } },
+          { recommendation: { contains: query.search } },
+        ],
+      });
+    }
+    if (isAuditee) {
+      // A responder sees a finding whether they are the primary auditee or a co-responder.
+      and.push(this._auditeeMatch(actor.id));
+    } else if (!isOversight) {
+      and.push({
+        engagement: {
+          OR: [
+            { lead_auditor_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+          ],
+        },
+      });
+    }
 
     return {
       deleted_at: null,
@@ -267,24 +347,13 @@ export class FindingService implements IFindingService {
       ...(query.controlReference && {
         checklist: { control_reference: { contains: query.controlReference } },
       }),
-      ...(query.auditeeId && { auditee_id: query.auditeeId }),
-      ...(query.search && {
-        OR: [
-          { title: { contains: query.search } },
-          { description: { contains: query.search } },
-          { recommendation: { contains: query.search } },
-        ],
-      }),
-      ...(isAuditee && { auditee_id: actor.id }),
-      ...(!isOversight && !isAuditee && {
-        engagement: {
-          OR: [
-            { lead_auditor_id: actor.id },
-            { workflow_assignments: { some: { user_id: actor.id } } },
-          ],
-        },
-      }),
+      ...(and.length > 0 && { AND: and }),
     };
+  }
+
+  /** Matches findings where the given user is the primary auditee or a co-responder. */
+  private _auditeeMatch(userId: string): Prisma.Audit_FindingWhereInput {
+    return { OR: [{ auditee_id: userId }, { responders: { some: { user_id: userId } } }] };
   }
 
   private async _assertEngagementAllowsFindings(engagementId: string): Promise<void> {

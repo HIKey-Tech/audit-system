@@ -168,6 +168,13 @@ export const config = {
     // Strict cap on credential/OTP endpoints — counts FAILED attempts only, so
     // legitimate users are never throttled while brute force is blocked.
     authMax: parseInt(optionalEnv('RATE_LIMIT_AUTH_MAX', '10'), 10),
+    // Secure by default: rate limiting is ALWAYS on unless a developer explicitly
+    // opts out via RATE_LIMIT_DISABLED=true — and it can NEVER be disabled in
+    // production, even if NODE_ENV is misconfigured. This prevents a dev .env
+    // (NODE_ENV=development) from silently shipping with brute-force protection off.
+    disabled:
+      optionalEnv('NODE_ENV', 'development') !== 'production' &&
+      optionalEnv('RATE_LIMIT_DISABLED', 'false') === 'true',
   },
 
   logging: {
@@ -180,5 +187,17 @@ export const config = {
     apiKey: optionalEnv('DATA_WAREHOUSE_API_KEY'),
   },
 } as const;
+
+// ── Production safety checks ─────────────────────────────────────────
+// Fail fast at boot rather than silently running with a weaker posture.
+if (config.app.isProd) {
+  if (!config.mfa.encryptionKey) {
+    throw new Error(
+      'MFA_ENCRYPTION_KEY is required in production: it encrypts TOTP secrets at rest. ' +
+        'Without it the system silently falls back to a key derived from JWT_SECRET, ' +
+        'coupling two security domains. Generate one with: openssl rand -base64 32',
+    );
+  }
+}
 
 export type AppConfig = typeof config;

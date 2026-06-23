@@ -190,16 +190,27 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
 // ─────────────────────────────────────────────────────────────
 export interface DashboardVisibility {
   statCards: boolean;
+  programmeHealth: boolean;
   recentActivity: boolean;
   findingsBySeverity: boolean;
   myWork: boolean;
   topRisks: boolean;
+  riskHeatMap: boolean;
   escalations: boolean;
 }
 
 export const getDashboardVisibility = (user: SessionUser | null): DashboardVisibility => {
   if (!user) {
-    return { statCards: false, recentActivity: false, findingsBySeverity: false, myWork: false, topRisks: false, escalations: false };
+    return {
+      statCards: false,
+      programmeHealth: false,
+      recentActivity: false,
+      findingsBySeverity: false,
+      myWork: false,
+      topRisks: false,
+      riskHeatMap: false,
+      escalations: false,
+    };
   }
 
   // Permission-driven so the dashboard adapts to whatever roles GBB defines.
@@ -210,6 +221,9 @@ export const getDashboardVisibility = (user: SessionUser | null): DashboardVisib
   return {
     // Org-wide programme stat cards: oversight roles.
     statCards: oversight,
+
+    // Programme health (KPI gauges + lifecycle trends): oversight roles.
+    programmeHealth: oversight,
 
     // Recent activity feed: oversight roles or anyone who can read the audit log.
     recentActivity: oversight || can('log:read'),
@@ -223,10 +237,43 @@ export const getDashboardVisibility = (user: SessionUser | null): DashboardVisib
     // Top risks: risk monitors.
     topRisks: can('risk_monitoring:read'),
 
+    // Risk heat map: anyone who can read the risk register.
+    riskHeatMap: can('risk:read'),
+
     // Escalations: anyone who can see escalations.
     escalations: can('escalation:read'),
   };
 };
+
+// ─────────────────────────────────────────────────────────────
+// Quick actions — permission-gated shortcuts to the most common
+// "create / act" tasks. Each entry renders only if the user holds
+// the permission, so the grid adapts per role automatically.
+// ─────────────────────────────────────────────────────────────
+export interface QuickActionDef {
+  key: string;
+  label: string;
+  href: string;
+  permission: string;
+  wizard?: boolean;
+}
+
+// `wizard: true` actions are handled in-page (e.g. open a modal) rather than
+// by navigation; the dashboard passes a handler for those.
+const QUICK_ACTIONS: QuickActionDef[] = [
+  { key: 'start-audit', label: 'Start audit', href: '/audit/engagements', permission: 'engagement:create', wizard: true },
+  { key: 'new-plan', label: 'Audit plans', href: '/audit/plans', permission: 'plan:create' },
+  { key: 'raise-finding', label: 'Findings', href: '/audit/findings', permission: 'finding:create' },
+  { key: 'new-risk', label: 'Register risk', href: '/risk', permission: 'risk:create' },
+  { key: 'review-approvals', label: 'Review approvals', href: '/workflow/approvals', permission: 'approval:read' },
+  { key: 'new-request', label: 'Raise request', href: '/requests', permission: 'request:create' },
+  { key: 'upload-document', label: 'Documents', href: '/documents', permission: 'document:write' },
+  { key: 'new-asset', label: 'Add asset', href: '/assets', permission: 'asset:create' },
+];
+
+/** Returns the quick actions the given user is permitted to see. */
+export const getQuickActions = (user: SessionUser | null): QuickActionDef[] =>
+  QUICK_ACTIONS.filter((action) => userHasPermission(user, action.permission));
 
 // ─────────────────────────────────────────────────────────────
 // React hook (wraps the session)
@@ -254,6 +301,7 @@ export const usePermissions = () => {
       // Computed visibility maps
       nav: getNavVisibility(session),
       dashboard: getDashboardVisibility(session),
+      quickActions: getQuickActions(session),
       analyticsScope: getAnalyticsScope(session),
 
       // Can this user create/edit audit content?

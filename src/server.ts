@@ -95,9 +95,9 @@ const buildApp = (): Application => {
     standardHeaders: true,
     legacyHeaders: false,
     handler: rateLimitHandler('Too many requests.'),
-    // Skip in development: local traffic is a single trusted client behind the
-    // Next BFF proxy (one IP), so the per-IP limit just throttles the developer.
-    skip: () => config.app.isDev,
+    // On by default everywhere; only skipped when a developer explicitly opts
+    // out (RATE_LIMIT_DISABLED=true) in a non-production env. Never skipped in prod.
+    skip: () => config.rateLimit.disabled,
   });
 
   // Brute-force guard for credential/OTP endpoints. skipSuccessfulRequests means
@@ -111,7 +111,7 @@ const buildApp = (): Application => {
     legacyHeaders: false,
     skipSuccessfulRequests: true,
     handler: rateLimitHandler('Too many failed attempts.'),
-    skip: () => config.app.isDev,
+    skip: () => config.rateLimit.disabled,
   });
 
   const apiPrefix = `/api/${config.app.apiVersion}`;
@@ -125,18 +125,22 @@ const buildApp = (): Application => {
     });
   });
 
-  const openApiDocument = buildOpenApiDocument();
-  app.get('/docs.json', (_req: Request, res: Response) => {
-    res.status(200).json(openApiDocument);
-  });
-  app.use(
-    '/docs',
-    swaggerUi.serve,
-    swaggerUi.setup(openApiDocument, {
-      customSiteTitle: `${config.app.name} — API Docs`,
-      swaggerOptions: { persistAuthorization: true },
-    }),
-  );
+  // API docs publish the full route/schema surface — do not expose them to
+  // anonymous callers in production. Served only outside production.
+  if (!config.app.isProd) {
+    const openApiDocument = buildOpenApiDocument();
+    app.get('/docs.json', (_req: Request, res: Response) => {
+      res.status(200).json(openApiDocument);
+    });
+    app.use(
+      '/docs',
+      swaggerUi.serve,
+      swaggerUi.setup(openApiDocument, {
+        customSiteTitle: `${config.app.name} — API Docs`,
+        swaggerOptions: { persistAuthorization: true },
+      }),
+    );
+  }
 
   // Strict limiter on credential/OTP surfaces (before the general limiter so the
   // tighter cap applies there); general limiter for everything else.
@@ -186,6 +190,13 @@ const startServer = async (): Promise<http.Server> => {
     apiPrefix: `/api/${config.app.apiVersion}`,
     docs: `${config.app.url}/docs`,
   });
+
+  if (config.rateLimit.disabled) {
+    logger.warn(
+      'Rate limiting is DISABLED (RATE_LIMIT_DISABLED=true in a non-production env). ' +
+        'Brute-force protection is off — never use this configuration in production.',
+    );
+  }
 
   registerAllJobs();
   await schedulerService.startAll();

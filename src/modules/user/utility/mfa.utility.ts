@@ -25,13 +25,16 @@ export const generateScopedToken = (
 ): string =>
   jwt.sign({ sub, email, scope }, config.jwt.secret, {
     expiresIn,
+    algorithm: 'HS256',
   } as jwt.SignOptions);
 
 export const verifyScopedToken = (
   token: string,
   expectedScope: MfaScope,
 ): { sub: string; email: string } => {
-  const payload = jwt.verify(token, config.jwt.secret) as ScopedTokenPayload & {
+  const payload = jwt.verify(token, config.jwt.secret, {
+    algorithms: ['HS256'],
+  }) as ScopedTokenPayload & {
     iat: number;
     exp: number;
   };

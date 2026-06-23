@@ -157,7 +157,15 @@ export default function FindingDetailPage(): JSX.Element {
             </div>
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Auditee</dt>
-              <dd className="mt-1 text-sm text-text-primary">{data.auditeeName}</dd>
+              <dd className="mt-1 text-sm text-text-primary">
+                {data.auditeeName}
+                {data.additionalAuditees && data.additionalAuditees.length > 0 && (
+                  <span className="text-text-secondary">
+                    {', '}
+                    {data.additionalAuditees.map((a) => a.name ?? a.id).join(', ')}
+                  </span>
+                )}
+              </dd>
             </div>
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Due date</dt>

@@ -9,7 +9,7 @@ import {
   parsePagination,
   buildPaginationMeta,
 } from '../../../../shared/types/api-response.type';
-import { IDocumentService } from '../interface/document.service.interface';
+import { IDocumentService, DocumentAccessActor } from '../interface/document.service.interface';
 import {
   UploadDocumentDto,
   UploadVersionDto,
@@ -73,13 +73,13 @@ export class DocumentService implements IDocumentService {
     }
   }
 
-  async getById(id: string, requesterId: string): Promise<DocumentResponseDto> {
+  async getById(id: string, actor: DocumentAccessActor): Promise<DocumentResponseDto> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },
       include: uploaderInclude,
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, requesterId);
+    await this._assertCanAccess(doc, actor);
     const url = await this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
     return mapDocumentToResponse(doc, url);
   }
@@ -93,12 +93,12 @@ export class DocumentService implements IDocumentService {
     return this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
   }
 
-  async delete(id: string, actorId: string): Promise<void> {
+  async delete(id: string, actor: DocumentAccessActor): Promise<void> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, actorId);
+    await this._assertCanAccess(doc, actor);
 
     await prisma.document.update({
       where: { id },
@@ -106,7 +106,7 @@ export class DocumentService implements IDocumentService {
     });
 
     await this._storageClient(doc.storage_provider).delete(doc.storage_path);
-    logger.info('Document deleted', { documentId: id, actorId });
+    logger.info('Document deleted', { documentId: id, actorId: actor.id });
   }
 
   async list(
@@ -165,6 +165,29 @@ export class DocumentService implements IDocumentService {
     );
   }
 
+  async listByEntityForActor(
+    entityType: string,
+    entityId: string,
+    actor: DocumentAccessActor,
+  ): Promise<DocumentResponseDto[]> {
+    // Authorize the actor against the owning entity before exposing anything.
+    // For engagement-linked entity types this resolves the owning engagement and
+    // requires team membership / oversight; non-engagement types fall back to the
+    // route's module permission (the caller already holds `document:read`).
+    const engagementId = await this._resolveEngagementId(entityType, entityId);
+    if (engagementId !== null) {
+      if (
+        !this._isOversight(actor) &&
+        !(await this._isEngagementMember(engagementId, actor.id))
+      ) {
+        // Empty rather than 403 so the caller can't distinguish "no docs" from
+        // "not allowed" for an engagement they aren't on.
+        return [];
+      }
+    }
+    return this.listByEntity(entityType, entityId);
+  }
+
   async listByEntityIds(
     entityType: string,
     entityIds: string[],
@@ -207,13 +230,13 @@ export class DocumentService implements IDocumentService {
    * (engagement evidence, attachments, signatures, …) are exempt, so every party
    * linked to an engagement keeps access to its shared documents.
    */
-  async assertCanUserAccess(documentId: string, requesterId: string): Promise<void> {
+  async assertCanUserAccess(documentId: string, actor: DocumentAccessActor): Promise<void> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
-      select: { entity_type: true, uploaded_by_id: true },
+      select: { entity_type: true, entity_id: true, uploaded_by_id: true },
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, requesterId);
+    await this._assertCanAccess(doc, actor);
   }
 
   async getFileById(id: string): Promise<ServedFileDto> {
@@ -238,7 +261,7 @@ export class DocumentService implements IDocumentService {
     };
   }
 
-  async serveFile(storedName: string, requesterId: string): Promise<ServedFileDto> {
+  async serveFile(storedName: string, actor: DocumentAccessActor): Promise<ServedFileDto> {
     // Resolve the storage key to an owning record. Current versions live on
     // the Document row; historical versions live on Document_Version. Either
     // must exist and not belong to a soft-deleted document.
@@ -250,6 +273,7 @@ export class DocumentService implements IDocumentService {
         file_size: true,
         storage_provider: true,
         entity_type: true,
+        entity_id: true,
         uploaded_by_id: true,
       },
     });
@@ -260,7 +284,7 @@ export class DocumentService implements IDocumentService {
     let storageProvider: string;
 
     if (doc) {
-      this._assertCanAccess(doc, requesterId);
+      await this._assertCanAccess(doc, actor);
       mimeType = doc.mime_type;
       originalName = doc.original_name;
       fileSize = doc.file_size;
@@ -277,11 +301,11 @@ export class DocumentService implements IDocumentService {
           file_size: true,
           storage_provider: true,
           // A historical version inherits its parent document's access rules.
-          document: { select: { entity_type: true, uploaded_by_id: true } },
+          document: { select: { entity_type: true, entity_id: true, uploaded_by_id: true } },
         },
       });
       if (!version) throw AppError.notFound('File');
-      this._assertCanAccess(version.document, requesterId);
+      await this._assertCanAccess(version.document, actor);
       mimeType = version.mime_type;
       originalName = version.original_name;
       fileSize = version.file_size;
@@ -306,7 +330,11 @@ export class DocumentService implements IDocumentService {
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, dto.uploadedById);
+    await this._assertCanAccess(doc, {
+      id: dto.uploadedById,
+      permissions: [],
+      isSuperAdmin: false,
+    });
 
     const newVersionNumber = doc.version_number + 1;
     let storedName: string | undefined;
@@ -396,13 +424,13 @@ export class DocumentService implements IDocumentService {
 
   async listVersions(
     documentId: string,
-    requesterId: string,
+    actor: DocumentAccessActor,
   ): Promise<DocumentVersionResponseDto[]> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, requesterId);
+    await this._assertCanAccess(doc, actor);
 
     const history = await prisma.document_Version.findMany({
       where: { document_id: documentId },
@@ -434,13 +462,13 @@ export class DocumentService implements IDocumentService {
   async getVersion(
     documentId: string,
     versionNumber: number,
-    requesterId: string,
+    actor: DocumentAccessActor,
   ): Promise<DocumentVersionResponseDto> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, requesterId);
+    await this._assertCanAccess(doc, actor);
 
     if (versionNumber === doc.version_number) {
       const currentVersion = await prisma.document_Version.findUnique({
@@ -476,7 +504,7 @@ export class DocumentService implements IDocumentService {
   async getVersionDownloadUrl(
     documentId: string,
     versionNumber: number,
-    requesterId: string,
+    actor: DocumentAccessActor,
   ): Promise<string> {
     const doc = await prisma.document.findUnique({
       where: { id: documentId, deleted_at: null },
@@ -485,11 +513,12 @@ export class DocumentService implements IDocumentService {
         storage_provider: true,
         version_number: true,
         entity_type: true,
+        entity_id: true,
         uploaded_by_id: true,
       },
     });
     if (!doc) throw AppError.notFound('Document');
-    this._assertCanAccess(doc, requesterId);
+    await this._assertCanAccess(doc, actor);
 
     if (versionNumber === doc.version_number) {
       return this._storageClient(doc.storage_provider).getUrl(doc.storage_path);
@@ -752,24 +781,134 @@ export class DocumentService implements IDocumentService {
   }
 
   /**
-   * Enforce per-person isolation for standalone (personal) documents.
+   * Object-level access control for document reads.
    *
-   * A personal document has no entity attachment (`entity_type === null`) and
-   * is private to whoever uploaded it. Entity-attached documents (audit
-   * evidence, working papers, reports, request attachments, signatures, …) are
-   * governed by their owning module's access rules and stay shared with the
-   * audit/workflow team, so they are exempt from this check.
+   * - Personal documents (`entity_type === null`) are private to their uploader.
+   * - The uploader and oversight roles (`engagement:read_all` / super admin) may
+   *   always read.
+   * - Entity-attached documents that resolve to an engagement (evidence, working
+   *   papers, reports, findings, checklists, follow-ups) are restricted to the
+   *   engagement's audit team (lead / manager / assignee). This mirrors the
+   *   central repository visibility rule (`repositoryEngagementScope`) so a
+   *   user can no longer read another engagement's confidential material just by
+   *   holding `document:read`.
+   * - Entity types that do not map to an engagement (assets, risk records,
+   *   workflow requests, signed approval copies, plans, …) keep the prior
+   *   behaviour: any holder of the route's module permission may read them. They
+   *   are surfaced and governed through their own module endpoints.
    *
-   * Throws `notFound` rather than `forbidden` so a non-owner can't even
-   * confirm that another user's personal document exists.
+   * Throws `notFound` rather than `forbidden` so a caller cannot confirm the
+   * existence of a document they are not allowed to see.
    */
-  private _assertCanAccess(
-    doc: { entity_type: string | null; uploaded_by_id: string },
-    requesterId: string,
-  ): void {
-    if (doc.entity_type === null && doc.uploaded_by_id !== requesterId) {
+  private async _assertCanAccess(
+    doc: { entity_type: string | null; entity_id?: string | null; uploaded_by_id: string },
+    actor: DocumentAccessActor,
+  ): Promise<void> {
+    if (doc.entity_type === null) {
+      if (doc.uploaded_by_id !== actor.id) throw AppError.notFound('Document');
+      return;
+    }
+
+    if (doc.uploaded_by_id === actor.id || this._isOversight(actor)) return;
+
+    const engagementId = doc.entity_id
+      ? await this._resolveEngagementId(doc.entity_type, doc.entity_id)
+      : null;
+
+    // Non-engagement entity types are not gated here (governed by module perms).
+    if (engagementId === null) return;
+
+    if (!(await this._isEngagementMember(engagementId, actor.id))) {
       throw AppError.notFound('Document');
     }
+  }
+
+  private _isOversight(actor: DocumentAccessActor): boolean {
+    return actor.isSuperAdmin || actor.permissions.includes('engagement:read_all');
+  }
+
+  /**
+   * Maps a document `entity_type`/`entity_id` to the engagement that owns it, or
+   * null when the type is not engagement-scoped. The mappings follow how each
+   * audit module attaches documents (see the *.service.ts upload calls).
+   */
+  private async _resolveEngagementId(
+    entityType: string,
+    entityId: string,
+  ): Promise<string | null> {
+    switch (entityType) {
+      // entity_id is already the engagement id
+      case 'audit_engagement':
+      case 'audit_working_paper_source':
+        return entityId;
+      case 'audit_working_paper':
+      case 'audit_working_paper_snapshot': {
+        const wp = await prisma.audit_Working_Paper.findUnique({
+          where: { id: entityId },
+          select: { engagement_id: true },
+        });
+        return wp?.engagement_id ?? null;
+      }
+      case 'audit_evidence': {
+        const ev = await prisma.audit_Evidence.findUnique({
+          where: { id: entityId },
+          select: { engagement_id: true },
+        });
+        return ev?.engagement_id ?? null;
+      }
+      case 'audit_finding':
+      case 'audit_finding_closure': {
+        const f = await prisma.audit_Finding.findUnique({
+          where: { id: entityId },
+          select: { engagement_id: true },
+        });
+        return f?.engagement_id ?? null;
+      }
+      case 'audit_checklist': {
+        const c = await prisma.audit_Checklist.findUnique({
+          where: { id: entityId },
+          select: { engagement_id: true },
+        });
+        return c?.engagement_id ?? null;
+      }
+      case 'audit_report': {
+        // entity_id may be the report id or the (unique) engagement id.
+        const r = await prisma.audit_Report.findFirst({
+          where: { OR: [{ id: entityId }, { engagement_id: entityId }] },
+          select: { engagement_id: true },
+        });
+        return r?.engagement_id ?? null;
+      }
+      case 'audit_follow_up':
+      case 'audit_follow_up_evidence': {
+        const fu = await prisma.audit_Follow_Up.findUnique({
+          where: { id: entityId },
+          select: { finding: { select: { engagement_id: true } } },
+        });
+        return fu?.finding?.engagement_id ?? null;
+      }
+      default:
+        return null;
+    }
+  }
+
+  private async _isEngagementMember(
+    engagementId: string,
+    userId: string,
+  ): Promise<boolean> {
+    const eng = await prisma.audit_Engagement.findFirst({
+      where: {
+        id: engagementId,
+        deleted_at: null,
+        OR: [
+          { lead_auditor_id: userId },
+          { audit_manager_id: userId },
+          { workflow_assignments: { some: { user_id: userId } } },
+        ],
+      },
+      select: { id: true },
+    });
+    return eng !== null;
   }
 
   private async _assertTemplateExists(id: string): Promise<void> {

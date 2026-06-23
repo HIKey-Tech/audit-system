@@ -38,7 +38,16 @@ export const repositoryEngagementScope = (
   };
 };
 
-/** A "pure auditee" is the auditee and nothing else — not team, not oversight. */
+/**
+ * Resolves how a viewer sees one engagement's internal artifacts.
+ *
+ * Secure by default: only the audit team (lead, manager, or an assigned member)
+ * and oversight (`engagement:read_all`) get full visibility. Everyone else — the
+ * named auditee, a finding co-responder, or any other `engagement:read` holder
+ * who is not on the team — is treated as a restricted `auditee` and cannot see
+ * working papers, checklists, or draft evidence. We never fall back to the more
+ * privileged `team` role for an unrecognised viewer.
+ */
 export const resolveViewerContext = async (
   engagementId: string,
   parties: EngagementParties,
@@ -49,11 +58,9 @@ export const resolveViewerContext = async (
     actor.id === parties.lead_auditor_id ||
     actor.id === parties.audit_manager_id ||
     (await isAssignee(engagementId, actor.id));
-  const isAuditee = actor.id === parties.auditee_id;
-  const pureAuditee = isAuditee && !isOversight && !isTeam;
 
-  const role: ViewerContext['role'] = isOversight ? 'oversight' : pureAuditee ? 'auditee' : 'team';
-  const full = !pureAuditee;
+  const role: ViewerContext['role'] = isOversight ? 'oversight' : isTeam ? 'team' : 'auditee';
+  const full = isOversight || isTeam;
   return {
     role,
     canViewWorkingPapers: full,

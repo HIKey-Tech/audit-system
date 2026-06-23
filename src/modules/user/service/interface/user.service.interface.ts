@@ -18,10 +18,22 @@ import {
 } from '../../dto/response/user.response.dto';
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 
+/**
+ * Actor context for privileged operations that can change a user's authority.
+ * Carries the actor's own permissions/super-admin flag so role grants can be
+ * checked against the least-privilege rule (you cannot grant authority you do
+ * not hold; only super admins may grant super admin).
+ */
+export interface RoleManagementActor {
+  id: string;
+  isSuperAdmin: boolean;
+  permissions: string[];
+}
+
 export interface IUserService {
   createUser(
     dto: CreateUserRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<UserResponseDto>;
 
   getUserById(id: string): Promise<UserResponseDto>;
@@ -71,10 +83,10 @@ export interface IUserService {
   assignRoles(
     userId: string,
     dto: AssignRoleRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<UserResponseDto>;
 
-  removeRole(userId: string, roleId: string, actorId: string): Promise<UserResponseDto>;
+  removeRole(userId: string, roleId: string, actor: RoleManagementActor): Promise<UserResponseDto>;
 
   changePassword(
     userId: string,
@@ -96,4 +108,5 @@ export interface AzureAdProfile {
   groups?: string[];
   groupsOverage?: boolean; // true when Azure omitted groups due to the >150/200 limit
   authMethods?: string[]; // `amr` claim — e.g. ["pwd","mfa"]
+  emailVerified?: boolean; // IdP asserted the email is verified (OIDC `email_verified`)
 }
