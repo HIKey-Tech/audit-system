@@ -1,6 +1,6 @@
 // src/modules/user/controller/user.controller.ts
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission, requireAnyPermission } from '../../../shared/middleware/auth.middleware';
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { IUserService } from '../service/interface/user.service.interface';
@@ -80,12 +80,12 @@ export class UserController {
 
     /**
      * @route  GET /users/permissions
-     * @desc   List all permissions
-     * @access Private — permission:read
+     * @desc   List all permissions (reference data for the role-management UI)
+     * @access Private — permission:read OR role:read
      */
     this.router.get(
       '/permissions',
-      requirePermission('permission:read'),
+      requireAnyPermission('permission:read', 'role:read'),
       this._listPermissions.bind(this),
     );
 

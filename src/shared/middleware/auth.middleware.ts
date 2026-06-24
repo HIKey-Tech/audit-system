@@ -197,3 +197,28 @@ export const requirePermission = (...requiredPermissions: string[]) =>
     next();
   };
 
+/**
+ * Passes when the user holds AT LEAST ONE of the listed permissions (super admin
+ * always passes). Use for reference-data endpoints reachable from more than one
+ * screen — e.g. the permission catalogue, viewed both by permission admins and
+ * by role managers.
+ */
+export const requireAnyPermission = (...anyOf: string[]) =>
+  (req: Request, _res: Response, next: NextFunction): void => {
+    if (!req.user) {
+      return next(AppError.unauthorized());
+    }
+
+    if (req.user.isSuperAdmin) {
+      return next();
+    }
+
+    const hasAny = anyOf.some((perm) => req.user!.permissions.includes(perm));
+
+    if (!hasAny) {
+      return next(AppError.forbidden('Insufficient permissions'));
+    }
+
+    next();
+  };
+

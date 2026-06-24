@@ -23,11 +23,19 @@ const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 // not inspect file contents; deep magic-byte validation and malware scanning
 // remain recommended defence-in-depth for ingested third-party evidence.
 const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+  // Documents
   '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
-  '.csv', '.txt', '.png', '.jpg', '.jpeg', '.gif', '.webp', '.zip',
+  '.rtf', '.odt', '.ods', '.odp', '.csv', '.txt', '.xml', '.json',
+  // Images
+  '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.heic', '.heif',
+  // Email
+  '.msg', '.eml',
+  // Archives
+  '.zip', '.7z', '.rar',
 ]);
 
 const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+  // Documents
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -35,15 +43,36 @@ const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-powerpoint',
   'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+  'application/rtf',
+  'text/rtf',
+  'application/vnd.oasis.opendocument.text',
+  'application/vnd.oasis.opendocument.spreadsheet',
+  'application/vnd.oasis.opendocument.presentation',
   'text/csv',
   'text/plain',
+  'application/xml',
+  'text/xml',
+  'application/json',
+  // Images
   'image/png',
   'image/jpeg',
   'image/gif',
   'image/webp',
+  'image/bmp',
+  'image/tiff',
+  'image/heic',
+  'image/heif',
+  // Email
+  'application/vnd.ms-outlook',
+  'message/rfc822',
+  // Archives
   'application/zip',
   'application/x-zip-compressed',
-  // Some clients send a generic type; the extension gate still constrains it.
+  'application/x-7z-compressed',
+  'application/vnd.rar',
+  'application/x-rar-compressed',
+  // Many clients send a generic type for the formats above; the extension gate
+  // still constrains it to the allowlist (HTML/SVG/scripts/executables blocked).
   'application/octet-stream',
 ]);
 
