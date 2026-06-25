@@ -16,8 +16,8 @@ import { riskApi } from '@/lib/api/risk';
 import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
 
 const Schema = z.object({
-  title: z.string().min(2).max(300),
-  description: z.string().max(2000).optional().or(z.literal('')),
+  title: z.string().min(2).max(200),
+  description: z.string().trim().min(1, 'Description required').max(5000),
   categoryId: z.string().min(1, 'Category required'),
   ownerId: z.string().min(1, 'Owner required'),
   likelihood: z.coerce.number().int().min(1).max(5),
@@ -77,7 +77,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
     mutationFn: (v: FormValues) =>
       riskApi.create({
         title: v.title,
-        description: v.description || undefined,
+        description: v.description,
         categoryId: v.categoryId,
         ownerId: v.ownerId,
         likelihood: v.likelihood,
@@ -131,7 +131,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
         <FormField label="Title" required error={errors.title?.message}>
           <Input error={errors.title?.message} {...register('title')} />
         </FormField>
-        <FormField label="Description" error={errors.description?.message}>
+        <FormField label="Description" required error={errors.description?.message}>
           <Textarea rows={3} {...register('description')} />
         </FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
