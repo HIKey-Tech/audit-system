@@ -40,7 +40,7 @@ export interface RiskMonitoringSummary {
 
 export const riskApi = {
   // categories
-  listCategories: () => api.get<RiskCategory[]>('/risk/categories'),
+  listCategories: (q?: { isActive?: boolean }) => api.get<RiskCategory[]>('/risk/categories', q),
   createCategory: (dto: CreateRiskCategoryDto) =>
     api.post<RiskCategory>('/risk/categories', dto),
   updateCategory: (id: string, dto: Partial<CreateRiskCategoryDto>) =>
@@ -75,3 +75,4 @@ export const riskApi = {
   getAttentionRequired: () => api.get<Risk[]>('/risk/monitoring/attention-required'),
   getSummary: () => api.get<RiskMonitoringSummary>('/risk/monitoring/summary'),
 };
+

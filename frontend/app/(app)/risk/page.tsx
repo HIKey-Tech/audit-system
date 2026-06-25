@@ -28,7 +28,8 @@ const TABS: TabItem[] = [
 
 export default function RiskPage(): JSX.Element {
   const router = useRouter();
-  const { canManageAuditProgramme: canWrite } = usePermissions();
+  const { hasPermission } = usePermissions();
+  const canWrite = hasPermission('risk:create');
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get('tab');
   const initialTab: 'register' | 'monitoring' = tabParam === 'monitoring' ? 'monitoring' : 'register';
@@ -84,7 +85,7 @@ const RegisterTab = ({
 
   const categories = useQuery({
     queryKey: ['risk', 'categories'],
-    queryFn: () => riskApi.listCategories(),
+    queryFn: () => riskApi.listCategories({ isActive: true }),
   });
 
   const query = useQuery({
@@ -368,3 +369,4 @@ const MonitoringTab = (): JSX.Element => {
     </div>
   );
 };
+

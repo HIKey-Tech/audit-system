@@ -35,7 +35,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
   const qc = useQueryClient();
   const categories = useQuery({
     queryKey: ['risk', 'categories'],
-    queryFn: () => riskApi.listCategories(),
+    queryFn: () => riskApi.listCategories({ isActive: true }),
     enabled: open,
   });
 
@@ -94,6 +94,16 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
 
   const onSubmit = handleSubmit((v) => create.mutate(v));
 
+  const activeCategories = categories.data ?? [];
+  const categoryHelp = categories.isLoading
+    ? 'Loading categories...'
+    : categories.isError
+      ? 'Could not load risk categories. Check that your role has risk category read access.'
+      : activeCategories.length === 0
+        ? 'No active risk categories exist yet. Create a category before registering a risk.'
+        : undefined;
+  const categoryDisabled = categories.isLoading || categories.isError || activeCategories.length === 0;
+
   const ownerId = watch('ownerId');
   const likelihood = Number(watch('likelihood') || 0);
   const impact = Number(watch('impact') || 0);
@@ -111,7 +121,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} isLoading={create.isPending} size="sm">
+          <Button onClick={onSubmit} isLoading={create.isPending} disabled={categoryDisabled} size="sm">
             Add to register
           </Button>
         </div>
@@ -126,14 +136,19 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
         </FormField>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Category" required error={errors.categoryId?.message}>
-            <Select error={errors.categoryId?.message} {...register('categoryId')}>
-              <option value="">Select…</option>
-              {categories.data?.filter((c) => c.isActive).map((c) => (
+            <Select error={errors.categoryId?.message} disabled={categoryDisabled} {...register('categoryId')}>
+              <option value="">{categories.isLoading ? 'Loading categories...' : 'Select...'}</option>
+              {activeCategories.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name}
                 </option>
               ))}
             </Select>
+            {categoryHelp && (
+              <p className={categories.isError || activeCategories.length === 0 ? 'mt-1 text-xs text-danger' : 'mt-1 text-xs text-text-muted'}>
+                {categoryHelp}
+              </p>
+            )}
           </FormField>
           <FormField label="Status" required error={errors.status?.message}>
             <Select error={errors.status?.message} {...register('status')}>
@@ -182,3 +197,4 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
     </SlideOver>
   );
 };
+
