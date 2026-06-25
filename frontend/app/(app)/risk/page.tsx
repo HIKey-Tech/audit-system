@@ -20,11 +20,15 @@ import { formatDate, formatNumber } from '@/lib/utils/format';
 import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
 import type { Risk } from '@/lib/types/domain';
 import { NewRiskSlideOver } from '@/components/risk/NewRiskSlideOver';
+import { RiskCategoriesTab } from '@/components/risk/RiskCategoriesTab';
 
 const TABS: TabItem[] = [
   { key: 'register', label: 'Register' },
   { key: 'monitoring', label: 'Monitoring' },
+  { key: 'categories', label: 'Categories' },
 ];
+
+type RiskTab = 'register' | 'monitoring' | 'categories';
 
 export default function RiskPage(): JSX.Element {
   const router = useRouter();
@@ -32,10 +36,10 @@ export default function RiskPage(): JSX.Element {
   const canWrite = hasPermission('risk:create');
   const searchParams = useSearchParams();
   const tabParam = searchParams?.get('tab');
-  const initialTab: 'register' | 'monitoring' = tabParam === 'monitoring' ? 'monitoring' : 'register';
-  const [tab, setTab] = useState<'register' | 'monitoring'>(initialTab);
+  const initialTab: RiskTab = tabParam === 'monitoring' || tabParam === 'categories' ? tabParam : 'register';
+  const [tab, setTab] = useState<RiskTab>(initialTab);
 
-  const changeTab = (k: 'register' | 'monitoring'): void => {
+  const changeTab = (k: RiskTab): void => {
     setTab(k);
     router.replace(`?tab=${k}`, { scroll: false });
   };
@@ -56,10 +60,16 @@ export default function RiskPage(): JSX.Element {
       />
 
       <Card padded className="mb-4">
-        <Tabs tabs={TABS} active={tab} onChange={(k) => changeTab(k as 'register' | 'monitoring')} />
+        <Tabs tabs={TABS} active={tab} onChange={(k) => changeTab(k as RiskTab)} />
       </Card>
 
-      {tab === 'register' ? <RegisterTab onOpenNew={() => setOpen(true)} canWrite={canWrite} /> : <MonitoringTab />}
+      {tab === 'register' ? (
+        <RegisterTab onOpenNew={() => setOpen(true)} canWrite={canWrite} />
+      ) : tab === 'monitoring' ? (
+        <MonitoringTab />
+      ) : (
+        <RiskCategoriesTab />
+      )}
 
       <NewRiskSlideOver open={open} onClose={() => setOpen(false)} />
     </div>

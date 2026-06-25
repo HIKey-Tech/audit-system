@@ -32,6 +32,12 @@ export interface CreateRiskCategoryDto {
   description?: string;
 }
 
+export interface UpdateRiskCategoryDto {
+  name?: string;
+  description?: string;
+  isActive?: boolean;
+}
+
 export interface RiskMonitoringSummary {
   total: number;
   byScoreBand: { critical: number; high: number; medium: number; low: number };
@@ -43,7 +49,7 @@ export const riskApi = {
   listCategories: (q?: { isActive?: boolean }) => api.get<RiskCategory[]>('/risk/categories', q),
   createCategory: (dto: CreateRiskCategoryDto) =>
     api.post<RiskCategory>('/risk/categories', dto),
-  updateCategory: (id: string, dto: Partial<CreateRiskCategoryDto>) =>
+  updateCategory: (id: string, dto: UpdateRiskCategoryDto) =>
     api.put<RiskCategory>(`/risk/categories/${id}`, dto),
   deactivateCategory: (id: string) => api.delete(`/risk/categories/${id}`),
 

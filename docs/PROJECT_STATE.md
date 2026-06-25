@@ -2,7 +2,9 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-06-22 (rev 31)
+> Last updated: 2026-06-25 (rev 32)
+
+> **rev 32 changelog:** Added Risk Register category management UI. The /risk?tab=categories frontend tab lists active/inactive risk categories, supports create/edit/reactivate/deactivate through the existing /api/v1/risk/categories API, and gates actions on isk_category:write / isk_category:delete. Frontend production build passes.
 
 > **rev 31 changelog:** Azure AD (Entra) group→role integration — new `integration/` module (backend). Identity/membership stays Azure's authority; roles→permissions stay IAMS's; bridged by an admin-managed `directory_group_mappings` table (Azure security-group Object ID → IAMS role). New `user_roles.source` column (`'manual'` | `'azure_ad'`) makes AD-driven and manual role assignments coexist — reconciliation only ever touches `azure_ad` rows, so local accounts and manual grants are never disturbed. Pure `reconcileAdRoles()` util (unit-tested, the repo's first Jest test + a minimal `jest.config.js`). `GraphDirectoryClient` (real + stub + factory, read-only) calls Microsoft Graph app-only. `DirectoryMappingService` owns mapping CRUD + `applyAdRolesToUser` + `runFullDirectorySync`. SSO login (`syncFromAzureAd`) now applies group→role from the token's `groups` claim with a Graph overage fallback; **unmapped SSO users now get zero roles (was auto-`viewer`)**. New nightly job `BG:INTEGRATION:DIRECTORY:SYNC:DAILY` reconciles + deprovisions (disabled-in-Azure → deactivated), gated by `DIRECTORY_SYNC_ENABLED`. Routes under `/api/v1/integration/directory/*` (`settings:read`/`settings:manage`). Migration `20260622145209_add_directory_group_mapping`. **Frontend:** Settings → **Directory** tab (`directoryApi` + `DirectoryMappingsTab` + `DirectoryMappingSlideOver`) lists mappings, create/edit/delete via slide-over (group Object ID, display name, role dropdown, active toggle), and a "Sync now" button; write actions gated on `settings:manage`. Backend build + reconciler test + frontend production build all pass. **SSO login is now reachable from the UI:** a "Sign in with Microsoft" button on `/login` drives a BFF flow (`/api/auth/sso` start → Entra → `/api/auth/callback` exchanges via backend and sets the httpOnly cookies) — so `AZURE_AD_REDIRECT_URI` must point at the frontend `/api/auth/callback`. **MFA:** SSO already bypasses IAMS 2FA (Entra owns it); `SSO_REQUIRE_IDP_MFA=true` additionally rejects SSO logins whose token `amr` lacks `mfa`. **Baseline access:** `SSO_DEFAULT_ROLE` (default `viewer`) grants every SSO user a read-only role on top of any group-mapped roles, so all employees get baseline access.
 
@@ -664,7 +666,7 @@ Snapshot queried on 2026-05-01 after the full smoke test:
 
 ### 4.4 Frontend
 
-- Next.js frontend is scaffolded and active for dashboard, audit, risk, workflow, documents, logs, notifications, users, and settings workflows. Asset registry screens are not built yet. Integration and predictive pages remain placeholders.
+- Next.js frontend is scaffolded and active for dashboard, audit, risk (including category management), workflow, documents, logs, notifications, users, and settings workflows. Asset registry screens are not built yet. Integration and predictive pages remain placeholders.
 
 ---
 
