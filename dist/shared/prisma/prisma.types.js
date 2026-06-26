@@ -47,6 +47,12 @@ exports.riskRegisterWithDetailsInclude = client_1.Prisma.validator()({
     owner: {
         select: riskUserBriefSelect,
     },
+    universe: {
+        select: {
+            id: true,
+            name: true,
+        },
+    },
     assessments: {
         include: exports.riskAssessmentWithAssessorInclude,
         orderBy: { assessed_at: 'desc' },

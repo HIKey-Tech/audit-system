@@ -6,6 +6,7 @@ const app_error_1 = require("../../../../../shared/errors/app.error");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const repository_response_dto_1 = require("../../dto/response/repository.response.dto");
 class RepositoryService {
     documentService;
@@ -18,11 +19,18 @@ class RepositoryService {
         const entityTypes = query.category && query.category !== 'all'
             ? repository_response_dto_1.REPOSITORY_CATEGORY_ENTITY_TYPES[query.category]
             : repository_response_dto_1.ALL_REPOSITORY_ENTITY_TYPES;
+        // Scope to the engagements this actor may see. `null` = oversight (read_all),
+        // unrestricted. An empty set means they are on no engagements → nothing to show.
+        const visible = await this._visibleEngagementIds(actor);
+        if (visible !== null && visible.size === 0) {
+            return { items: [], meta: (0, api_response_type_1.buildPaginationMeta)(0, page, pageSize) };
+        }
         const where = {
             deleted_at: null,
             module: 'audit',
             entity_type: { in: entityTypes },
             ...(query.search && { original_name: { contains: query.search } }),
+            ...(visible !== null && { OR: await this._engagementScopedDocFilter([...visible]) }),
         };
         const [total, docs] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.document.count({ where }),
@@ -67,13 +75,56 @@ class RepositoryService {
         // Scope to audit-module documents so engagement:read cannot pull arbitrary files.
         const doc = await prisma_client_1.prisma.document.findFirst({
             where: { id: documentId, module: 'audit', deleted_at: null },
-            select: { id: true },
+            select: { id: true, entity_type: true, entity_id: true },
         });
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
+        // A non-oversight actor may only download files from engagements they can see.
+        // `notFound` (not `forbidden`) so we don't reveal that the document exists.
+        const visible = await this._visibleEngagementIds(actor);
+        if (visible !== null) {
+            const engId = (await this._resolveEngagements([doc])).get(doc.id)?.id;
+            if (!engId || !visible.has(engId))
+                throw app_error_1.AppError.notFound('Document');
+        }
         const file = await this.documentService.getFileById(documentId);
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.repository.download', module: 'audit', entityType: 'document', entityId: documentId });
         return file;
+    }
+    /**
+     * The set of engagement ids whose documents the actor may see, or `null` for
+     * unrestricted (oversight / `engagement:read_all`) access. An empty set means
+     * the actor is party to no engagements.
+     */
+    async _visibleEngagementIds(actor) {
+        const scope = (0, engagement_visibility_util_1.repositoryEngagementScope)(actor);
+        if (!scope)
+            return null;
+        const engagements = await prisma_client_1.prisma.audit_Engagement.findMany({
+            where: { deleted_at: null, ...scope },
+            select: { id: true },
+        });
+        return new Set(engagements.map((e) => e.id));
+    }
+    /**
+     * Build the document-level OR filter that restricts results to the given
+     * engagements. Documents reference engagements either directly (evidence and
+     * working-paper-source store the engagement id) or via a child entity
+     * (reports, snapshots, follow-up evidence), so we resolve those child ids
+     * first. Mirrors the forward mapping in {@link _resolveEngagements}.
+     */
+    async _engagementScopedDocFilter(engIds) {
+        const [reports, papers, findings] = await Promise.all([
+            prisma_client_1.prisma.audit_Report.findMany({ where: { engagement_id: { in: engIds } }, select: { id: true } }),
+            prisma_client_1.prisma.audit_Working_Paper.findMany({ where: { engagement_id: { in: engIds } }, select: { id: true } }),
+            prisma_client_1.prisma.audit_Finding.findMany({ where: { engagement_id: { in: engIds } }, select: { id: true } }),
+        ]);
+        return [
+            { entity_type: { in: ['audit_engagement', 'audit_working_paper_source'] }, entity_id: { in: engIds } },
+            { entity_type: 'audit_report', entity_id: { in: reports.map((r) => r.id) } },
+            { entity_type: 'audit_working_paper_snapshot', entity_id: { in: papers.map((p) => p.id) } },
+            { entity_type: 'audit_follow_up_evidence', entity_id: { in: findings.map((f) => f.id) } },
+        ];
     }
     /**
      * Resolve the owning engagement for a page of documents. Evidence and

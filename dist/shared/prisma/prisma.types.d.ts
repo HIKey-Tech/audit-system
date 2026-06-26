@@ -49,6 +49,12 @@ export declare const riskRegisterWithDetailsInclude: {
             job_title: true;
         };
     };
+    universe: {
+        select: {
+            id: true;
+            name: true;
+        };
+    };
     assessments: {
         include: {
             assessed_by: {

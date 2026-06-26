@@ -19,6 +19,8 @@ export declare class FindingService implements IFindingService {
     }>;
     listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]>;
     private _buildFindingWhere;
+    /** Matches findings where the given user is the primary auditee or a co-responder. */
+    private _auditeeMatch;
     private _assertEngagementAllowsFindings;
     private _assertWorkingPaperInEngagement;
     private _assertChecklistInEngagement;

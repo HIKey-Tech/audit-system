@@ -33,7 +33,7 @@ var __importStar = (this && this.__importStar) || (function () {
     };
 })();
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.assertCanViewInternalArtifacts = exports.resolveViewerContext = void 0;
+exports.assertCanViewInternalArtifacts = exports.resolveViewerContext = exports.repositoryEngagementScope = void 0;
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const isAssignee = async (engagementId, userId) => {
     const a = await prisma_client_1.prisma.workflow_Assignment.findFirst({
@@ -42,16 +42,43 @@ const isAssignee = async (engagementId, userId) => {
     });
     return a !== null;
 };
-/** A "pure auditee" is the auditee and nothing else — not team, not oversight. */
+/**
+ * Engagements whose documents an actor may see in the central audit repository.
+ * The repository holds internal auditor material only — working papers,
+ * supporting documents, engagement and follow-up evidence, reports — so a
+ * *pure auditee* gets nothing here (the auditee branch is deliberately omitted),
+ * mirroring `assertCanViewInternalArtifacts`. Oversight (`engagement:read_all`)
+ * is unrestricted. Returns `undefined` for unrestricted access.
+ */
+const repositoryEngagementScope = (actor) => {
+    if (actor.permissions.includes('engagement:read_all'))
+        return undefined;
+    return {
+        OR: [
+            { lead_auditor_id: actor.id },
+            { audit_manager_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+        ],
+    };
+};
+exports.repositoryEngagementScope = repositoryEngagementScope;
+/**
+ * Resolves how a viewer sees one engagement's internal artifacts.
+ *
+ * Secure by default: only the audit team (lead, manager, or an assigned member)
+ * and oversight (`engagement:read_all`) get full visibility. Everyone else — the
+ * named auditee, a finding co-responder, or any other `engagement:read` holder
+ * who is not on the team — is treated as a restricted `auditee` and cannot see
+ * working papers, checklists, or draft evidence. We never fall back to the more
+ * privileged `team` role for an unrecognised viewer.
+ */
 const resolveViewerContext = async (engagementId, parties, actor) => {
     const isOversight = actor.permissions.includes('engagement:read_all');
     const isTeam = actor.id === parties.lead_auditor_id ||
         actor.id === parties.audit_manager_id ||
         (await isAssignee(engagementId, actor.id));
-    const isAuditee = actor.id === parties.auditee_id;
-    const pureAuditee = isAuditee && !isOversight && !isTeam;
-    const role = isOversight ? 'oversight' : pureAuditee ? 'auditee' : 'team';
-    const full = !pureAuditee;
+    const role = isOversight ? 'oversight' : isTeam ? 'team' : 'auditee';
+    const full = isOversight || isTeam;
     return {
         role,
         canViewWorkingPapers: full,

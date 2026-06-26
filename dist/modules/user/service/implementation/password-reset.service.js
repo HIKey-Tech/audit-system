@@ -8,6 +8,7 @@ const logger_util_1 = require("../../../../shared/utils/logger.util");
 const app_config_1 = require("../../../../shared/config/app.config");
 const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
 const token_utility_1 = require("../../utility/token.utility");
+const session_guard_1 = require("../../../../shared/security/session-guard");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     switch (char) {
         case '&':
@@ -40,17 +41,21 @@ class PasswordResetService {
                 is_active: true,
             },
         });
+        // Account enumeration guard: never reveal whether the address exists, is
+        // active, or is SSO-only. For any non-eligible account we log the real
+        // reason server-side and return silently; the controller always responds
+        // with the same generic "if an account exists, a link was sent" message.
         if (!user) {
             logger_util_1.logger.info('Password reset requested for non-eligible account', { email });
-            throw app_error_1.AppError.notFound('Account');
+            return;
         }
         if (!user.is_active) {
             logger_util_1.logger.info('Password reset requested for inactive account', { userId: user.id });
-            throw app_error_1.AppError.forbidden('This account is inactive. Contact an administrator.');
+            return;
         }
         if (!user.password_hash) {
             logger_util_1.logger.info('Password reset requested for SSO-only account', { userId: user.id });
-            throw app_error_1.AppError.badRequest('This account uses single sign-on. Reset your password through your identity provider.');
+            return;
         }
         // Invalidate any prior unused tokens so only the newest link works.
         await prisma_client_1.prisma.password_Reset_Token.updateMany({
@@ -99,6 +104,8 @@ class PasswordResetService {
                 data: { revoked_at: new Date() },
             });
         });
+        // Invalidate any outstanding access tokens too.
+        await (0, session_guard_1.revokeUserSessions)(stored.user_id);
         logger_util_1.logger.info('Password reset completed', { userId: stored.user_id });
     }
     async _sendResetEmail(user, rawToken) {

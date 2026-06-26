@@ -103,7 +103,7 @@ class AuthController {
     async _forgotPassword(req, res, next) {
         try {
             await this.passwordResetService.requestReset(req.body.email, req.ip);
-            res.status(200).json((0, api_response_type_1.buildResponse)(null, 'A password reset link has been sent to that email address.'));
+            res.status(200).json((0, api_response_type_1.buildResponse)(null, 'If an account exists for that email address, a password reset link has been sent.'));
         }
         catch (err) {
             next(err);

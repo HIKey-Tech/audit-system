@@ -44,10 +44,13 @@ const otplib_1 = require("otplib");
 const app_config_1 = require("../../../shared/config/app.config");
 const generateScopedToken = (sub, email, scope, expiresIn) => jwt.sign({ sub, email, scope }, app_config_1.config.jwt.secret, {
     expiresIn,
+    algorithm: 'HS256',
 });
 exports.generateScopedToken = generateScopedToken;
 const verifyScopedToken = (token, expectedScope) => {
-    const payload = jwt.verify(token, app_config_1.config.jwt.secret);
+    const payload = jwt.verify(token, app_config_1.config.jwt.secret, {
+        algorithms: ['HS256'],
+    });
     if (payload.scope !== expectedScope) {
         throw new Error(`Invalid token scope: expected ${expectedScope}`);
     }

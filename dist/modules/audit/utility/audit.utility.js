@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.assertHasPermission = void 0;
+exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.isFindingAuditee = exports.isFindingOversight = exports.assertHasPermission = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const audit_enum_1 = require("../domain/enum/audit.enum");
 const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
@@ -9,6 +9,24 @@ const assertHasPermission = (permissions, required, message = 'Insufficient perm
     }
 };
 exports.assertHasPermission = assertHasPermission;
+/**
+ * How a viewer is scoped when reading findings. Mirrors the dashboard's
+ * isRestrictedAuditee/isRestrictedAuditor semantics so finding visibility and
+ * dashboard metrics agree.
+ *
+ * - oversight (`finding:read_all`)         → every finding
+ * - auditee (this helper)                  → only findings assigned to them
+ * - field auditor (neither of the above)   → engagements they lead / are assigned to
+ *
+ * An auditee is identified by `followup:respond` (auditee-exclusive) OR a lack
+ * of engagement visibility — NOT by the absence of `engagement:read` alone,
+ * because the seeded `auditee` role does hold `engagement:read`.
+ */
+const isFindingOversight = (permissions) => permissions.includes('finding:read_all');
+exports.isFindingOversight = isFindingOversight;
+const isFindingAuditee = (permissions) => !permissions.includes('finding:read_all') &&
+    (permissions.includes('followup:respond') || !permissions.includes('engagement:read'));
+exports.isFindingAuditee = isFindingAuditee;
 const assertTransition = (current, next, transitions, entityName) => {
     if (!transitions[current]?.includes(next)) {
         throw app_error_1.AppError.badRequest(`Invalid ${entityName} status transition from '${current}' to '${next}'`);

@@ -3,10 +3,11 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.requirePermission = exports.requireEnrollmentContext = exports.requireMfaToken = exports.authenticate = void 0;
+exports.requireAnyPermission = exports.requirePermission = exports.requireEnrollmentContext = exports.requireMfaToken = exports.authenticate = void 0;
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const app_config_1 = require("../config/app.config");
 const app_error_1 = require("../errors/app.error");
+const session_guard_1 = require("../security/session-guard");
 const authenticate = async (req, _res, next) => {
     try {
         const authHeader = req.headers.authorization;
@@ -16,7 +17,9 @@ const authenticate = async (req, _res, next) => {
         const token = authHeader.slice(7);
         let payload;
         try {
-            payload = jsonwebtoken_1.default.verify(token, app_config_1.config.jwt.secret);
+            payload = jsonwebtoken_1.default.verify(token, app_config_1.config.jwt.secret, {
+                algorithms: ['HS256'],
+            });
         }
         catch (err) {
             if (err instanceof jsonwebtoken_1.default.TokenExpiredError) {
@@ -28,6 +31,10 @@ const authenticate = async (req, _res, next) => {
         if (payload.scope) {
             throw app_error_1.AppError.unauthorized('Invalid token');
         }
+        // Enforce server-side revocation: a deactivated/deleted user, or a token
+        // issued before a logout-all / password change / role change, is rejected
+        // even though the JWT itself is still cryptographically valid.
+        await (0, session_guard_1.assertSessionValid)(payload.sub, payload.iat);
         req.user = {
             id: payload.sub,
             email: payload.email,
@@ -57,7 +64,9 @@ const requireMfaToken = (scope) => (req, _res, next) => {
         const token = authHeader.slice(7);
         let payload;
         try {
-            payload = jsonwebtoken_1.default.verify(token, app_config_1.config.jwt.secret);
+            payload = jsonwebtoken_1.default.verify(token, app_config_1.config.jwt.secret, {
+                algorithms: ['HS256'],
+            });
         }
         catch (err) {
             if (err instanceof jsonwebtoken_1.default.TokenExpiredError) {
@@ -90,7 +99,9 @@ const requireEnrollmentContext = (req, _res, next) => {
         const token = authHeader.slice(7);
         let payload;
         try {
-            payload = jsonwebtoken_1.default.verify(token, app_config_1.config.jwt.secret);
+            payload = jsonwebtoken_1.default.verify(token, app_config_1.config.jwt.secret, {
+                algorithms: ['HS256'],
+            });
         }
         catch (err) {
             if (err instanceof jsonwebtoken_1.default.TokenExpiredError) {
@@ -124,4 +135,24 @@ const requirePermission = (...requiredPermissions) => (req, _res, next) => {
     next();
 };
 exports.requirePermission = requirePermission;
+/**
+ * Passes when the user holds AT LEAST ONE of the listed permissions (super admin
+ * always passes). Use for reference-data endpoints reachable from more than one
+ * screen — e.g. the permission catalogue, viewed both by permission admins and
+ * by role managers.
+ */
+const requireAnyPermission = (...anyOf) => (req, _res, next) => {
+    if (!req.user) {
+        return next(app_error_1.AppError.unauthorized());
+    }
+    if (req.user.isSuperAdmin) {
+        return next();
+    }
+    const hasAny = anyOf.some((perm) => req.user.permissions.includes(perm));
+    if (!hasAny) {
+        return next(app_error_1.AppError.forbidden('Insufficient permissions'));
+    }
+    next();
+};
+exports.requireAnyPermission = requireAnyPermission;
 //# sourceMappingURL=auth.middleware.js.map

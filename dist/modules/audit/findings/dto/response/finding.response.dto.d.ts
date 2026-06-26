@@ -19,6 +19,11 @@ export interface FindingResponseDto {
     recommendation: string;
     auditeeId: string;
     auditeeName?: string;
+    /** Co-responders beyond the primary auditee (empty when the include is absent). */
+    additionalAuditees?: Array<{
+        id: string;
+        name?: string;
+    }>;
     status: string;
     dueDate: string;
     createdById: string;
@@ -61,6 +66,10 @@ export declare const mapFindingToResponse: (finding: {
     recommendation: string;
     auditee_id: string;
     auditee?: Parameters<typeof formatUserName>[0];
+    responders?: Array<{
+        user_id: string;
+        user?: Parameters<typeof formatUserName>[0];
+    }>;
     status: string;
     due_date: Date;
     created_by_id: string;

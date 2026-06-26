@@ -13,6 +13,7 @@ const graph_client_1 = require("../../../integration/service/client/graph.client
 const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
+const session_guard_1 = require("../../../../shared/security/session-guard");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     switch (char) {
         case '&':
@@ -34,7 +35,8 @@ class UserService {
     constructor(notificationQueue = notification_queue_service_1.notificationQueueService) {
         this.notificationQueue = notificationQueue;
     }
-    async createUser(dto, actorId) {
+    async createUser(dto, actor) {
+        const actorId = actor.id;
         const existing = await prisma_client_1.prisma.user.findUnique({
             where: { email: dto.email },
         });
@@ -47,6 +49,7 @@ class UserService {
         if (dto.roleIds?.length && assignedRoles.length !== dto.roleIds.length) {
             throw app_error_1.AppError.badRequest('One or more role IDs are invalid');
         }
+        await this._assertCanGrantRoles(dto.roleIds ?? [], actor);
         const initialPassword = dto.password ?? (0, token_utility_1.generateTemporaryPassword)();
         const password_hash = await (0, token_utility_1.hashPassword)(initialPassword);
         const user = await prisma_client_1.prisma.user.create({
@@ -318,6 +321,11 @@ class UserService {
             data: { is_active: isActive },
             include: prisma_types_1.userWithRolesInclude,
         });
+        // Reflect the change in the session guard: refresh the liveness snapshot and,
+        // on deactivation, invalidate the user's outstanding access tokens now.
+        await (0, session_guard_1.setUserActiveSnapshot)(id, isActive);
+        if (!isActive)
+            await (0, session_guard_1.revokeUserSessions)(id);
         logger_util_1.logger.info(isActive ? 'User activated' : 'User deactivated', {
             userId: id,
             actorId,
@@ -333,9 +341,13 @@ class UserService {
             where: { id },
             data: { deleted_at: new Date(), is_active: false },
         });
+        // Lock the deleted user out of any live session immediately.
+        await (0, session_guard_1.setUserActiveSnapshot)(id, false);
+        await (0, session_guard_1.revokeUserSessions)(id);
         logger_util_1.logger.info('User soft-deleted', { userId: id, actorId });
     }
-    async assignRoles(userId, dto, actorId) {
+    async assignRoles(userId, dto, actor) {
+        const actorId = actor.id;
         await this._assertUserExists(userId);
         // Verify all roles exist
         const roles = await prisma_client_1.prisma.role.findMany({
@@ -344,6 +356,7 @@ class UserService {
         if (roles.length !== dto.roleIds.length) {
             throw app_error_1.AppError.badRequest('One or more role IDs are invalid');
         }
+        await this._assertCanGrantRoles(dto.roleIds, actor);
         // Upsert each role assignment
         await prisma_client_1.prisma.$transaction(dto.roleIds.map((roleId) => prisma_client_1.prisma.user_Role.upsert({
             where: { user_id_role_id: { user_id: userId, role_id: roleId } },
@@ -360,14 +373,23 @@ class UserService {
         })));
         logger_util_1.logger.info('Roles assigned', { userId, roleIds: dto.roleIds, actorId });
         await this._syncUserSuperAdminFlag(userId);
+        // Force the next request to pick up the new authority: the current access
+        // token (with stale permissions) is rejected and silently refreshed.
+        await (0, session_guard_1.revokeUserSessions)(userId);
         return this.getUserById(userId);
     }
-    async removeRole(userId, roleId, actorId) {
+    async removeRole(userId, roleId, actor) {
+        const actorId = actor.id;
+        // Removing super_admin is itself a privileged action — only a super admin
+        // may do it (prevents a lesser admin from manipulating it).
+        await this._assertCanGrantRoles([roleId], actor);
         await prisma_client_1.prisma.user_Role.deleteMany({
             where: { user_id: userId, role_id: roleId },
         });
         logger_util_1.logger.info('Role removed from user', { userId, roleId, actorId });
         await this._syncUserSuperAdminFlag(userId);
+        // Revoke the stale-permission access token; the next refresh reflects the change.
+        await (0, session_guard_1.revokeUserSessions)(userId);
         return this.getUserById(userId);
     }
     async changePassword(userId, dto) {
@@ -389,16 +411,45 @@ class UserService {
             where: { id: userId },
             data: { password_hash: newHash },
         });
+        // A password change invalidates sessions opened with the old credential.
+        await prisma_client_1.prisma.refresh_Token.updateMany({
+            where: { user_id: userId, revoked_at: null },
+            data: { revoked_at: new Date() },
+        });
+        await (0, session_guard_1.revokeUserSessions)(userId);
         logger_util_1.logger.info('Password changed', { userId });
     }
     async syncFromAzureAd(azureOid, profile) {
-        const existing = await prisma_client_1.prisma.user.findFirst({
-            where: {
-                OR: [{ azure_oid: azureOid }, { email: profile.email }],
-                deleted_at: null,
-            },
+        // Resolve strictly by the immutable subject id first. Email is only used as
+        // a fallback to link a pre-existing local account, and never to silently
+        // take over an account already bound to a different identity.
+        let existing = await prisma_client_1.prisma.user.findFirst({
+            where: { azure_oid: azureOid, deleted_at: null },
             include: prisma_types_1.userWithRolesInclude,
         });
+        if (!existing) {
+            const byEmail = await prisma_client_1.prisma.user.findFirst({
+                where: { email: profile.email, deleted_at: null },
+                include: prisma_types_1.userWithRolesInclude,
+            });
+            if (byEmail) {
+                if (byEmail.azure_oid && byEmail.azure_oid !== azureOid) {
+                    // The email belongs to an account already linked to a different IdP
+                    // subject — refuse rather than hijack it.
+                    logger_util_1.logger.warn('SSO email collides with a different linked account', {
+                        userId: byEmail.id,
+                        attemptedOid: azureOid,
+                    });
+                    throw app_error_1.AppError.unauthorized('This account cannot be linked via single sign-on.');
+                }
+                if (!profile.emailVerified) {
+                    // Don't link a local account on the strength of an unverified email.
+                    logger_util_1.logger.warn('SSO link refused — unverified email', { email: profile.email });
+                    throw app_error_1.AppError.unauthorized('Your identity provider did not verify this email address.');
+                }
+                existing = byEmail;
+            }
+        }
         if (existing) {
             // Sync latest profile data from IdP
             const updated = await prisma_client_1.prisma.user.update({
@@ -461,6 +512,33 @@ class UserService {
         }
         catch (err) {
             logger_util_1.logger.error('Directory role apply failed during SSO login', { userId, err });
+        }
+    }
+    /**
+     * Least-privilege guard for granting/removing roles. A super admin may manage
+     * any role. Everyone else:
+     *   - may never grant or remove the `super_admin` role, and
+     *   - may only assign roles whose permission set is a subset of their own
+     *     (you cannot hand out authority you do not hold — blocks self/lateral
+     *     privilege escalation through `role:assign` / `user:create`).
+     */
+    async _assertCanGrantRoles(roleIds, actor) {
+        if (actor.isSuperAdmin || roleIds.length === 0)
+            return;
+        const roles = await prisma_client_1.prisma.role.findMany({
+            where: { id: { in: roleIds } },
+            include: { role_permissions: { include: { permission: true } } },
+        });
+        if (roles.some((r) => r.name === 'super_admin')) {
+            throw app_error_1.AppError.forbidden('Only a super admin can grant or remove the super admin role');
+        }
+        const actorPerms = new Set(actor.permissions);
+        for (const role of roles) {
+            for (const rp of role.role_permissions) {
+                if (!actorPerms.has(rp.permission.slug)) {
+                    throw app_error_1.AppError.forbidden('You cannot assign a role that grants permissions you do not hold');
+                }
+            }
         }
     }
     async _assertUserExists(id) {

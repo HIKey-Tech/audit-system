@@ -1,11 +1,13 @@
 import { DashboardActorContext } from '../../domain/entity/dashboard.entity';
-import { ApprovalInboxSummaryResponseDto, AuditAnalyticsResponseDto, AuditSummaryResponseDto, EscalationOverviewResponseDto, FindingsSummaryResponseDto, MyWorkResponseDto, RecentActivityItemDto, RiskOverviewResponseDto } from '../../dto/response/dashboard.response.dto';
+import { ApprovalInboxSummaryResponseDto, AuditAnalyticsResponseDto, AuditSummaryResponseDto, EscalationOverviewResponseDto, FindingsSummaryResponseDto, MyWorkResponseDto, RecentActivityItemDto, RiskMatrixResponseDto, RiskOverviewResponseDto } from '../../dto/response/dashboard.response.dto';
 export declare class DashboardService {
     getAuditAnalytics(actor: DashboardActorContext): Promise<AuditAnalyticsResponseDto>;
     private _computeAuditAnalytics;
     getAuditSummary(actor: DashboardActorContext): Promise<AuditSummaryResponseDto>;
     getFindingsSummary(actor: DashboardActorContext): Promise<FindingsSummaryResponseDto>;
     getRiskOverview(_actor: DashboardActorContext): Promise<RiskOverviewResponseDto>;
+    getRiskMatrix(): Promise<RiskMatrixResponseDto>;
+    private _computeRiskMatrix;
     getRecentActivity(actor: DashboardActorContext, limit: number): Promise<RecentActivityItemDto[]>;
     getEscalationOverview(actor: DashboardActorContext): Promise<EscalationOverviewResponseDto>;
     getMyWork(userId: string): Promise<MyWorkResponseDto>;

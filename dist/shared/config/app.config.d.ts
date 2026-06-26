@@ -95,6 +95,7 @@ export declare const config: {
         readonly windowMs: number;
         readonly max: number;
         readonly authMax: number;
+        readonly disabled: boolean;
     };
     readonly logging: {
         readonly level: string;

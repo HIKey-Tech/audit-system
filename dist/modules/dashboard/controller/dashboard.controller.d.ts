@@ -8,6 +8,7 @@ export declare class DashboardController {
     private _getAuditSummary;
     private _getFindingsSummary;
     private _getRiskOverview;
+    private _getRiskMatrix;
     private _getRecentActivity;
     private _getEscalationOverview;
     private _getMyWork;

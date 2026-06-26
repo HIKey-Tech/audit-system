@@ -19,7 +19,7 @@ import { riskApi } from '@/lib/api/risk';
 import { formatDate, formatNumber } from '@/lib/utils/format';
 import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
 import type { Risk } from '@/lib/types/domain';
-import { NewRiskSlideOver } from '@/components/risk/NewRiskSlideOver';
+import { RiskFormSlideOver } from '@/components/risk/RiskFormSlideOver';
 import { RiskCategoriesTab } from '@/components/risk/RiskCategoriesTab';
 
 const TABS: TabItem[] = [
@@ -71,7 +71,7 @@ export default function RiskPage(): JSX.Element {
         <RiskCategoriesTab />
       )}
 
-      <NewRiskSlideOver open={open} onClose={() => setOpen(false)} />
+      <RiskFormSlideOver open={open} onClose={() => setOpen(false)} />
     </div>
   );
 }

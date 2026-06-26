@@ -6,7 +6,23 @@ const msal_node_1 = require("@azure/msal-node");
 const openid_client_1 = require("openid-client");
 const app_config_1 = require("../../../../shared/config/app.config");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
+const cache_client_1 = require("../../../../shared/cache/cache.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
+// SSO login state (PKCE verifier + nonce) is short-lived and must be shared
+// across instances so the callback can land on any node — and must survive a
+// restart. It lives in the shared cache (Redis in clustered deployments),
+// keyed by `state`, and is consumed exactly once on callback.
+const OIDC_STATE_TTL_SECONDS = 10 * 60;
+const oidcStateKey = (state) => `oidc:state:${state}`;
+const putLoginState = (state, value) => cache_client_1.cache.set(oidcStateKey(state), value, OIDC_STATE_TTL_SECONDS);
+/** Read and delete the login state in one step (single-use, prevents replay). */
+const takeLoginState = async (state) => {
+    const key = oidcStateKey(state);
+    const value = await cache_client_1.cache.get(key);
+    if (value)
+        await cache_client_1.cache.del(key);
+    return value;
+};
 // ──────────────────────────────────────────────
 // Azure AD OIDC Client
 // ──────────────────────────────────────────────
@@ -34,23 +50,20 @@ class AzureAdOidcClient {
             state: generatedState,
             prompt: 'select_account',
         });
-        // Store verifier in a short-lived cache keyed by state
-        // In production use Redis; here we use an in-memory map
-        stateVerifierMap.set(generatedState, verifier);
-        setTimeout(() => stateVerifierMap.delete(generatedState), 10 * 60 * 1000);
+        // Store verifier in the shared, short-lived state store keyed by state.
+        await putLoginState(generatedState, { verifier });
         return { url, state: generatedState };
     }
     async handleCallback(code, state) {
         if (!state) {
             throw app_error_1.AppError.unauthorized('Missing SSO state — possible CSRF attempt');
         }
-        const verifier = stateVerifierMap.get(state);
-        if (!verifier) {
+        // Consume the state immediately (read+delete) so it cannot be replayed.
+        const loginState = await takeLoginState(state);
+        if (!loginState) {
             throw app_error_1.AppError.unauthorized('Invalid or expired SSO state — possible CSRF attempt');
         }
-        // Consume the state immediately so it cannot be replayed, regardless
-        // of whether the token exchange below succeeds or fails.
-        stateVerifierMap.delete(state);
+        const verifier = loginState.verifier;
         try {
             const tokenResponse = await this.msalClient.acquireTokenByCode({
                 code,
@@ -78,6 +91,9 @@ class AzureAdOidcClient {
                 // Azure sets _claim_names.groups when membership overflows the token
                 groupsOverage: Boolean(claimNames && 'groups' in claimNames),
                 authMethods: Array.isArray(claims['amr']) ? claims['amr'] : undefined,
+                // Single-tenant Entra: the address comes from the org directory and is
+                // trusted. (Email/UPN in a controlled tenant cannot be self-asserted.)
+                emailVerified: true,
             };
             return {
                 profile,
@@ -119,12 +135,7 @@ class GenericOidcClient {
         const nonce = openid_client_1.generators.nonce();
         const codeVerifier = openid_client_1.generators.codeVerifier();
         const codeChallenge = openid_client_1.generators.codeChallenge(codeVerifier);
-        stateVerifierMap.set(generatedState, codeVerifier);
-        stateNonceMap.set(generatedState, nonce);
-        setTimeout(() => {
-            stateVerifierMap.delete(generatedState);
-            stateNonceMap.delete(generatedState);
-        }, 10 * 60 * 1000);
+        await putLoginState(generatedState, { verifier: codeVerifier, nonce });
         const url = client.authorizationUrl({
             scope: app_config_1.config.oidc.generic.scopes.join(' '),
             state: generatedState,
@@ -138,14 +149,13 @@ class GenericOidcClient {
         if (!state) {
             throw app_error_1.AppError.unauthorized('Missing SSO state — possible CSRF attempt');
         }
-        const codeVerifier = stateVerifierMap.get(state);
-        const nonce = stateNonceMap.get(state);
-        if (!codeVerifier || !nonce) {
+        // Consume state/nonce/verifier immediately (read+delete) to prevent replay.
+        const loginState = await takeLoginState(state);
+        if (!loginState?.verifier || !loginState.nonce) {
             throw app_error_1.AppError.unauthorized('Invalid or expired SSO state — possible CSRF attempt');
         }
-        // Consume state/nonce/verifier immediately to prevent replay.
-        stateVerifierMap.delete(state);
-        stateNonceMap.delete(state);
+        const codeVerifier = loginState.verifier;
+        const nonce = loginState.nonce;
         try {
             const client = await this.getClient();
             const tokenSet = await client.callback(app_config_1.config.oidc.generic.redirectUri, { code, state }, { state, nonce, code_verifier: codeVerifier });
@@ -156,6 +166,8 @@ class GenericOidcClient {
                 givenName: claims['given_name'],
                 familyName: claims['family_name'],
                 displayName: claims['name'],
+                // Only trust the email for account linking if the IdP says it's verified.
+                emailVerified: claims['email_verified'] === true,
             };
             return {
                 profile,
@@ -172,9 +184,6 @@ class GenericOidcClient {
     }
 }
 exports.GenericOidcClient = GenericOidcClient;
-// In-memory state storage (replace with Redis in production)
-const stateVerifierMap = new Map();
-const stateNonceMap = new Map();
 // ──────────────────────────────────────────────
 // Factory — returns the configured OIDC client
 // ──────────────────────────────────────────────

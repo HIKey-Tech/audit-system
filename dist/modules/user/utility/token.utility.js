@@ -59,6 +59,7 @@ const shuffle = (chars) => {
 const generateAccessToken = (payload) => {
     return jwt.sign(payload, app_config_1.config.jwt.secret, {
         expiresIn: app_config_1.config.jwt.expiresIn,
+        algorithm: 'HS256',
     });
 };
 exports.generateAccessToken = generateAccessToken;

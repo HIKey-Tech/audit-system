@@ -1,8 +1,19 @@
 import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
 import { UserResponseDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
+/**
+ * Actor context for privileged operations that can change a user's authority.
+ * Carries the actor's own permissions/super-admin flag so role grants can be
+ * checked against the least-privilege rule (you cannot grant authority you do
+ * not hold; only super admins may grant super admin).
+ */
+export interface RoleManagementActor {
+    id: string;
+    isSuperAdmin: boolean;
+    permissions: string[];
+}
 export interface IUserService {
-    createUser(dto: CreateUserRequestDto, actorId: string): Promise<UserResponseDto>;
+    createUser(dto: CreateUserRequestDto, actor: RoleManagementActor): Promise<UserResponseDto>;
     getUserById(id: string): Promise<UserResponseDto>;
     getUserByEmail(email: string): Promise<UserResponseDto>;
     listUsers(query: UserQueryDto): Promise<{
@@ -23,8 +34,8 @@ export interface IUserService {
     updateUser(id: string, dto: UpdateUserRequestDto, actorId: string): Promise<UserResponseDto>;
     setUserActiveStatus(id: string, isActive: boolean, actorId: string): Promise<UserResponseDto>;
     deleteUser(id: string, actorId: string): Promise<void>;
-    assignRoles(userId: string, dto: AssignRoleRequestDto, actorId: string): Promise<UserResponseDto>;
-    removeRole(userId: string, roleId: string, actorId: string): Promise<UserResponseDto>;
+    assignRoles(userId: string, dto: AssignRoleRequestDto, actor: RoleManagementActor): Promise<UserResponseDto>;
+    removeRole(userId: string, roleId: string, actor: RoleManagementActor): Promise<UserResponseDto>;
     changePassword(userId: string, dto: ChangePasswordRequestDto): Promise<void>;
     syncFromAzureAd(azureOid: string, profile: AzureAdProfile): Promise<UserResponseDto>;
 }
@@ -40,5 +51,6 @@ export interface AzureAdProfile {
     groups?: string[];
     groupsOverage?: boolean;
     authMethods?: string[];
+    emailVerified?: boolean;
 }
 //# sourceMappingURL=user.service.interface.d.ts.map

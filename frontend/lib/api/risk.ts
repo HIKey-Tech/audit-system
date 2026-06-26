@@ -18,7 +18,7 @@ export interface CreateRiskDto {
   likelihood: number;
   impact: number;
   status?: string;
-  universeId?: string;
+  universeId?: string | null;
 }
 
 export interface CreateAssessmentDto {

@@ -57,6 +57,12 @@ export const riskRegisterWithDetailsInclude = Prisma.validator<Prisma.Risk_Regis
   owner: {
     select: riskUserBriefSelect,
   },
+  universe: {
+    select: {
+      id: true,
+      name: true,
+    },
+  },
   assessments: {
     include: riskAssessmentWithAssessorInclude,
     orderBy: { assessed_at: 'desc' },

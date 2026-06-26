@@ -8,7 +8,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 // IAMS — Application entry point.
 // Boot order: validate config → connect DB → wire Express → start HTTP server → start scheduler.
 // Shutdown order: stop accepting connections → stop scheduler → disconnect DB → exit.
-//implement
+//implement done
 const http_1 = __importDefault(require("http"));
 const express_1 = __importDefault(require("express"));
 const helmet_1 = __importDefault(require("helmet"));
@@ -80,9 +80,9 @@ const buildApp = () => {
         standardHeaders: true,
         legacyHeaders: false,
         handler: rateLimitHandler('Too many requests.'),
-        // Skip in development: local traffic is a single trusted client behind the
-        // Next BFF proxy (one IP), so the per-IP limit just throttles the developer.
-        skip: () => app_config_1.config.app.isDev,
+        // On by default everywhere; only skipped when a developer explicitly opts
+        // out (RATE_LIMIT_DISABLED=true) in a non-production env. Never skipped in prod.
+        skip: () => app_config_1.config.rateLimit.disabled,
     });
     // Brute-force guard for credential/OTP endpoints. skipSuccessfulRequests means
     // only failed attempts count toward the cap, so a real user logging in (even
@@ -95,7 +95,7 @@ const buildApp = () => {
         legacyHeaders: false,
         skipSuccessfulRequests: true,
         handler: rateLimitHandler('Too many failed attempts.'),
-        skip: () => app_config_1.config.app.isDev,
+        skip: () => app_config_1.config.rateLimit.disabled,
     });
     const apiPrefix = `/api/${app_config_1.config.app.apiVersion}`;
     app.get('/health', (_req, res) => {
@@ -106,14 +106,18 @@ const buildApp = () => {
             timestamp: new Date().toISOString(),
         });
     });
-    const openApiDocument = (0, openapi_util_1.buildOpenApiDocument)();
-    app.get('/docs.json', (_req, res) => {
-        res.status(200).json(openApiDocument);
-    });
-    app.use('/docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(openApiDocument, {
-        customSiteTitle: `${app_config_1.config.app.name} — API Docs`,
-        swaggerOptions: { persistAuthorization: true },
-    }));
+    // API docs publish the full route/schema surface — do not expose them to
+    // anonymous callers in production. Served only outside production.
+    if (!app_config_1.config.app.isProd) {
+        const openApiDocument = (0, openapi_util_1.buildOpenApiDocument)();
+        app.get('/docs.json', (_req, res) => {
+            res.status(200).json(openApiDocument);
+        });
+        app.use('/docs', swagger_ui_express_1.default.serve, swagger_ui_express_1.default.setup(openApiDocument, {
+            customSiteTitle: `${app_config_1.config.app.name} — API Docs`,
+            swaggerOptions: { persistAuthorization: true },
+        }));
+    }
     // Strict limiter on credential/OTP surfaces (before the general limiter so the
     // tighter cap applies there); general limiter for everything else.
     app.use(`${apiPrefix}/auth/login`, authLimiter);
@@ -156,6 +160,10 @@ const startServer = async () => {
         apiPrefix: `/api/${app_config_1.config.app.apiVersion}`,
         docs: `${app_config_1.config.app.url}/docs`,
     });
+    if (app_config_1.config.rateLimit.disabled) {
+        logger_util_1.logger.warn('Rate limiting is DISABLED (RATE_LIMIT_DISABLED=true in a non-production env). ' +
+            'Brute-force protection is off — never use this configuration in production.');
+    }
     (0, background_1.registerAllJobs)();
     await background_1.schedulerService.startAll();
     return server;

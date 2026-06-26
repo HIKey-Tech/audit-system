@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Plus, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Plus, TrendingUp, Pencil } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -20,12 +20,14 @@ import { formatDateTime } from '@/lib/utils/format';
 import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
 import type { RiskAssessment } from '@/lib/types/domain';
 import { NewAssessmentSlideOver } from '@/components/risk/NewAssessmentSlideOver';
+import { RiskFormSlideOver } from '@/components/risk/RiskFormSlideOver';
 
 export default function RiskDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const { canManageAuditProgramme: canWrite } = usePermissions();
   const [open, setOpen] = useState(false);
+  const [editOpen, setEditOpen] = useState(false);
 
   const risk = useQuery({
     queryKey: ['risk', id],
@@ -135,9 +137,14 @@ export default function RiskDetailPage(): JSX.Element {
               </Button>
             </Link>
             {canWrite && (
-              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
-                New assessment
-              </Button>
+              <>
+                <Button variant="secondary" leftIcon={<Pencil className="h-4 w-4" />} onClick={() => setEditOpen(true)}>
+                  Edit
+                </Button>
+                <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
+                  New assessment
+                </Button>
+              </>
             )}
           </div>
         }
@@ -171,12 +178,18 @@ export default function RiskDetailPage(): JSX.Element {
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Likelihood × Impact</dt>
               <dd className="mt-1 text-sm text-text-primary">{r.currentLikelihood} × {r.currentImpact}</dd>
             </div>
-            {r.universeName && (
-              <div>
-                <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Linked entity</dt>
-                <dd className="mt-1 text-sm text-text-primary">{r.universeName}</dd>
-              </div>
-            )}
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Linked entity</dt>
+              <dd className="mt-1 text-sm text-text-primary">
+                {r.universeName ? (
+                  <Link href={`/audit/universe/${r.universeId}`} className="text-primary hover:underline font-medium">
+                    {r.universeName}
+                  </Link>
+                ) : (
+                  <span className="text-text-secondary">None</span>
+                )}
+              </dd>
+            </div>
           </dl>
         </Card>
 
@@ -208,6 +221,7 @@ export default function RiskDetailPage(): JSX.Element {
       </Card>
 
       <NewAssessmentSlideOver open={open} onClose={() => setOpen(false)} riskId={r.id} />
+      <RiskFormSlideOver open={editOpen} onClose={() => setEditOpen(false)} risk={r} />
     </div>
   );
 }

@@ -313,6 +313,38 @@ class DashboardService {
         };
     }
     // =============================================================
+    // Risk matrix (likelihood × impact heat map)
+    // =============================================================
+    async getRiskMatrix() {
+        // Org-wide and shared across all viewers (risk data is not actor-scoped),
+        // so a single cached entry serves every dashboard load. Short TTL keeps it
+        // near-real-time; the cache never throws, so a miss just recomputes.
+        return cache_client_1.cache.getOrSet('dashboard:risk-matrix:org', 30, () => this._computeRiskMatrix());
+    }
+    async _computeRiskMatrix() {
+        // Only active risks are plotted — closed/accepted ones are no longer "live"
+        // exposure and would distort the heat map.
+        const groups = await prisma_client_1.prisma.risk_Register.groupBy({
+            by: ['likelihood', 'impact'],
+            where: { deleted_at: null, status: { in: ['open', 'mitigated'] } },
+            _count: { _all: true },
+        });
+        const counts = new Map();
+        for (const group of groups) {
+            counts.set(`${group.likelihood}:${group.impact}`, extractCount(group._count));
+        }
+        const cells = [];
+        let totalPlotted = 0;
+        for (let likelihood = 1; likelihood <= 5; likelihood += 1) {
+            for (let impact = 1; impact <= 5; impact += 1) {
+                const count = counts.get(`${likelihood}:${impact}`) ?? 0;
+                totalPlotted += count;
+                cells.push({ likelihood, impact, score: likelihood * impact, count });
+            }
+        }
+        return { cells, totalPlotted };
+    }
+    // =============================================================
     // Recent activity
     // =============================================================
     async getRecentActivity(actor, limit) {

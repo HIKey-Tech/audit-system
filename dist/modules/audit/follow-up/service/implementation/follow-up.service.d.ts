@@ -19,6 +19,10 @@ export declare class FollowUpService implements IFollowUpService {
     getFollowUp(findingId: string): Promise<FollowUpResponseDto>;
     listPendingFollowUps(engagementId: string): Promise<FollowUpResponseDto[]>;
     private _getFinding;
+    /** A finding may be acted on by its primary auditee or any co-responder. */
+    private _assertResponder;
+    /** Primary auditee plus co-responders, de-duplicated by user id. */
+    private _responders;
     /**
      * Notify the engagement's lead auditor that an auditee has acted on a finding
      * (management response / remediation evidence). Post-commit and best-effort —

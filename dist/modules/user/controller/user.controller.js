@@ -41,19 +41,19 @@ class UserController {
          * @desc   List all users (paginated)
          * @access Private — user:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('role:read'), (0, validate_middleware_1.validate)(user_request_dto_1.UserQuerySchema, 'query'), this._listUsers.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('user:read'), (0, validate_middleware_1.validate)(user_request_dto_1.UserQuerySchema, 'query'), this._listUsers.bind(this));
         /**
          * @route  GET /users/roles
          * @desc   List all roles with permissions (paginated)
-         * @access Private — user:read
+         * @access Private — role:read
          */
-        this.router.get('/roles', (0, auth_middleware_1.requirePermission)('permission:read'), (0, validate_middleware_1.validate)(user_request_dto_1.RoleQuerySchema, 'query'), this._listRoles.bind(this));
+        this.router.get('/roles', (0, auth_middleware_1.requirePermission)('role:read'), (0, validate_middleware_1.validate)(user_request_dto_1.RoleQuerySchema, 'query'), this._listRoles.bind(this));
         /**
          * @route  GET /users/permissions
-         * @desc   List all permissions
-         * @access Private — user:read
+         * @desc   List all permissions (reference data for the role-management UI)
+         * @access Private — permission:read OR role:read
          */
-        this.router.get('/permissions', (0, auth_middleware_1.requirePermission)('user:read'), this._listPermissions.bind(this));
+        this.router.get('/permissions', (0, auth_middleware_1.requireAnyPermission)('permission:read', 'role:read'), this._listPermissions.bind(this));
         /**
          * @route  POST /users
          * @desc   Create a user
@@ -159,7 +159,7 @@ class UserController {
     }
     async _createUser(req, res, next) {
         try {
-            const user = await this.userService.createUser(req.body, req.user.id);
+            const user = await this.userService.createUser(req.body, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(user, 'User created successfully'));
         }
         catch (err) {
@@ -213,7 +213,7 @@ class UserController {
     }
     async _assignRoles(req, res, next) {
         try {
-            const user = await this.userService.assignRoles(req.params.id, req.body, req.user.id);
+            const user = await this.userService.assignRoles(req.params.id, req.body, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(user, 'Roles assigned'));
         }
         catch (err) {
@@ -222,7 +222,7 @@ class UserController {
     }
     async _removeRole(req, res, next) {
         try {
-            const user = await this.userService.removeRole(req.params.id, req.params.roleId, req.user.id);
+            const user = await this.userService.removeRole(req.params.id, req.params.roleId, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(user, 'Role removed'));
         }
         catch (err) {

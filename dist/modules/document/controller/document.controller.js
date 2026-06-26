@@ -5,6 +5,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.DocumentController = void 0;
 // src/modules/document/controller/document.controller.ts
+const path_1 = __importDefault(require("path"));
 const express_1 = require("express");
 const multer_1 = __importDefault(require("multer"));
 const auth_middleware_1 = require("../../../shared/middleware/auth.middleware");
@@ -13,9 +14,74 @@ const api_response_type_1 = require("../../../shared/types/api-response.type");
 const app_error_1 = require("../../../shared/errors/app.error");
 const document_request_dto_1 = require("../dto/request/document.request.dto");
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
+// Allowlist of document/evidence file types. Anything else (HTML, SVG, scripts,
+// executables, …) is rejected up front. This is the first gate only — it does
+// not inspect file contents; deep magic-byte validation and malware scanning
+// remain recommended defence-in-depth for ingested third-party evidence.
+const ALLOWED_UPLOAD_EXTENSIONS = new Set([
+    // Documents
+    '.pdf', '.doc', '.docx', '.xls', '.xlsx', '.ppt', '.pptx',
+    '.rtf', '.odt', '.ods', '.odp', '.csv', '.txt', '.xml', '.json',
+    // Images
+    '.png', '.jpg', '.jpeg', '.gif', '.webp', '.bmp', '.tif', '.tiff', '.heic', '.heif',
+    // Email
+    '.msg', '.eml',
+    // Archives
+    '.zip', '.7z', '.rar',
+]);
+const ALLOWED_UPLOAD_MIME_TYPES = new Set([
+    // Documents
+    'application/pdf',
+    'application/msword',
+    'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+    'application/vnd.ms-excel',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-powerpoint',
+    'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+    'application/rtf',
+    'text/rtf',
+    'application/vnd.oasis.opendocument.text',
+    'application/vnd.oasis.opendocument.spreadsheet',
+    'application/vnd.oasis.opendocument.presentation',
+    'text/csv',
+    'text/plain',
+    'application/xml',
+    'text/xml',
+    'application/json',
+    // Images
+    'image/png',
+    'image/jpeg',
+    'image/gif',
+    'image/webp',
+    'image/bmp',
+    'image/tiff',
+    'image/heic',
+    'image/heif',
+    // Email
+    'application/vnd.ms-outlook',
+    'message/rfc822',
+    // Archives
+    'application/zip',
+    'application/x-zip-compressed',
+    'application/x-7z-compressed',
+    'application/vnd.rar',
+    'application/x-rar-compressed',
+    // Many clients send a generic type for the formats above; the extension gate
+    // still constrains it to the allowlist (HTML/SVG/scripts/executables blocked).
+    'application/octet-stream',
+]);
+const uploadFileFilter = (_req, file, cb) => {
+    const ext = path_1.default.extname(file.originalname).toLowerCase();
+    if (ALLOWED_UPLOAD_EXTENSIONS.has(ext) && ALLOWED_UPLOAD_MIME_TYPES.has(file.mimetype)) {
+        cb(null, true);
+        return;
+    }
+    cb(app_error_1.AppError.badRequest(`Unsupported file type: "${file.originalname}"`));
+};
 const upload = (0, multer_1.default)({
     storage: multer_1.default.memoryStorage(),
     limits: { fileSize: MAX_UPLOAD_BYTES },
+    fileFilter: uploadFileFilter,
 });
 class DocumentController {
     documentService;
@@ -172,7 +238,7 @@ class DocumentController {
     }
     async _getById(req, res, next) {
         try {
-            const document = await this.documentService.getById(req.params.id, req.user.id);
+            const document = await this.documentService.getById(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(document));
         }
         catch (err) {
@@ -181,7 +247,7 @@ class DocumentController {
     }
     async _getDownloadUrl(req, res, next) {
         try {
-            await this.documentService.assertCanUserAccess(req.params.id, req.user.id);
+            await this.documentService.assertCanUserAccess(req.params.id, req.user);
             const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
             res.status(200).json((0, api_response_type_1.buildResponse)({ downloadUrl }));
         }
@@ -191,7 +257,7 @@ class DocumentController {
     }
     async _delete(req, res, next) {
         try {
-            await this.documentService.delete(req.params.id, req.user.id);
+            await this.documentService.delete(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(null, 'Document deleted'));
         }
         catch (err) {
@@ -200,7 +266,7 @@ class DocumentController {
     }
     async _listByEntity(req, res, next) {
         try {
-            const documents = await this.documentService.listByEntity(req.params.entityType, req.params.entityId);
+            const documents = await this.documentService.listByEntityForActor(req.params.entityType, req.params.entityId, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(documents));
         }
         catch (err) {
@@ -218,7 +284,7 @@ class DocumentController {
     }
     async _serve(req, res, next) {
         try {
-            const file = await this.documentService.serveFile(req.params.storedName, req.user.id);
+            const file = await this.documentService.serveFile(req.params.storedName, req.user);
             this._sendFile(res, file);
         }
         catch (err) {
@@ -227,7 +293,7 @@ class DocumentController {
     }
     async _getFileById(req, res, next) {
         try {
-            await this.documentService.assertCanUserAccess(req.params.id, req.user.id);
+            await this.documentService.assertCanUserAccess(req.params.id, req.user);
             const file = await this.documentService.getFileById(req.params.id);
             this._sendFile(res, file);
         }
@@ -267,7 +333,7 @@ class DocumentController {
     }
     async _listVersions(req, res, next) {
         try {
-            const versions = await this.documentService.listVersions(req.params.id, req.user.id);
+            const versions = await this.documentService.listVersions(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(versions));
         }
         catch (err) {
@@ -280,7 +346,7 @@ class DocumentController {
             if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
                 throw app_error_1.AppError.badRequest('Version must be a positive integer');
             }
-            const version = await this.documentService.getVersion(req.params.id, versionNumber, req.user.id);
+            const version = await this.documentService.getVersion(req.params.id, versionNumber, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(version));
         }
         catch (err) {
@@ -293,7 +359,7 @@ class DocumentController {
             if (!Number.isInteger(versionNumber) || versionNumber <= 0) {
                 throw app_error_1.AppError.badRequest('Version must be a positive integer');
             }
-            const downloadUrl = await this.documentService.getVersionDownloadUrl(req.params.id, versionNumber, req.user.id);
+            const downloadUrl = await this.documentService.getVersionDownloadUrl(req.params.id, versionNumber, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)({ downloadUrl }));
         }
         catch (err) {

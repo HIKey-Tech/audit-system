@@ -64,6 +64,16 @@ export interface RiskOverviewResponseDto {
     topFiveRisks: TopRiskItemDto[];
     staleRisks: number;
 }
+export interface RiskMatrixCellDto {
+    likelihood: number;
+    impact: number;
+    score: number;
+    count: number;
+}
+export interface RiskMatrixResponseDto {
+    cells: RiskMatrixCellDto[];
+    totalPlotted: number;
+}
 export interface RecentActivityItemDto {
     id: string;
     action: string;

@@ -13,29 +13,42 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { UserSelect } from '@/components/common/UserSelect';
 import { riskApi } from '@/lib/api/risk';
+import { universeApi } from '@/lib/api/audit';
 import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
+import type { Risk } from '@/lib/types/domain';
 
 const Schema = z.object({
-  title: z.string().min(2).max(200),
+  title: z.string().min(2, 'Title must be at least 2 characters').max(200),
   description: z.string().trim().min(1, 'Description required').max(5000),
   categoryId: z.string().min(1, 'Category required'),
   ownerId: z.string().min(1, 'Owner required'),
   likelihood: z.coerce.number().int().min(1).max(5),
   impact: z.coerce.number().int().min(1).max(5),
   status: z.enum(['open', 'mitigated', 'accepted', 'closed']),
+  universeId: z.string().optional().or(z.literal('')),
 });
+
 type FormValues = z.infer<typeof Schema>;
 
 interface Props {
   open: boolean;
   onClose: () => void;
+  risk?: Risk | null;
 }
 
-export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
+export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element => {
   const qc = useQueryClient();
+  const isEdit = Boolean(risk);
+
   const categories = useQuery({
     queryKey: ['risk', 'categories'],
     queryFn: () => riskApi.listCategories({ isActive: true }),
+    enabled: open,
+  });
+
+  const universeEntities = useQuery({
+    queryKey: ['universe', 'list-active-entities'],
+    queryFn: () => universeApi.list({ pageSize: 100, status: 'active' }),
     enabled: open,
   });
 
@@ -45,7 +58,7 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
     setValue,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -56,24 +69,39 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
       likelihood: 3,
       impact: 3,
       status: 'open',
+      universeId: '',
     },
   });
 
   useEffect(() => {
     if (open) {
-      reset({
-        title: '',
-        description: '',
-        categoryId: '',
-        ownerId: '',
-        likelihood: 3,
-        impact: 3,
-        status: 'open',
-      });
+      if (risk) {
+        reset({
+          title: risk.title,
+          description: risk.description ?? '',
+          categoryId: risk.categoryId,
+          ownerId: risk.ownerId,
+          likelihood: risk.currentLikelihood,
+          impact: risk.currentImpact,
+          status: risk.status as FormValues['status'],
+          universeId: risk.universeId ?? '',
+        });
+      } else {
+        reset({
+          title: '',
+          description: '',
+          categoryId: '',
+          ownerId: '',
+          likelihood: 3,
+          impact: 3,
+          status: 'open',
+          universeId: '',
+        });
+      }
     }
-  }, [open, reset]);
+  }, [open, risk, reset]);
 
-  const create = useMutation({
+  const createMut = useMutation({
     mutationFn: (v: FormValues) =>
       riskApi.create({
         title: v.title,
@@ -83,16 +111,44 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
         likelihood: v.likelihood,
         impact: v.impact,
         status: v.status,
+        universeId: v.universeId || undefined,
       }),
     onSuccess: () => {
       toast.success('Risk added to register');
       qc.invalidateQueries({ queryKey: ['risk'] });
       onClose();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to add risk'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v));
+  const updateMut = useMutation({
+    mutationFn: (v: FormValues) =>
+      riskApi.update(risk!.id, {
+        title: v.title,
+        description: v.description,
+        categoryId: v.categoryId,
+        ownerId: v.ownerId,
+        likelihood: v.likelihood,
+        impact: v.impact,
+        status: v.status,
+        universeId: v.universeId || null,
+      }),
+    onSuccess: () => {
+      toast.success('Risk updated successfully');
+      qc.invalidateQueries({ queryKey: ['risk'] });
+      qc.invalidateQueries({ queryKey: ['risk', risk!.id] });
+      onClose();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to update risk'),
+  });
+
+  const onSubmit = handleSubmit((v) => {
+    if (isEdit) {
+      updateMut.mutate(v);
+    } else {
+      createMut.mutate(v);
+    }
+  });
 
   const activeCategories = categories.data ?? [];
   const categoryHelp = categories.isLoading
@@ -114,15 +170,20 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
     <SlideOver
       open={open}
       onClose={onClose}
-      title="New risk"
+      title={isEdit ? 'Edit risk' : 'New risk'}
       description="Likelihood × impact define the score band."
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} isLoading={create.isPending} disabled={categoryDisabled} size="sm">
-            Add to register
+          <Button
+            onClick={onSubmit}
+            isLoading={isSubmitting || createMut.isPending || updateMut.isPending}
+            disabled={categoryDisabled}
+            size="sm"
+          >
+            {isEdit ? 'Save changes' : 'Add to register'}
           </Button>
         </div>
       }
@@ -134,6 +195,22 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
         <FormField label="Description" required error={errors.description?.message}>
           <Textarea rows={3} {...register('description')} />
         </FormField>
+        
+        <FormField label="Linked Universe Entity" error={errors.universeId?.message}>
+          <Select
+            error={errors.universeId?.message}
+            disabled={universeEntities.isLoading}
+            {...register('universeId')}
+          >
+            <option value="">None (Generic / Unlinked)</option>
+            {universeEntities.data?.items?.map((u) => (
+              <option key={u.id} value={u.id}>
+                {u.name} ({u.category})
+              </option>
+            ))}
+          </Select>
+        </FormField>
+
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Category" required error={errors.categoryId?.message}>
             <Select error={errors.categoryId?.message} disabled={categoryDisabled} {...register('categoryId')}>
@@ -197,4 +274,3 @@ export const NewRiskSlideOver = ({ open, onClose }: Props): JSX.Element => {
     </SlideOver>
   );
 };
-

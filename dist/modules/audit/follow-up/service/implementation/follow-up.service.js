@@ -37,8 +37,7 @@ class FollowUpService {
     }
     async submitManagementResponse(findingId, dto, actor) {
         const finding = await this._getFinding(findingId);
-        if (finding.auditee_id !== actor.id)
-            throw app_error_1.AppError.forbidden('Only the assigned auditee can submit a management response');
+        this._assertResponder(finding, actor.id);
         const followUp = await prisma_client_1.prisma.$transaction(async (tx) => {
             await tx.audit_Finding.update({
                 where: { id: findingId },
@@ -71,8 +70,7 @@ class FollowUpService {
     }
     async submitRemediationEvidence(findingId, evidenceId, actor) {
         const finding = await this._getFinding(findingId);
-        if (finding.auditee_id !== actor.id)
-            throw app_error_1.AppError.forbidden('Only the assigned auditee can submit remediation evidence');
+        this._assertResponder(finding, actor.id);
         const evidence = await prisma_client_1.prisma.audit_Evidence.findUnique({
             where: { id: evidenceId },
             select: { engagement_id: true },
@@ -113,8 +111,7 @@ class FollowUpService {
         if (!this.documentService)
             throw app_error_1.AppError.internal('Document service is not configured for follow-up evidence upload');
         const finding = await this._getFinding(findingId);
-        if (finding.auditee_id !== actor.id)
-            throw app_error_1.AppError.forbidden('Only the assigned auditee can submit remediation evidence');
+        this._assertResponder(finding, actor.id);
         const document = await this.documentService.upload({
             uploadedById: actor.id,
             originalName: file.originalName,
@@ -167,74 +164,70 @@ class FollowUpService {
             });
         });
         const isVerified = dto.verificationStatus === audit_enum_1.VerificationStatus.Verified;
+        // Notify the primary auditee and every co-responder.
+        const recipients = this._responders(finding);
         if (isVerified) {
-            const [auditee, auditor] = await Promise.all([
-                prisma_client_1.prisma.user.findUnique({
-                    where: { id: finding.auditee_id },
-                    select: { email: true, display_name: true, first_name: true, last_name: true },
-                }),
-                prisma_client_1.prisma.user.findUnique({
-                    where: { id: actor.id },
-                    select: { display_name: true, first_name: true, last_name: true },
-                }),
-            ]);
-            const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
-            const auditorName = auditor?.display_name ?? `${auditor?.first_name ?? ''} ${auditor?.last_name ?? ''}`.trim();
-            const verifiedVariables = {
-                auditeeName,
-                auditorName,
-                findingTitle: finding.title,
-                verificationNotes: dto.verificationNotes ?? '',
-            };
-            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
-                userId: finding.auditee_id,
-                title: 'Remediation verified',
-                body: `Remediation for "${finding.title}" has been verified.`,
-                type: 'success',
-                referenceType: 'audit_finding',
-                referenceId: findingId,
-                eventKey: 'audit.followup.verified',
-                variables: verifiedVariables,
+            const auditor = await prisma_client_1.prisma.user.findUnique({
+                where: { id: actor.id },
+                select: { display_name: true, first_name: true, last_name: true },
             });
-            if (auditee?.email) {
-                await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
-                    to: auditee.email,
-                    subject: `Finding Verified: ${finding.title}`,
-                    text: `Remediation for "${finding.title}" has been verified.`,
+            const auditorName = auditor?.display_name ?? `${auditor?.first_name ?? ''} ${auditor?.last_name ?? ''}`.trim();
+            for (const recipient of recipients) {
+                const auditeeName = recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+                const verifiedVariables = {
+                    auditeeName,
+                    auditorName,
+                    findingTitle: finding.title,
+                    verificationNotes: dto.verificationNotes ?? '',
+                };
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                    userId: recipient.id,
+                    title: 'Remediation verified',
+                    body: `Remediation for "${finding.title}" has been verified.`,
+                    type: 'success',
+                    referenceType: 'audit_finding',
+                    referenceId: findingId,
                     eventKey: 'audit.followup.verified',
                     variables: verifiedVariables,
                 });
+                if (recipient.email) {
+                    await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+                        to: recipient.email,
+                        subject: `Finding Verified: ${finding.title}`,
+                        text: `Remediation for "${finding.title}" has been verified.`,
+                        eventKey: 'audit.followup.verified',
+                        variables: verifiedVariables,
+                    });
+                }
             }
         }
         else {
-            const auditee = await prisma_client_1.prisma.user.findUnique({
-                where: { id: finding.auditee_id },
-                select: { email: true, display_name: true, first_name: true, last_name: true },
-            });
-            const auditeeName = auditee?.display_name ?? `${auditee?.first_name ?? ''} ${auditee?.last_name ?? ''}`.trim();
-            const rejectedVariables = {
-                auditeeName,
-                findingTitle: finding.title,
-                verificationNotes: dto.verificationNotes ?? '',
-            };
-            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
-                userId: finding.auditee_id,
-                title: 'Remediation rejected',
-                body: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
-                type: 'warning',
-                referenceType: 'audit_finding',
-                referenceId: findingId,
-                eventKey: 'audit.followup.rejected',
-                variables: rejectedVariables,
-            });
-            if (auditee?.email) {
-                await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
-                    to: auditee.email,
-                    subject: `Remediation Rejected: ${finding.title}`,
-                    text: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
+            for (const recipient of recipients) {
+                const auditeeName = recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
+                const rejectedVariables = {
+                    auditeeName,
+                    findingTitle: finding.title,
+                    verificationNotes: dto.verificationNotes ?? '',
+                };
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                    userId: recipient.id,
+                    title: 'Remediation rejected',
+                    body: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
+                    type: 'warning',
+                    referenceType: 'audit_finding',
+                    referenceId: findingId,
                     eventKey: 'audit.followup.rejected',
                     variables: rejectedVariables,
                 });
+                if (recipient.email) {
+                    await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+                        to: recipient.email,
+                        subject: `Remediation Rejected: ${finding.title}`,
+                        text: `Remediation for "${finding.title}" was rejected. Please resubmit evidence.`,
+                        eventKey: 'audit.followup.rejected',
+                        variables: rejectedVariables,
+                    });
+                }
             }
         }
         logger_util_1.logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
@@ -262,6 +255,7 @@ class FollowUpService {
         return followUps.map(follow_up_response_dto_1.mapFollowUpToResponse);
     }
     async _getFinding(findingId) {
+        const responderSelect = { id: true, email: true, display_name: true, first_name: true, last_name: true };
         const finding = await prisma_client_1.prisma.audit_Finding.findFirst({
             where: { id: findingId, deleted_at: null },
             select: {
@@ -269,6 +263,8 @@ class FollowUpService {
                 engagement_id: true,
                 auditee_id: true,
                 title: true,
+                auditee: { select: responderSelect },
+                responders: { select: { user: { select: responderSelect } } },
                 engagement: {
                     select: {
                         reference_number: true,
@@ -282,6 +278,17 @@ class FollowUpService {
         if (!finding)
             throw app_error_1.AppError.notFound('Audit finding');
         return finding;
+    }
+    /** A finding may be acted on by its primary auditee or any co-responder. */
+    _assertResponder(finding, actorId) {
+        const allowed = finding.auditee_id === actorId || finding.responders.some((r) => r.user.id === actorId);
+        if (!allowed)
+            throw app_error_1.AppError.forbidden('Only an assigned auditee can submit a response for this finding');
+    }
+    /** Primary auditee plus co-responders, de-duplicated by user id. */
+    _responders(finding) {
+        const all = [finding.auditee, ...finding.responders.map((r) => r.user)];
+        return all.filter((u, i) => all.findIndex((o) => o.id === u.id) === i);
     }
     /**
      * Notify the engagement's lead auditor that an auditee has acted on a finding

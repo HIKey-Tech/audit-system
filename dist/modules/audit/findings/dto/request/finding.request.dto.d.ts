@@ -12,6 +12,8 @@ export declare const CreateFindingRequestSchema: z.ZodObject<{
     riskImplication: z.ZodString;
     recommendation: z.ZodString;
     auditeeId: z.ZodString;
+    /** Co-responders who may also answer this finding alongside the primary auditee. */
+    additionalAuditeeIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     dueDate: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     title: string;
@@ -26,6 +28,7 @@ export declare const CreateFindingRequestSchema: z.ZodObject<{
     riskId?: string | undefined;
     workingPaperId?: string | undefined;
     checklistId?: string | undefined;
+    additionalAuditeeIds?: string[] | undefined;
 }, {
     title: string;
     description: string;
@@ -39,6 +42,7 @@ export declare const CreateFindingRequestSchema: z.ZodObject<{
     riskId?: string | undefined;
     workingPaperId?: string | undefined;
     checklistId?: string | undefined;
+    additionalAuditeeIds?: string[] | undefined;
 }>;
 export declare const UpdateFindingRequestSchema: z.ZodObject<{
     workingPaperId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
@@ -52,6 +56,8 @@ export declare const UpdateFindingRequestSchema: z.ZodObject<{
     riskImplication: z.ZodOptional<z.ZodString>;
     recommendation: z.ZodOptional<z.ZodString>;
     auditeeId: z.ZodOptional<z.ZodString>;
+    /** When provided, replaces the full set of co-responders for this finding. */
+    additionalAuditeeIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     dueDate: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
@@ -65,6 +71,7 @@ export declare const UpdateFindingRequestSchema: z.ZodObject<{
     checklistId?: string | null | undefined;
     rootCause?: string | undefined;
     riskImplication?: string | undefined;
+    additionalAuditeeIds?: string[] | undefined;
     dueDate?: string | undefined;
 }, {
     title?: string | undefined;
@@ -78,6 +85,7 @@ export declare const UpdateFindingRequestSchema: z.ZodObject<{
     checklistId?: string | null | undefined;
     rootCause?: string | undefined;
     riskImplication?: string | undefined;
+    additionalAuditeeIds?: string[] | undefined;
     dueDate?: string | undefined;
 }>;
 export declare const UpdateFindingStatusRequestSchema: z.ZodObject<{

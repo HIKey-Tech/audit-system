@@ -28,6 +28,7 @@ const mapFindingToResponse = (finding) => ({
     recommendation: finding.recommendation,
     auditeeId: finding.auditee_id,
     auditeeName: formatUserName(finding.auditee),
+    additionalAuditees: finding.responders?.map((r) => ({ id: r.user_id, name: formatUserName(r.user) })),
     status: finding.status,
     dueDate: finding.due_date.toISOString(),
     createdById: finding.created_by_id,

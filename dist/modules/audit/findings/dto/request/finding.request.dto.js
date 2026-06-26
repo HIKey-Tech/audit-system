@@ -15,6 +15,8 @@ exports.CreateFindingRequestSchema = zod_1.z.object({
     riskImplication: zod_1.z.string().min(1),
     recommendation: zod_1.z.string().min(1),
     auditeeId: zod_1.z.string().uuid(),
+    /** Co-responders who may also answer this finding alongside the primary auditee. */
+    additionalAuditeeIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
     dueDate: zod_1.z.string().datetime(),
 });
 exports.UpdateFindingRequestSchema = zod_1.z.object({
@@ -29,6 +31,8 @@ exports.UpdateFindingRequestSchema = zod_1.z.object({
     riskImplication: zod_1.z.string().min(1).optional(),
     recommendation: zod_1.z.string().min(1).optional(),
     auditeeId: zod_1.z.string().uuid().optional(),
+    /** When provided, replaces the full set of co-responders for this finding. */
+    additionalAuditeeIds: zod_1.z.array(zod_1.z.string().uuid()).optional(),
     dueDate: zod_1.z.string().datetime().optional(),
 });
 exports.UpdateFindingStatusRequestSchema = zod_1.z.object({

@@ -15,6 +15,7 @@ const token_utility_1 = require("../../utility/token.utility");
 const mfa_utility_1 = require("../../utility/mfa.utility");
 const oidc_client_1 = require("../client/oidc.client");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
+const session_guard_1 = require("../../../../shared/security/session-guard");
 class AuthService {
     userService;
     mfaService;
@@ -256,6 +257,8 @@ class AuthService {
             where: { user_id: userId, revoked_at: null },
             data: { revoked_at: new Date() },
         });
+        // Also invalidate outstanding access tokens, not just refresh tokens.
+        await (0, session_guard_1.revokeUserSessions)(userId);
         logger_util_1.logger.info('All refresh tokens revoked', { userId });
     }
     async _issueTokens(userId, ipAddress, userAgent) {
