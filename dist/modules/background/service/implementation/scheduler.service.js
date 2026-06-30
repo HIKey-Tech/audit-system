@@ -70,6 +70,7 @@ exports.JOB_KEYS = {
 class SchedulerService {
     jobs = [];
     tasks = new Map();
+    runningJobs = new Set();
     register(job) {
         this.jobs.push(job);
         logger_util_1.logger.info('Background job registered', { jobKey: job.key });
@@ -135,12 +136,21 @@ class SchedulerService {
         }
     }
     async _runJob(job) {
+        if (this.runningJobs.has(job.key)) {
+            logger_util_1.logger.warn('Background job skipped because previous run is still active', { jobKey: job.key });
+            return;
+        }
+        this.runningJobs.add(job.key);
         logger_util_1.logger.info('Background job started running', { jobKey: job.key });
         const run = await prisma_client_1.prisma.scheduled_Job_Run.create({
             data: {
                 job_id: await this._getJobId(job.key),
                 status: 'running',
             },
+        });
+        await prisma_client_1.prisma.scheduled_Job.update({
+            where: { job_key: job.key },
+            data: { last_status: 'running' },
         });
         const startMs = Date.now();
         try {
@@ -169,6 +179,9 @@ class SchedulerService {
                 data: { last_run_at: new Date(), last_status: 'failure' },
             });
             logger_util_1.logger.error('Background job failed', { err, jobKey: job.key });
+        }
+        finally {
+            this.runningJobs.delete(job.key);
         }
     }
     async _upsertJobRecord(job, isActive) {

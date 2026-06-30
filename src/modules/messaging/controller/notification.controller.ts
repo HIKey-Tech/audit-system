@@ -94,7 +94,7 @@ export class NotificationController {
   private async _getUnreadCount(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const count = await this.notificationService.getUnreadCount(req.user!.id);
-      res.status(200).json(buildResponse({ count }));
+      res.status(200).json(buildResponse({ unread: count }));
     } catch (err) {
       next(err);
     }

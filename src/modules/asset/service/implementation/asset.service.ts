@@ -51,6 +51,7 @@ export class AssetService implements IAssetService {
       select: { id: true },
     });
     if (existing) throw AppError.conflict(`Asset tag '${dto.assetTag}' already exists`);
+    await this._assertUsersActive(dto.ownerId, dto.custodianId);
 
     const asset = await prisma.asset.create({
       data: {
@@ -118,6 +119,7 @@ export class AssetService implements IAssetService {
       });
       if (existing) throw AppError.conflict(`Asset tag '${dto.assetTag}' already exists`);
     }
+    await this._assertUsersActive(dto.ownerId, dto.custodianId);
 
     const asset = await prisma.asset.update({
       where: { id },
@@ -284,7 +286,7 @@ export class AssetService implements IAssetService {
 
   async listAssetsForEngagement(engagementId: string, actor: AssetActorContext): Promise<AssetResponseDto[]> {
     assertHasPermission(actor, 'asset:read');
-    await this._assertEngagementExists(engagementId);
+    await this._assertCanManageEngagementAssetLinks(engagementId, actor);
 
     const links = await prisma.audit_Engagement_Asset.findMany({
       where: { engagement_id: engagementId, asset: { deleted_at: null } },
@@ -528,7 +530,7 @@ export class AssetService implements IAssetService {
   ): Promise<AssetLinkResponseDto> {
     assertHasPermission(actor, 'asset:link');
     await this._assertAssetExists(dto.assetId);
-    await this._assertEngagementExists(engagementId);
+    await this._assertCanManageEngagementAssetLinks(engagementId, actor);
 
     const link = await prisma.audit_Engagement_Asset.upsert({
       where: { engagement_id_asset_id: { engagement_id: engagementId, asset_id: dto.assetId } },
@@ -553,6 +555,7 @@ export class AssetService implements IAssetService {
 
   async unlinkFromEngagement(engagementId: string, assetId: string, actor: AssetActorContext): Promise<void> {
     assertHasPermission(actor, 'asset:link');
+    await this._assertCanManageEngagementAssetLinks(engagementId, actor);
     const result = await prisma.audit_Engagement_Asset.deleteMany({ where: { engagement_id: engagementId, asset_id: assetId } });
     if (result.count === 0) throw AppError.notFound('Asset engagement link');
     this._logUnlink('asset.unlink.engagement', 'audit_engagement_asset', actor, { assetId, engagementId });
@@ -566,7 +569,7 @@ export class AssetService implements IAssetService {
   ): Promise<AssetLinkResponseDto> {
     assertHasPermission(actor, 'asset:link');
     await this._assertAssetExists(assetId);
-    await this._assertFindingExists(findingId);
+    await this._assertCanManageFindingAssetLinks(findingId, actor);
 
     const link = await prisma.audit_Finding_Asset.upsert({
       where: { finding_id_asset_id: { finding_id: findingId, asset_id: assetId } },
@@ -586,6 +589,7 @@ export class AssetService implements IAssetService {
 
   async unlinkFromFinding(assetId: string, findingId: string, actor: AssetActorContext): Promise<void> {
     assertHasPermission(actor, 'asset:link');
+    await this._assertCanManageFindingAssetLinks(findingId, actor);
     const result = await prisma.audit_Finding_Asset.deleteMany({ where: { asset_id: assetId, finding_id: findingId } });
     if (result.count === 0) throw AppError.notFound('Asset finding link');
     this._logUnlink('asset.unlink.finding', 'audit_finding_asset', actor, { assetId, findingId });
@@ -599,7 +603,7 @@ export class AssetService implements IAssetService {
   ): Promise<AssetLinkResponseDto> {
     assertHasPermission(actor, 'asset:link');
     await this._assertAssetExists(assetId);
-    await this._assertRiskExists(riskId);
+    await this._assertCanManageRiskAssetLinks(riskId, actor);
 
     const link = await prisma.risk_Asset_Link.upsert({
       where: { risk_id_asset_id: { risk_id: riskId, asset_id: assetId } },
@@ -619,6 +623,7 @@ export class AssetService implements IAssetService {
 
   async unlinkFromRisk(assetId: string, riskId: string, actor: AssetActorContext): Promise<void> {
     assertHasPermission(actor, 'asset:link');
+    await this._assertCanManageRiskAssetLinks(riskId, actor);
     const result = await prisma.risk_Asset_Link.deleteMany({ where: { asset_id: assetId, risk_id: riskId } });
     if (result.count === 0) throw AppError.notFound('Asset risk link');
     this._logUnlink('asset.unlink.risk', 'risk_asset_link', actor, { assetId, riskId });
@@ -627,7 +632,7 @@ export class AssetService implements IAssetService {
   async linkToEvidence(assetId: string, evidenceId: string, actor: AssetActorContext): Promise<AssetLinkResponseDto> {
     assertHasPermission(actor, 'asset:link');
     await this._assertAssetExists(assetId);
-    await this._assertEvidenceExists(evidenceId);
+    await this._assertCanManageEvidenceAssetLinks(evidenceId, actor);
 
     const link = await prisma.audit_Evidence_Asset.upsert({
       where: { evidence_id_asset_id: { evidence_id: evidenceId, asset_id: assetId } },
@@ -640,6 +645,7 @@ export class AssetService implements IAssetService {
 
   async unlinkFromEvidence(assetId: string, evidenceId: string, actor: AssetActorContext): Promise<void> {
     assertHasPermission(actor, 'asset:link');
+    await this._assertCanManageEvidenceAssetLinks(evidenceId, actor);
     const result = await prisma.audit_Evidence_Asset.deleteMany({ where: { asset_id: assetId, evidence_id: evidenceId } });
     if (result.count === 0) throw AppError.notFound('Asset evidence link');
     this._logUnlink('asset.unlink.evidence', 'audit_evidence_asset', actor, { assetId, evidenceId });
@@ -649,12 +655,27 @@ export class AssetService implements IAssetService {
     assertHasPermission(actor, 'asset:read');
     await this._assertAssetExists(assetId);
 
+    const engagementScope = this._engagementLinkScope(actor);
+    const riskScope = this._riskLinkScope(actor);
+
     const [universeLinks, engagementLinks, findingLinks, riskLinks, evidenceLinks] = await prisma.$transaction([
       prisma.audit_Universe_Asset.findMany({ where: { asset_id: assetId }, orderBy: { created_at: 'desc' } }),
-      prisma.audit_Engagement_Asset.findMany({ where: { asset_id: assetId }, orderBy: { created_at: 'desc' } }),
-      prisma.audit_Finding_Asset.findMany({ where: { asset_id: assetId }, orderBy: { created_at: 'desc' } }),
-      prisma.risk_Asset_Link.findMany({ where: { asset_id: assetId }, orderBy: { created_at: 'desc' } }),
-      prisma.audit_Evidence_Asset.findMany({ where: { asset_id: assetId }, orderBy: { created_at: 'desc' } }),
+      prisma.audit_Engagement_Asset.findMany({
+        where: { asset_id: assetId, ...(engagementScope && { engagement: engagementScope }) },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.audit_Finding_Asset.findMany({
+        where: { asset_id: assetId, ...(engagementScope && { finding: { engagement: engagementScope } }) },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.risk_Asset_Link.findMany({
+        where: { asset_id: assetId, ...(riskScope && { risk: riskScope }) },
+        orderBy: { created_at: 'desc' },
+      }),
+      prisma.audit_Evidence_Asset.findMany({
+        where: { asset_id: assetId, ...(engagementScope && { evidence: { engagement: engagementScope } }) },
+        orderBy: { created_at: 'desc' },
+      }),
     ]);
 
     return {
@@ -671,6 +692,90 @@ export class AssetService implements IAssetService {
       })),
       evidenceLinks: evidenceLinks.map((link) => this._mapLink(link.id, assetId, 'audit_evidence', link.evidence_id, link.created_by_id, link.created_at)),
     };
+  }
+
+  private _engagementLinkScope(actor: AssetActorContext): Prisma.Audit_EngagementWhereInput | null {
+    if (hasPermission(actor, 'engagement:read_all')) return null;
+    return {
+      deleted_at: null,
+      OR: [
+        { lead_auditor_id: actor.id },
+        { audit_manager_id: actor.id },
+        { workflow_assignments: { some: { user_id: actor.id } } },
+      ],
+    };
+  }
+
+  private _riskLinkScope(actor: AssetActorContext): Prisma.Risk_RegisterWhereInput | null {
+    if (hasPermission(actor, 'risk:read_all')) return null;
+    return { deleted_at: null, owner_id: actor.id };
+  }
+  private async _assertUsersActive(ownerId?: string, custodianId?: string | null): Promise<void> {
+    const ids = [ownerId, custodianId].filter((id): id is string => Boolean(id));
+    if (ids.length === 0) return;
+
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids }, deleted_at: null, is_active: true },
+      select: { id: true },
+    });
+    const activeIds = new Set(users.map((user) => user.id));
+    if (ownerId && !activeIds.has(ownerId)) throw AppError.notFound('Active asset owner');
+    if (custodianId && !activeIds.has(custodianId)) throw AppError.notFound('Active asset custodian');
+  }
+
+  private async _assertCanManageEngagementAssetLinks(
+    engagementId: string,
+    actor: AssetActorContext,
+  ): Promise<void> {
+    const scope = this._engagementLinkScope(actor);
+    const engagement = await prisma.audit_Engagement.findFirst({
+      where: { id: engagementId, deleted_at: null, ...(scope ?? {}) },
+      select: { id: true },
+    });
+    if (!engagement) throw AppError.notFound('Audit engagement');
+  }
+
+  private async _assertCanManageFindingAssetLinks(
+    findingId: string,
+    actor: AssetActorContext,
+  ): Promise<void> {
+    const scope = this._engagementLinkScope(actor);
+    const finding = await prisma.audit_Finding.findFirst({
+      where: {
+        id: findingId,
+        deleted_at: null,
+        ...(scope && { engagement: scope }),
+      },
+      select: { id: true },
+    });
+    if (!finding) throw AppError.notFound('Audit finding');
+  }
+
+  private async _assertCanManageEvidenceAssetLinks(
+    evidenceId: string,
+    actor: AssetActorContext,
+  ): Promise<void> {
+    const scope = this._engagementLinkScope(actor);
+    const evidence = await prisma.audit_Evidence.findFirst({
+      where: {
+        id: evidenceId,
+        ...(scope && { engagement: scope }),
+      },
+      select: { id: true },
+    });
+    if (!evidence) throw AppError.notFound('Audit evidence');
+  }
+
+  private async _assertCanManageRiskAssetLinks(
+    riskId: string,
+    actor: AssetActorContext,
+  ): Promise<void> {
+    const scope = this._riskLinkScope(actor);
+    const risk = await prisma.risk_Register.findFirst({
+      where: { id: riskId, deleted_at: null, ...(scope ?? {}) },
+      select: { id: true },
+    });
+    if (!risk) throw AppError.notFound('Risk');
   }
 
   private async _assertAssetExists(id: string): Promise<void> {

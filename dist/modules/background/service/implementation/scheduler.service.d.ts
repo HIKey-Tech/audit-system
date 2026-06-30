@@ -29,6 +29,7 @@ interface RegisteredJob {
 declare class SchedulerService {
     private readonly jobs;
     private readonly tasks;
+    private readonly runningJobs;
     register(job: RegisteredJob): void;
     startAll(): Promise<void>;
     stopAll(): void;

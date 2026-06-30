@@ -13,6 +13,7 @@ const assessment_response_dto_1 = require("../../dto/response/assessment.respons
 class RiskAssessmentService {
     async createAssessment(riskId, dto, actor) {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:assess');
+        await this._assertRiskExists(riskId, actor);
         const score = (0, risk_utility_1.calculateRiskScore)(dto.likelihood, dto.impact);
         const assessedAt = dto.assessedAt ? new Date(dto.assessedAt) : new Date();
         const assessment = await prisma_client_1.prisma.$transaction(async (tx) => {

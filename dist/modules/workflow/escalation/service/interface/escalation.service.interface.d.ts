@@ -5,7 +5,7 @@ import { EscalationPolicyResponseDto, EscalationResponseDto } from '../../dto/re
 export interface IEscalationService {
     checkAndEscalate(): Promise<WorkflowEscalationRunResult>;
     acknowledgeEscalation(escalationId: string, userId: string): Promise<EscalationResponseDto>;
-    getEscalationHistory(entityType: WorkflowEscalationEntityType, entityId: string): Promise<EscalationResponseDto[]>;
+    getEscalationHistory(entityType: WorkflowEscalationEntityType, entityId: string, actor: WorkflowActorContext): Promise<EscalationResponseDto[]>;
     listEscalationPolicies(): Promise<EscalationPolicyResponseDto[]>;
     createOrUpdateEscalationPolicy(dto: UpsertEscalationPolicyRequestDto, updatedBy: WorkflowActorContext): Promise<EscalationPolicyResponseDto>;
 }

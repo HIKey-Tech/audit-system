@@ -12,7 +12,7 @@ export interface IFollowUpService {
         buffer: Buffer;
     }, actor: ActorContext): Promise<FollowUpResponseDto>;
     verifyRemediation(findingId: string, dto: VerifyRemediationRequestDto, actor: ActorContext): Promise<FollowUpResponseDto>;
-    getFollowUp(findingId: string): Promise<FollowUpResponseDto>;
-    listPendingFollowUps(engagementId: string): Promise<FollowUpResponseDto[]>;
+    getFollowUp(findingId: string, actor: ActorContext): Promise<FollowUpResponseDto>;
+    listPendingFollowUps(engagementId: string, actor: ActorContext): Promise<FollowUpResponseDto[]>;
 }
 //# sourceMappingURL=follow-up.service.interface.d.ts.map

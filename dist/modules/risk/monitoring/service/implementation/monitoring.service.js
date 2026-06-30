@@ -36,11 +36,13 @@ class RiskMonitoringService {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk_monitoring:read');
         const staleCutoff = new Date();
         staleCutoff.setDate(staleCutoff.getDate() - 90);
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
         const risks = await prisma_client_1.prisma.risk_Register.findMany({
             where: {
                 deleted_at: null,
                 status: { in: [risk_enum_1.RiskStatus.Open, risk_enum_1.RiskStatus.Mitigated] },
                 current_score: { gte: 13 },
+                ...(restrictToOwner && { owner_id: actor.id }),
                 OR: [
                     { last_assessed_at: null },
                     { last_assessed_at: { lt: staleCutoff } },

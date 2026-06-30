@@ -12,9 +12,13 @@ interface WorkflowUserLike {
 export interface AssignmentResponseDto {
     id: string;
     engagementId: string;
+    engagementReference: string | null;
+    engagementTitle: string | null;
     userId: string;
+    userName: string | null;
     role: string;
     assignedById: string;
+    assignedByName: string | null;
     assignedAt: string;
     createdAt: string;
     user?: WorkflowUserBrief;

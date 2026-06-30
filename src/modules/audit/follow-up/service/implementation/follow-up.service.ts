@@ -171,6 +171,21 @@ export class FollowUpService implements IFollowUpService {
     assertHasPermission(actor.permissions, 'followup:verify');
     const finding = await this._getFinding(findingId);
 
+    if (!actor.permissions.includes('engagement:read_all')) {
+      const allowed = await prisma.audit_Engagement.count({
+        where: {
+          id: finding.engagement_id,
+          deleted_at: null,
+          OR: [
+            { lead_auditor_id: actor.id },
+            { audit_manager_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+          ],
+        },
+      }) > 0;
+      if (!allowed) throw AppError.forbidden('Only the assigned audit team can verify remediation');
+    }
+
     const followUp = await prisma.$transaction(async (tx) => {
       if (dto.verificationStatus === VerificationStatus.Verified) {
         await tx.audit_Finding.update({
@@ -267,16 +282,60 @@ export class FollowUpService implements IFollowUpService {
     return mapFollowUpToResponse(followUp);
   }
 
-  async getFollowUp(findingId: string): Promise<FollowUpResponseDto> {
+  async getFollowUp(findingId: string, actor: ActorContext): Promise<FollowUpResponseDto> {
     const followUp = await prisma.audit_Follow_Up.findUnique({
       where: { finding_id: findingId },
-      include: { finding: true, remediation_evidence: true },
+      include: {
+        finding: {
+          include: {
+            responders: { select: { user_id: true } }
+          }
+        },
+        remediation_evidence: true
+      },
     });
-    if (!followUp) throw AppError.notFound('Audit follow-up');
+    if (!followUp || followUp.finding.deleted_at !== null) throw AppError.notFound('Audit follow-up');
+
+    const isOversight = actor.permissions.includes('finding:read_all');
+    const isTeamOrResponder =
+      isOversight ||
+      followUp.finding.created_by_id === actor.id ||
+      followUp.finding.auditee_id === actor.id ||
+      followUp.finding.responders.some((r) => r.user_id === actor.id) ||
+      (await prisma.audit_Engagement.count({
+        where: {
+          id: followUp.finding.engagement_id,
+          deleted_at: null,
+          OR: [
+            { lead_auditor_id: actor.id },
+            { audit_manager_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+          ],
+        },
+      })) > 0;
+
+    if (!isTeamOrResponder) throw AppError.notFound('Audit follow-up');
+
     return mapFollowUpToResponse(followUp);
   }
 
-  async listPendingFollowUps(engagementId: string): Promise<FollowUpResponseDto[]> {
+  async listPendingFollowUps(engagementId: string, actor: ActorContext): Promise<FollowUpResponseDto[]> {
+    const allowed =
+      actor.permissions.includes('engagement:read_all') ||
+      (await prisma.audit_Engagement.count({
+        where: {
+          id: engagementId,
+          deleted_at: null,
+          OR: [
+            { lead_auditor_id: actor.id },
+            { audit_manager_id: actor.id },
+            { auditee_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+          ],
+        },
+      })) > 0;
+    if (!allowed) throw AppError.notFound('Audit engagement');
+
     const followUps = await prisma.audit_Follow_Up.findMany({
       where: {
         finding: { engagement_id: engagementId, deleted_at: null },

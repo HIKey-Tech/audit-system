@@ -229,7 +229,7 @@ class DocumentController {
                 module: req.body.module,
                 entityType: req.body.entityType,
                 entityId: req.body.entityId,
-            });
+            }, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(document, 'Document uploaded'));
         }
         catch (err) {
@@ -324,7 +324,7 @@ class DocumentController {
                 fileSize: req.file.size,
                 buffer: req.file.buffer,
                 changeNote: req.body.changeNote,
-            });
+            }, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(version, 'New document version uploaded'));
         }
         catch (err) {

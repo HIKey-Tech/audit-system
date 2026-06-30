@@ -32,18 +32,21 @@ export declare const AddPlanItemRequestSchema: z.ZodObject<{
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     priority: z.ZodNativeEnum<typeof AuditPriority>;
+    notes: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, "strip", z.ZodTypeAny, {
     priority: AuditPriority;
     universeId: string;
     auditType: AuditType;
     plannedStartDate: string;
     plannedEndDate: string;
+    notes?: string | null | undefined;
 }, {
     priority: AuditPriority;
     universeId: string;
     auditType: AuditType;
     plannedStartDate: string;
     plannedEndDate: string;
+    notes?: string | null | undefined;
 }>;
 export declare const RejectPlanRequestSchema: z.ZodObject<{
     reason: z.ZodString;

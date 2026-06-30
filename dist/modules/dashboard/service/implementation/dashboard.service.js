@@ -229,10 +229,10 @@ class DashboardService {
     // =============================================================
     // Risk overview
     // =============================================================
-    async getRiskOverview(_actor) {
+    async getRiskOverview(actor) {
         const staleCutoff = new Date();
         staleCutoff.setDate(staleCutoff.getDate() - 90);
-        const baseWhere = { deleted_at: null };
+        const baseWhere = this._riskWhere(actor);
         const [totalRisks, critical, high, medium, low, statusGroups, topFiveRaw, staleRisks,] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.risk_Register.count({ where: baseWhere }),
             prisma_client_1.prisma.risk_Register.count({
@@ -315,18 +315,17 @@ class DashboardService {
     // =============================================================
     // Risk matrix (likelihood × impact heat map)
     // =============================================================
-    async getRiskMatrix() {
-        // Org-wide and shared across all viewers (risk data is not actor-scoped),
-        // so a single cached entry serves every dashboard load. Short TTL keeps it
-        // near-real-time; the cache never throws, so a miss just recomputes.
-        return cache_client_1.cache.getOrSet('dashboard:risk-matrix:org', 30, () => this._computeRiskMatrix());
+    async getRiskMatrix(actor) {
+        const scoped = !actor.permissions.includes('risk:read_all');
+        const cacheKey = scoped
+            ? `dashboard:risk-matrix:user:${actor.id}`
+            : 'dashboard:risk-matrix:org';
+        return cache_client_1.cache.getOrSet(cacheKey, 30, () => this._computeRiskMatrix(actor));
     }
-    async _computeRiskMatrix() {
-        // Only active risks are plotted — closed/accepted ones are no longer "live"
-        // exposure and would distort the heat map.
+    async _computeRiskMatrix(actor) {
         const groups = await prisma_client_1.prisma.risk_Register.groupBy({
             by: ['likelihood', 'impact'],
-            where: { deleted_at: null, status: { in: ['open', 'mitigated'] } },
+            where: { ...this._riskWhere(actor), status: { in: ['open', 'mitigated'] } },
             _count: { _all: true },
         });
         const counts = new Map();
@@ -587,6 +586,12 @@ class DashboardService {
     // =============================================================
     // Internal helpers
     // =============================================================
+    _riskWhere(actor) {
+        return {
+            deleted_at: null,
+            ...(actor.permissions.includes('risk:read_all') ? {} : { owner_id: actor.id }),
+        };
+    }
     async _averageDaysToCloseRaw(auditeeId) {
         if (auditeeId) {
             return prisma_client_1.prisma.$queryRaw(client_1.Prisma.sql `

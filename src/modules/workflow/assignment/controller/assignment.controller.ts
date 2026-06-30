@@ -57,9 +57,9 @@ export class AssignmentController {
     /**
      * @route  GET /workflow/assignments/candidates/:engagementId
      * @desc   Get candidate users for engagement assignment with skills and workload
-     * @access Private - assignment:read
+     * @access Private - assignment:create
      */
-    this.router.get('/candidates/:engagementId', requirePermission('assignment:read'), this._getCandidates.bind(this));
+    this.router.get('/candidates/:engagementId', requirePermission('assignment:create'), this._getCandidates.bind(this));
   }
 
   private async _assignStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -73,7 +73,7 @@ export class AssignmentController {
 
   private async _getAssignments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const assignments = await this.assignmentService.getAssignments(req.params.id);
+      const assignments = await this.assignmentService.getAssignments(req.params.id, req.user!);
       res.status(200).json(buildResponse(assignments));
     } catch (err) {
       next(err);
@@ -109,7 +109,7 @@ export class AssignmentController {
 
   private async _getCandidates(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const candidates = await this.assignmentService.getCandidates(req.params.engagementId);
+      const candidates = await this.assignmentService.getCandidates(req.params.engagementId, req.user!);
       res.json(buildResponse(candidates, 'Candidates retrieved'));
     } catch (err) {
       next(err);

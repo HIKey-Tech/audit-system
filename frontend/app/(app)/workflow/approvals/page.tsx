@@ -1,14 +1,15 @@
 'use client';
 
 import { useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Inbox } from 'lucide-react';
+import { Inbox, Send } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
-import { Badge } from '@/components/ui/Badge';
+import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Input';
@@ -21,6 +22,7 @@ import { cn } from '@/lib/utils/cn';
 
 export default function ApprovalsPage(): JSX.Element {
   const qc = useQueryClient();
+  const [view, setView] = useState<'inbox' | 'history'>('inbox');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -28,6 +30,12 @@ export default function ApprovalsPage(): JSX.Element {
   const pending = useQuery({
     queryKey: ['workflow', 'pending'],
     queryFn: () => workflowApi.listPending(),
+  });
+
+  const history = useQuery({
+    queryKey: ['workflow', 'history'],
+    queryFn: () => workflowApi.listHistory(),
+    enabled: view === 'history',
   });
 
   const reject = useMutation({
@@ -45,9 +53,71 @@ export default function ApprovalsPage(): JSX.Element {
 
   return (
     <div>
-      <PageHeader title="Audit Approvals" subtitle="Audit records (plans, engagements, reports) awaiting your sign-off. For requests between colleagues, see Requests." />
+      <PageHeader
+        title="Audit Approvals"
+        subtitle="Audit records (plans, engagements, reports) awaiting your sign-off."
+        actions={
+          <Link href="/requests">
+            <Button variant="secondary" size="sm" leftIcon={<Send className="h-4 w-4" />}>
+              Requests history
+            </Button>
+          </Link>
+        }
+      />
 
-      {pending.isLoading ? (
+      <div className="mb-4 flex gap-1 border-b border-border">
+        {(['inbox', 'history'] as const).map((v) => (
+          <button
+            key={v}
+            onClick={() => setView(v)}
+            className={cn(
+              'border-b-2 px-4 py-2 text-sm font-medium transition-colors',
+              view === v
+                ? 'border-primary text-primary'
+                : 'border-transparent text-text-secondary hover:text-text-primary',
+            )}
+          >
+            {v === 'inbox' ? 'Pending inbox' : 'History'}
+          </button>
+        ))}
+      </div>
+
+      {view === 'history' ? (
+        history.isLoading ? (
+          <Card>
+            <Skeleton className="h-12 w-full" />
+          </Card>
+        ) : !history.data || history.data.length === 0 ? (
+          <Card>
+            <EmptyState
+              icon={<Inbox className="h-4 w-4" />}
+              title="No approval history yet"
+              description="Approvals you submit or action will appear here once completed."
+            />
+          </Card>
+        ) : (
+          <Card padded={false}>
+            <ul className="divide-y divide-border">
+              {history.data.map((a) => (
+                <li key={a.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="gray">{humanizeStatus(a.entityType)}</Badge>
+                      <StatusBadge status={a.status} />
+                    </div>
+                    <p className="mt-1 text-xs text-text-secondary">
+                      Submitted by {a.submittedByName} · {formatRelative(a.updatedAt)}
+                    </p>
+                    {a.rejectionReason && (
+                      <p className="mt-1 text-xs text-danger">Reason: {a.rejectionReason}</p>
+                    )}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          </Card>
+        )
+      ) : pending.isLoading ? (
         <Card>
           <Skeleton className="h-12 w-full" />
         </Card>

@@ -20,7 +20,11 @@ import { PlanResponseDto, mapPlanToResponse } from '../../dto/response/planning.
 import { IPlanningService } from '../interface/planning.service.interface';
 
 const planInclude = {
-  items: { include: { universe: true }, orderBy: { created_at: 'asc' as const } },
+  approved_by: { select: { display_name: true, first_name: true, last_name: true } },
+  items: {
+    include: { universe: true, engagements: { select: { id: true }, where: { deleted_at: null } } },
+    orderBy: { created_at: 'asc' as const },
+  },
 };
 
 export class PlanningService implements IPlanningService {
@@ -133,6 +137,7 @@ export class PlanningService implements IPlanningService {
         planned_start_date: new Date(dto.plannedStartDate),
         planned_end_date: new Date(dto.plannedEndDate),
         priority: dto.priority,
+        notes: dto.notes ?? null,
       },
     });
 
@@ -248,6 +253,7 @@ export class PlanningService implements IPlanningService {
       prisma.audit_Plan.count({ where }),
       prisma.audit_Plan.findMany({
         where,
+        include: { _count: { select: { items: true } } },
         orderBy: { [query.sortBy]: query.sortOrder },
         skip,
         take,

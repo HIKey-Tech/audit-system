@@ -1,6 +1,7 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.RiskRegisterService = void 0;
+const client_1 = require("@prisma/client");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
@@ -13,20 +14,27 @@ class RiskRegisterService {
     async createRisk(dto, actor) {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:create');
         const score = (0, risk_utility_1.calculateRiskScore)(dto.likelihood, dto.impact);
-        const risk = await prisma_client_1.prisma.risk_Register.create({
-            data: {
-                title: dto.title,
-                description: dto.description,
-                category_id: dto.categoryId,
-                owner_id: dto.ownerId,
-                likelihood: dto.likelihood,
-                impact: dto.impact,
-                current_score: score,
-                status: dto.status,
-                universe_id: dto.universeId ?? null,
-                created_by_id: actor.id,
-            },
-            include: prisma_types_1.riskRegisterWithDetailsInclude,
+        this._assertCanAssignOwner(dto.ownerId, actor);
+        await this._assertReferencesValid(dto.categoryId, dto.ownerId, dto.universeId ?? null);
+        const risk = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const created = await tx.risk_Register.create({
+                data: {
+                    title: dto.title,
+                    description: dto.description,
+                    category_id: dto.categoryId,
+                    owner_id: dto.ownerId,
+                    likelihood: dto.likelihood,
+                    impact: dto.impact,
+                    current_score: score,
+                    status: dto.status,
+                    universe_id: dto.universeId ?? null,
+                    created_by_id: actor.id,
+                },
+                include: prisma_types_1.riskRegisterWithDetailsInclude,
+            });
+            if (dto.universeId)
+                await this._syncUniverseRiskScore(tx, dto.universeId);
+            return created;
         });
         logger_util_1.logger.info('Risk created', { riskId: risk.id, actorId: actor.id, currentScore: score });
         audit_log_service_1.auditLogService.logAsync({
@@ -42,23 +50,31 @@ class RiskRegisterService {
     async updateRisk(id, dto, actor) {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:update');
         const existing = await this._getExistingRisk(id);
+        await this._assertCanMutateRisk(existing, actor);
+        if (dto.ownerId)
+            this._assertCanAssignOwner(dto.ownerId, actor);
+        await this._assertReferencesValid(dto.categoryId, dto.ownerId, dto.universeId);
         const likelihood = dto.likelihood ?? existing.likelihood;
         const impact = dto.impact ?? existing.impact;
         const score = (0, risk_utility_1.calculateRiskScore)(likelihood, impact);
         const scoreChanged = likelihood !== existing.likelihood || impact !== existing.impact;
-        const risk = await prisma_client_1.prisma.risk_Register.update({
-            where: { id },
-            data: {
-                ...(dto.title !== undefined && { title: dto.title }),
-                ...(dto.description !== undefined && { description: dto.description }),
-                ...(dto.categoryId !== undefined && { category_id: dto.categoryId }),
-                ...(dto.ownerId !== undefined && { owner_id: dto.ownerId }),
-                ...(dto.likelihood !== undefined && { likelihood: dto.likelihood }),
-                ...(dto.impact !== undefined && { impact: dto.impact }),
-                ...(scoreChanged && { current_score: score }),
-                ...(dto.universeId !== undefined && { universe_id: dto.universeId }),
-            },
-            include: prisma_types_1.riskRegisterWithDetailsInclude,
+        const risk = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const updated = await tx.risk_Register.update({
+                where: { id },
+                data: {
+                    ...(dto.title !== undefined && { title: dto.title }),
+                    ...(dto.description !== undefined && { description: dto.description }),
+                    ...(dto.categoryId !== undefined && { category_id: dto.categoryId }),
+                    ...(dto.ownerId !== undefined && { owner_id: dto.ownerId }),
+                    ...(dto.likelihood !== undefined && { likelihood: dto.likelihood }),
+                    ...(dto.impact !== undefined && { impact: dto.impact }),
+                    ...(scoreChanged && { current_score: score }),
+                    ...(dto.universeId !== undefined && { universe_id: dto.universeId }),
+                },
+                include: prisma_types_1.riskRegisterWithDetailsInclude,
+            });
+            await this._syncAffectedUniverseRiskScores(tx, existing.universe_id, updated.universe_id);
+            return updated;
         });
         logger_util_1.logger.info('Risk updated', { riskId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
@@ -73,11 +89,16 @@ class RiskRegisterService {
     }
     async updateRiskStatus(id, dto, actor) {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:update');
-        await this._getExistingRisk(id);
-        const risk = await prisma_client_1.prisma.risk_Register.update({
-            where: { id },
-            data: { status: dto.status },
-            include: prisma_types_1.riskRegisterWithDetailsInclude,
+        const existing = await this._getExistingRisk(id);
+        await this._assertCanMutateRisk(existing, actor);
+        const risk = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const updated = await tx.risk_Register.update({
+                where: { id },
+                data: { status: dto.status },
+                include: prisma_types_1.riskRegisterWithDetailsInclude,
+            });
+            await this._syncAffectedUniverseRiskScores(tx, existing.universe_id, updated.universe_id);
+            return updated;
         });
         logger_util_1.logger.info('Risk status updated', { riskId: id, actorId: actor.id, status: dto.status });
         audit_log_service_1.auditLogService.logAsync({
@@ -92,10 +113,15 @@ class RiskRegisterService {
     }
     async deleteRisk(id, actor) {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:delete');
-        await this._getExistingRisk(id);
-        await prisma_client_1.prisma.risk_Register.update({
-            where: { id },
-            data: { deleted_at: new Date() },
+        const existing = await this._getExistingRisk(id);
+        await this._assertCanMutateRisk(existing, actor);
+        await prisma_client_1.prisma.$transaction(async (tx) => {
+            await tx.risk_Register.update({
+                where: { id },
+                data: { deleted_at: new Date() },
+            });
+            if (existing.universe_id)
+                await this._syncUniverseRiskScore(tx, existing.universe_id);
         });
         logger_util_1.logger.info('Risk soft-deleted', { riskId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
@@ -158,10 +184,80 @@ class RiskRegisterService {
         });
         return risks.map(register_response_dto_1.mapRiskRegisterToResponse);
     }
+    _assertCanAssignOwner(ownerId, actor) {
+        if (actor.permissions.includes('risk:read_all'))
+            return;
+        if (ownerId === actor.id)
+            return;
+        throw app_error_1.AppError.forbidden('You are not authorized to assign this risk to another owner');
+    }
+    async _syncAffectedUniverseRiskScores(tx, previousUniverseId, nextUniverseId) {
+        if (previousUniverseId)
+            await this._syncUniverseRiskScore(tx, previousUniverseId);
+        if (nextUniverseId && nextUniverseId !== previousUniverseId) {
+            await this._syncUniverseRiskScore(tx, nextUniverseId);
+        }
+    }
+    async _syncUniverseRiskScore(tx, universeId) {
+        const aggregate = await tx.risk_Register.aggregate({
+            where: {
+                universe_id: universeId,
+                deleted_at: null,
+                status: { not: 'closed' },
+            },
+            _max: { current_score: true },
+        });
+        await tx.audit_Universe.update({
+            where: { id: universeId },
+            data: {
+                risk_score: aggregate._max.current_score === null
+                    ? null
+                    : new client_1.Prisma.Decimal(aggregate._max.current_score),
+            },
+        });
+    }
+    async _assertReferencesValid(categoryId, ownerId, universeId) {
+        const checks = [];
+        if (categoryId !== undefined) {
+            checks.push(prisma_client_1.prisma.risk_Category.findFirst({
+                where: { id: categoryId, is_active: true },
+                select: { id: true },
+            }).then((category) => {
+                if (!category)
+                    throw app_error_1.AppError.notFound('Active risk category');
+            }));
+        }
+        if (ownerId !== undefined) {
+            checks.push(prisma_client_1.prisma.user.findFirst({
+                where: { id: ownerId, deleted_at: null, is_active: true },
+                select: { id: true },
+            }).then((owner) => {
+                if (!owner)
+                    throw app_error_1.AppError.notFound('Active risk owner');
+            }));
+        }
+        if (universeId !== undefined && universeId !== null) {
+            checks.push(prisma_client_1.prisma.audit_Universe.findFirst({
+                where: { id: universeId, deleted_at: null },
+                select: { id: true },
+            }).then((universe) => {
+                if (!universe)
+                    throw app_error_1.AppError.notFound('Audit universe entity');
+            }));
+        }
+        await Promise.all(checks);
+    }
+    async _assertCanMutateRisk(risk, actor) {
+        if (actor.permissions.includes('risk:read_all'))
+            return;
+        if (risk.owner_id === actor.id)
+            return;
+        throw app_error_1.AppError.forbidden('You are not authorized to modify this risk');
+    }
     async _getExistingRisk(id) {
         const risk = await prisma_client_1.prisma.risk_Register.findFirst({
             where: { id, deleted_at: null },
-            select: { id: true, likelihood: true, impact: true },
+            select: { id: true, likelihood: true, impact: true, owner_id: true, universe_id: true },
         });
         if (!risk)
             throw app_error_1.AppError.notFound('Risk');

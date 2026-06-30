@@ -4,6 +4,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
 };
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationService = exports.NotificationService = void 0;
+const app_error_1 = require("../../../../shared/errors/app.error");
 const nodemailer_1 = __importDefault(require("nodemailer"));
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
@@ -98,10 +99,12 @@ class NotificationService {
         };
     }
     async markNotificationRead(notificationId, userId) {
-        await prisma_client_1.prisma.notification.updateMany({
+        const result = await prisma_client_1.prisma.notification.updateMany({
             where: { id: notificationId, user_id: userId },
             data: { is_read: true, read_at: new Date() },
         });
+        if (result.count === 0)
+            throw app_error_1.AppError.notFound('Notification');
     }
     async markAllRead(userId) {
         const result = await prisma_client_1.prisma.notification.updateMany({

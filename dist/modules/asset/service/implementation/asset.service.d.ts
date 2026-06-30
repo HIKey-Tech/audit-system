@@ -32,6 +32,13 @@ export declare class AssetService implements IAssetService {
     linkToEvidence(assetId: string, evidenceId: string, actor: AssetActorContext): Promise<AssetLinkResponseDto>;
     unlinkFromEvidence(assetId: string, evidenceId: string, actor: AssetActorContext): Promise<void>;
     getAuditContext(assetId: string, actor: AssetActorContext): Promise<AssetAuditContextResponseDto>;
+    private _engagementLinkScope;
+    private _riskLinkScope;
+    private _assertUsersActive;
+    private _assertCanManageEngagementAssetLinks;
+    private _assertCanManageFindingAssetLinks;
+    private _assertCanManageEvidenceAssetLinks;
+    private _assertCanManageRiskAssetLinks;
     private _assertAssetExists;
     private _assertUniverseExists;
     private _assertEngagementExists;

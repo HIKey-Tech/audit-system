@@ -297,26 +297,57 @@ export class ReportService implements IReportService {
     return mapReportToResponse(updated);
   }
 
-  async getReport(engagementId: string): Promise<ReportResponseDto> {
+  private _actorReportScope(actor: ActorContext): Prisma.Audit_ReportWhereInput | undefined {
+    if (actor.permissions.includes('engagement:read_all')) return undefined;
+
+    return {
+      engagement: {
+        OR: [
+          { lead_auditor_id: actor.id },
+          { audit_manager_id: actor.id },
+          { workflow_assignments: { some: { user_id: actor.id } } },
+          {
+            AND: [
+              { auditee_id: actor.id },
+              { report: { status: ReportStatus.Issued } },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  async getReport(engagementId: string, actor: ActorContext): Promise<ReportResponseDto> {
+    const scope = this._actorReportScope(actor);
     const report = await prisma.audit_Report.findFirst({
-      where: { engagement_id: engagementId, deleted_at: null },
+      where: {
+        engagement_id: engagementId,
+        deleted_at: null,
+        ...(scope ?? {}),
+      },
       include: reportInclude,
     });
     if (!report) throw AppError.notFound('Audit report');
     return mapReportToResponse(report);
   }
 
-  async getReportById(id: string): Promise<ReportResponseDto> {
+  async getReportById(id: string, actor: ActorContext): Promise<ReportResponseDto> {
+    const scope = this._actorReportScope(actor);
     const report = await prisma.audit_Report.findFirst({
-      where: { id, deleted_at: null },
+      where: {
+        id,
+        deleted_at: null,
+        ...(scope ?? {}),
+      },
       include: reportInclude,
     });
     if (!report) throw AppError.notFound('Audit report');
     return mapReportToResponse(report);
   }
 
-  async listReports(query: ReportQueryDto): Promise<{ reports: ReportResponseDto[]; meta: PaginationMeta }> {
+  async listReports(query: ReportQueryDto, actor: ActorContext): Promise<{ reports: ReportResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
+    const scope = this._actorReportScope(actor);
     const where: Prisma.Audit_ReportWhereInput = {
       deleted_at: null,
       ...(query.status && { status: query.status }),
@@ -327,6 +358,7 @@ export class ReportService implements IReportService {
           { engagement: { reference_number: { contains: query.search } } },
         ],
       }),
+      ...(scope ?? {}),
     };
 
     const [total, reports] = await prisma.$transaction([
@@ -346,7 +378,13 @@ export class ReportService implements IReportService {
     };
   }
 
-  async exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile> {
+  async exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile> {
+    const scope = this._actorReportScope(actor);
+    const exists = await prisma.audit_Report.count({
+      where: { id, deleted_at: null, ...(scope ?? {}) },
+    });
+    if (exists === 0) throw AppError.notFound('Audit report');
+
     const file = await this.reportGenerationService.exportReport(id, format);
     return {
       fileName: file.filename,

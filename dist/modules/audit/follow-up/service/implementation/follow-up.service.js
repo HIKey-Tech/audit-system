@@ -146,6 +146,21 @@ class FollowUpService {
     async verifyRemediation(findingId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'followup:verify');
         const finding = await this._getFinding(findingId);
+        if (!actor.permissions.includes('engagement:read_all')) {
+            const allowed = await prisma_client_1.prisma.audit_Engagement.count({
+                where: {
+                    id: finding.engagement_id,
+                    deleted_at: null,
+                    OR: [
+                        { lead_auditor_id: actor.id },
+                        { audit_manager_id: actor.id },
+                        { workflow_assignments: { some: { user_id: actor.id } } },
+                    ],
+                },
+            }) > 0;
+            if (!allowed)
+                throw app_error_1.AppError.forbidden('Only the assigned audit team can verify remediation');
+        }
         const followUp = await prisma_client_1.prisma.$transaction(async (tx) => {
             if (dto.verificationStatus === audit_enum_1.VerificationStatus.Verified) {
                 await tx.audit_Finding.update({
@@ -234,16 +249,56 @@ class FollowUpService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
-    async getFollowUp(findingId) {
+    async getFollowUp(findingId, actor) {
         const followUp = await prisma_client_1.prisma.audit_Follow_Up.findUnique({
             where: { finding_id: findingId },
-            include: { finding: true, remediation_evidence: true },
+            include: {
+                finding: {
+                    include: {
+                        responders: { select: { user_id: true } }
+                    }
+                },
+                remediation_evidence: true
+            },
         });
-        if (!followUp)
+        if (!followUp || followUp.finding.deleted_at !== null)
+            throw app_error_1.AppError.notFound('Audit follow-up');
+        const isOversight = actor.permissions.includes('finding:read_all');
+        const isTeamOrResponder = isOversight ||
+            followUp.finding.created_by_id === actor.id ||
+            followUp.finding.auditee_id === actor.id ||
+            followUp.finding.responders.some((r) => r.user_id === actor.id) ||
+            (await prisma_client_1.prisma.audit_Engagement.count({
+                where: {
+                    id: followUp.finding.engagement_id,
+                    deleted_at: null,
+                    OR: [
+                        { lead_auditor_id: actor.id },
+                        { audit_manager_id: actor.id },
+                        { workflow_assignments: { some: { user_id: actor.id } } },
+                    ],
+                },
+            })) > 0;
+        if (!isTeamOrResponder)
             throw app_error_1.AppError.notFound('Audit follow-up');
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
-    async listPendingFollowUps(engagementId) {
+    async listPendingFollowUps(engagementId, actor) {
+        const allowed = actor.permissions.includes('engagement:read_all') ||
+            (await prisma_client_1.prisma.audit_Engagement.count({
+                where: {
+                    id: engagementId,
+                    deleted_at: null,
+                    OR: [
+                        { lead_auditor_id: actor.id },
+                        { audit_manager_id: actor.id },
+                        { auditee_id: actor.id },
+                        { workflow_assignments: { some: { user_id: actor.id } } },
+                    ],
+                },
+            })) > 0;
+        if (!allowed)
+            throw app_error_1.AppError.notFound('Audit engagement');
         const followUps = await prisma_client_1.prisma.audit_Follow_Up.findMany({
             where: {
                 finding: { engagement_id: engagementId, deleted_at: null },

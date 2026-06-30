@@ -5,11 +5,14 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListChecks } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { Paperclip, Check, Download } from 'lucide-react';
+
 import { Card } from '@/components/ui/Card';
 import { Select, Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { checklistsApi } from '@/lib/api/audit';
+import { checklistsApi, evidenceApi } from '@/lib/api/audit';
+import { documentsApi } from '@/lib/api/documents';
 import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditEngagementDetail, AuditChecklistItem } from '@/lib/types/domain';
 
@@ -41,6 +44,16 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
     queryFn: () => checklistsApi.listByEngagement(engagement.id),
   });
 
+  const evidence = useQuery({
+    queryKey: ['engagements', engagement.id, 'evidence'],
+    queryFn: () => evidenceApi.listByEngagement(engagement.id),
+  });
+
+  const evidenceById = useMemo(
+    () => new Map((evidence.data ?? []).map((e) => [e.id, e])),
+    [evidence.data],
+  );
+
   const update = useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: { result: string; notes?: string | null } }) =>
       checklistsApi.update(id, dto),
@@ -49,6 +62,19 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
       qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const attachEvidence = useMutation({
+    mutationFn: async ({ itemId, file }: { itemId: string; file: File }) => {
+      const evidence = await evidenceApi.upload(engagement.id, file, `Checklist evidence: ${itemId}`);
+      return checklistsApi.linkEvidence(itemId, evidence.id);
+    },
+    onSuccess: () => {
+      toast.success('Evidence attached');
+      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'checklists'] });
+      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'evidence'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to attach evidence'),
   });
 
   const { flat, grouped } = useMemo(() => normalizeChecklists(list.data), [list.data]);
@@ -132,8 +158,25 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
                           initial={item.notes ?? ''}
                           onSave={(v) => update.mutate({ id: item.id, dto: { result: item.result, notes: v || null } })}
                         />
+                        <EvidenceAttach
+                          attached={Boolean(item.evidenceId)}
+                          highlight={item.result === 'failed' && !item.evidenceId}
+                          isUploading={attachEvidence.isPending && attachEvidence.variables?.itemId === item.id}
+                          onFile={(file) => attachEvidence.mutate({ itemId: item.id, file })}
+                        />
                       </div>
                     </div>
+                    {item.evidenceId && evidenceById.get(item.evidenceId) && (
+                      <a
+                        href={documentsApi.downloadUrl(evidenceById.get(item.evidenceId)!.documentId)}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="mt-2 inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                      >
+                        <Download className="h-3.5 w-3.5" />
+                        {evidenceById.get(item.evidenceId)!.fileName}
+                      </a>
+                    )}
                   </li>
                 ))}
               </ul>
@@ -163,6 +206,44 @@ const NotesInput = ({
       }}
       className="w-56 h-8 text-xs"
     />
+  );
+};
+
+const EvidenceAttach = ({
+  attached,
+  highlight,
+  isUploading,
+  onFile,
+}: {
+  attached: boolean;
+  highlight: boolean;
+  isUploading: boolean;
+  onFile: (file: File) => void;
+}): JSX.Element => {
+  return (
+    <label
+      className={`inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border px-2.5 text-xs font-medium transition-colors ${
+        attached
+          ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+          : highlight
+            ? 'border-amber-300 bg-amber-50 text-amber-700 hover:bg-amber-100'
+            : 'border-border text-text-secondary hover:bg-surface-alt'
+      }`}
+      title={attached ? 'Evidence attached — upload to replace' : 'Attach evidence for this control'}
+    >
+      {attached ? <Check className="h-3.5 w-3.5" /> : <Paperclip className="h-3.5 w-3.5" />}
+      {isUploading ? 'Uploading…' : attached ? 'Evidence' : 'Attach evidence'}
+      <input
+        type="file"
+        className="hidden"
+        disabled={isUploading}
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) onFile(file);
+          e.target.value = '';
+        }}
+      />
+    </label>
   );
 };
 

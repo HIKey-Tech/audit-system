@@ -57,7 +57,7 @@ class WorkingPaperTemplateService {
         await this._assertTemplateExists(id);
         if (dto.name) {
             const clash = await prisma_client_1.prisma.working_Paper_Template.findFirst({
-                where: { name: dto.name, id: { not: id } },
+                where: { name: dto.name, id: { not: id }, deleted_at: null },
                 select: { id: true },
             });
             if (clash) {

@@ -86,7 +86,7 @@ export class WorkingPaperTemplateService implements IWorkingPaperTemplateService
 
     if (dto.name) {
       const clash = await prisma.working_Paper_Template.findFirst({
-        where: { name: dto.name, id: { not: id } },
+        where: { name: dto.name, id: { not: id }, deleted_at: null },
         select: { id: true },
       });
       if (clash) {

@@ -76,6 +76,7 @@ export interface AddPlanItemDto {
   priority: string;
   plannedStartDate: string;
   plannedEndDate: string;
+  notes?: string | null;
 }
 
 export const plansApi = {
@@ -342,6 +343,9 @@ export const checklistsApi = {
     api.get<Record<string, AuditChecklistItem[]>>(`/audit/engagements/${engagementId}/checklists`),
   update: (id: string, dto: { result: string; notes?: string | null }) =>
     api.patch<AuditChecklistItem>(`/audit/checklists/${id}`, dto),
+  /** Link an already-uploaded evidence record to a checklist item. */
+  linkEvidence: (checklistItemId: string, evidenceId: string) =>
+    api.post<AuditChecklistItem>(`/audit/checklists/${checklistItemId}/evidence/${evidenceId}`),
   getTemplates: () => api.get<ChecklistTemplateConfig>('/audit/checklist-templates'),
   updateTemplates: (templates: ChecklistTemplateConfig) =>
     api.put<ChecklistTemplateConfig>('/audit/checklist-templates', { templates }),

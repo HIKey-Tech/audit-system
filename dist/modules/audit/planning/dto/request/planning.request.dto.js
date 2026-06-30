@@ -19,6 +19,7 @@ exports.AddPlanItemRequestSchema = zod_1.z.object({
     plannedStartDate: zod_1.z.string().datetime(),
     plannedEndDate: zod_1.z.string().datetime(),
     priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority),
+    notes: zod_1.z.string().max(5000).nullable().optional(),
 });
 exports.RejectPlanRequestSchema = zod_1.z.object({
     reason: zod_1.z.string().min(1).max(5000),

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Send, Check, X, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Check, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -20,14 +20,15 @@ import { Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 
 import { plansApi } from '@/lib/api/audit';
-import { formatDate, formatRelative } from '@/lib/utils/format';
+import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { AddPlanItemSlideOver } from '@/components/audit/plans/AddPlanItemSlideOver';
 import { CreateEngagementSlideOver } from '@/components/audit/plans/CreateEngagementSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
-import type { AuditPlanItem, AuditPlanApprovalStep } from '@/lib/types/domain';
+import { ApprovalChain } from '@/components/audit/engagements/ApprovalChain';
+import type { AuditPlanItem } from '@/lib/types/domain';
 
 export default function PlanDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
@@ -97,7 +98,14 @@ export default function PlanDetailPage(): JSX.Element {
     {
       key: 'name',
       header: 'Entity',
-      render: (i) => <span className="font-medium text-text-primary">{i.universeName}</span>,
+      render: (i) => (
+        <div className="min-w-0">
+          <span className="font-medium text-text-primary">{i.universeName}</span>
+          {i.notes && (
+            <p className="mt-0.5 text-xs text-text-muted whitespace-pre-wrap">{i.notes}</p>
+          )}
+        </div>
+      ),
     },
     {
       key: 'type',
@@ -154,8 +162,6 @@ export default function PlanDetailPage(): JSX.Element {
       width: '170px',
     },
   ];
-
-  const approvalChain: AuditPlanApprovalStep[] = data.approvalChain ?? [];
 
   return (
     <div>
@@ -254,51 +260,12 @@ export default function PlanDetailPage(): JSX.Element {
         </Card>
 
         <Card>
-          <CardHeader title="Approval chain" />
-          {approvalChain.length === 0 ? (
-            <p className="text-xs text-text-muted">Approval chain appears once the plan is submitted.</p>
-          ) : (
-            <ol className="space-y-3">
-              {approvalChain.map((step) => (
-                <li key={step.id} className="flex items-start gap-3">
-                  <span
-                    className={`mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold ring-1 ${
-                      step.status === 'approved'
-                        ? 'bg-emerald-50 text-emerald-700 ring-emerald-200'
-                        : step.status === 'rejected'
-                          ? 'bg-red-50 text-red-700 ring-red-200'
-                          : step.status === 'pending'
-                            ? 'bg-amber-50 text-amber-700 ring-amber-200'
-                            : 'bg-slate-100 text-slate-700 ring-slate-200'
-                    }`}
-                  >
-                    {step.status === 'approved' ? (
-                      <CheckCircle2 className="h-3.5 w-3.5" />
-                    ) : step.status === 'rejected' ? (
-                      <X className="h-3.5 w-3.5" />
-                    ) : step.status === 'pending' ? (
-                      <AlertCircle className="h-3.5 w-3.5" />
-                    ) : (
-                      step.level
-                    )}
-                  </span>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-medium text-text-primary">
-                      Level {step.level} · {step.approverName}
-                    </p>
-                    <p className="text-[10px] text-text-muted">
-                      <StatusBadge status={step.status} size="xs" />
-                      {step.decidedAt ? <> · {formatRelative(step.decidedAt)}</> : null}
-                    </p>
-                    {(step.comment || step.rejectionReason) && (
-                      <p className="mt-1 text-xs text-text-secondary whitespace-pre-wrap">
-                        {step.rejectionReason || step.comment}
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ol>
+          <CardHeader title="Approval chain" subtitle="Who needs to approve, in order" />
+          <ApprovalChain entityType="audit_plan" entityId={id} />
+          {data.status === 'rejected' && data.rejectionReason && (
+            <p className="mt-3 rounded-md bg-red-50 px-3 py-2 text-xs text-red-700 ring-1 ring-red-200 whitespace-pre-wrap">
+              Rejected: {data.rejectionReason}
+            </p>
           )}
         </Card>
       </div>

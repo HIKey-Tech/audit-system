@@ -28,7 +28,7 @@ export interface DocumentAccessActor {
 
 export interface IDocumentService {
   // ──────────── Files ────────────
-  upload(dto: UploadDocumentDto): Promise<DocumentResponseDto>;
+  upload(dto: UploadDocumentDto, actor?: DocumentAccessActor): Promise<DocumentResponseDto>;
   getById(id: string, actor: DocumentAccessActor): Promise<DocumentResponseDto>;
   getDownloadUrl(id: string): Promise<string>;
   delete(id: string, actor: DocumentAccessActor): Promise<void>;
@@ -83,6 +83,7 @@ export interface IDocumentService {
   uploadNewVersion(
     documentId: string,
     dto: UploadVersionDto,
+    actor?: DocumentAccessActor,
   ): Promise<DocumentVersionResponseDto>;
 
   listVersions(

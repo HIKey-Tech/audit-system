@@ -14,6 +14,11 @@ export declare class RiskRegisterService implements IRegisterService {
         meta: PaginationMeta;
     }>;
     getRisksByUniverseEntity(universeId: string, actor?: RiskActorContext): Promise<RiskRegisterResponseDto[]>;
+    private _assertCanAssignOwner;
+    private _syncAffectedUniverseRiskScores;
+    private _syncUniverseRiskScore;
+    private _assertReferencesValid;
+    private _assertCanMutateRisk;
     private _getExistingRisk;
 }
 //# sourceMappingURL=register.service.d.ts.map

@@ -99,9 +99,9 @@ class DashboardController {
             next(err);
         }
     }
-    async _getRiskMatrix(_req, res, next) {
+    async _getRiskMatrix(req, res, next) {
         try {
-            const matrix = await this.dashboardService.getRiskMatrix();
+            const matrix = await this.dashboardService.getRiskMatrix(req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(matrix));
         }
         catch (err) {

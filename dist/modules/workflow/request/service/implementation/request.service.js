@@ -165,10 +165,13 @@ class RequestService {
         const step = this._assertCurrentRecipient(request, actor.id);
         const now = new Date();
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
-            await tx.workflow_Request_Step.update({
-                where: { id: step.id },
+            const claimed = await tx.workflow_Request_Step.updateMany({
+                where: { id: step.id, status: request_enum_1.RequestStepStatus.Pending },
                 data: { status: request_enum_1.RequestStepStatus.Rejected, acted_at: now },
             });
+            if (claimed.count === 0) {
+                throw app_error_1.AppError.conflict('This request step has already been actioned');
+            }
             await tx.workflow_Request.update({
                 where: { id: requestId },
                 data: { status: request_enum_1.RequestStatus.Rejected, locked_at: request.locked_at ?? now },
@@ -382,10 +385,13 @@ class RequestService {
         const nextStep = request.steps.find((s) => s.level === request.current_level + 1);
         const now = new Date();
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
-            await tx.workflow_Request_Step.update({
-                where: { id: step.id },
+            const claimed = await tx.workflow_Request_Step.updateMany({
+                where: { id: step.id, status: request_enum_1.RequestStepStatus.Pending },
                 data: { status: opts.stepStatus, acted_at: now },
             });
+            if (claimed.count === 0) {
+                throw app_error_1.AppError.conflict('This request step has already been actioned');
+            }
             await tx.workflow_Request_Action.create({
                 data: {
                     request_id: requestId,

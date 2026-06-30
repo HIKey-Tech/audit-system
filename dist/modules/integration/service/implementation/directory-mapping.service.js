@@ -57,6 +57,22 @@ class DirectoryMappingService {
             const role = await prisma_client_1.prisma.role.findUnique({ where: { id: dto.roleId } });
             if (!role)
                 throw app_error_1.AppError.badRequest('roleId does not reference a known role');
+            const current = await prisma_client_1.prisma.directory_Group_Mapping.findUnique({
+                where: { id },
+                select: { ad_group_id: true },
+            });
+            if (!current)
+                throw app_error_1.AppError.notFound('Directory group mapping');
+            const duplicate = await prisma_client_1.prisma.directory_Group_Mapping.findFirst({
+                where: {
+                    id: { not: id },
+                    ad_group_id: current.ad_group_id,
+                    role_id: dto.roleId,
+                },
+                select: { id: true },
+            });
+            if (duplicate)
+                throw app_error_1.AppError.conflict('This group is already mapped to this role');
         }
         const updated = await prisma_client_1.prisma.directory_Group_Mapping.update({
             where: { id },

@@ -1,6 +1,23 @@
 import { Prisma } from '@prisma/client';
 import { decimalToNumber, toIso } from '../../../utility/audit.utility';
-import { RiskRegisterResponseDto } from '../../../../risk/register/dto/response/register.response.dto';
+
+export interface UniverseLinkedRiskDto {
+  id: string;
+  title: string;
+  currentScore: number;
+  status: string;
+  categoryName: string | null;
+}
+
+export interface UniverseEngagementHistoryDto {
+  id: string;
+  referenceNumber: string;
+  title: string;
+  auditType: string;
+  status: string;
+  startDate: string | null;
+  endDate: string | null;
+}
 
 export interface UniverseResponseDto {
   id: string;
@@ -8,6 +25,7 @@ export interface UniverseResponseDto {
   description: string | null;
   category: string;
   ownerId: string;
+  ownerName: string | null;
   riskScore: number | null;
   lastAuditedAt: string | null;
   auditFrequency: string;
@@ -15,7 +33,8 @@ export interface UniverseResponseDto {
   createdById: string;
   createdAt: string;
   updatedAt: string;
-  risks?: RiskRegisterResponseDto[];
+  linkedRisks?: UniverseLinkedRiskDto[];
+  engagementHistory?: UniverseEngagementHistoryDto[];
 }
 
 export const mapUniverseToResponse = (entity: {
@@ -24,6 +43,7 @@ export const mapUniverseToResponse = (entity: {
   description: string | null;
   category: string;
   owner_id: string;
+  owner?: { display_name: string | null; first_name: string; last_name: string } | null;
   risk_score: Prisma.Decimal | null;
   last_audited_at: Date | null;
   audit_frequency: string;
@@ -37,6 +57,9 @@ export const mapUniverseToResponse = (entity: {
   description: entity.description,
   category: entity.category,
   ownerId: entity.owner_id,
+  ownerName: entity.owner
+    ? entity.owner.display_name ?? `${entity.owner.first_name} ${entity.owner.last_name}`.trim()
+    : null,
   riskScore: decimalToNumber(entity.risk_score),
   lastAuditedAt: toIso(entity.last_audited_at),
   auditFrequency: entity.audit_frequency,

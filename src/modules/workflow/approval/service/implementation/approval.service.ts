@@ -427,22 +427,24 @@ export class ApprovalService implements IApprovalService {
     return mapApprovalToResponse(updated);
   }
 
-  async getApprovalById(approvalId: string): Promise<ApprovalResponseDto> {
+  async getApprovalById(approvalId: string, actor?: ApprovalActor): Promise<ApprovalResponseDto> {
     const approval = await prisma.workflow_Approval.findUnique({
       where: { id: approvalId },
       include: approvalInclude,
     });
     if (!approval) throw AppError.notFound('Workflow approval');
+    if (actor) await this._assertCanViewApproval(approval, actor);
     return mapApprovalToResponse(approval);
   }
 
-  async getApprovalByEntity(entityType: WorkflowEntityType, entityId: string): Promise<ApprovalResponseDto> {
+  async getApprovalByEntity(entityType: WorkflowEntityType, entityId: string, actor?: ApprovalActor): Promise<ApprovalResponseDto> {
     const approval = await prisma.workflow_Approval.findFirst({
       where: { entity_type: entityType, entity_id: entityId },
       include: approvalInclude,
       orderBy: { created_at: 'desc' },
     });
     if (!approval) throw AppError.notFound('Workflow approval');
+    if (actor) await this._assertCanViewApproval(approval, actor);
     return mapApprovalToResponse(approval);
   }
 
@@ -485,7 +487,40 @@ export class ApprovalService implements IApprovalService {
     };
   }
 
-  async listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]> {
+  async getApprovalHistoryForUser(
+    actor: ApprovalActor,
+    pagination: PaginationQuery,
+  ): Promise<{ approvals: ApprovalResponseDto[]; meta: PaginationMeta }> {
+    const { skip, take, page, pageSize } = parsePagination(pagination);
+
+    // Approvals the user submitted or acted on, that have reached a terminal state.
+    const where: Prisma.Workflow_ApprovalWhereInput = {
+      status: { not: WorkflowApprovalStatus.Pending },
+      OR: [
+        { submitted_by_id: actor.id },
+        { steps: { some: { approver_id: actor.id, status: { in: [WorkflowApprovalStepStatus.Approved, WorkflowApprovalStepStatus.Rejected] } } } },
+      ],
+    };
+
+    const [total, approvals] = await prisma.$transaction([
+      prisma.workflow_Approval.count({ where }),
+      prisma.workflow_Approval.findMany({
+        where,
+        include: approvalInclude,
+        orderBy: { completed_at: 'desc' },
+        skip,
+        take,
+      }),
+    ]);
+
+    return {
+      approvals: approvals.map(mapApprovalToResponse),
+      meta: buildPaginationMeta(total, page, pageSize),
+    };
+  }
+
+  async listSignedDocuments(approvalId: string, actor?: ApprovalActor): Promise<SignedApprovalDocumentDto[]> {
+    if (actor) await this.getApprovalById(approvalId, actor);
     const rows = await prisma.workflow_Approval_Signed_Document.findMany({
       where: { approval_id: approvalId },
       orderBy: { generated_at: 'asc' },
@@ -545,6 +580,7 @@ export class ApprovalService implements IApprovalService {
   async resolveChainForEntity(
     entityType: WorkflowEntityType,
     entityId: string,
+    actor: ApprovalActor,
   ): Promise<ResolvedApprovalChainDto> {
     const approval = await prisma.workflow_Approval.findFirst({
       where: { entity_type: entityType, entity_id: entityId },
@@ -554,6 +590,7 @@ export class ApprovalService implements IApprovalService {
 
     // Case A: an approval exists — render its actual steps as people.
     if (approval) {
+      if (actor) await this._assertCanViewApproval(approval, actor);
       const levels: ResolvedApprovalLevelDto[] = [];
       for (const step of approval.steps) {
         const acted = step.status === 'approved' || step.status === 'rejected';
@@ -586,6 +623,7 @@ export class ApprovalService implements IApprovalService {
     }
 
     // Case B: no approval yet — render the prospective chain from the matrix.
+    if (actor) await this._assertCanViewApprovalEntity(entityType, entityId, actor);
     const matrix = await getApprovalMatrix();
     const chain = this._chainForEntity(matrix, entityType);
     const managerId = await this._resolveEngagementManager(prisma, entityType, entityId).catch(() => null);
@@ -775,6 +813,62 @@ export class ApprovalService implements IApprovalService {
       throw AppError.forbidden('You are not authorized to act on the current approval step');
     }
     return step;
+  }
+  private async _assertCanViewApproval(approval: ApprovalWithDetails, actor: ApprovalActor): Promise<void> {
+    if (actor.permissions.includes('engagement:read_all')) return;
+    if (approval.submitted_by_id === actor.id) return;
+    if (
+      approval.steps.some((step) =>
+        step.approver_id === actor.id ||
+        (step.approver_id === null && !!step.required_permission && actor.permissions.includes(step.required_permission))
+      )
+    ) {
+      return;
+    }
+    await this._assertCanViewApprovalEntity(approval.entity_type as WorkflowEntityType, approval.entity_id, actor);
+  }
+
+  private async _assertCanViewApprovalEntity(
+    entityType: WorkflowEntityType,
+    entityId: string,
+    actor: ApprovalActor,
+  ): Promise<void> {
+    if (actor.permissions.includes('engagement:read_all')) return;
+
+    const teamWhere = {
+      OR: [
+        { lead_auditor_id: actor.id },
+        { audit_manager_id: actor.id },
+        { workflow_assignments: { some: { user_id: actor.id } } },
+      ],
+    };
+
+    if (entityType === WorkflowEntityType.AuditWorkingPaper) {
+      const count = await prisma.audit_Working_Paper.count({
+        where: { id: entityId, deleted_at: null, engagement: teamWhere },
+      });
+      if (count > 0) return;
+      throw AppError.forbidden('You do not have access to this approval');
+    }
+
+    if (entityType === WorkflowEntityType.AuditReport) {
+      const count = await prisma.audit_Report.count({
+        where: { id: entityId, deleted_at: null, engagement: teamWhere },
+      });
+      if (count > 0) return;
+      throw AppError.forbidden('You do not have access to this approval');
+    }
+
+    if (entityType === WorkflowEntityType.AuditFindingClosure) {
+      const count = await prisma.audit_Finding.count({
+        where: { id: entityId, deleted_at: null, engagement: teamWhere },
+      });
+      if (count > 0) return;
+      throw AppError.forbidden('You do not have access to this approval');
+    }
+
+    if (entityType === WorkflowEntityType.AuditPlan && actor.permissions.includes('audit_plan:approve')) return;
+    throw AppError.forbidden('You do not have access to this approval');
   }
 
   private async _notifyUser(

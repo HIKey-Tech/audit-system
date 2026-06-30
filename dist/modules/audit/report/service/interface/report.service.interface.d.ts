@@ -9,12 +9,12 @@ export interface IReportService {
     approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
     rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto>;
     issueReport(id: string, actor: ActorContext): Promise<ReportResponseDto>;
-    getReport(engagementId: string): Promise<ReportResponseDto>;
-    getReportById(id: string): Promise<ReportResponseDto>;
-    listReports(query: ReportQueryDto): Promise<{
+    getReport(engagementId: string, actor: ActorContext): Promise<ReportResponseDto>;
+    getReportById(id: string, actor: ActorContext): Promise<ReportResponseDto>;
+    listReports(query: ReportQueryDto, actor: ActorContext): Promise<{
         reports: ReportResponseDto[];
         meta: PaginationMeta;
     }>;
-    exportReport(id: string, format: 'docx' | 'pdf'): Promise<ExportedAuditFile>;
+    exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile>;
 }
 //# sourceMappingURL=report.service.interface.d.ts.map

@@ -65,14 +65,19 @@ class AuthService {
                 return { status: 'MFA_ENROLLMENT_REQUIRED', enrollmentToken };
             }
             // Within grace: log in normally, but flag that setup is still pending.
-            const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
-            await prisma_client_1.prisma.user.update({
-                where: { id: user.id },
-                data: {
-                    last_login_at: now,
-                    // Persist the deadline the first time we compute it.
-                    ...(user.mfa_grace_until ? {} : { mfa_grace_until: graceUntil }),
-                },
+            // Fix (Obs #1): issue tokens and persist the grace deadline atomically so
+            // a crash between the two cannot grant a second full grace window.
+            const tokens = await prisma_client_1.prisma.$transaction(async (tx) => {
+                const issued = await this._issueTokens(user.id, ipAddress, userAgent, tx);
+                await tx.user.update({
+                    where: { id: user.id },
+                    data: {
+                        last_login_at: now,
+                        // Persist the deadline the first time we compute it.
+                        ...(user.mfa_grace_until ? {} : { mfa_grace_until: graceUntil }),
+                    },
+                });
+                return issued;
             });
             logger_util_1.logger.info('User logged in via password (2FA grace active)', { userId: user.id });
             return {
@@ -96,10 +101,15 @@ class AuthService {
         };
     }
     async completeMfaLogin(userId, ipAddress, userAgent) {
-        const user = (await prisma_client_1.prisma.user.findUniqueOrThrow({
-            where: { id: userId },
+        // Bug fix: use findUnique with deleted_at:null so a user soft-deleted
+        // between password-OK and MFA-verify cannot complete login.
+        const user = (await prisma_client_1.prisma.user.findUnique({
+            where: { id: userId, deleted_at: null },
             include: prisma_types_1.userWithRolesInclude,
         }));
+        if (!user) {
+            throw app_error_1.AppError.unauthorized('Invalid credentials');
+        }
         if (!user.is_active) {
             throw app_error_1.AppError.unauthorized('Account is deactivated');
         }
@@ -261,14 +271,15 @@ class AuthService {
         await (0, session_guard_1.revokeUserSessions)(userId);
         logger_util_1.logger.info('All refresh tokens revoked', { userId });
     }
-    async _issueTokens(userId, ipAddress, userAgent) {
-        const user = await prisma_client_1.prisma.user.findUniqueOrThrow({
+    async _issueTokens(userId, ipAddress, userAgent, tx) {
+        const db = tx ?? prisma_client_1.prisma;
+        const user = await db.user.findUniqueOrThrow({
             where: { id: userId },
             include: prisma_types_1.userWithRolesInclude,
         });
         const accessToken = this._generateUserAccessToken(user);
         const { raw, hash, expiresAt } = (0, token_utility_1.generateRefreshToken)();
-        await prisma_client_1.prisma.refresh_Token.create({
+        await db.refresh_Token.create({
             data: {
                 user_id: userId,
                 token_hash: hash,

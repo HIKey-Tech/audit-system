@@ -6,11 +6,12 @@ import { IEscalationService } from '../interface/escalation.service.interface';
 export declare class EscalationService implements IEscalationService {
     checkAndEscalate(): Promise<WorkflowEscalationRunResult>;
     acknowledgeEscalation(escalationId: string, userId: string): Promise<EscalationResponseDto>;
-    getEscalationHistory(entityType: WorkflowEscalationEntityType, entityId: string): Promise<EscalationResponseDto[]>;
+    getEscalationHistory(entityType: WorkflowEscalationEntityType, entityId: string, actor: WorkflowActorContext): Promise<EscalationResponseDto[]>;
     listEscalationPolicies(): Promise<EscalationPolicyResponseDto[]>;
     createOrUpdateEscalationPolicy(dto: UpsertEscalationPolicyRequestDto, updatedBy: WorkflowActorContext): Promise<EscalationPolicyResponseDto>;
     private _fireEscalation;
     private _resolveEscalationTargets;
+    private _assertCanViewEscalationHistory;
     private _getUsersByRoles;
     private _getUsersByPermission;
     private _latestEscalationMap;

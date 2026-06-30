@@ -15,10 +15,13 @@ const uploaderInclude = {
     },
 };
 class DocumentService {
-    async upload(dto) {
+    async upload(dto, actor) {
         const storageProvider = app_config_1.config.storage.provider;
         const storageClient = this._storageClient(storageProvider);
         let storedName;
+        if (actor) {
+            await this._assertCanAttachToEntity(dto, actor);
+        }
         try {
             storedName = await storageClient.save(dto.buffer, dto.originalName);
             const document = await prisma_client_1.prisma.document.create({
@@ -256,7 +259,7 @@ class DocumentService {
     // ────────────────────────────────────────────────────────────
     // Versioning
     // ────────────────────────────────────────────────────────────
-    async uploadNewVersion(documentId, dto) {
+    async uploadNewVersion(documentId, dto, actor) {
         const storageProvider = app_config_1.config.storage.provider;
         const storageClient = this._storageClient(storageProvider);
         const doc = await prisma_client_1.prisma.document.findUnique({
@@ -264,11 +267,12 @@ class DocumentService {
         });
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
-        await this._assertCanAccess(doc, {
+        const accessActor = actor ?? {
             id: dto.uploadedById,
             permissions: [],
             isSuperAdmin: false,
-        });
+        };
+        await this._assertCanAccess(doc, accessActor);
         const newVersionNumber = doc.version_number + 1;
         let storedName;
         // Ensure the outgoing current version is present in Document_Version,
@@ -654,6 +658,56 @@ class DocumentService {
      * Throws `notFound` rather than `forbidden` so a caller cannot confirm the
      * existence of a document they are not allowed to see.
      */
+    async _assertCanAttachToEntity(dto, actor) {
+        if (!dto.entityType && !dto.entityId)
+            return;
+        if (!dto.entityType || !dto.entityId) {
+            throw app_error_1.AppError.badRequest('entityType and entityId must be provided together');
+        }
+        const engagementId = await this._resolveEngagementId(dto.entityType, dto.entityId);
+        if (engagementId === null) {
+            if (this._isEngagementScopedEntityType(dto.entityType)) {
+                throw app_error_1.AppError.notFound('Document entity');
+            }
+            return;
+        }
+        await this._assertCanAccessEngagement(engagementId, actor);
+    }
+    async _assertCanAccessEngagement(engagementId, actor) {
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: {
+                id: engagementId,
+                deleted_at: null,
+                ...(this._isOversight(actor)
+                    ? {}
+                    : {
+                        OR: [
+                            { lead_auditor_id: actor.id },
+                            { audit_manager_id: actor.id },
+                            { workflow_assignments: { some: { user_id: actor.id } } },
+                        ],
+                    }),
+            },
+            select: { id: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Document entity');
+    }
+    _isEngagementScopedEntityType(entityType) {
+        return [
+            'audit_engagement',
+            'audit_working_paper_source',
+            'audit_working_paper',
+            'audit_working_paper_snapshot',
+            'audit_evidence',
+            'audit_finding',
+            'audit_finding_closure',
+            'audit_checklist',
+            'audit_report',
+            'audit_follow_up',
+            'audit_follow_up_evidence',
+        ].includes(entityType);
+    }
     async _assertCanAccess(doc, actor) {
         if (doc.entity_type === null) {
             if (doc.uploaded_by_id !== actor.id)

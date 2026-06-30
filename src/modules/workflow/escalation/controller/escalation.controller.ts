@@ -50,7 +50,7 @@ export class EscalationController {
 
   private async _getEscalationHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const escalations = await this.escalationService.getEscalationHistory(req.params.type as never, req.params.id);
+      const escalations = await this.escalationService.getEscalationHistory(req.params.type as never, req.params.id, req.user!);
       res.status(200).json(buildResponse(escalations));
     } catch (err) {
       next(err);

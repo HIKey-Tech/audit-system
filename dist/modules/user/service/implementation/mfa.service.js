@@ -13,6 +13,7 @@ const app_config_1 = require("../../../../shared/config/app.config");
 const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
 const token_utility_1 = require("../../utility/token.utility");
 const mfa_utility_1 = require("../../utility/mfa.utility");
+const session_guard_1 = require("../../../../shared/security/session-guard");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     switch (char) {
         case '&':
@@ -131,6 +132,9 @@ class MfaService {
             prisma_client_1.prisma.mfa_Backup_Code.deleteMany({ where: { user_id: targetUserId } }),
             prisma_client_1.prisma.mfa_Email_Otp.deleteMany({ where: { user_id: targetUserId } }),
         ]);
+        // Fix (Obs #2): invalidate outstanding access tokens so the user's auth
+        // state (mfa_enabled) is reflected immediately without waiting for TTL.
+        await (0, session_guard_1.revokeUserSessions)(targetUserId);
         logger_util_1.logger.info('MFA reset by admin', { targetUserId, actorId });
     }
     // ── internals ───────────────────────────────────────────────

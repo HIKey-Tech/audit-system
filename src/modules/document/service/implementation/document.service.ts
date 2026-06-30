@@ -38,10 +38,14 @@ const uploaderInclude = {
 } as const;
 
 export class DocumentService implements IDocumentService {
-  async upload(dto: UploadDocumentDto): Promise<DocumentResponseDto> {
+  async upload(dto: UploadDocumentDto, actor?: DocumentAccessActor): Promise<DocumentResponseDto> {
     const storageProvider = config.storage.provider;
     const storageClient = this._storageClient(storageProvider);
     let storedName: string | undefined;
+
+    if (actor) {
+      await this._assertCanAttachToEntity(dto, actor);
+    }
 
     try {
       storedName = await storageClient.save(dto.buffer, dto.originalName);
@@ -323,6 +327,7 @@ export class DocumentService implements IDocumentService {
   async uploadNewVersion(
     documentId: string,
     dto: UploadVersionDto,
+    actor?: DocumentAccessActor,
   ): Promise<DocumentVersionResponseDto> {
     const storageProvider = config.storage.provider;
     const storageClient = this._storageClient(storageProvider);
@@ -330,11 +335,12 @@ export class DocumentService implements IDocumentService {
       where: { id: documentId, deleted_at: null },
     });
     if (!doc) throw AppError.notFound('Document');
-    await this._assertCanAccess(doc, {
+    const accessActor = actor ?? {
       id: dto.uploadedById,
       permissions: [],
       isSuperAdmin: false,
-    });
+    };
+    await this._assertCanAccess(doc, accessActor);
 
     const newVersionNumber = doc.version_number + 1;
     let storedName: string | undefined;
@@ -800,6 +806,65 @@ export class DocumentService implements IDocumentService {
    * Throws `notFound` rather than `forbidden` so a caller cannot confirm the
    * existence of a document they are not allowed to see.
    */
+  private async _assertCanAttachToEntity(
+    dto: Pick<UploadDocumentDto, 'entityType' | 'entityId'>,
+    actor: DocumentAccessActor,
+  ): Promise<void> {
+    if (!dto.entityType && !dto.entityId) return;
+    if (!dto.entityType || !dto.entityId) {
+      throw AppError.badRequest('entityType and entityId must be provided together');
+    }
+
+    const engagementId = await this._resolveEngagementId(dto.entityType, dto.entityId);
+    if (engagementId === null) {
+      if (this._isEngagementScopedEntityType(dto.entityType)) {
+        throw AppError.notFound('Document entity');
+      }
+      return;
+    }
+
+    await this._assertCanAccessEngagement(engagementId, actor);
+  }
+
+  private async _assertCanAccessEngagement(
+    engagementId: string,
+    actor: DocumentAccessActor,
+  ): Promise<void> {
+    const engagement = await prisma.audit_Engagement.findFirst({
+      where: {
+        id: engagementId,
+        deleted_at: null,
+        ...(this._isOversight(actor)
+          ? {}
+          : {
+              OR: [
+                { lead_auditor_id: actor.id },
+                { audit_manager_id: actor.id },
+                { workflow_assignments: { some: { user_id: actor.id } } },
+              ],
+            }),
+      },
+      select: { id: true },
+    });
+    if (!engagement) throw AppError.notFound('Document entity');
+  }
+
+  private _isEngagementScopedEntityType(entityType: string): boolean {
+    return [
+      'audit_engagement',
+      'audit_working_paper_source',
+      'audit_working_paper',
+      'audit_working_paper_snapshot',
+      'audit_evidence',
+      'audit_finding',
+      'audit_finding_closure',
+      'audit_checklist',
+      'audit_report',
+      'audit_follow_up',
+      'audit_follow_up_evidence',
+    ].includes(entityType);
+  }
+
   private async _assertCanAccess(
     doc: { entity_type: string | null; entity_id?: string | null; uploaded_by_id: string },
     actor: DocumentAccessActor,

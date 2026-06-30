@@ -12,6 +12,7 @@ export interface IEscalationService {
   getEscalationHistory(
     entityType: WorkflowEscalationEntityType,
     entityId: string,
+    actor: WorkflowActorContext,
   ): Promise<EscalationResponseDto[]>;
   listEscalationPolicies(): Promise<EscalationPolicyResponseDto[]>;
   createOrUpdateEscalationPolicy(

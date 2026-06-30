@@ -8,6 +8,9 @@ const mapUniverseToResponse = (entity) => ({
     description: entity.description,
     category: entity.category,
     ownerId: entity.owner_id,
+    ownerName: entity.owner
+        ? entity.owner.display_name ?? `${entity.owner.first_name} ${entity.owner.last_name}`.trim()
+        : null,
     riskScore: (0, audit_utility_1.decimalToNumber)(entity.risk_score),
     lastAuditedAt: (0, audit_utility_1.toIso)(entity.last_audited_at),
     auditFrequency: entity.audit_frequency,

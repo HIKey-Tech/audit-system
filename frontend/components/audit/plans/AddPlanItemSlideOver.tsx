@@ -81,6 +81,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
         priority: v.priority,
         plannedStartDate: toISODatetime(v.plannedStartDate),
         plannedEndDate: toISODatetime(v.plannedEndDate),
+        notes: v.notes?.trim() ? v.notes.trim() : null,
       }),
     onSuccess: () => {
       toast.success('Item added to plan');

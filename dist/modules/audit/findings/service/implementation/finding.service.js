@@ -230,6 +230,21 @@ class FindingService {
         });
         if (!finding)
             throw app_error_1.AppError.notFound('Audit finding');
+        if (!isAuditee && !actor.permissions.includes('finding:read_all')) {
+            const allowed = await prisma_client_1.prisma.audit_Engagement.count({
+                where: {
+                    id: finding.engagement_id,
+                    deleted_at: null,
+                    OR: [
+                        { lead_auditor_id: actor.id },
+                        { audit_manager_id: actor.id },
+                        { workflow_assignments: { some: { user_id: actor.id } } },
+                    ],
+                },
+            }) > 0;
+            if (!allowed)
+                throw app_error_1.AppError.notFound('Audit finding');
+        }
         return (0, finding_response_dto_1.mapFindingToResponse)(finding);
     }
     async listAllFindings(query, actor) {

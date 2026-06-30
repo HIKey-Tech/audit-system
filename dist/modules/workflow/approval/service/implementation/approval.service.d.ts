@@ -17,15 +17,19 @@ export declare class ApprovalService implements IApprovalService {
     private _queueApprovalRejectedAsync;
     approve(approvalId: string, actor: ApprovalActor, comment?: string): Promise<ApprovalResponseDto>;
     reject(approvalId: string, actor: ApprovalActor, reason: string): Promise<ApprovalResponseDto>;
-    getApprovalById(approvalId: string): Promise<ApprovalResponseDto>;
-    getApprovalByEntity(entityType: WorkflowEntityType, entityId: string): Promise<ApprovalResponseDto>;
+    getApprovalById(approvalId: string, actor?: ApprovalActor): Promise<ApprovalResponseDto>;
+    getApprovalByEntity(entityType: WorkflowEntityType, entityId: string, actor?: ApprovalActor): Promise<ApprovalResponseDto>;
     getPendingApprovalsForUser(actor: ApprovalActor, pagination: PaginationQuery): Promise<{
         approvals: ApprovalResponseDto[];
         meta: PaginationMeta;
     }>;
-    listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]>;
+    getApprovalHistoryForUser(actor: ApprovalActor, pagination: PaginationQuery): Promise<{
+        approvals: ApprovalResponseDto[];
+        meta: PaginationMeta;
+    }>;
+    listSignedDocuments(approvalId: string, actor?: ApprovalActor): Promise<SignedApprovalDocumentDto[]>;
     cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
-    resolveChainForEntity(entityType: WorkflowEntityType, entityId: string): Promise<ResolvedApprovalChainDto>;
+    resolveChainForEntity(entityType: WorkflowEntityType, entityId: string, actor: ApprovalActor): Promise<ResolvedApprovalChainDto>;
     private _resolveApproverChain;
     private _chainForEntity;
     private _resolveEngagementManager;
@@ -37,6 +41,8 @@ export declare class ApprovalService implements IApprovalService {
     private _activeHoldersBrief;
     private _getPendingApproval;
     private _getActionableStep;
+    private _assertCanViewApproval;
+    private _assertCanViewApprovalEntity;
     private _notifyUser;
     private _queueNotification;
     private _resolveEntityReference;

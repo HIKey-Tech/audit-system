@@ -11,6 +11,6 @@ export interface IFollowUpService {
   submitRemediationEvidence(findingId: string, evidenceId: string, actor: ActorContext): Promise<FollowUpResponseDto>;
   uploadRemediationEvidence(findingId: string, file: { originalName: string; mimeType: string; fileSize: number; buffer: Buffer }, actor: ActorContext): Promise<FollowUpResponseDto>;
   verifyRemediation(findingId: string, dto: VerifyRemediationRequestDto, actor: ActorContext): Promise<FollowUpResponseDto>;
-  getFollowUp(findingId: string): Promise<FollowUpResponseDto>;
-  listPendingFollowUps(engagementId: string): Promise<FollowUpResponseDto[]>;
+  getFollowUp(findingId: string, actor: ActorContext): Promise<FollowUpResponseDto>;
+  listPendingFollowUps(engagementId: string, actor: ActorContext): Promise<FollowUpResponseDto[]>;
 }

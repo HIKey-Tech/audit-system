@@ -336,7 +336,7 @@ export class DocumentController {
         module: req.body.module,
         entityType: req.body.entityType,
         entityId: req.body.entityId,
-      });
+      }, req.user!);
       res.status(201).json(buildResponse(document, 'Document uploaded'));
     } catch (err) {
       next(err);
@@ -447,7 +447,7 @@ export class DocumentController {
         fileSize: req.file.size,
         buffer: req.file.buffer,
         changeNote: req.body.changeNote,
-      });
+      }, req.user!);
       res.status(201).json(buildResponse(version, 'New document version uploaded'));
     } catch (err) {
       next(err);

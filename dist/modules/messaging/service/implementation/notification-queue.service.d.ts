@@ -6,6 +6,7 @@ export declare class NotificationQueueService implements INotificationQueueServi
     enqueueSafe<T extends NotificationQueueType>(type: T, payload: NotificationQueuePayloadByType[T], options?: EnqueueOptions): Promise<void>;
     processQueue(): Promise<void>;
     private _drainQueue;
+    private _recoverStaleProcessingItems;
     getQueueStats(): Promise<NotificationQueueStatsResponseDto>;
 }
 export declare const notificationQueueService: NotificationQueueService;

@@ -17,11 +17,17 @@ const mapRiskRegisterToResponse = (risk) => ({
     title: risk.title,
     description: risk.description,
     categoryId: risk.category_id,
+    categoryName: risk.category?.name ?? null,
     category: risk.category ? (0, category_response_dto_1.mapRiskCategoryToResponse)(risk.category) : undefined,
     ownerId: risk.owner_id,
+    ownerName: risk.owner
+        ? risk.owner.display_name ?? `${risk.owner.first_name} ${risk.owner.last_name}`.trim()
+        : null,
     owner: risk.owner ? mapRiskUserToResponse(risk.owner) : undefined,
     likelihood: risk.likelihood,
     impact: risk.impact,
+    currentLikelihood: risk.likelihood,
+    currentImpact: risk.impact,
     currentScore: risk.current_score,
     status: risk.status,
     lastAssessedAt: risk.last_assessed_at?.toISOString() ?? null,

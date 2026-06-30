@@ -15,15 +15,22 @@ interface WorkflowUserLike {
 export interface AssignmentResponseDto {
   id: string;
   engagementId: string;
+  engagementReference: string | null;
+  engagementTitle: string | null;
   userId: string;
+  userName: string | null;
   role: string;
   assignedById: string;
+  assignedByName: string | null;
   assignedAt: string;
   createdAt: string;
   user?: WorkflowUserBrief;
   assignedBy?: WorkflowUserBrief;
   engagement?: EngagementResponseDto;
 }
+
+const briefName = (u?: WorkflowUserLike): string | null =>
+  u ? u.display_name ?? `${u.first_name} ${u.last_name}`.trim() : null;
 
 export interface WorkloadResponseDto {
   userId: string;
@@ -63,9 +70,13 @@ export const mapAssignmentToResponse = (assignment: {
 }): AssignmentResponseDto => ({
   id: assignment.id,
   engagementId: assignment.engagement_id,
+  engagementReference: assignment.engagement?.reference_number ?? null,
+  engagementTitle: assignment.engagement?.title ?? null,
   userId: assignment.user_id,
+  userName: briefName(assignment.user),
   role: assignment.role,
   assignedById: assignment.assigned_by_id,
+  assignedByName: briefName(assignment.assigned_by),
   assignedAt: assignment.assigned_at.toISOString(),
   createdAt: assignment.created_at.toISOString(),
   user: assignment.user ? mapWorkflowUserBrief(assignment.user) : undefined,

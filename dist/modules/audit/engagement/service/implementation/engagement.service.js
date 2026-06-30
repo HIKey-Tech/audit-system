@@ -44,6 +44,8 @@ class EngagementService {
     }
     async _assertManagerCanApprove(managerId) {
         const manager = await this.userService.getUserById(managerId);
+        if (!manager.isActive)
+            throw app_error_1.AppError.badRequest('Assigned audit manager account is deactivated');
         const missing = MANAGER_APPROVAL_PERMISSIONS.filter((slug) => !manager.permissions.includes(slug));
         if (missing.length > 0) {
             throw app_error_1.AppError.badRequest(`Assigned audit manager must hold approval permissions: ${missing.join(', ')}`);
@@ -51,10 +53,27 @@ class EngagementService {
     }
     async _assertLeadAuditorEligible(leadAuditorId) {
         const lead = await this.userService.getUserById(leadAuditorId);
+        if (!lead.isActive)
+            throw app_error_1.AppError.badRequest('Assigned lead auditor account is deactivated');
         const missing = LEAD_AUDITOR_PERMISSIONS.filter((slug) => !lead.permissions.includes(slug));
         if (missing.length > 0) {
             throw app_error_1.AppError.badRequest(`Assigned lead auditor must hold fieldwork permissions: ${missing.join(', ')}`);
         }
+    }
+    async _assertUniverseActive(universeId) {
+        const universe = await prisma_client_1.prisma.audit_Universe.findFirst({
+            where: { id: universeId, deleted_at: null },
+            select: { id: true },
+        });
+        if (!universe)
+            throw app_error_1.AppError.badRequest('Universe entity does not exist or has been deleted');
+    }
+    async _assertAuditeeActive(auditeeId) {
+        if (!auditeeId)
+            return;
+        const auditee = await this.userService.getUserById(auditeeId);
+        if (!auditee.isActive)
+            throw app_error_1.AppError.badRequest('Assigned auditee account is deactivated');
     }
     async getEligibleUsers(query) {
         const requiredPermissions = query.role === 'audit_manager' ? MANAGER_APPROVAL_PERMISSIONS : LEAD_AUDITOR_PERMISSIONS;
@@ -109,6 +128,7 @@ class EngagementService {
             throw app_error_1.AppError.conflict('An engagement has already been created from this plan item');
         await this._assertManagerCanApprove(dto.auditManagerId);
         await this._assertLeadAuditorEligible(dto.leadAuditorId);
+        await this._assertAuditeeActive(dto.auditeeId);
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
         const engagement = await prisma_client_1.prisma.$transaction(async (tx) => {
             const created = await tx.audit_Engagement.create({
@@ -144,8 +164,10 @@ class EngagementService {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:create');
         if (!dto.adhocReason)
             throw app_error_1.AppError.badRequest('Ad-hoc reason is required');
+        await this._assertUniverseActive(dto.universeId);
         await this._assertManagerCanApprove(dto.auditManagerId);
         await this._assertLeadAuditorEligible(dto.leadAuditorId);
+        await this._assertAuditeeActive(dto.auditeeId);
         const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
         const engagement = await prisma_client_1.prisma.audit_Engagement.create({
             data: {

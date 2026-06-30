@@ -15,14 +15,19 @@ export interface IApprovalService {
     queueApprovalRequiredNotification(approval: ApprovalResponseDto): void;
     approve(approvalId: string, actor: ApprovalActor, comment?: string): Promise<ApprovalResponseDto>;
     reject(approvalId: string, actor: ApprovalActor, reason: string): Promise<ApprovalResponseDto>;
-    getApprovalById(approvalId: string): Promise<ApprovalResponseDto>;
-    getApprovalByEntity(entityType: WorkflowEntityType, entityId: string): Promise<ApprovalResponseDto>;
+    getApprovalById(approvalId: string, actor?: ApprovalActor): Promise<ApprovalResponseDto>;
+    getApprovalByEntity(entityType: WorkflowEntityType, entityId: string, actor?: ApprovalActor): Promise<ApprovalResponseDto>;
     getPendingApprovalsForUser(actor: ApprovalActor, pagination: PaginationQuery): Promise<{
         approvals: ApprovalResponseDto[];
         meta: PaginationMeta;
     }>;
+    /** Approvals the user submitted or acted on that are no longer pending. */
+    getApprovalHistoryForUser(actor: ApprovalActor, pagination: PaginationQuery): Promise<{
+        approvals: ApprovalResponseDto[];
+        meta: PaginationMeta;
+    }>;
     cancelApproval(approvalId: string, cancelledBy: WorkflowActorContext): Promise<ApprovalResponseDto>;
-    listSignedDocuments(approvalId: string): Promise<SignedApprovalDocumentDto[]>;
-    resolveChainForEntity(entityType: WorkflowEntityType, entityId: string): Promise<ResolvedApprovalChainDto>;
+    listSignedDocuments(approvalId: string, actor?: ApprovalActor): Promise<SignedApprovalDocumentDto[]>;
+    resolveChainForEntity(entityType: WorkflowEntityType, entityId: string, actor?: ApprovalActor): Promise<ResolvedApprovalChainDto>;
 }
 //# sourceMappingURL=approval.service.interface.d.ts.map

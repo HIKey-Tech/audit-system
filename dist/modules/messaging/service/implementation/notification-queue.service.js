@@ -16,6 +16,7 @@ const FAILED_STATUS = 'failed';
 // Exponential backoff between retries: 2^attempts minutes, capped. Keeps a
 // flapping SMTP relay or a single bad recipient from being hammered every tick.
 const RETRY_BACKOFF_CAP_MINUTES = 60;
+const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
 const computeRetryDelayMs = (attempts) => {
     const minutes = Math.min(2 ** attempts, RETRY_BACKOFF_CAP_MINUTES);
     return minutes * 60 * 1000;
@@ -188,6 +189,7 @@ class NotificationQueueService {
         }
     }
     async _drainQueue() {
+        await this._recoverStaleProcessingItems();
         const items = await prisma_client_1.prisma.notification_Queue.findMany({
             where: {
                 status: PENDING_STATUS,
@@ -286,6 +288,34 @@ class NotificationQueueService {
             }
         }
         logger_util_1.logger.info('Notification queue processing completed', { count: items.length });
+    }
+    async _recoverStaleProcessingItems() {
+        const staleItems = await prisma_client_1.prisma.notification_Queue.findMany({
+            where: {
+                status: PROCESSING_STATUS,
+                updated_at: { lt: new Date(Date.now() - PROCESSING_TIMEOUT_MS) },
+            },
+            take: BATCH_SIZE,
+        });
+        for (const item of staleItems) {
+            const finalFailure = item.attempts >= item.max_attempts;
+            await prisma_client_1.prisma.notification_Queue.updateMany({
+                where: { id: item.id, status: PROCESSING_STATUS },
+                data: {
+                    status: finalFailure ? FAILED_STATUS : PENDING_STATUS,
+                    last_error: finalFailure
+                        ? (item.last_error ?? 'Notification processing timed out')
+                        : 'Notification processing timed out; retry scheduled',
+                    processed_at: finalFailure ? new Date() : null,
+                    ...(finalFailure
+                        ? {}
+                        : { scheduled_at: new Date(Date.now() + computeRetryDelayMs(item.attempts)) }),
+                },
+            });
+        }
+        if (staleItems.length > 0) {
+            logger_util_1.logger.warn('Recovered stale notification queue items', { count: staleItems.length });
+        }
     }
     async getQueueStats() {
         const grouped = await prisma_client_1.prisma.notification_Queue.groupBy({

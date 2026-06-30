@@ -787,6 +787,7 @@ model Audit_Plan_Item {
   planned_start_date DateTime
   planned_end_date   DateTime
   priority           String // critical | high | medium | low
+  notes              String?  @db.NVarChar(Max)
   engagement_created Boolean  @default(false)
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt

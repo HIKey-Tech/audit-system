@@ -3,7 +3,7 @@ import { IDocumentService, DocumentAccessActor } from '../interface/document.ser
 import { UploadDocumentDto, UploadVersionDto, CreateTemplateRequestDto, UpdateTemplateRequestDto, TemplateQueryDto, DocumentListQueryDto } from '../../dto/request/document.request.dto';
 import { DocumentResponseDto, DocumentVersionResponseDto, DocumentTemplateResponseDto, ServedFileDto } from '../../dto/response/document.response.dto';
 export declare class DocumentService implements IDocumentService {
-    upload(dto: UploadDocumentDto): Promise<DocumentResponseDto>;
+    upload(dto: UploadDocumentDto, actor?: DocumentAccessActor): Promise<DocumentResponseDto>;
     getById(id: string, actor: DocumentAccessActor): Promise<DocumentResponseDto>;
     getDownloadUrl(id: string): Promise<string>;
     delete(id: string, actor: DocumentAccessActor): Promise<void>;
@@ -25,7 +25,7 @@ export declare class DocumentService implements IDocumentService {
     assertCanUserAccess(documentId: string, actor: DocumentAccessActor): Promise<void>;
     getFileById(id: string): Promise<ServedFileDto>;
     serveFile(storedName: string, actor: DocumentAccessActor): Promise<ServedFileDto>;
-    uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;
+    uploadNewVersion(documentId: string, dto: UploadVersionDto, actor?: DocumentAccessActor): Promise<DocumentVersionResponseDto>;
     listVersions(documentId: string, actor: DocumentAccessActor): Promise<DocumentVersionResponseDto[]>;
     getVersion(documentId: string, versionNumber: number, actor: DocumentAccessActor): Promise<DocumentVersionResponseDto>;
     getVersionDownloadUrl(documentId: string, versionNumber: number, actor: DocumentAccessActor): Promise<string>;
@@ -63,6 +63,9 @@ export declare class DocumentService implements IDocumentService {
      * Throws `notFound` rather than `forbidden` so a caller cannot confirm the
      * existence of a document they are not allowed to see.
      */
+    private _assertCanAttachToEntity;
+    private _assertCanAccessEngagement;
+    private _isEngagementScopedEntityType;
     private _assertCanAccess;
     private _isOversight;
     /**

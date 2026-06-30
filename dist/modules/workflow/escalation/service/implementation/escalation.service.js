@@ -153,7 +153,8 @@ class EscalationService {
         });
         return (0, escalation_response_dto_1.mapEscalationToResponse)(updated);
     }
-    async getEscalationHistory(entityType, entityId) {
+    async getEscalationHistory(entityType, entityId, actor) {
+        await this._assertCanViewEscalationHistory(entityType, entityId, actor);
         const escalations = await prisma_client_1.prisma.workflow_Escalation.findMany({
             where: { entity_type: entityType, entity_id: entityId },
             include: escalationInclude,
@@ -310,6 +311,59 @@ class EscalationService {
         if (level === 4)
             return this._getUsersByRoles(matrix.workflowApproval.level4);
         return this._getUsersByRoles(matrix.workflowApproval.otherwise);
+    }
+    async _assertCanViewEscalationHistory(entityType, entityId, actor) {
+        if (actor.permissions.includes('engagement:read_all'))
+            return;
+        const targeted = await prisma_client_1.prisma.workflow_Escalation.count({
+            where: { entity_type: entityType, entity_id: entityId, escalated_to_id: actor.id },
+        });
+        if (targeted > 0)
+            return;
+        if (entityType === workflow_enum_1.WorkflowEscalationEntityType.AuditEngagement) {
+            const count = await prisma_client_1.prisma.audit_Engagement.count({
+                where: {
+                    id: entityId,
+                    deleted_at: null,
+                    OR: [
+                        { lead_auditor_id: actor.id },
+                        { audit_manager_id: actor.id },
+                        { workflow_assignments: { some: { user_id: actor.id } } },
+                    ],
+                },
+            });
+            if (count > 0)
+                return;
+        }
+        if (entityType === workflow_enum_1.WorkflowEscalationEntityType.WorkflowApproval) {
+            const count = await prisma_client_1.prisma.workflow_Approval.count({
+                where: {
+                    id: entityId,
+                    OR: [
+                        { submitted_by_id: actor.id },
+                        { steps: { some: { approver_id: actor.id } } },
+                        { steps: { some: { approver_id: null, required_permission: { in: actor.permissions } } } },
+                    ],
+                },
+            });
+            if (count > 0)
+                return;
+        }
+        if (entityType === workflow_enum_1.WorkflowEscalationEntityType.WorkflowRequest) {
+            const count = await prisma_client_1.prisma.workflow_Request.count({
+                where: {
+                    id: entityId,
+                    deleted_at: null,
+                    OR: [
+                        { initiator_id: actor.id },
+                        { steps: { some: { recipient_id: actor.id } } },
+                    ],
+                },
+            });
+            if (count > 0)
+                return;
+        }
+        throw app_error_1.AppError.forbidden('You do not have access to these escalations');
     }
     async _getUsersByRoles(roleNames) {
         if (roleNames.length === 0)

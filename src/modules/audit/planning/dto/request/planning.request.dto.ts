@@ -19,6 +19,7 @@ export const AddPlanItemRequestSchema = z.object({
   plannedStartDate: z.string().datetime(),
   plannedEndDate: z.string().datetime(),
   priority: z.nativeEnum(AuditPriority),
+  notes: z.string().max(5000).nullable().optional(),
 });
 
 export const RejectPlanRequestSchema = z.object({

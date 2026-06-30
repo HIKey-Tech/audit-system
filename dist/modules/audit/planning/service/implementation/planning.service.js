@@ -12,7 +12,11 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const planning_response_dto_1 = require("../../dto/response/planning.response.dto");
 const planInclude = {
-    items: { include: { universe: true }, orderBy: { created_at: 'asc' } },
+    approved_by: { select: { display_name: true, first_name: true, last_name: true } },
+    items: {
+        include: { universe: true, engagements: { select: { id: true }, where: { deleted_at: null } } },
+        orderBy: { created_at: 'asc' },
+    },
 };
 class PlanningService {
     approvalService;
@@ -109,6 +113,7 @@ class PlanningService {
                 planned_start_date: new Date(dto.plannedStartDate),
                 planned_end_date: new Date(dto.plannedEndDate),
                 priority: dto.priority,
+                notes: dto.notes ?? null,
             },
         });
         logger_util_1.logger.info('Audit plan item added', { planId, universeId: dto.universeId, actorId: actor.id });
@@ -211,6 +216,7 @@ class PlanningService {
             prisma_client_1.prisma.audit_Plan.count({ where }),
             prisma_client_1.prisma.audit_Plan.findMany({
                 where,
+                include: { _count: { select: { items: true } } },
                 orderBy: { [query.sortBy]: query.sortOrder },
                 skip,
                 take,

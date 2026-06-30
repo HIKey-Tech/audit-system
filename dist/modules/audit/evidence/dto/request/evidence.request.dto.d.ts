@@ -41,11 +41,11 @@ export declare const EvidenceRepositoryQuerySchema: z.ZodObject<{
     search?: string | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
+    uploadedById?: string | undefined;
     findingId?: string | undefined;
     engagementId?: string | undefined;
     fileType?: string | undefined;
     workingPaperId?: string | undefined;
-    uploadedById?: string | undefined;
     isDisputed?: boolean | undefined;
     uploadedFrom?: Date | undefined;
     uploadedTo?: Date | undefined;
@@ -53,11 +53,11 @@ export declare const EvidenceRepositoryQuerySchema: z.ZodObject<{
     search?: string | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
+    uploadedById?: string | undefined;
     findingId?: string | undefined;
     engagementId?: string | undefined;
     fileType?: string | undefined;
     workingPaperId?: string | undefined;
-    uploadedById?: string | undefined;
     isDisputed?: "true" | "false" | undefined;
     uploadedFrom?: Date | undefined;
     uploadedTo?: Date | undefined;

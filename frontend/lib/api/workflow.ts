@@ -21,6 +21,7 @@ type WorkflowAssignmentRole = 'lead_auditor' | 'supporting_auditor';
 export const workflowApi = {
   // approvals
   listPending: () => api.get<WorkflowApproval[]>('/workflow/approvals/pending'),
+  listHistory: () => api.get<WorkflowApproval[]>('/workflow/approvals/history'),
   getApproval: (id: string) => api.get<WorkflowApproval>(`/workflow/approvals/${id}`),
   getApprovalByEntity: (entityType: string, entityId: string) =>
     api.get<WorkflowApproval>(

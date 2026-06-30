@@ -22,11 +22,16 @@ export interface RiskRegisterResponseDto {
   title: string;
   description: string;
   categoryId: string;
+  categoryName: string | null;
   category?: RiskCategoryResponseDto;
   ownerId: string;
+  ownerName: string | null;
   owner?: RiskUserResponseDto;
   likelihood: number;
   impact: number;
+  // Flat aliases the frontend reads (Risk type uses currentLikelihood/currentImpact).
+  currentLikelihood: number;
+  currentImpact: number;
   currentScore: number;
   status: string;
   lastAssessedAt: string | null;
@@ -91,11 +96,17 @@ export const mapRiskRegisterToResponse = (risk: {
   title: risk.title,
   description: risk.description,
   categoryId: risk.category_id,
+  categoryName: risk.category?.name ?? null,
   category: risk.category ? mapRiskCategoryToResponse(risk.category) : undefined,
   ownerId: risk.owner_id,
+  ownerName: risk.owner
+    ? risk.owner.display_name ?? `${risk.owner.first_name} ${risk.owner.last_name}`.trim()
+    : null,
   owner: risk.owner ? mapRiskUserToResponse(risk.owner) : undefined,
   likelihood: risk.likelihood,
   impact: risk.impact,
+  currentLikelihood: risk.likelihood,
+  currentImpact: risk.impact,
   currentScore: risk.current_score,
   status: risk.status,
   lastAssessedAt: risk.last_assessed_at?.toISOString() ?? null,

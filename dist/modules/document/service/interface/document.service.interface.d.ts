@@ -12,7 +12,7 @@ export interface DocumentAccessActor {
     isSuperAdmin: boolean;
 }
 export interface IDocumentService {
-    upload(dto: UploadDocumentDto): Promise<DocumentResponseDto>;
+    upload(dto: UploadDocumentDto, actor?: DocumentAccessActor): Promise<DocumentResponseDto>;
     getById(id: string, actor: DocumentAccessActor): Promise<DocumentResponseDto>;
     getDownloadUrl(id: string): Promise<string>;
     delete(id: string, actor: DocumentAccessActor): Promise<void>;
@@ -55,7 +55,7 @@ export interface IDocumentService {
     listByEntityIds(entityType: string, entityIds: string[]): Promise<Map<string, DocumentResponseDto[]>>;
     serveFile(storedName: string, actor: DocumentAccessActor): Promise<ServedFileDto>;
     getFileById(id: string): Promise<ServedFileDto>;
-    uploadNewVersion(documentId: string, dto: UploadVersionDto): Promise<DocumentVersionResponseDto>;
+    uploadNewVersion(documentId: string, dto: UploadVersionDto, actor?: DocumentAccessActor): Promise<DocumentVersionResponseDto>;
     listVersions(documentId: string, actor: DocumentAccessActor): Promise<DocumentVersionResponseDto[]>;
     getVersion(documentId: string, versionNumber: number, actor: DocumentAccessActor): Promise<DocumentVersionResponseDto>;
     getVersionDownloadUrl(documentId: string, versionNumber: number, actor: DocumentAccessActor): Promise<string>;

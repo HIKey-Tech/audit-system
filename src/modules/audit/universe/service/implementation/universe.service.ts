@@ -108,13 +108,47 @@ export class UniverseService implements IUniverseService {
   async getEntityById(id: string, actor: ActorContext): Promise<UniverseResponseDto> {
     const entity = await prisma.audit_Universe.findFirst({
       where: { id, deleted_at: null },
+      include: { owner: { select: { display_name: true, first_name: true, last_name: true } } },
     });
     if (!entity) throw AppError.notFound('Audit universe entity');
     const response = mapUniverseToResponse(entity);
-    if (!this.riskRegisterService) return response;
 
-    const risks = await this.riskRegisterService.getRisksByUniverseEntity(id, actor);
-    return { ...response, risks };
+    const engagements = await prisma.audit_Engagement.findMany({
+      where: { universe_id: id, deleted_at: null },
+      orderBy: { created_at: 'desc' },
+      select: {
+        id: true,
+        reference_number: true,
+        title: true,
+        audit_type: true,
+        status: true,
+        actual_start_date: true,
+        planned_start_date: true,
+        actual_end_date: true,
+        planned_end_date: true,
+      },
+    });
+    response.engagementHistory = engagements.map((e) => ({
+      id: e.id,
+      referenceNumber: e.reference_number,
+      title: e.title,
+      auditType: e.audit_type,
+      status: e.status,
+      startDate: (e.actual_start_date ?? e.planned_start_date)?.toISOString() ?? null,
+      endDate: (e.actual_end_date ?? e.planned_end_date)?.toISOString() ?? null,
+    }));
+
+    if (this.riskRegisterService) {
+      const risks = await this.riskRegisterService.getRisksByUniverseEntity(id, actor);
+      response.linkedRisks = risks.map((r) => ({
+        id: r.id,
+        title: r.title,
+        currentScore: r.currentScore,
+        status: r.status,
+        categoryName: r.categoryName,
+      }));
+    }
+    return response;
   }
 
   async listEntities(query: UniverseQueryDto): Promise<{ entities: UniverseResponseDto[]; meta: PaginationMeta }> {
@@ -129,6 +163,7 @@ export class UniverseService implements IUniverseService {
       prisma.audit_Universe.count({ where }),
       prisma.audit_Universe.findMany({
         where,
+        include: { owner: { select: { display_name: true, first_name: true, last_name: true } } },
         orderBy: { [query.sortBy]: query.sortOrder },
         skip,
         take,

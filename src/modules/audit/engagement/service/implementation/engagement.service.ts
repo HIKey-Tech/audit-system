@@ -69,6 +69,7 @@ export class EngagementService implements IEngagementService {
 
   private async _assertManagerCanApprove(managerId: string): Promise<void> {
     const manager = await this.userService.getUserById(managerId);
+    if (!manager.isActive) throw AppError.badRequest('Assigned audit manager account is deactivated');
     const missing = MANAGER_APPROVAL_PERMISSIONS.filter((slug) => !manager.permissions.includes(slug));
     if (missing.length > 0) {
       throw AppError.badRequest(
@@ -79,12 +80,27 @@ export class EngagementService implements IEngagementService {
 
   private async _assertLeadAuditorEligible(leadAuditorId: string): Promise<void> {
     const lead = await this.userService.getUserById(leadAuditorId);
+    if (!lead.isActive) throw AppError.badRequest('Assigned lead auditor account is deactivated');
     const missing = LEAD_AUDITOR_PERMISSIONS.filter((slug) => !lead.permissions.includes(slug));
     if (missing.length > 0) {
       throw AppError.badRequest(
         `Assigned lead auditor must hold fieldwork permissions: ${missing.join(', ')}`,
       );
     }
+  }
+
+  private async _assertUniverseActive(universeId: string): Promise<void> {
+    const universe = await prisma.audit_Universe.findFirst({
+      where: { id: universeId, deleted_at: null },
+      select: { id: true },
+    });
+    if (!universe) throw AppError.badRequest('Universe entity does not exist or has been deleted');
+  }
+
+  private async _assertAuditeeActive(auditeeId: string | undefined | null): Promise<void> {
+    if (!auditeeId) return;
+    const auditee = await this.userService.getUserById(auditeeId);
+    if (!auditee.isActive) throw AppError.badRequest('Assigned auditee account is deactivated');
   }
 
   async getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]> {
@@ -150,6 +166,7 @@ export class EngagementService implements IEngagementService {
     if (planItem.engagement_created) throw AppError.conflict('An engagement has already been created from this plan item');
     await this._assertManagerCanApprove(dto.auditManagerId);
     await this._assertLeadAuditorEligible(dto.leadAuditorId);
+    await this._assertAuditeeActive(dto.auditeeId);
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.$transaction(async (tx) => {
@@ -189,8 +206,10 @@ export class EngagementService implements IEngagementService {
   async createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
     assertHasPermission(actor.permissions, 'engagement:create');
     if (!dto.adhocReason) throw AppError.badRequest('Ad-hoc reason is required');
+    await this._assertUniverseActive(dto.universeId);
     await this._assertManagerCanApprove(dto.auditManagerId);
     await this._assertLeadAuditorEligible(dto.leadAuditorId);
+    await this._assertAuditeeActive(dto.auditeeId);
 
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.audit_Engagement.create({

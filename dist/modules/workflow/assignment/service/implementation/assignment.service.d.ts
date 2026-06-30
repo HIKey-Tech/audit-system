@@ -6,13 +6,14 @@ import { IAssignmentService } from '../interface/assignment.service.interface';
 export declare class AssignmentService implements IAssignmentService {
     assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto>;
     removeAssignment(assignmentId: string, removedBy: WorkflowActorContext): Promise<void>;
-    getAssignments(engagementId: string): Promise<AssignmentResponseDto[]>;
+    getAssignments(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentResponseDto[]>;
     getMyAssignments(userId: string, filters: MyAssignmentsQueryDto): Promise<{
         assignments: AssignmentResponseDto[];
         meta: PaginationMeta;
     }>;
     getUserWorkload(userId: string): Promise<WorkloadResponseDto>;
-    getCandidates(engagementId: string): Promise<AssignmentCandidateDto[]>;
+    getCandidates(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentCandidateDto[]>;
+    private _assertCanViewEngagementAssignments;
     getActiveWorkloadMap(): Promise<Map<string, number>>;
 }
 export declare const workflowAssignmentService: AssignmentService;

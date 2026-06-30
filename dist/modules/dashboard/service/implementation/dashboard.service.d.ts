@@ -5,13 +5,14 @@ export declare class DashboardService {
     private _computeAuditAnalytics;
     getAuditSummary(actor: DashboardActorContext): Promise<AuditSummaryResponseDto>;
     getFindingsSummary(actor: DashboardActorContext): Promise<FindingsSummaryResponseDto>;
-    getRiskOverview(_actor: DashboardActorContext): Promise<RiskOverviewResponseDto>;
-    getRiskMatrix(): Promise<RiskMatrixResponseDto>;
+    getRiskOverview(actor: DashboardActorContext): Promise<RiskOverviewResponseDto>;
+    getRiskMatrix(actor: DashboardActorContext): Promise<RiskMatrixResponseDto>;
     private _computeRiskMatrix;
     getRecentActivity(actor: DashboardActorContext, limit: number): Promise<RecentActivityItemDto[]>;
     getEscalationOverview(actor: DashboardActorContext): Promise<EscalationOverviewResponseDto>;
     getMyWork(userId: string): Promise<MyWorkResponseDto>;
     getApprovalInboxSummary(userId: string): Promise<ApprovalInboxSummaryResponseDto>;
+    private _riskWhere;
     private _averageDaysToCloseRaw;
     private _activeEscalationCondition;
     private _pendingApprovalStepsForUserRaw;

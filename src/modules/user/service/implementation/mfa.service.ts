@@ -19,6 +19,7 @@ import {
   generateBackupCodes,
   normaliseBackupCode,
 } from '../../utility/mfa.utility';
+import { revokeUserSessions } from '../../../../shared/security/session-guard';
 
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => {
@@ -159,6 +160,9 @@ export class MfaService implements IMfaService {
       prisma.mfa_Backup_Code.deleteMany({ where: { user_id: targetUserId } }),
       prisma.mfa_Email_Otp.deleteMany({ where: { user_id: targetUserId } }),
     ]);
+    // Fix (Obs #2): invalidate outstanding access tokens so the user's auth
+    // state (mfa_enabled) is reflected immediately without waiting for TTL.
+    await revokeUserSessions(targetUserId);
     logger.info('MFA reset by admin', { targetUserId, actorId });
   }
 

@@ -108,8 +108,9 @@ class EvidenceService {
     async listRepository(query, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:read');
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
+        const scope = (0, engagement_visibility_util_1.repositoryEngagementScope)(actor);
         const where = {
-            engagement: { deleted_at: null },
+            engagement: { deleted_at: null, ...(scope ?? {}) },
             ...(query.engagementId && { engagement_id: query.engagementId }),
             ...(query.findingId && { finding_id: query.findingId }),
             ...(query.workingPaperId && { working_paper_id: query.workingPaperId }),
@@ -147,8 +148,12 @@ class EvidenceService {
     }
     async getRepositoryEvidence(evidenceId, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:read');
+        const scope = (0, engagement_visibility_util_1.repositoryEngagementScope)(actor);
         const evidence = await prisma_client_1.prisma.audit_Evidence.findFirst({
-            where: { id: evidenceId, engagement: { deleted_at: null } },
+            where: {
+                id: evidenceId,
+                engagement: { deleted_at: null, ...(scope ?? {}) },
+            },
             include: evidence_response_dto_1.evidenceRepositoryInclude,
         });
         if (!evidence)
@@ -157,7 +162,15 @@ class EvidenceService {
     }
     async getDownloadUrl(evidenceId, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:read');
-        const evidence = await this._getEvidence(evidenceId);
+        const scope = (0, engagement_visibility_util_1.repositoryEngagementScope)(actor);
+        const evidence = await prisma_client_1.prisma.audit_Evidence.findFirst({
+            where: {
+                id: evidenceId,
+                engagement: { deleted_at: null, ...(scope ?? {}) },
+            },
+        });
+        if (!evidence)
+            throw app_error_1.AppError.notFound('Audit evidence');
         const url = await this.documentService.getDownloadUrl(evidence.document_id);
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.download', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId });
         return url;

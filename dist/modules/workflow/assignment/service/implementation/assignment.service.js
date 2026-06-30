@@ -171,7 +171,8 @@ class AssignmentService {
             oldValues: { userId: assignment.user_id, role: assignment.role },
         });
     }
-    async getAssignments(engagementId) {
+    async getAssignments(engagementId, actor) {
+        await this._assertCanViewEngagementAssignments(engagementId, actor);
         const assignments = await prisma_client_1.prisma.workflow_Assignment.findMany({
             where: { engagement_id: engagementId },
             include: assignmentInclude,
@@ -231,7 +232,8 @@ class AssignmentService {
             byStatus: Array.from(counts.entries()).map(([status, count]) => ({ status, count })),
         };
     }
-    async getCandidates(engagementId) {
+    async getCandidates(engagementId, actor) {
+        (0, workflow_utility_1.assertHasPermission)(actor.permissions, 'assignment:create');
         // Need the engagement's audit type + priority to score skill fit and weight workload.
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
@@ -297,6 +299,24 @@ class AssignmentService {
         })
             .sort((a, b) => b.recommendationScore - a.recommendationScore ||
             a.activeEngagementCount - b.activeEngagementCount);
+    }
+    async _assertCanViewEngagementAssignments(engagementId, actor) {
+        if (actor.permissions.includes('engagement:read_all'))
+            return;
+        const count = await prisma_client_1.prisma.audit_Engagement.count({
+            where: {
+                id: engagementId,
+                deleted_at: null,
+                OR: [
+                    { lead_auditor_id: actor.id },
+                    { audit_manager_id: actor.id },
+                    { workflow_assignments: { some: { user_id: actor.id } } },
+                ],
+            },
+        });
+        if (count === 0) {
+            throw app_error_1.AppError.forbidden('You do not have access to this engagement assignments');
+        }
     }
     async getActiveWorkloadMap() {
         const grouped = await prisma_client_1.prisma.workflow_Assignment.groupBy({

@@ -31,6 +31,7 @@ export class RiskAssessmentService implements IAssessmentService {
     actor: RiskActorContext,
   ): Promise<RiskAssessmentResponseDto> {
     assertHasPermission(actor.permissions, 'risk:assess');
+    await this._assertRiskExists(riskId, actor);
 
     const score = calculateRiskScore(dto.likelihood, dto.impact);
     const assessedAt = dto.assessedAt ? new Date(dto.assessedAt) : new Date();

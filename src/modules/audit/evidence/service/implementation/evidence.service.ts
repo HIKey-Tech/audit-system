@@ -8,7 +8,7 @@ import { IDocumentService } from '../../../../document/service/interface/documen
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
 import { assertHasPermission } from '../../../utility/audit.utility';
-import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
+import { assertCanViewInternalArtifacts, repositoryEngagementScope } from '../../../engagement/utility/engagement-visibility.util';
 import { EvidenceQueryDto, EvidenceRepositoryQueryDto, UploadEvidenceDto } from '../../dto/request/evidence.request.dto';
 import {
   EvidenceResponseDto,
@@ -128,9 +128,10 @@ export class EvidenceService implements IEvidenceService {
   ): Promise<{ evidence: RepositoryEvidenceResponseDto[]; meta: PaginationMeta }> {
     assertHasPermission(actor.permissions, 'evidence:read');
     const { skip, take, page, pageSize } = parsePagination(query);
+    const scope = repositoryEngagementScope(actor);
 
     const where: Prisma.Audit_EvidenceWhereInput = {
-      engagement: { deleted_at: null },
+      engagement: { deleted_at: null, ...(scope ?? {}) },
       ...(query.engagementId && { engagement_id: query.engagementId }),
       ...(query.findingId && { finding_id: query.findingId }),
       ...(query.workingPaperId && { working_paper_id: query.workingPaperId }),
@@ -171,8 +172,12 @@ export class EvidenceService implements IEvidenceService {
 
   async getRepositoryEvidence(evidenceId: string, actor: ActorContext): Promise<RepositoryEvidenceResponseDto> {
     assertHasPermission(actor.permissions, 'evidence:read');
+    const scope = repositoryEngagementScope(actor);
     const evidence = await prisma.audit_Evidence.findFirst({
-      where: { id: evidenceId, engagement: { deleted_at: null } },
+      where: {
+        id: evidenceId,
+        engagement: { deleted_at: null, ...(scope ?? {}) },
+      },
       include: evidenceRepositoryInclude,
     });
     if (!evidence) throw AppError.notFound('Audit evidence');
@@ -181,7 +186,14 @@ export class EvidenceService implements IEvidenceService {
 
   async getDownloadUrl(evidenceId: string, actor: ActorContext): Promise<string> {
     assertHasPermission(actor.permissions, 'evidence:read');
-    const evidence = await this._getEvidence(evidenceId);
+    const scope = repositoryEngagementScope(actor);
+    const evidence = await prisma.audit_Evidence.findFirst({
+      where: {
+        id: evidenceId,
+        engagement: { deleted_at: null, ...(scope ?? {}) },
+      },
+    });
+    if (!evidence) throw AppError.notFound('Audit evidence');
     const url = await this.documentService.getDownloadUrl(evidence.document_id);
     auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.download', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId });
     return url;

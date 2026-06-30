@@ -1,5 +1,6 @@
 // src/modules/messaging/service/implementation/notification.service.ts
 import { Prisma } from '@prisma/client';
+import { AppError } from '../../../../shared/errors/app.error';
 import nodemailer from 'nodemailer';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../shared/utils/logger.util';
@@ -121,10 +122,11 @@ export class NotificationService implements INotificationService {
   }
 
   async markNotificationRead(notificationId: string, userId: string): Promise<void> {
-    await prisma.notification.updateMany({
+    const result = await prisma.notification.updateMany({
       where: { id: notificationId, user_id: userId },
       data: { is_read: true, read_at: new Date() },
     });
+    if (result.count === 0) throw AppError.notFound('Notification');
   }
 
   async markAllRead(userId: string): Promise<number> {

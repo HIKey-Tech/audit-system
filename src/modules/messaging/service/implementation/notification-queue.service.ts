@@ -26,6 +26,7 @@ const FAILED_STATUS = 'failed';
 // Exponential backoff between retries: 2^attempts minutes, capped. Keeps a
 // flapping SMTP relay or a single bad recipient from being hammered every tick.
 const RETRY_BACKOFF_CAP_MINUTES = 60;
+const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
 const computeRetryDelayMs = (attempts: number): number => {
   const minutes = Math.min(2 ** attempts, RETRY_BACKOFF_CAP_MINUTES);
   return minutes * 60 * 1000;
@@ -241,6 +242,8 @@ export class NotificationQueueService implements INotificationQueueService {
   }
 
   private async _drainQueue(): Promise<void> {
+    await this._recoverStaleProcessingItems();
+
     const items = await prisma.notification_Queue.findMany({
       where: {
         status: PENDING_STATUS,
@@ -345,6 +348,37 @@ export class NotificationQueueService implements INotificationQueueService {
     }
 
     logger.info('Notification queue processing completed', { count: items.length });
+  }
+
+  private async _recoverStaleProcessingItems(): Promise<void> {
+    const staleItems = await prisma.notification_Queue.findMany({
+      where: {
+        status: PROCESSING_STATUS,
+        updated_at: { lt: new Date(Date.now() - PROCESSING_TIMEOUT_MS) },
+      },
+      take: BATCH_SIZE,
+    });
+
+    for (const item of staleItems) {
+      const finalFailure = item.attempts >= item.max_attempts;
+      await prisma.notification_Queue.updateMany({
+        where: { id: item.id, status: PROCESSING_STATUS },
+        data: {
+          status: finalFailure ? FAILED_STATUS : PENDING_STATUS,
+          last_error: finalFailure
+            ? (item.last_error ?? 'Notification processing timed out')
+            : 'Notification processing timed out; retry scheduled',
+          processed_at: finalFailure ? new Date() : null,
+          ...(finalFailure
+            ? {}
+            : { scheduled_at: new Date(Date.now() + computeRetryDelayMs(item.attempts)) }),
+        },
+      });
+    }
+
+    if (staleItems.length > 0) {
+      logger.warn('Recovered stale notification queue items', { count: staleItems.length });
+    }
   }
 
   async getQueueStats(): Promise<NotificationQueueStatsResponseDto> {

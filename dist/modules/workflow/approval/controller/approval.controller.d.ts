@@ -5,6 +5,7 @@ export declare class ApprovalController {
     readonly router: Router;
     constructor(approvalService: IApprovalService);
     private _registerRoutes;
+    private _getApprovalHistory;
     private _getPendingApprovals;
     private _getApprovalByEntity;
     private _getChain;

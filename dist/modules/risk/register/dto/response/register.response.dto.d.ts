@@ -14,11 +14,15 @@ export interface RiskRegisterResponseDto {
     title: string;
     description: string;
     categoryId: string;
+    categoryName: string | null;
     category?: RiskCategoryResponseDto;
     ownerId: string;
+    ownerName: string | null;
     owner?: RiskUserResponseDto;
     likelihood: number;
     impact: number;
+    currentLikelihood: number;
+    currentImpact: number;
     currentScore: number;
     status: string;
     lastAssessedAt: string | null;

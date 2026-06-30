@@ -14,6 +14,8 @@ export declare class EngagementService implements IEngagementService {
     constructor(checklistService: IChecklistService, userService: IUserService, assignmentService: IAssignmentService);
     private _assertManagerCanApprove;
     private _assertLeadAuditorEligible;
+    private _assertUniverseActive;
+    private _assertAuditeeActive;
     getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]>;
     createFromPlanItem(planItemId: string, dto: CreateEngagementFromPlanRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;
     createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;

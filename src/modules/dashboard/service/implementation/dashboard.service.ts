@@ -330,12 +330,12 @@ export class DashboardService {
   // Risk overview
   // =============================================================
   async getRiskOverview(
-    _actor: DashboardActorContext,
+    actor: DashboardActorContext,
   ): Promise<RiskOverviewResponseDto> {
     const staleCutoff = new Date();
     staleCutoff.setDate(staleCutoff.getDate() - 90);
 
-    const baseWhere: Prisma.Risk_RegisterWhereInput = { deleted_at: null };
+    const baseWhere = this._riskWhere(actor);
 
     const [
       totalRisks,
@@ -432,21 +432,21 @@ export class DashboardService {
   // =============================================================
   // Risk matrix (likelihood × impact heat map)
   // =============================================================
-  async getRiskMatrix(): Promise<RiskMatrixResponseDto> {
-    // Org-wide and shared across all viewers (risk data is not actor-scoped),
-    // so a single cached entry serves every dashboard load. Short TTL keeps it
-    // near-real-time; the cache never throws, so a miss just recomputes.
-    return cache.getOrSet('dashboard:risk-matrix:org', 30, () =>
-      this._computeRiskMatrix(),
+  async getRiskMatrix(actor: DashboardActorContext): Promise<RiskMatrixResponseDto> {
+    const scoped = !actor.permissions.includes('risk:read_all');
+    const cacheKey = scoped
+      ? `dashboard:risk-matrix:user:${actor.id}`
+      : 'dashboard:risk-matrix:org';
+
+    return cache.getOrSet(cacheKey, 30, () =>
+      this._computeRiskMatrix(actor),
     );
   }
 
-  private async _computeRiskMatrix(): Promise<RiskMatrixResponseDto> {
-    // Only active risks are plotted — closed/accepted ones are no longer "live"
-    // exposure and would distort the heat map.
+  private async _computeRiskMatrix(actor: DashboardActorContext): Promise<RiskMatrixResponseDto> {
     const groups = await prisma.risk_Register.groupBy({
       by: ['likelihood', 'impact'],
-      where: { deleted_at: null, status: { in: ['open', 'mitigated'] } },
+      where: { ...this._riskWhere(actor), status: { in: ['open', 'mitigated'] } },
       _count: { _all: true },
     });
 
@@ -750,6 +750,13 @@ export class DashboardService {
   // =============================================================
   // Internal helpers
   // =============================================================
+  private _riskWhere(actor: DashboardActorContext): Prisma.Risk_RegisterWhereInput {
+    return {
+      deleted_at: null,
+      ...(actor.permissions.includes('risk:read_all') ? {} : { owner_id: actor.id }),
+    };
+  }
+
   private async _averageDaysToCloseRaw(
     auditeeId: string | null,
   ): Promise<Array<{ avg_days: number | null }>> {

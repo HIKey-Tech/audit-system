@@ -43,7 +43,7 @@ class EscalationController {
     }
     async _getEscalationHistory(req, res, next) {
         try {
-            const escalations = await this.escalationService.getEscalationHistory(req.params.type, req.params.id);
+            const escalations = await this.escalationService.getEscalationHistory(req.params.type, req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(escalations));
         }
         catch (err) {

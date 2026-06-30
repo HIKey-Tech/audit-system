@@ -30,6 +30,13 @@ export class ApprovalController {
     this.router.get('/pending', requirePermission('approval:read'), validate(PendingApprovalQuerySchema, 'query'), this._getPendingApprovals.bind(this));
 
     /**
+     * @route  GET /workflow/approvals/history
+     * @desc   Approvals the current user submitted or actioned (no longer pending)
+     * @access Private - approval:read
+     */
+    this.router.get('/history', requirePermission('approval:read'), this._getApprovalHistory.bind(this));
+
+    /**
      * @route  GET /workflow/approvals/entity/:type/:id
      * @desc   Get latest approval for an entity
      * @access Private - audit:read
@@ -41,7 +48,7 @@ export class ApprovalController {
      * @desc   Resolve an entity's approval chain to named people for display
      * @access Private - audit:read
      */
-    this.router.get('/chain/:entityType/:entityId', requirePermission('audit:read'), this._getChain.bind(this));
+    this.router.get('/chain/:entityType/:entityId', requirePermission('approval:read'), this._getChain.bind(this));
 
     /**
      * @route  GET /workflow/approvals/:id
@@ -79,6 +86,15 @@ export class ApprovalController {
     this.router.post('/:id/cancel', requirePermission('approval:cancel'), this._cancel.bind(this));
   }
 
+  private async _getApprovalHistory(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { approvals, meta } = await this.approvalService.getApprovalHistoryForUser(req.user!, req.query);
+      res.status(200).json(buildResponse(approvals, 'Approval history retrieved', meta));
+    } catch (err) {
+      next(err);
+    }
+  }
+
   private async _getPendingApprovals(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { approvals, meta } = await this.approvalService.getPendingApprovalsForUser(req.user!, req.query);
@@ -90,7 +106,7 @@ export class ApprovalController {
 
   private async _getApprovalByEntity(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const approval = await this.approvalService.getApprovalByEntity(req.params.type as never, req.params.id);
+      const approval = await this.approvalService.getApprovalByEntity(req.params.type as never, req.params.id, req.user!);
       res.status(200).json(buildResponse(approval));
     } catch (err) {
       next(err);
@@ -100,7 +116,7 @@ export class ApprovalController {
   private async _getChain(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const { entityType, entityId } = req.params;
-      const chain = await this.approvalService.resolveChainForEntity(entityType as WorkflowEntityType, entityId);
+      const chain = await this.approvalService.resolveChainForEntity(entityType as WorkflowEntityType, entityId, req.user!);
       res.status(200).json(buildResponse(chain, 'Approval chain resolved'));
     } catch (err) {
       next(err);
@@ -109,7 +125,7 @@ export class ApprovalController {
 
   private async _getApprovalById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const approval = await this.approvalService.getApprovalById(req.params.id);
+      const approval = await this.approvalService.getApprovalById(req.params.id, req.user!);
       res.status(200).json(buildResponse(approval));
     } catch (err) {
       next(err);
@@ -118,7 +134,7 @@ export class ApprovalController {
 
   private async _listSignedDocuments(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const docs = await this.approvalService.listSignedDocuments(req.params.id);
+      const docs = await this.approvalService.listSignedDocuments(req.params.id, req.user!);
       res.status(200).json(buildResponse(docs));
     } catch (err) {
       next(err);

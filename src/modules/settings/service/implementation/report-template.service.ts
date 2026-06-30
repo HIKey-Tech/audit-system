@@ -88,7 +88,7 @@ export class ReportTemplateService implements IReportTemplateService {
 
     if (dto.name) {
       const clash = await prisma.report_Template.findFirst({
-        where: { name: dto.name, id: { not: id } },
+        where: { name: dto.name, id: { not: id }, deleted_at: null },
         select: { id: true },
       });
       if (clash) {

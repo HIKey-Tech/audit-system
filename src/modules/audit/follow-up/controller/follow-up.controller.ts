@@ -118,7 +118,7 @@ export class FollowUpController {
 
   private async _getFollowUp(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const followUp = await this.followUpService.getFollowUp(req.params.id);
+      const followUp = await this.followUpService.getFollowUp(req.params.id, req.user!);
       res.status(200).json(buildResponse(followUp));
     } catch (err) {
       next(err);
@@ -127,7 +127,7 @@ export class FollowUpController {
 
   private async _listPendingFollowUps(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const followUps = await this.followUpService.listPendingFollowUps(req.params.id);
+      const followUps = await this.followUpService.listPendingFollowUps(req.params.id, req.user!);
       res.status(200).json(buildResponse(followUps));
     } catch (err) {
       next(err);

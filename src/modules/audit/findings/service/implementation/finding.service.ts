@@ -257,6 +257,22 @@ export class FindingService implements IFindingService {
       },
     });
     if (!finding) throw AppError.notFound('Audit finding');
+
+    if (!isAuditee && !actor.permissions.includes('finding:read_all')) {
+      const allowed = await prisma.audit_Engagement.count({
+        where: {
+          id: finding.engagement_id,
+          deleted_at: null,
+          OR: [
+            { lead_auditor_id: actor.id },
+            { audit_manager_id: actor.id },
+            { workflow_assignments: { some: { user_id: actor.id } } },
+          ],
+        },
+      }) > 0;
+      if (!allowed) throw AppError.notFound('Audit finding');
+    }
+
     return mapFindingToResponse(finding);
   }
 

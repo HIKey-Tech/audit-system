@@ -133,7 +133,7 @@ class ReportController {
     }
     async _getReport(req, res, next) {
         try {
-            const report = await this.reportService.getReport(req.params.id);
+            const report = await this.reportService.getReport(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(report));
         }
         catch (err) {
@@ -142,7 +142,7 @@ class ReportController {
     }
     async _getReportById(req, res, next) {
         try {
-            const report = await this.reportService.getReportById(req.params.id);
+            const report = await this.reportService.getReportById(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(report));
         }
         catch (err) {
@@ -151,7 +151,7 @@ class ReportController {
     }
     async _listReports(req, res, next) {
         try {
-            const { reports, meta } = await this.reportService.listReports(req.query);
+            const { reports, meta } = await this.reportService.listReports(req.query, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(reports, 'Audit reports retrieved', meta));
         }
         catch (err) {
@@ -161,7 +161,7 @@ class ReportController {
     async _exportReport(req, res, next) {
         try {
             const format = req.query.format ?? 'pdf';
-            const file = await this.reportService.exportReport(req.params.id, format);
+            const file = await this.reportService.exportReport(req.params.id, format, req.user);
             res.setHeader('Content-Type', file.mimeType);
             res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.fileName)}"`);
             res.status(200).send(file.buffer);

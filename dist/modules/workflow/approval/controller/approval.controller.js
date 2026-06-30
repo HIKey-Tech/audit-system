@@ -23,6 +23,12 @@ class ApprovalController {
          */
         this.router.get('/pending', (0, auth_middleware_1.requirePermission)('approval:read'), (0, validate_middleware_1.validate)(approval_request_dto_1.PendingApprovalQuerySchema, 'query'), this._getPendingApprovals.bind(this));
         /**
+         * @route  GET /workflow/approvals/history
+         * @desc   Approvals the current user submitted or actioned (no longer pending)
+         * @access Private - approval:read
+         */
+        this.router.get('/history', (0, auth_middleware_1.requirePermission)('approval:read'), this._getApprovalHistory.bind(this));
+        /**
          * @route  GET /workflow/approvals/entity/:type/:id
          * @desc   Get latest approval for an entity
          * @access Private - audit:read
@@ -33,7 +39,7 @@ class ApprovalController {
          * @desc   Resolve an entity's approval chain to named people for display
          * @access Private - audit:read
          */
-        this.router.get('/chain/:entityType/:entityId', (0, auth_middleware_1.requirePermission)('audit:read'), this._getChain.bind(this));
+        this.router.get('/chain/:entityType/:entityId', (0, auth_middleware_1.requirePermission)('approval:read'), this._getChain.bind(this));
         /**
          * @route  GET /workflow/approvals/:id
          * @desc   Get workflow approval
@@ -65,6 +71,15 @@ class ApprovalController {
          */
         this.router.post('/:id/cancel', (0, auth_middleware_1.requirePermission)('approval:cancel'), this._cancel.bind(this));
     }
+    async _getApprovalHistory(req, res, next) {
+        try {
+            const { approvals, meta } = await this.approvalService.getApprovalHistoryForUser(req.user, req.query);
+            res.status(200).json((0, api_response_type_1.buildResponse)(approvals, 'Approval history retrieved', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
     async _getPendingApprovals(req, res, next) {
         try {
             const { approvals, meta } = await this.approvalService.getPendingApprovalsForUser(req.user, req.query);
@@ -76,7 +91,7 @@ class ApprovalController {
     }
     async _getApprovalByEntity(req, res, next) {
         try {
-            const approval = await this.approvalService.getApprovalByEntity(req.params.type, req.params.id);
+            const approval = await this.approvalService.getApprovalByEntity(req.params.type, req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(approval));
         }
         catch (err) {
@@ -86,7 +101,7 @@ class ApprovalController {
     async _getChain(req, res, next) {
         try {
             const { entityType, entityId } = req.params;
-            const chain = await this.approvalService.resolveChainForEntity(entityType, entityId);
+            const chain = await this.approvalService.resolveChainForEntity(entityType, entityId, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(chain, 'Approval chain resolved'));
         }
         catch (err) {
@@ -95,7 +110,7 @@ class ApprovalController {
     }
     async _getApprovalById(req, res, next) {
         try {
-            const approval = await this.approvalService.getApprovalById(req.params.id);
+            const approval = await this.approvalService.getApprovalById(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(approval));
         }
         catch (err) {
@@ -104,7 +119,7 @@ class ApprovalController {
     }
     async _listSignedDocuments(req, res, next) {
         try {
-            const docs = await this.approvalService.listSignedDocuments(req.params.id);
+            const docs = await this.approvalService.listSignedDocuments(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(docs));
         }
         catch (err) {

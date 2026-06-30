@@ -49,9 +49,9 @@ class AssignmentController {
         /**
          * @route  GET /workflow/assignments/candidates/:engagementId
          * @desc   Get candidate users for engagement assignment with skills and workload
-         * @access Private - assignment:read
+         * @access Private - assignment:create
          */
-        this.router.get('/candidates/:engagementId', (0, auth_middleware_1.requirePermission)('assignment:read'), this._getCandidates.bind(this));
+        this.router.get('/candidates/:engagementId', (0, auth_middleware_1.requirePermission)('assignment:create'), this._getCandidates.bind(this));
     }
     async _assignStaff(req, res, next) {
         try {
@@ -64,7 +64,7 @@ class AssignmentController {
     }
     async _getAssignments(req, res, next) {
         try {
-            const assignments = await this.assignmentService.getAssignments(req.params.id);
+            const assignments = await this.assignmentService.getAssignments(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(assignments));
         }
         catch (err) {
@@ -100,7 +100,7 @@ class AssignmentController {
     }
     async _getCandidates(req, res, next) {
         try {
-            const candidates = await this.assignmentService.getCandidates(req.params.engagementId);
+            const candidates = await this.assignmentService.getCandidates(req.params.engagementId, req.user);
             res.json((0, api_response_type_1.buildResponse)(candidates, 'Candidates retrieved'));
         }
         catch (err) {

@@ -103,14 +103,19 @@ export class AuthService implements IAuthService {
       }
 
       // Within grace: log in normally, but flag that setup is still pending.
-      const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
-      await prisma.user.update({
-        where: { id: user.id },
-        data: {
-          last_login_at: now,
-          // Persist the deadline the first time we compute it.
-          ...(user.mfa_grace_until ? {} : { mfa_grace_until: graceUntil }),
-        },
+      // Fix (Obs #1): issue tokens and persist the grace deadline atomically so
+      // a crash between the two cannot grant a second full grace window.
+      const tokens = await prisma.$transaction(async (tx) => {
+        const issued = await this._issueTokens(user.id, ipAddress, userAgent, tx);
+        await tx.user.update({
+          where: { id: user.id },
+          data: {
+            last_login_at: now,
+            // Persist the deadline the first time we compute it.
+            ...(user.mfa_grace_until ? {} : { mfa_grace_until: graceUntil }),
+          },
+        });
+        return issued;
       });
       logger.info('User logged in via password (2FA grace active)', { userId: user.id });
       return {
@@ -143,10 +148,16 @@ export class AuthService implements IAuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<AuthResponseDto> {
-    const user = (await prisma.user.findUniqueOrThrow({
-      where: { id: userId },
+    // Bug fix: use findUnique with deleted_at:null so a user soft-deleted
+    // between password-OK and MFA-verify cannot complete login.
+    const user = (await prisma.user.findUnique({
+      where: { id: userId, deleted_at: null },
       include: userWithRolesInclude,
-    })) as UserWithRoles;
+    })) as UserWithRoles | null;
+
+    if (!user) {
+      throw AppError.unauthorized('Invalid credentials');
+    }
 
     if (!user.is_active) {
       throw AppError.unauthorized('Account is deactivated');
@@ -366,8 +377,10 @@ export class AuthService implements IAuthService {
     userId: string,
     ipAddress?: string,
     userAgent?: string,
+    tx?: Parameters<Parameters<typeof prisma.$transaction>[0]>[0],
   ): Promise<TokenPair> {
-    const user = await prisma.user.findUniqueOrThrow({
+    const db = tx ?? prisma;
+    const user = await db.user.findUniqueOrThrow({
       where: { id: userId },
       include: userWithRolesInclude,
     });
@@ -376,7 +389,7 @@ export class AuthService implements IAuthService {
 
     const { raw, hash, expiresAt } = generateRefreshToken();
 
-    await prisma.refresh_Token.create({
+    await db.refresh_Token.create({
       data: {
         user_id: userId,
         token_hash: hash,

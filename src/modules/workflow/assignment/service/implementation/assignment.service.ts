@@ -229,7 +229,8 @@ export class AssignmentService implements IAssignmentService {
     });
   }
 
-  async getAssignments(engagementId: string): Promise<AssignmentResponseDto[]> {
+  async getAssignments(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentResponseDto[]> {
+    await this._assertCanViewEngagementAssignments(engagementId, actor);
     const assignments = await prisma.workflow_Assignment.findMany({
       where: { engagement_id: engagementId },
       include: assignmentInclude,
@@ -299,7 +300,8 @@ export class AssignmentService implements IAssignmentService {
     };
   }
 
-  async getCandidates(engagementId: string): Promise<AssignmentCandidateDto[]> {
+  async getCandidates(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentCandidateDto[]> {
+    assertHasPermission(actor.permissions, 'assignment:create');
     // Need the engagement's audit type + priority to score skill fit and weight workload.
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
@@ -370,6 +372,27 @@ export class AssignmentService implements IAssignmentService {
         b.recommendationScore - a.recommendationScore ||
         a.activeEngagementCount - b.activeEngagementCount,
       );
+  }
+  private async _assertCanViewEngagementAssignments(
+    engagementId: string,
+    actor: WorkflowActorContext,
+  ): Promise<void> {
+    if (actor.permissions.includes('engagement:read_all')) return;
+
+    const count = await prisma.audit_Engagement.count({
+      where: {
+        id: engagementId,
+        deleted_at: null,
+        OR: [
+          { lead_auditor_id: actor.id },
+          { audit_manager_id: actor.id },
+          { workflow_assignments: { some: { user_id: actor.id } } },
+        ],
+      },
+    });
+    if (count === 0) {
+      throw AppError.forbidden('You do not have access to this engagement assignments');
+    }
   }
 
   async getActiveWorkloadMap(): Promise<Map<string, number>> {

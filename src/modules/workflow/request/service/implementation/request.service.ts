@@ -232,10 +232,13 @@ export class RequestService implements IRequestService {
     const now = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.workflow_Request_Step.update({
-        where: { id: step.id },
+      const claimed = await tx.workflow_Request_Step.updateMany({
+        where: { id: step.id, status: RequestStepStatus.Pending },
         data: { status: RequestStepStatus.Rejected, acted_at: now },
       });
+      if (claimed.count === 0) {
+        throw AppError.conflict('This request step has already been actioned');
+      }
       await tx.workflow_Request.update({
         where: { id: requestId },
         data: { status: RequestStatus.Rejected, locked_at: request.locked_at ?? now },
@@ -504,10 +507,13 @@ export class RequestService implements IRequestService {
     const now = new Date();
 
     const updated = await prisma.$transaction(async (tx) => {
-      await tx.workflow_Request_Step.update({
-        where: { id: step.id },
+      const claimed = await tx.workflow_Request_Step.updateMany({
+        where: { id: step.id, status: RequestStepStatus.Pending },
         data: { status: opts.stepStatus, acted_at: now },
       });
+      if (claimed.count === 0) {
+        throw AppError.conflict('This request step has already been actioned');
+      }
 
       await tx.workflow_Request_Action.create({
         data: {

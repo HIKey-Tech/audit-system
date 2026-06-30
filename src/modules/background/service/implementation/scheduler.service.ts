@@ -43,6 +43,7 @@ interface RegisteredJob {
 class SchedulerService {
   private readonly jobs: RegisteredJob[] = [];
   private readonly tasks = new Map<string, cron.ScheduledTask>();
+  private readonly runningJobs = new Set<string>();
 
   register(job: RegisteredJob): void {
     this.jobs.push(job);
@@ -118,6 +119,11 @@ class SchedulerService {
   }
 
   private async _runJob(job: RegisteredJob): Promise<void> {
+    if (this.runningJobs.has(job.key)) {
+      logger.warn('Background job skipped because previous run is still active', { jobKey: job.key });
+      return;
+    }
+    this.runningJobs.add(job.key);
     logger.info('Background job started running', { jobKey: job.key });
 
     const run = await prisma.scheduled_Job_Run.create({
@@ -125,6 +131,11 @@ class SchedulerService {
         job_id: await this._getJobId(job.key),
         status: 'running',
       },
+    });
+
+    await prisma.scheduled_Job.update({
+      where: { job_key: job.key },
+      data: { last_status: 'running' },
     });
 
     const startMs = Date.now();
@@ -161,6 +172,8 @@ class SchedulerService {
       });
 
       logger.error('Background job failed', { err, jobKey: job.key });
+    } finally {
+      this.runningJobs.delete(job.key);
     }
   }
 

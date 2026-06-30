@@ -317,6 +317,7 @@ export interface AuditPlan {
   approvedById: string | null;
   approvedByName: string | null;
   approvedAt: string | null;
+  rejectionReason: string | null;
   itemsCount: number;
   createdAt: string;
   updatedAt: string;

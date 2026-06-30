@@ -105,7 +105,7 @@ class FollowUpController {
     }
     async _getFollowUp(req, res, next) {
         try {
-            const followUp = await this.followUpService.getFollowUp(req.params.id);
+            const followUp = await this.followUpService.getFollowUp(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(followUp));
         }
         catch (err) {
@@ -114,7 +114,7 @@ class FollowUpController {
     }
     async _listPendingFollowUps(req, res, next) {
         try {
-            const followUps = await this.followUpService.listPendingFollowUps(req.params.id);
+            const followUps = await this.followUpService.listPendingFollowUps(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(followUps));
         }
         catch (err) {

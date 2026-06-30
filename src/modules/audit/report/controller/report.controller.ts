@@ -149,7 +149,7 @@ export class ReportController {
 
   private async _getReport(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const report = await this.reportService.getReport(req.params.id);
+      const report = await this.reportService.getReport(req.params.id, req.user!);
       res.status(200).json(buildResponse(report));
     } catch (err) {
       next(err);
@@ -158,7 +158,7 @@ export class ReportController {
 
   private async _getReportById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const report = await this.reportService.getReportById(req.params.id);
+      const report = await this.reportService.getReportById(req.params.id, req.user!);
       res.status(200).json(buildResponse(report));
     } catch (err) {
       next(err);
@@ -167,7 +167,7 @@ export class ReportController {
 
   private async _listReports(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const { reports, meta } = await this.reportService.listReports(req.query as never);
+      const { reports, meta } = await this.reportService.listReports(req.query as never, req.user!);
       res.status(200).json(buildResponse(reports, 'Audit reports retrieved', meta));
     } catch (err) {
       next(err);
@@ -177,7 +177,7 @@ export class ReportController {
   private async _exportReport(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const format = (req.query.format as 'docx' | 'pdf' | undefined) ?? 'pdf';
-      const file = await this.reportService.exportReport(req.params.id, format);
+      const file = await this.reportService.exportReport(req.params.id, format, req.user!);
       res.setHeader('Content-Type', file.mimeType);
       res.setHeader('Content-Disposition', `attachment; filename="${encodeURIComponent(file.fileName)}"`);
       res.status(200).send(file.buffer);

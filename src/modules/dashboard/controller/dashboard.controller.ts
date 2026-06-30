@@ -161,12 +161,12 @@ export class DashboardController {
   }
 
   private async _getRiskMatrix(
-    _req: Request,
+    req: Request,
     res: Response,
     next: NextFunction,
   ): Promise<void> {
     try {
-      const matrix = await this.dashboardService.getRiskMatrix();
+      const matrix = await this.dashboardService.getRiskMatrix(req.user!);
       res.status(200).json(buildResponse(matrix));
     } catch (err) {
       next(err);
