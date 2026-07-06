@@ -1,0 +1,83 @@
+# IAMS production stack. See docs/VPS_DEPLOYMENT_RUNBOOK.md for the full flow.
+#
+# Everyday:   docker compose -f docker-compose.prod.yml up -d
+# Migrate:    docker compose -f docker-compose.prod.yml --profile ops run --rm db-migrate
+# Seed:       docker compose -f docker-compose.prod.yml --profile ops run --rm db-seed
+
+services:
+  iams-api:
+    build:
+      context: .
+      target: runtime
+    image: iams-api:latest
+    env_file: .env
+    environment:
+      - STORAGE_LOCAL_PATH=/data/uploads
+    volumes:
+      - /opt/iams/uploads:/data/uploads
+      - /opt/iams/logs:/app/logs
+    networks: [iams]
+    restart: unless-stopped
+    # Background jobs run in-process (node-cron) — never scale this service
+    # beyond one replica or every job runs N times.
+
+  iams-web:
+    build:
+      context: ./frontend
+      target: runtime
+    image: iams-web:latest
+    environment:
+      - INTERNAL_API_URL=http://iams-api:3000/api/v1
+    networks: [iams]
+    restart: unless-stopped
+    depends_on: [iams-api]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis-data:/data
+    networks: [iams]
+    restart: unless-stopped
+    # No ports: — internal only.
+
+  nginx:
+    image: nginx:stable-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - /opt/iams/certs:/etc/nginx/certs:ro
+    networks: [iams]
+    restart: unless-stopped
+    depends_on: [iams-api, iams-web]
+
+  # ── One-off DB operations (never long-running) ──────────────────────
+  # Built from the Dockerfile's `build` stage, which keeps the Prisma CLI,
+  # ts-node, and prisma/ (schema, migrations, seed, templates).
+  db-migrate:
+    build:
+      context: .
+      target: build
+    image: iams-db-tools:latest
+    env_file: .env
+    command: ["npx", "prisma", "migrate", "deploy"]
+    networks: [iams]
+    profiles: [ops]
+
+  db-seed:
+    build:
+      context: .
+      target: build
+    image: iams-db-tools:latest
+    env_file: .env
+    command: ["npx", "prisma", "db", "seed"]
+    networks: [iams]
+    profiles: [ops]
+
+networks:
+  iams: {}
+
+volumes:
+  redis-data: {}

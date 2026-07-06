@@ -211,65 +211,49 @@ Checks the app does for you at boot — don't fight them:
 
 ## 4. Bring the stack up
 
-The compose file should follow this shape (align with your actual one):
+The stack is defined in **`docker-compose.prod.yml`** at the repo root, built
+from the two Dockerfiles (`Dockerfile` for the API, `frontend/Dockerfile` for
+the web app). It follows this shape:
 
-```yaml
-services:
-  iams-api:
-    image: iams-api:<tag>          # or build: .
-    env_file: .env
-    volumes:
-      - /opt/iams/uploads:/data/uploads
-      - /opt/iams/logs:/app/logs
-    networks: [iams]
-    restart: unless-stopped
-    deploy: { replicas: 1 }        # MUST stay 1 — see §6 background jobs
+- `iams-api` — backend, builds the `runtime` target of `Dockerfile`; mounts
+  `/opt/iams/uploads` and `/opt/iams/logs`; **single replica only** (§6).
+- `iams-web` — frontend, builds `frontend/Dockerfile` (Next.js standalone);
+  gets `INTERNAL_API_URL=http://iams-api:3000/api/v1`.
+- `redis` — internal only, no published ports, AOF persistence.
+- `nginx` — the only service publishing ports (80/443); mounts
+  `deploy/nginx.conf` and `/opt/iams/certs`.
+- `db-migrate` / `db-seed` — one-off containers under the `ops` profile, built
+  from the Dockerfile's `build` stage (Prisma CLI + ts-node + `prisma/`).
 
-  iams-web:
-    image: iams-web:<tag>
-    environment:
-      - INTERNAL_API_URL=http://iams-api:3000/api/v1
-      - NEXT_PUBLIC_API_URL=https://<host>/api/v1
-    networks: [iams]
-    restart: unless-stopped
+Both app containers run as the non-root `node` user (uid 1000), so the host
+directories must be writable by uid 1000:
 
-  redis:
-    image: redis:7-alpine
-    command: ["redis-server", "--appendonly", "yes"]
-    volumes: [redis-data:/data]
-    networks: [iams]
-    restart: unless-stopped
-    # NO ports: — internal only
-
-  nginx:
-    image: nginx:stable-alpine
-    ports: ["80:80", "443:443"]
-    volumes:
-      - ./deploy/nginx.conf:/etc/nginx/conf.d/default.conf:ro
-      - /opt/iams/certs:/etc/nginx/certs:ro
-    networks: [iams]
-    restart: unless-stopped
-    depends_on: [iams-api, iams-web]
-
-networks: { iams: {} }
-volumes: { redis-data: {} }
+```bash
+sudo chown -R 1000:1000 /opt/iams/uploads /opt/iams/logs
 ```
 
 ```bash
 cd /opt/iams/app
-docker compose pull        # or: docker compose build
-docker compose up -d
-docker compose ps          # everything "running"
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps    # everything "running" and healthy
 ```
+
+> Tip: `export COMPOSE_FILE=docker-compose.prod.yml` in the deploy user's
+> profile and drop the `-f` flag from every command below.
 
 ### 4.1 Database migrate + seed (first deploy)
 
+The runtime image is lean — it carries no Prisma CLI or ts-node. DB operations
+run as one-off containers built from the Dockerfile's `build` stage (compose
+profile `ops`):
+
 ```bash
-# Apply all migrations (includes 20260705193755_add_engagement_time_tracking)
-docker compose exec iams-api npx prisma migrate deploy
+# Apply all migrations
+docker compose -f docker-compose.prod.yml --profile ops run --rm db-migrate
 
 # Seed roles/permissions/templates/config — idempotent upserts
-docker compose exec iams-api npx prisma db seed
+docker compose -f docker-compose.prod.yml --profile ops run --rm db-seed
 ```
 
 **Immediately after seeding, deal with the test users.** The seed creates
@@ -469,10 +453,10 @@ Then in a browser:
 ```bash
 cd /opt/iams/app
 git pull                                   # or bump the image tag
-docker compose build                       # skip if pulling from registry
-docker compose exec iams-api npx prisma migrate deploy   # BEFORE swapping the API
-docker compose up -d                       # recreates changed containers
-docker compose logs -f iams-api            # watch boot: storage check, jobs registered
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml --profile ops run --rm db-migrate   # BEFORE swapping the API
+docker compose -f docker-compose.prod.yml up -d          # recreates changed containers
+docker compose -f docker-compose.prod.yml logs -f iams-api   # watch boot: storage check, jobs registered
 ```
 
 Seed only when a release note says so (new permissions/templates) — it's

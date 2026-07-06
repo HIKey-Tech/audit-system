@@ -1,0 +1,10 @@
+node_modules
+.next
+.next-dev
+.next-build
+.git
+.env
+.env.*
+!.env.example
+Dockerfile
+*.md

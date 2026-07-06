@@ -1,0 +1,16 @@
+node_modules
+dist
+frontend
+uploads
+logs
+docs
+coverage
+backups
+.git
+.env
+.env.*
+!.env.example
+*.md
+Dockerfile
+docker-compose*.yml
+deploy
