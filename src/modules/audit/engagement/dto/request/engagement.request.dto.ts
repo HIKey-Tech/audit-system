@@ -20,6 +20,7 @@ const EngagementBaseSchema = z.object({
   plannedStartDate: z.string().datetime(),
   plannedEndDate: z.string().datetime(),
   slaDeadline: z.string().datetime(),
+  plannedHours: z.number().int().positive().max(100000).optional(),
   checklistControls: z.array(ChecklistControlSchema).max(200).optional(),
 });
 
@@ -47,6 +48,7 @@ export const UpdateEngagementRequestSchema = z.object({
   slaDeadline: z.string().datetime().optional(),
   priority: z.nativeEnum(AuditPriority).optional(),
   adhocReason: z.string().max(5000).nullable().optional(),
+  plannedHours: z.number().int().positive().max(100000).nullable().optional(),
 });
 
 export const UpdateEngagementStatusRequestSchema = z.object({

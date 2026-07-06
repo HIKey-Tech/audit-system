@@ -14,7 +14,10 @@ import {
   parseReferenceSequence,
 } from '../../../utility/audit.utility';
 import { getAuditLifecycleRules, serializeChecklistControls } from '../../../utility/audit-config.utility';
+import { getEngagementGateStatus } from './engagement-gates';
 import { resolveViewerContext } from '../../utility/engagement-visibility.util';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
+import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
 import { IUserService } from '../../../../user';
 import { UserQueryDto } from '../../../../user/dto/request/user.request.dto';
@@ -65,6 +68,7 @@ export class EngagementService implements IEngagementService {
     private readonly checklistService: IChecklistService,
     private readonly userService: IUserService,
     private readonly assignmentService: IAssignmentService,
+    private readonly approvalService: IApprovalService = workflowApprovalService,
   ) {}
 
   private async _assertManagerCanApprove(managerId: string): Promise<void> {
@@ -184,6 +188,7 @@ export class EngagementService implements IEngagementService {
           planned_start_date: new Date(dto.plannedStartDate),
           planned_end_date: new Date(dto.plannedEndDate),
           sla_deadline: new Date(dto.slaDeadline),
+          planned_hours: dto.plannedHours,
           checklist_template: serializeChecklistControls(dto.checklistControls),
           created_by_id: actor.id,
         },
@@ -225,6 +230,7 @@ export class EngagementService implements IEngagementService {
         planned_start_date: new Date(dto.plannedStartDate),
         planned_end_date: new Date(dto.plannedEndDate),
         sla_deadline: new Date(dto.slaDeadline),
+        planned_hours: dto.plannedHours,
         is_adhoc: true,
         adhoc_reason: dto.adhocReason,
         checklist_template: serializeChecklistControls(dto.checklistControls),
@@ -240,27 +246,51 @@ export class EngagementService implements IEngagementService {
 
   async updateEngagement(id: string, dto: UpdateEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
     assertHasPermission(actor.permissions, 'engagement:update');
-    await this._assertEngagementExists(id);
+    const existing = await prisma.audit_Engagement.findFirst({
+      where: { id, deleted_at: null },
+      select: { audit_manager_id: true },
+    });
+    if (!existing) throw AppError.notFound('Audit engagement');
     if (dto.auditManagerId !== undefined) await this._assertManagerCanApprove(dto.auditManagerId);
     if (dto.leadAuditorId !== undefined) await this._assertLeadAuditorEligible(dto.leadAuditorId);
 
-    const engagement = await prisma.audit_Engagement.update({
-      where: { id },
-      data: {
-        ...(dto.title !== undefined && { title: dto.title }),
-        ...(dto.leadAuditorId !== undefined && { lead_auditor_id: dto.leadAuditorId }),
-        ...(dto.auditManagerId !== undefined && { audit_manager_id: dto.auditManagerId }),
-        ...(dto.auditeeId !== undefined && { auditee_id: dto.auditeeId }),
-        ...(dto.plannedStartDate !== undefined && { planned_start_date: new Date(dto.plannedStartDate) }),
-        ...(dto.plannedEndDate !== undefined && { planned_end_date: new Date(dto.plannedEndDate) }),
-        ...(dto.slaDeadline !== undefined && { sla_deadline: new Date(dto.slaDeadline) }),
-        ...(dto.priority !== undefined && { priority: dto.priority }),
-        ...(dto.adhocReason !== undefined && { adhoc_reason: dto.adhocReason }),
-      },
-      include: engagementInclude,
+    const managerChanged =
+      dto.auditManagerId !== undefined && dto.auditManagerId !== existing.audit_manager_id;
+
+    const engagement = await prisma.$transaction(async (tx) => {
+      const updated = await tx.audit_Engagement.update({
+        where: { id },
+        data: {
+          ...(dto.title !== undefined && { title: dto.title }),
+          ...(dto.leadAuditorId !== undefined && { lead_auditor_id: dto.leadAuditorId }),
+          ...(dto.auditManagerId !== undefined && { audit_manager_id: dto.auditManagerId }),
+          ...(dto.auditeeId !== undefined && { auditee_id: dto.auditeeId }),
+          ...(dto.plannedStartDate !== undefined && { planned_start_date: new Date(dto.plannedStartDate) }),
+          ...(dto.plannedEndDate !== undefined && { planned_end_date: new Date(dto.plannedEndDate) }),
+          ...(dto.slaDeadline !== undefined && { sla_deadline: new Date(dto.slaDeadline) }),
+          ...(dto.priority !== undefined && { priority: dto.priority }),
+          ...(dto.adhocReason !== undefined && { adhoc_reason: dto.adhocReason }),
+          ...(dto.plannedHours !== undefined && { planned_hours: dto.plannedHours }),
+        },
+        include: engagementInclude,
+      });
+
+      // A pinned engagement-manager approval step has no active-holder fallback
+      // (see ApprovalService#_resolveApproverChain) — migrate any already-created
+      // pending steps to the new manager so the approval doesn't stall.
+      if (managerChanged) {
+        await this.approvalService.reassignEngagementManagerApprovals(
+          id,
+          existing.audit_manager_id,
+          dto.auditManagerId!,
+          tx,
+        );
+      }
+
+      return updated;
     });
 
-    logger.info('Audit engagement updated', { engagementId: id, actorId: actor.id });
+    logger.info('Audit engagement updated', { engagementId: id, actorId: actor.id, managerChanged });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.update', module: 'audit', entityType: 'audit_engagement', entityId: id, newValues: mapEngagementToResponse(engagement) });
     return mapEngagementToResponse(engagement);
   }
@@ -452,6 +482,11 @@ export class EngagementService implements IEngagementService {
       prisma.audit_Engagement_Asset.count({ where: { engagement_id: engagement.id } }),
     ]);
 
+    const loggedTime = await prisma.audit_Time_Entry.aggregate({
+      where: { engagement_id: engagement.id, deleted_at: null },
+      _sum: { hours: true },
+    });
+
     const findingStatusGroups = await prisma.audit_Finding.groupBy({
       by: ['status'],
       where: { engagement_id: engagement.id, deleted_at: null },
@@ -493,6 +528,8 @@ export class EngagementService implements IEngagementService {
       actor,
     );
 
+    const gateStatus = await getEngagementGateStatus(engagement.id, engagement.status);
+
     const dto = mapEngagementToResponse(engagement, {
       findingCounts,
       workingPaperCount,
@@ -502,8 +539,13 @@ export class EngagementService implements IEngagementService {
       reportStatus: report?.status ?? null,
       evidenceCount,
       assetCount,
+      actualHours: Number(loggedTime._sum.hours ?? 0),
     });
     dto.viewerContext = viewerContext;
+    // Always set when a gate applies to the current status (even as an empty
+    // array once satisfied) so the frontend can tell "no blockers" apart from
+    // "no forward gate for this status" (planned/closed).
+    if (gateStatus) dto.pendingGates = gateStatus.unmet;
     return dto;
   }
 

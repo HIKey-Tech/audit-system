@@ -17,6 +17,7 @@ import { usePermission } from '@/hooks/usePermission';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 import { ManageAssignmentsSlideOver } from './ManageAssignmentsSlideOver';
+import { TimeTrackingCard } from './TimeTrackingCard';
 
 export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const { user } = usePermissions();
@@ -176,6 +177,13 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
           </p>
           <p className="text-xs text-text-secondary mt-1">Total documents on file</p>
         </Card>
+
+        {engagement.viewerContext?.role !== 'auditee' && (
+          <TimeTrackingCard
+            engagementId={engagement.id}
+            isClosed={engagement.status === 'closed'}
+          />
+        )}
 
         <Card>
           <CardHeader title="Checklist" subtitle={`${tested}/${total} tested`} />

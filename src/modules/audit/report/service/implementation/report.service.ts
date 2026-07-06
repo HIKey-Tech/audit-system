@@ -235,8 +235,10 @@ export class ReportService implements IReportService {
         title: 'Audit report issued',
         body: `Audit report "${report.title}" has been issued.`,
         type: 'info',
-        referenceType: 'audit_report',
-        referenceId: id,
+        // The frontend has no report detail page — land the auditee on the
+        // engagement (Report tab) instead of a dead reference.
+        referenceType: 'audit_engagement',
+        referenceId: report.engagement_id,
         eventKey: 'audit.report.issued',
         variables: reportVariables,
       },

@@ -18,11 +18,13 @@ const cookie_parser_1 = __importDefault(require("cookie-parser"));
 const morgan_1 = __importDefault(require("morgan"));
 const express_rate_limit_1 = __importDefault(require("express-rate-limit"));
 const swagger_ui_express_1 = __importDefault(require("swagger-ui-express"));
+const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const app_config_1 = require("./shared/config/app.config");
 const logger_util_1 = require("./shared/utils/logger.util");
 const prisma_client_1 = require("./shared/prisma/prisma.client");
 const cache_client_1 = require("./shared/cache/cache.client");
 const storage_client_1 = require("./modules/document/service/client/storage.client");
+const workflow_utility_1 = require("./modules/workflow/utility/workflow.utility");
 const error_handler_middleware_1 = require("./shared/middleware/error-handler.middleware");
 const request_logger_middleware_1 = require("./modules/logging/utility/request-logger.middleware");
 const logging_1 = require("./modules/logging");
@@ -74,11 +76,33 @@ const buildApp = () => {
             timestamp: new Date().toISOString(),
         });
     };
+    // Key by the authenticated user when possible, not just IP — many GBB users sit
+    // behind the same NAT/VPN egress IP, and IP-only keying would throttle all of
+    // them as one bucket. Falls back to IP for unauthenticated/public requests.
+    // Decoding here (ahead of the per-route `authenticate` middleware) is a
+    // read-only lookup of the `sub` claim; it does not replace or skip real auth.
+    const apiLimiterKeyGenerator = (req) => {
+        const authHeader = req.headers.authorization;
+        if (authHeader?.startsWith('Bearer ')) {
+            try {
+                const payload = jsonwebtoken_1.default.verify(authHeader.slice(7), app_config_1.config.jwt.secret, {
+                    algorithms: ['HS256'],
+                });
+                if (payload.sub)
+                    return `user:${payload.sub}`;
+            }
+            catch {
+                // Invalid/expired token — fall through to IP keying below.
+            }
+        }
+        return `ip:${req.ip}`;
+    };
     const apiLimiter = (0, express_rate_limit_1.default)({
         windowMs: app_config_1.config.rateLimit.windowMs,
         max: app_config_1.config.rateLimit.max,
         standardHeaders: true,
         legacyHeaders: false,
+        keyGenerator: apiLimiterKeyGenerator,
         handler: rateLimitHandler('Too many requests.'),
         // On by default everywhere; only skipped when a developer explicitly opts
         // out (RATE_LIMIT_DISABLED=true) in a non-production env. Never skipped in prod.
@@ -166,6 +190,7 @@ const startServer = async () => {
     }
     (0, background_1.registerAllJobs)();
     await background_1.schedulerService.startAll();
+    void (0, workflow_utility_1.warnOnUnresolvableEscalationTargets)();
     return server;
 };
 const shutdown = async (server, signal) => {

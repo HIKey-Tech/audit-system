@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download } from 'lucide-react';
+import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download, FlaskConical } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -14,17 +14,66 @@ import { FormField } from '@/components/ui/FormField';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { workingPapersApi } from '@/lib/api/audit';
+import { checklistsApi, workingPapersApi } from '@/lib/api/audit';
 import { wpTemplatesApi } from '@/lib/api/settings';
+import { Markdown } from '@/components/common/Markdown';
+import { SamplingToolSlideOver } from './SamplingToolSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { formatRelative } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
 import type {
+  AuditChecklistItem,
   AuditEngagementDetail,
   AuditWorkingPaper,
   WorkingPaperImportPreview,
 } from '@/lib/types/domain';
+
+const MARKDOWN_HINT =
+  'Markdown supported: # headings, **bold**, *italic*, - lists, | tables |.';
+
+/** Small Write / Preview segmented toggle shared by the create and view/edit forms. */
+const WritePreviewToggle = ({
+  previewing,
+  onChange,
+}: {
+  previewing: boolean;
+  onChange: (v: boolean) => void;
+}): JSX.Element => (
+  <div className="inline-flex rounded-md border border-border p-0.5 text-xs font-medium">
+    <button
+      type="button"
+      onClick={() => onChange(false)}
+      className={`rounded px-2.5 py-1 transition-colors ${!previewing ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+    >
+      Write
+    </button>
+    <button
+      type="button"
+      onClick={() => onChange(true)}
+      className={`rounded px-2.5 py-1 transition-colors ${previewing ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+    >
+      Preview
+    </button>
+  </div>
+);
+
+/** Plain-text snapshot of the engagement's control test results, for embedding
+ * into a working paper so the tester doesn't transcribe their own system's data. */
+function buildTestResultsText(items: AuditChecklistItem[]): string {
+  const tested = items.filter((c) => c.result !== 'not_tested');
+  const count = (r: string): number => items.filter((c) => c.result === r).length;
+  const lines = [
+    `Summary: ${tested.length} of ${items.length} controls tested — ${count('passed')} passed, ${count('failed')} failed, ${count('not_applicable')} N/A.`,
+    '',
+    ...items.map((c) => {
+      const label = c.result.replace('_', ' ').toUpperCase();
+      const notes = c.notes ? ` — Notes: ${c.notes}` : '';
+      return `[${label}] ${c.controlReference} — ${c.controlDescription}${notes}`;
+    }),
+  ];
+  return lines.join('\n');
+}
 
 interface Props {
   engagement: AuditEngagementDetail;
@@ -37,9 +86,12 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
   const canSubmitWP = usePermission('working_paper:submit');
   const canApproveWP = usePermission('working_paper:approve');
   const canRejectWP = usePermission('working_paper:reject');
+  const canSample = usePermission('evidence:upload');
 
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
+  const [samplingOpen, setSamplingOpen] = useState(false);
+  const [samplingPrefill, setSamplingPrefill] = useState<{ title: string; content: string } | null>(null);
   const [editing, setEditing] = useState<AuditWorkingPaper | null>(null);
   const [rejecting, setRejecting] = useState<AuditWorkingPaper | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
@@ -99,6 +151,11 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
         </div>
         {canCreate && (
           <div className="flex flex-wrap gap-2">
+            {canSample && (
+              <Button size="sm" variant="secondary" leftIcon={<FlaskConical className="h-3.5 w-3.5" />} onClick={() => setSamplingOpen(true)}>
+                Sampling tool
+              </Button>
+            )}
             <Button size="sm" variant="secondary" leftIcon={<Upload className="h-3.5 w-3.5" />} onClick={() => setImportOpen(true)}>
               Import
             </Button>
@@ -204,7 +261,8 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                   <ApproveSignPanel
                     entityType="audit_working_paper"
                     showComment={false}
-                    approveFn={() => workingPapersApi.approve(wp.id)}
+                    wpContent={wp.content ?? undefined}
+                    approveFn={(edits) => workingPapersApi.approve(wp.id, edits)}
                     onDone={() => {
                       setApprovingId(null);
                       refresh();
@@ -226,8 +284,23 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
         engagementId={engagement.id}
         auditType={engagement.auditType}
         open={createOpen}
-        onClose={() => setCreateOpen(false)}
+        onClose={() => {
+          setCreateOpen(false);
+          setSamplingPrefill(null);
+        }}
         onSaved={refresh}
+        initialTitle={samplingPrefill?.title}
+        initialContent={samplingPrefill?.content}
+      />
+      <SamplingToolSlideOver
+        engagementId={engagement.id}
+        open={samplingOpen}
+        onClose={() => setSamplingOpen(false)}
+        onCreateWorkingPaper={(title, content) => {
+          setSamplingPrefill({ title, content });
+          setSamplingOpen(false);
+          setCreateOpen(true);
+        }}
       />
       <ImportPaperSlideOver
         engagementId={engagement.id}
@@ -266,19 +339,38 @@ const CreateOrEditPaperSlideOver = ({
   open,
   onClose,
   onSaved,
+  initialTitle,
+  initialContent,
 }: {
   engagementId: string;
   auditType: string;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
+  /** Optional prefill (e.g. the sampling tool's methodology write-up). */
+  initialTitle?: string;
+  initialContent?: string;
 }): JSX.Element => {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [sectionContents, setSectionContents] = useState<string[]>([]);
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
+  const [includeTestResults, setIncludeTestResults] = useState(false);
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+
+  // Prefill from the caller (sampling tool). Prefilled papers start in blank
+  // (free-text) mode so the provided markdown is immediately visible.
+  useEffect(() => {
+    if (open && initialContent !== undefined) {
+      setContent(initialContent);
+      if (initialTitle) setTitle(initialTitle);
+      setSelectedTemplateId('');
+      setTouched(true);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initialContent, initialTitle]);
 
   const templatesQuery = useQuery({
     queryKey: ['settings', 'working-paper-templates', 'list'],
@@ -286,6 +378,17 @@ const CreateOrEditPaperSlideOver = ({
     enabled: open,
     retry: false,
   });
+
+  // Control test outcomes already recorded on the Checklists tab — offered as an
+  // auto-generated section so the paper documents them without re-typing.
+  const checklistsQuery = useQuery({
+    queryKey: ['engagements', engagementId, 'checklists'],
+    queryFn: () => checklistsApi.listByEngagement(engagementId),
+    enabled: open,
+  });
+  const checklistItems: AuditChecklistItem[] = checklistsQuery.data
+    ? Object.values(checklistsQuery.data).flat()
+    : [];
 
   const templates = templatesQuery.data ?? [];
   const defaultTemplate =
@@ -309,7 +412,9 @@ const CreateOrEditPaperSlideOver = ({
     setContent('');
     setSectionContents([]);
     setSelectedTemplateId('');
+    setIncludeTestResults(false);
     setTouched(false);
+    setPreviewing(false);
   };
 
   const handleClose = () => {
@@ -332,6 +437,11 @@ const CreateOrEditPaperSlideOver = ({
       return;
     }
 
+    const testResultsSection =
+      includeTestResults && checklistItems.length > 0
+        ? { title: 'Control Test Results (auto-generated)', content: buildTestResultsText(checklistItems) }
+        : null;
+
     let payloadContent: string;
     if (selectedTemplate) {
       const missing = selectedTemplate.sections.find(
@@ -342,17 +452,22 @@ const CreateOrEditPaperSlideOver = ({
         return;
       }
       payloadContent = JSON.stringify({
-        sections: selectedTemplate.sections.map((section, index) => ({
-          title: section.title,
-          content: sectionContents[index] ?? '',
-        })),
+        sections: [
+          ...selectedTemplate.sections.map((section, index) => ({
+            title: section.title,
+            content: sectionContents[index] ?? '',
+          })),
+          ...(testResultsSection ? [testResultsSection] : []),
+        ],
       });
     } else {
-      if (!content.trim()) {
+      if (!content.trim() && !testResultsSection) {
         toast.error('Content required');
         return;
       }
-      payloadContent = content;
+      payloadContent = testResultsSection
+        ? `${content.trim()}\n\n${testResultsSection.title}\n${'-'.repeat(40)}\n${testResultsSection.content}`.trim()
+        : content;
     }
 
     setSaving(true);
@@ -404,32 +519,55 @@ const CreateOrEditPaperSlideOver = ({
         </div>
       ) : (
         <div className="space-y-4">
-          <FormField
-            label="Template"
-            tooltip="Pick a structured template for this audit type, or Blank to write free-form notes. Templates standardize what every working paper captures."
-          >
-            <Select
-              value={selectedTemplateId}
-              onChange={(e) => {
-                setTouched(true);
-                setSelectedTemplateId(e.target.value);
-              }}
+          <div className="flex items-end justify-between gap-3">
+            <FormField
+              label="Template"
+              tooltip="Pick a structured template for this audit type, or Blank to write free-form notes. Templates standardize what every working paper captures."
+              className="flex-1"
             >
-              <option value="">Blank (free text)</option>
-              {templates.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.name}
-                  {t.isDefault && t.auditType === auditType ? ' (default)' : ''}
-                </option>
-              ))}
-            </Select>
-          </FormField>
+              <Select
+                value={selectedTemplateId}
+                onChange={(e) => {
+                  setTouched(true);
+                  setSelectedTemplateId(e.target.value);
+                }}
+              >
+                <option value="">Blank (free text)</option>
+                {templates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.name}
+                    {t.isDefault && t.auditType === auditType ? ' (default)' : ''}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+            <div className="pb-1">
+              <WritePreviewToggle previewing={previewing} onChange={setPreviewing} />
+            </div>
+          </div>
 
           <FormField label="Title" required>
             <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. WP-01 Sample Selection" />
           </FormField>
 
-          {selectedTemplate ? (
+          {previewing ? (
+            selectedTemplate ? (
+              selectedTemplate.sections.map((section, index) => (
+                <div key={`${section.title}-${index}`}>
+                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                    {section.title}
+                  </p>
+                  <div className="rounded-md border border-border bg-surface p-3">
+                    <Markdown content={sectionContents[index] ?? ''} />
+                  </div>
+                </div>
+              ))
+            ) : (
+              <div className="rounded-md border border-border bg-surface p-3">
+                <Markdown content={content} />
+              </div>
+            )
+          ) : selectedTemplate ? (
             selectedTemplate.sections.map((section, index) => {
               const fieldId = `working-paper-section-${index}`;
               return (
@@ -439,6 +577,7 @@ const CreateOrEditPaperSlideOver = ({
                   required={section.required}
                   htmlFor={fieldId}
                   description={section.description}
+                  hint={index === 0 ? MARKDOWN_HINT : undefined}
                 >
                   <Textarea
                     id={fieldId}
@@ -451,9 +590,29 @@ const CreateOrEditPaperSlideOver = ({
               );
             })
           ) : (
-            <FormField label="Content" hint="Plain text or markdown — exported into the DOCX template.">
+            <FormField label="Content" hint={MARKDOWN_HINT}>
               <Textarea rows={14} value={content} onChange={(e) => setContent(e.target.value)} className="font-mono text-xs" />
             </FormField>
+          )}
+
+          {checklistItems.length > 0 && (
+            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-surface-alt p-3">
+              <input
+                type="checkbox"
+                checked={includeTestResults}
+                onChange={(e) => setIncludeTestResults(e.target.checked)}
+                className="mt-0.5"
+              />
+              <span className="text-xs">
+                <span className="font-medium text-text-primary">
+                  Append &quot;Control Test Results&quot; section
+                </span>
+                <span className="block text-text-secondary">
+                  Auto-generated snapshot of this engagement&apos;s {checklistItems.length} checklist
+                  result{checklistItems.length === 1 ? '' : 's'} — no re-typing from the Checklists tab.
+                </span>
+              </span>
+            </label>
           )}
         </div>
       )}
@@ -737,8 +896,11 @@ const ViewPaperSlideOver = ({
   const [sections, setSections] = useState<PaperSection[]>([]);
   const [isStructured, setIsStructured] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   const editable = canEdit && Boolean(paper) && (paper?.status === 'draft' || paper?.status === 'rejected');
+  // Non-editable papers always show the rendered document; editable ones can toggle.
+  const showRendered = !editable || previewing;
 
   // Sync local state whenever the viewed paper changes.
   useEffect(() => {
@@ -828,31 +990,60 @@ const ViewPaperSlideOver = ({
     >
       {paper && (
         <div className="space-y-4">
-          <FormField label="Title">
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} />
-          </FormField>
+          {editable && (
+            <div className="flex justify-end">
+              <WritePreviewToggle previewing={previewing} onChange={setPreviewing} />
+            </div>
+          )}
 
-          {isStructured ? (
-            sections.map((section, index) => (
-              <FormField key={`${section.title}-${index}`} label={section.title}>
-                <Textarea
-                  rows={4}
-                  value={section.content}
-                  onChange={(e) => updateSection(index, e.target.value)}
-                  disabled={!editable}
-                />
-              </FormField>
-            ))
+          {showRendered ? (
+            <>
+              {isStructured ? (
+                sections.map((section, index) => (
+                  <div key={`${section.title}-${index}`}>
+                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                      {section.title}
+                    </p>
+                    <div className="rounded-md border border-border bg-surface p-3">
+                      <Markdown content={section.content} />
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="rounded-md border border-border bg-surface p-3">
+                  <Markdown content={content} />
+                </div>
+              )}
+            </>
           ) : (
-            <FormField label="Content">
-              <Textarea
-                rows={20}
-                value={content}
-                onChange={(e) => setContent(e.target.value)}
-                className="font-mono text-xs"
-                disabled={!editable}
-              />
-            </FormField>
+            <>
+              <FormField label="Title">
+                <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} />
+              </FormField>
+
+              {isStructured ? (
+                sections.map((section, index) => (
+                  <FormField key={`${section.title}-${index}`} label={section.title} hint={MARKDOWN_HINT}>
+                    <Textarea
+                      rows={4}
+                      value={section.content}
+                      onChange={(e) => updateSection(index, e.target.value)}
+                      disabled={!editable}
+                    />
+                  </FormField>
+                ))
+              ) : (
+                <FormField label="Content" hint={MARKDOWN_HINT}>
+                  <Textarea
+                    rows={20}
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    className="font-mono text-xs"
+                    disabled={!editable}
+                  />
+                </FormField>
+              )}
+            </>
           )}
 
           {paper.reviewComment && (
@@ -862,8 +1053,115 @@ const ViewPaperSlideOver = ({
               </p>
             </FormField>
           )}
+
+          <PaperComments paperId={paper.id} />
         </div>
       )}
     </SlideOver>
+  );
+};
+
+/**
+ * Review-comment thread — lets a reviewer point at specific problems (and the
+ * preparer reply) without rejecting the paper, replacing the Word-tracked-
+ * changes email loop.
+ */
+const PaperComments = ({ paperId }: { paperId: string }): JSX.Element => {
+  const qc = useQueryClient();
+  const [body, setBody] = useState('');
+
+  const comments = useQuery({
+    queryKey: ['working-papers', paperId, 'comments'],
+    queryFn: () => workingPapersApi.listComments(paperId),
+  });
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['working-papers', paperId, 'comments'] });
+
+  const add = useMutation({
+    mutationFn: () => workingPapersApi.addComment(paperId, body.trim()),
+    onSuccess: () => {
+      setBody('');
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to comment'),
+  });
+
+  const resolve = useMutation({
+    mutationFn: (commentId: string) => workingPapersApi.resolveComment(commentId),
+    onSuccess: refresh,
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const items = comments.data ?? [];
+  const openCount = items.filter((c) => !c.resolvedAt).length;
+
+  return (
+    <div className="border-t border-border pt-4">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+        Review comments{openCount > 0 ? ` (${openCount} open)` : ''}
+      </p>
+
+      {comments.isLoading ? (
+        <Skeleton className="h-10 w-full" />
+      ) : items.length === 0 ? (
+        <p className="text-xs text-text-muted">
+          No comments yet. Reviewers can point out issues here instead of rejecting the paper.
+        </p>
+      ) : (
+        <ul className="space-y-2">
+          {items.map((c) => (
+            <li
+              key={c.id}
+              className={`rounded-md border px-3 py-2 ${c.resolvedAt ? 'border-border bg-surface-alt/50 opacity-70' : 'border-border bg-surface-alt'}`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-xs font-medium text-text-primary">
+                    {c.authorName}
+                    <span className="ml-1.5 font-normal text-text-muted">{formatRelative(c.createdAt)}</span>
+                  </p>
+                  <p className="mt-0.5 whitespace-pre-wrap text-xs text-text-secondary">{c.body}</p>
+                  {c.resolvedAt && (
+                    <p className="mt-1 text-[10px] uppercase tracking-wider text-success">
+                      Resolved{c.resolvedByName ? ` by ${c.resolvedByName}` : ''}
+                    </p>
+                  )}
+                </div>
+                {!c.resolvedAt && (
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => resolve.mutate(c.id)}
+                    isLoading={resolve.isPending && resolve.variables === c.id}
+                  >
+                    Resolve
+                  </Button>
+                )}
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="mt-3 flex items-end gap-2">
+        <Textarea
+          rows={2}
+          value={body}
+          onChange={(e) => setBody(e.target.value)}
+          placeholder="Point out an issue or reply…"
+          className="flex-1"
+        />
+        <Button
+          size="sm"
+          onClick={() => {
+            if (!body.trim()) return;
+            add.mutate();
+          }}
+          isLoading={add.isPending}
+        >
+          Comment
+        </Button>
+      </div>
+    </div>
   );
 };

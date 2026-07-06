@@ -31,6 +31,10 @@ export interface ApprovalResponseDto {
     id: string;
     entityType: string;
     entityId: string;
+    /** Human-readable name of the entity awaiting approval (list endpoints only). */
+    entityTitle?: string | null;
+    /** Parent engagement, when the entity belongs to one (list endpoints only). */
+    engagementId?: string | null;
     submittedById: string;
     currentLevel: number;
     status: string;

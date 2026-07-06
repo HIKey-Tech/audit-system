@@ -12,8 +12,10 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
 const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const working_paper_response_dto_1 = require("../../dto/response/working-paper.response.dto");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const working_paper_import_utility_1 = require("../../utility/working-paper-import.utility");
 const working_paper_utility_1 = require("../../utility/working-paper.utility");
+const markdown_utility_1 = require("../../utility/markdown.utility");
 const pdf_util_1 = require("../../../../../shared/utils/pdf.util");
 class WorkingPaperService {
     documentService;
@@ -156,17 +158,77 @@ class WorkingPaperService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.submit', module: 'audit', entityType: 'audit_working_paper', entityId: id });
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
     }
-    async approveWorkingPaper(id, actor) {
+    async approveWorkingPaper(id, actor, edits) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:approve');
         const paper = await this._getPaper(id);
         if (paper.status !== audit_enum_1.WorkingPaperStatus.Submitted)
             throw app_error_1.AppError.badRequest('Only submitted working papers can be approved');
         const approval = await this.approvalService.getApprovalByEntity(workflow_enum_1.WorkflowEntityType.AuditWorkingPaper, id);
-        await this.approvalService.approve(approval.id, actor);
+        // Approve-with-edit: the approver's content fix is applied atomically with
+        // the approval step, so a small issue doesn't force reject + resubmission.
+        await this.approvalService.approve(approval.id, actor, undefined, edits?.content ? { content: edits.content } : undefined);
         const updated = await this._getPaper(id);
-        logger_util_1.logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id });
+        logger_util_1.logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id, edited: !!edits?.content });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.approve', module: 'audit', entityType: 'audit_working_paper', entityId: id });
         return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
+    }
+    // ──────────── Review comments (reviewer ↔ preparer back-and-forth) ────────────
+    async addComment(workingPaperId, body, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:read');
+        const paper = await this._getPaper(workingPaperId);
+        await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(paper.engagement_id, actor);
+        const comment = await prisma_client_1.prisma.audit_Working_Paper_Comment.create({
+            data: { working_paper_id: workingPaperId, author_id: actor.id, body },
+            include: working_paper_response_dto_1.wpCommentInclude,
+        });
+        logger_util_1.logger.info('Working paper comment added', { workingPaperId, commentId: comment.id, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.comment', module: 'audit', entityType: 'audit_working_paper', entityId: workingPaperId });
+        // Tell the preparer someone commented on their paper (unless they did).
+        if (paper.created_by_id !== actor.id) {
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                userId: paper.created_by_id,
+                title: 'New comment on your working paper',
+                body: `${comment.author.display_name ?? 'A reviewer'} commented on "${paper.title}": ${body.slice(0, 200)}`,
+                type: 'info',
+                referenceType: 'audit_engagement',
+                referenceId: paper.engagement_id,
+            });
+        }
+        return (0, working_paper_response_dto_1.mapWpCommentToResponse)(comment);
+    }
+    async listComments(workingPaperId, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:read');
+        const paper = await this._getPaper(workingPaperId);
+        await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(paper.engagement_id, actor);
+        const comments = await prisma_client_1.prisma.audit_Working_Paper_Comment.findMany({
+            where: { working_paper_id: workingPaperId },
+            include: working_paper_response_dto_1.wpCommentInclude,
+            orderBy: { created_at: 'asc' },
+        });
+        return comments.map(working_paper_response_dto_1.mapWpCommentToResponse);
+    }
+    async resolveComment(commentId, actor) {
+        const comment = await prisma_client_1.prisma.audit_Working_Paper_Comment.findUnique({
+            where: { id: commentId },
+            include: { working_paper: { select: { created_by_id: true } } },
+        });
+        if (!comment)
+            throw app_error_1.AppError.notFound('Working paper comment');
+        if (comment.resolved_at)
+            throw app_error_1.AppError.badRequest('Comment is already resolved');
+        // The comment's author, the paper's preparer, or a reviewer may resolve.
+        const canResolve = comment.author_id === actor.id ||
+            comment.working_paper.created_by_id === actor.id ||
+            actor.permissions.includes('working_paper:approve');
+        if (!canResolve)
+            throw app_error_1.AppError.forbidden('You cannot resolve this comment');
+        const updated = await prisma_client_1.prisma.audit_Working_Paper_Comment.update({
+            where: { id: commentId },
+            data: { resolved_at: new Date(), resolved_by_id: actor.id },
+            include: working_paper_response_dto_1.wpCommentInclude,
+        });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.comment_resolve', module: 'audit', entityType: 'audit_working_paper', entityId: updated.working_paper_id });
+        return (0, working_paper_response_dto_1.mapWpCommentToResponse)(updated);
     }
     async rejectWorkingPaper(id, reason, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:reject');
@@ -235,7 +297,15 @@ class WorkingPaperService {
                 date: exportDate,
                 status: paper.status,
                 version: String(paper.version_number),
-                content: paper.content,
+                // The {content} placeholder takes plain text with line breaks —
+                // parse the stored sections (never the raw JSON string) and render
+                // each section's Markdown down to readable text.
+                content: (0, working_paper_utility_1.parseWorkingPaperSections)(paper.content)
+                    .map((section, idx) => {
+                    const heading = (section.title || `Section ${idx + 1}`).toUpperCase();
+                    return `${heading}\n${(0, markdown_utility_1.markdownToPlainText)(section.content)}`;
+                })
+                    .join('\n\n'),
             });
         logger_util_1.logger.info('Working paper exported', { workingPaperId: id, format });
         return {

@@ -10,12 +10,56 @@ export declare const CreateApprovalRequestSchema: z.ZodObject<{
     entityType: WorkflowEntityType;
     entityId: string;
 }>;
+export declare const ApprovalEditsSchema: z.ZodObject<{
+    executiveSummary: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    scope: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    methodology: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    content: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+}, "strip", z.ZodTypeAny, {
+    content?: string | undefined;
+    scope?: string | undefined;
+    methodology?: string | undefined;
+    executiveSummary?: string | undefined;
+}, {
+    content?: string | undefined;
+    scope?: string | undefined;
+    methodology?: string | undefined;
+    executiveSummary?: string | undefined;
+}>;
 export declare const ApprovalActionRequestSchema: z.ZodObject<{
     comment: z.ZodOptional<z.ZodString>;
+    edits: z.ZodOptional<z.ZodObject<{
+        executiveSummary: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+        scope: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+        methodology: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+        content: z.ZodOptional<z.ZodOptional<z.ZodString>>;
+    }, "strip", z.ZodTypeAny, {
+        content?: string | undefined;
+        scope?: string | undefined;
+        methodology?: string | undefined;
+        executiveSummary?: string | undefined;
+    }, {
+        content?: string | undefined;
+        scope?: string | undefined;
+        methodology?: string | undefined;
+        executiveSummary?: string | undefined;
+    }>>;
 }, "strip", z.ZodTypeAny, {
     comment?: string | undefined;
+    edits?: {
+        content?: string | undefined;
+        scope?: string | undefined;
+        methodology?: string | undefined;
+        executiveSummary?: string | undefined;
+    } | undefined;
 }, {
     comment?: string | undefined;
+    edits?: {
+        content?: string | undefined;
+        scope?: string | undefined;
+        methodology?: string | undefined;
+        executiveSummary?: string | undefined;
+    } | undefined;
 }>;
 export declare const RejectApprovalRequestSchema: z.ZodObject<{
     reason: z.ZodString;
@@ -45,6 +89,7 @@ export declare const PendingApprovalQuerySchema: z.ZodObject<{
     pageSize?: number | undefined;
 }>;
 export type CreateApprovalRequestDto = z.infer<typeof CreateApprovalRequestSchema>;
+export type ApprovalEditsDto = z.infer<typeof ApprovalEditsSchema>;
 export type ApprovalActionRequestDto = z.infer<typeof ApprovalActionRequestSchema>;
 export type RejectApprovalRequestDto = z.infer<typeof RejectApprovalRequestSchema>;
 export type PendingApprovalQueryDto = z.infer<typeof PendingApprovalQuerySchema>;

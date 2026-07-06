@@ -77,3 +77,39 @@ export const mapWorkingPaperToResponse = (paper: {
   updatedAt: paper.updated_at.toISOString(),
   evidence: paper.evidence?.map(mapEvidenceToResponse),
 });
+
+// ──────────── Review comments ────────────
+
+import { Prisma } from '@prisma/client';
+
+export const wpCommentInclude = Prisma.validator<Prisma.Audit_Working_Paper_CommentInclude>()({
+  author: { select: { display_name: true, first_name: true, last_name: true } },
+  resolved_by: { select: { display_name: true, first_name: true, last_name: true } },
+});
+
+type WpCommentWithAuthor = Prisma.Audit_Working_Paper_CommentGetPayload<{ include: typeof wpCommentInclude }>;
+
+export interface WorkingPaperCommentResponseDto {
+  id: string;
+  workingPaperId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  createdAt: string;
+}
+
+const wpUserName = (u: { display_name: string | null; first_name: string; last_name: string } | null): string | null =>
+  u ? (u.display_name ?? `${u.first_name} ${u.last_name}`.trim()) : null;
+
+export const mapWpCommentToResponse = (c: WpCommentWithAuthor): WorkingPaperCommentResponseDto => ({
+  id: c.id,
+  workingPaperId: c.working_paper_id,
+  authorId: c.author_id,
+  authorName: wpUserName(c.author) ?? 'Unknown',
+  body: c.body,
+  resolvedAt: c.resolved_at?.toISOString() ?? null,
+  resolvedByName: wpUserName(c.resolved_by),
+  createdAt: c.created_at.toISOString(),
+});

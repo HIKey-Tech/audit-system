@@ -33,6 +33,12 @@ const checklist_controller_1 = require("./checklists/controller/checklist.contro
 const repository_controller_1 = require("./repository/controller/repository.controller");
 const compliance_service_1 = require("./compliance/service/implementation/compliance.service");
 const compliance_controller_1 = require("./compliance/controller/compliance.controller");
+const sampling_service_1 = require("./sampling/service/implementation/sampling.service");
+const sampling_controller_1 = require("./sampling/controller/sampling.controller");
+const evidence_request_service_1 = require("./evidence-request/service/implementation/evidence-request.service");
+const evidence_request_controller_1 = require("./evidence-request/controller/evidence-request.controller");
+const time_entry_service_1 = require("./time-entry/service/implementation/time-entry.service");
+const time_entry_controller_1 = require("./time-entry/controller/time-entry.controller");
 const createAuditModule = () => {
     const router = (0, express_1.Router)();
     const documentService = new document_1.DocumentService();
@@ -60,6 +66,7 @@ const createAuditModule = () => {
     const checklistController = new checklist_controller_1.ChecklistController(checklistService);
     const repositoryController = new repository_controller_1.RepositoryController(repositoryService);
     const complianceController = new compliance_controller_1.ComplianceController(new compliance_service_1.ComplianceService());
+    const samplingController = new sampling_controller_1.SamplingController(new sampling_service_1.SamplingService(evidenceService));
     router.use('/audit/universe', universeController.router);
     router.use('/audit/plans', planningController.router);
     router.use('/audit/engagements', engagementController.router);
@@ -71,6 +78,9 @@ const createAuditModule = () => {
     router.use('/audit', checklistController.router);
     router.use('/audit', repositoryController.router);
     router.use('/audit', complianceController.router);
+    router.use('/audit', samplingController.router);
+    router.use('/audit', new evidence_request_controller_1.EvidenceRequestController(new evidence_request_service_1.EvidenceRequestService(documentService)).router);
+    router.use('/audit', new time_entry_controller_1.TimeEntryController(new time_entry_service_1.TimeEntryService()).router);
     return router;
 };
 exports.createAuditModule = createAuditModule;

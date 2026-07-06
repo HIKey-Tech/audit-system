@@ -3,6 +3,7 @@ import { authenticate, requirePermission } from '../../../shared/middleware/auth
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { DashboardService } from '../service/implementation/dashboard.service';
+import { committeePackService } from '../service/implementation/committee-pack.service';
 import {
   ActivityQueryDto,
   ActivityQuerySchema,
@@ -119,6 +120,49 @@ export class DashboardController {
       requirePermission('dashboard:read'),
       this._getAuditAnalytics.bind(this),
     );
+
+    /**
+     * @route  GET /dashboard/committee-pack
+     * @desc   Org-wide audit committee oversight pack (engagements, findings aging, KPIs, risks)
+     * @access Private - committee_pack:read
+     */
+    this.router.get(
+      '/committee-pack',
+      requirePermission('committee_pack:read'),
+      this._getCommitteePack.bind(this),
+    );
+
+    /**
+     * @route  GET /dashboard/committee-pack/export
+     * @desc   Download the committee pack as a PDF
+     * @access Private - committee_pack:read
+     */
+    this.router.get(
+      '/committee-pack/export',
+      requirePermission('committee_pack:read'),
+      this._exportCommitteePack.bind(this),
+    );
+  }
+
+  private async _getCommitteePack(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const pack = await committeePackService.getCommitteePack();
+      res.status(200).json(buildResponse(pack));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _exportCommitteePack(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const buffer = await committeePackService.exportCommitteePackPdf();
+      const fileName = `committee-pack-${new Date().toISOString().slice(0, 10)}.pdf`;
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+      res.status(200).send(buffer);
+    } catch (err) {
+      next(err);
+    }
   }
 
   private async _getAuditSummary(

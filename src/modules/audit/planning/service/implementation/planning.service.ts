@@ -8,8 +8,9 @@ import { IApprovalService } from '../../../../workflow/approval/service/interfac
 import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
-import { PlanStatus } from '../../../domain/enum/audit.enum';
-import { assertHasPermission } from '../../../utility/audit.utility';
+import { FindingStatus, PlanStatus, UniverseStatus } from '../../../domain/enum/audit.enum';
+import { assertHasPermission, decimalToNumber } from '../../../utility/audit.utility';
+import { getPlanningPriorityWeights } from '../../../utility/audit-config.utility';
 import {
   AddPlanItemRequestDto,
   CreatePlanRequestDto,
@@ -17,7 +18,7 @@ import {
   UpdatePlanRequestDto,
 } from '../../dto/request/planning.request.dto';
 import { PlanResponseDto, mapPlanToResponse } from '../../dto/response/planning.response.dto';
-import { IPlanningService } from '../interface/planning.service.interface';
+import { IPlanningService, PlanningRecommendationDto } from '../interface/planning.service.interface';
 
 const planInclude = {
   approved_by: { select: { display_name: true, first_name: true, last_name: true } },
@@ -27,8 +28,120 @@ const planInclude = {
   },
 };
 
+/** Months per audit-frequency value, mirroring the AuditFrequency enum. */
+const FREQUENCY_MONTHS: Record<string, number> = {
+  monthly: 1,
+  quarterly: 3,
+  biannual: 6,
+  annual: 12,
+};
+
+const monthsSince = (date: Date, now: Date): number =>
+  (now.getTime() - date.getTime()) / (30.44 * 24 * 60 * 60 * 1000);
+
 export class PlanningService implements IPlanningService {
   constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
+
+  /**
+   * Composite audit-priority ranking over the active audit universe — the
+   * defensible "what should we audit next year" list. Each signal is scored
+   * 0-100 and blended with admin-configurable weights
+   * (system_config.planning_priority_weights), so GBB decides what "priority"
+   * means without a redeploy. The per-entity component breakdown and reasons
+   * are returned so the ranking is explainable, not a black box.
+   */
+  async getRecommendations(): Promise<PlanningRecommendationDto[]> {
+    const [weights, entities, openFindings] = await Promise.all([
+      getPlanningPriorityWeights(),
+      prisma.audit_Universe.findMany({
+        where: { deleted_at: null, status: UniverseStatus.Active },
+        select: {
+          id: true,
+          name: true,
+          category: true,
+          risk_score: true,
+          audit_frequency: true,
+          last_audited_at: true,
+        },
+      }),
+      prisma.audit_Finding.findMany({
+        where: {
+          deleted_at: null,
+          status: { not: FindingStatus.Closed },
+          engagement: { deleted_at: null },
+        },
+        select: { engagement: { select: { universe_id: true } } },
+      }),
+    ]);
+
+    const openByUniverse = new Map<string, number>();
+    for (const finding of openFindings) {
+      const key = finding.engagement.universe_id;
+      openByUniverse.set(key, (openByUniverse.get(key) ?? 0) + 1);
+    }
+
+    const weightSum =
+      weights.riskScore + weights.openFindings + weights.overdueForAudit + weights.neverAudited + weights.timeSinceLastAudit;
+    const now = new Date();
+
+    const recommendations = entities.map((entity): PlanningRecommendationDto => {
+      const riskScore = decimalToNumber(entity.risk_score) ?? 0;
+      const openCount = openByUniverse.get(entity.id) ?? 0;
+      const frequencyMonths = FREQUENCY_MONTHS[entity.audit_frequency];
+      const monthsSinceAudit = entity.last_audited_at ? monthsSince(entity.last_audited_at, now) : null;
+      const overdue =
+        monthsSinceAudit !== null && frequencyMonths !== undefined && monthsSinceAudit > frequencyMonths;
+
+      const components = {
+        riskScore: Math.min((riskScore / 25) * 100, 100),
+        openFindings: Math.min(openCount * 25, 100),
+        overdueForAudit: overdue ? 100 : 0,
+        neverAudited: entity.last_audited_at === null ? 100 : 0,
+        timeSinceLastAudit:
+          monthsSinceAudit === null ? 100 : Math.min((monthsSinceAudit / 24) * 100, 100),
+      };
+
+      const score =
+        weightSum <= 0
+          ? 0
+          : (weights.riskScore * components.riskScore +
+              weights.openFindings * components.openFindings +
+              weights.overdueForAudit * components.overdueForAudit +
+              weights.neverAudited * components.neverAudited +
+              weights.timeSinceLastAudit * components.timeSinceLastAudit) /
+            weightSum;
+
+      const reasons: string[] = [];
+      if (riskScore >= 13) reasons.push(`High risk score (${riskScore})`);
+      if (openCount > 0) reasons.push(`${openCount} unresolved finding${openCount === 1 ? '' : 's'}`);
+      if (entity.last_audited_at === null) reasons.push('Never audited');
+      else if (overdue) reasons.push(`Audit overdue (${entity.audit_frequency} cycle)`);
+      else if (monthsSinceAudit !== null && monthsSinceAudit >= 12) {
+        reasons.push(`Last audited ${Math.floor(monthsSinceAudit)} months ago`);
+      }
+
+      return {
+        universeId: entity.id,
+        name: entity.name,
+        category: entity.category,
+        riskScore,
+        auditFrequency: entity.audit_frequency,
+        lastAuditedAt: entity.last_audited_at?.toISOString() ?? null,
+        openFindingsCount: openCount,
+        score: Math.round(score),
+        components: {
+          riskScore: Math.round(components.riskScore),
+          openFindings: Math.round(components.openFindings),
+          overdueForAudit: components.overdueForAudit,
+          neverAudited: components.neverAudited,
+          timeSinceLastAudit: Math.round(components.timeSinceLastAudit),
+        },
+        reasons,
+      };
+    });
+
+    return recommendations.sort((a, b) => b.score - a.score);
+  }
 
   async createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:create');

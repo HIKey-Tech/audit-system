@@ -386,6 +386,11 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           <ApproveSignPanel
             approvalId={approval.data.id}
             entityType="audit_report"
+            reportFields={{
+              executiveSummary: r.executiveSummary ?? '',
+              scope: r.scope ?? '',
+              methodology: r.methodology ?? '',
+            }}
             onDone={() => {
               setApproveOpen(false);
               refresh();
@@ -551,7 +556,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                       const highest = approvedSteps.length > 0
                         ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
                         : undefined;
-                      return highest?.approverName || '—';
+                      return highest?.approver?.displayName || '—';
                     }
                     return '—';
                   })()}

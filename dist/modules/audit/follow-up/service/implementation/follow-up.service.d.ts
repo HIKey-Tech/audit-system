@@ -16,6 +16,8 @@ export declare class FollowUpService implements IFollowUpService {
         buffer: Buffer;
     }, actor: ActorContext): Promise<FollowUpResponseDto>;
     verifyRemediation(findingId: string, dto: VerifyRemediationRequestDto, actor: ActorContext): Promise<FollowUpResponseDto>;
+    /** Notify the owners of risks related to a just-verified finding that a reassessment may be due. */
+    private _suggestRiskReassessment;
     getFollowUp(findingId: string, actor: ActorContext): Promise<FollowUpResponseDto>;
     listPendingFollowUps(engagementId: string, actor: ActorContext): Promise<FollowUpResponseDto[]>;
     private _getFinding;

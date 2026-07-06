@@ -20,6 +20,13 @@ export interface EscalationMatrix {
 }
 export declare const DEFAULT_ESCALATION_MATRIX: EscalationMatrix;
 export declare const getEscalationMatrix: () => Promise<EscalationMatrix>;
+/**
+ * Boot-time sanity check: warn when an escalation tier targets role names
+ * that no active user holds (e.g. a deployment renamed/replaced the seeded
+ * director/cae roles without updating `system_config.escalation_matrix`) —
+ * escalations at that tier would notify nobody. Never throws.
+ */
+export declare const warnOnUnresolvableEscalationTargets: () => Promise<void>;
 export declare const hoursAgo: (hours: number) => Date;
 export declare const hasElapsed: (from: Date, hours: number, now?: Date) => boolean;
 //# sourceMappingURL=workflow.utility.d.ts.map

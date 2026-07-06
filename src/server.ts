@@ -13,12 +13,14 @@ import cookieParser from 'cookie-parser';
 import morgan, { StreamOptions } from 'morgan';
 import rateLimit from 'express-rate-limit';
 import swaggerUi from 'swagger-ui-express';
+import jwt from 'jsonwebtoken';
 
 import { config } from './shared/config/app.config';
 import { logger } from './shared/utils/logger.util';
 import { connectDatabase, disconnectDatabase } from './shared/prisma/prisma.client';
 import { cache } from './shared/cache/cache.client';
 import { verifyStorageReady } from './modules/document/service/client/storage.client';
+import { warnOnUnresolvableEscalationTargets } from './modules/workflow/utility/workflow.utility';
 import {
   errorHandlerMiddleware,
   notFoundMiddleware,
@@ -89,11 +91,32 @@ const buildApp = (): Application => {
         });
       };
 
+  // Key by the authenticated user when possible, not just IP — many GBB users sit
+  // behind the same NAT/VPN egress IP, and IP-only keying would throttle all of
+  // them as one bucket. Falls back to IP for unauthenticated/public requests.
+  // Decoding here (ahead of the per-route `authenticate` middleware) is a
+  // read-only lookup of the `sub` claim; it does not replace or skip real auth.
+  const apiLimiterKeyGenerator = (req: Request): string => {
+    const authHeader = req.headers.authorization;
+    if (authHeader?.startsWith('Bearer ')) {
+      try {
+        const payload = jwt.verify(authHeader.slice(7), config.jwt.secret, {
+          algorithms: ['HS256'],
+        }) as { sub?: string };
+        if (payload.sub) return `user:${payload.sub}`;
+      } catch {
+        // Invalid/expired token — fall through to IP keying below.
+      }
+    }
+    return `ip:${req.ip}`;
+  };
+
   const apiLimiter = rateLimit({
     windowMs: config.rateLimit.windowMs,
     max: config.rateLimit.max,
     standardHeaders: true,
     legacyHeaders: false,
+    keyGenerator: apiLimiterKeyGenerator,
     handler: rateLimitHandler('Too many requests.'),
     // On by default everywhere; only skipped when a developer explicitly opts
     // out (RATE_LIMIT_DISABLED=true) in a non-production env. Never skipped in prod.
@@ -200,6 +223,8 @@ const startServer = async (): Promise<http.Server> => {
 
   registerAllJobs();
   await schedulerService.startAll();
+
+  void warnOnUnresolvableEscalationTargets();
 
   return server;
 };

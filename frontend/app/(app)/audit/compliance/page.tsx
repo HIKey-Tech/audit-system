@@ -99,7 +99,7 @@ export default function CompliancePage(): JSX.Element {
   return (
     <div>
       <PageHeader
-        title="Compliance Frameworks"
+        title="Control Library"
         subtitle="Control library and per-framework coverage across IT, financial, systems, and compliance audits."
         actions={
           canManage ? (

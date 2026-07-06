@@ -293,10 +293,20 @@ export class AssignmentService implements IAssignmentService {
       counts.set(status, (counts.get(status) ?? 0) + 1);
     }
 
+    const loggedTime = await prisma.audit_Time_Entry.aggregate({
+      where: {
+        user_id: userId,
+        deleted_at: null,
+        engagement: { deleted_at: null, status: { in: ACTIVE_ENGAGEMENT_STATUSES } },
+      },
+      _sum: { hours: true },
+    });
+
     return {
       userId,
       totalActive: assignments.length,
       byStatus: Array.from(counts.entries()).map(([status, count]) => ({ status, count })),
+      loggedHours: Number(loggedTime._sum.hours ?? 0),
     };
   }
 

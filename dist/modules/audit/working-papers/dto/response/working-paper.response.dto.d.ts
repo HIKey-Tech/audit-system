@@ -56,4 +56,36 @@ export declare const mapWorkingPaperToResponse: (paper: {
     updated_at: Date;
     evidence?: Array<Parameters<typeof mapEvidenceToResponse>[0]>;
 }) => WorkingPaperResponseDto;
+import { Prisma } from '@prisma/client';
+export declare const wpCommentInclude: {
+    author: {
+        select: {
+            display_name: true;
+            first_name: true;
+            last_name: true;
+        };
+    };
+    resolved_by: {
+        select: {
+            display_name: true;
+            first_name: true;
+            last_name: true;
+        };
+    };
+};
+type WpCommentWithAuthor = Prisma.Audit_Working_Paper_CommentGetPayload<{
+    include: typeof wpCommentInclude;
+}>;
+export interface WorkingPaperCommentResponseDto {
+    id: string;
+    workingPaperId: string;
+    authorId: string;
+    authorName: string;
+    body: string;
+    resolvedAt: string | null;
+    resolvedByName: string | null;
+    createdAt: string;
+}
+export declare const mapWpCommentToResponse: (c: WpCommentWithAuthor) => WorkingPaperCommentResponseDto;
+export {};
 //# sourceMappingURL=working-paper.response.dto.d.ts.map

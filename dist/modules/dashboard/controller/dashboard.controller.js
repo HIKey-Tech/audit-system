@@ -5,6 +5,7 @@ const express_1 = require("express");
 const auth_middleware_1 = require("../../../shared/middleware/auth.middleware");
 const validate_middleware_1 = require("../../../shared/middleware/validate.middleware");
 const api_response_type_1 = require("../../../shared/types/api-response.type");
+const committee_pack_service_1 = require("../service/implementation/committee-pack.service");
 const dashboard_request_dto_1 = require("../dto/request/dashboard.request.dto");
 class DashboardController {
     dashboardService;
@@ -71,6 +72,39 @@ class DashboardController {
          * @access Private - dashboard:read
          */
         this.router.get('/analytics', (0, auth_middleware_1.requirePermission)('dashboard:read'), this._getAuditAnalytics.bind(this));
+        /**
+         * @route  GET /dashboard/committee-pack
+         * @desc   Org-wide audit committee oversight pack (engagements, findings aging, KPIs, risks)
+         * @access Private - committee_pack:read
+         */
+        this.router.get('/committee-pack', (0, auth_middleware_1.requirePermission)('committee_pack:read'), this._getCommitteePack.bind(this));
+        /**
+         * @route  GET /dashboard/committee-pack/export
+         * @desc   Download the committee pack as a PDF
+         * @access Private - committee_pack:read
+         */
+        this.router.get('/committee-pack/export', (0, auth_middleware_1.requirePermission)('committee_pack:read'), this._exportCommitteePack.bind(this));
+    }
+    async _getCommitteePack(req, res, next) {
+        try {
+            const pack = await committee_pack_service_1.committeePackService.getCommitteePack();
+            res.status(200).json((0, api_response_type_1.buildResponse)(pack));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _exportCommitteePack(req, res, next) {
+        try {
+            const buffer = await committee_pack_service_1.committeePackService.exportCommitteePackPdf();
+            const fileName = `committee-pack-${new Date().toISOString().slice(0, 10)}.pdf`;
+            res.setHeader('Content-Type', 'application/pdf');
+            res.setHeader('Content-Disposition', `attachment; filename="${fileName}"`);
+            res.status(200).send(buffer);
+        }
+        catch (err) {
+            next(err);
+        }
     }
     async _getAuditSummary(req, res, next) {
         try {

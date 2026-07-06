@@ -10,6 +10,9 @@ export declare class WorkingPaperController {
     private _updateWorkingPaper;
     private _submitWorkingPaper;
     private _approveWorkingPaper;
+    private _addComment;
+    private _listComments;
+    private _resolveComment;
     private _rejectWorkingPaper;
     private _getWorkingPaperById;
     private _listWorkingPapers;

@@ -5,7 +5,7 @@ import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
-import { UniverseStatus } from '../../../domain/enum/audit.enum';
+import { FindingStatus, UniverseStatus } from '../../../domain/enum/audit.enum';
 import { assertHasPermission } from '../../../utility/audit.utility';
 import {
   CreateUniverseRequestDto,
@@ -148,6 +148,17 @@ export class UniverseService implements IUniverseService {
         categoryName: r.categoryName,
       }));
     }
+
+    // Audit results feeding back into the entity's risk picture: how many
+    // findings raised against this entity's engagements are still unresolved.
+    response.openFindingsCount = await prisma.audit_Finding.count({
+      where: {
+        deleted_at: null,
+        status: { not: FindingStatus.Closed },
+        engagement: { universe_id: id, deleted_at: null },
+      },
+    });
+
     return response;
   }
 

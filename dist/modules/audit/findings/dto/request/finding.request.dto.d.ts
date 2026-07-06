@@ -109,7 +109,7 @@ export declare const FindingQuerySchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     page: number;
     pageSize: number;
-    sortBy: "created_at" | "updated_at" | "status" | "severity" | "due_date";
+    sortBy: "created_at" | "updated_at" | "status" | "due_date" | "severity";
     sortOrder: "asc" | "desc";
     search?: string | undefined;
     status?: FindingStatus | undefined;
@@ -124,7 +124,7 @@ export declare const FindingQuerySchema: z.ZodObject<{
     severity?: FindingSeverity | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
-    sortBy?: "created_at" | "updated_at" | "status" | "severity" | "due_date" | undefined;
+    sortBy?: "created_at" | "updated_at" | "status" | "due_date" | "severity" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
     controlReference?: string | undefined;
     auditeeId?: string | undefined;

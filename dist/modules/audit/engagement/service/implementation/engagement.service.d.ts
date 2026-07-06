@@ -1,6 +1,7 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
+import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
 import { IUserService } from '../../../../user';
 import { IAssignmentService } from '../../../../workflow/assignment/service/interface/assignment.service.interface';
@@ -11,7 +12,8 @@ export declare class EngagementService implements IEngagementService {
     private readonly checklistService;
     private readonly userService;
     private readonly assignmentService;
-    constructor(checklistService: IChecklistService, userService: IUserService, assignmentService: IAssignmentService);
+    private readonly approvalService;
+    constructor(checklistService: IChecklistService, userService: IUserService, assignmentService: IAssignmentService, approvalService?: IApprovalService);
     private _assertManagerCanApprove;
     private _assertLeadAuditorEligible;
     private _assertUniverseActive;

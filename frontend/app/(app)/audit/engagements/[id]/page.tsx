@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useCallback } from 'react';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { ArrowLeft } from 'lucide-react';
@@ -19,6 +19,7 @@ import { usePermissions } from '@/lib/hooks/usePermissions';
 import { OverviewTab } from '@/components/audit/engagements/OverviewTab';
 import { WorkingPapersTab } from '@/components/audit/engagements/WorkingPapersTab';
 import { EvidenceTab } from '@/components/audit/engagements/EvidenceTab';
+import { EvidenceRequestsTab } from '@/components/audit/engagements/EvidenceRequestsTab';
 import { AssetsTab } from '@/components/audit/engagements/AssetsTab';
 import { FindingsTab } from '@/components/audit/engagements/FindingsTab';
 import { ChecklistsTab } from '@/components/audit/engagements/ChecklistsTab';
@@ -30,27 +31,44 @@ type TabKey =
   | 'overview'
   | 'working-papers'
   | 'evidence'
+  | 'requests'
   | 'assets'
   | 'findings'
   | 'checklists'
   | 'report'
   | 'follow-up';
 
+// Ordered to mirror the fieldwork lifecycle: test controls → document work →
+// attach evidence → raise findings → report → follow up. Assets is scope
+// reference material, so it sits last.
 const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'overview', label: 'Overview' },
+  { key: 'checklists', label: 'Checklists' },
   { key: 'working-papers', label: 'Working Papers' },
   { key: 'evidence', label: 'Evidence' },
-  { key: 'assets', label: 'Assets' },
+  { key: 'requests', label: 'Evidence Requests' },
   { key: 'findings', label: 'Findings' },
-  { key: 'checklists', label: 'Checklists' },
   { key: 'report', label: 'Report' },
   { key: 'follow-up', label: 'Follow-up' },
+  { key: 'assets', label: 'Assets' },
 ];
 
 export default function EngagementDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
-  const [tab, setTab] = useState<TabKey>('overview');
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  // Tab lives in the URL so refreshes keep their place and other screens can
+  // deep-link straight to e.g. ?tab=report.
+  const tabParam = searchParams?.get('tab');
+  const tab: TabKey = TAB_DEFS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : 'overview';
+  const setTab = useCallback(
+    (k: TabKey) => {
+      router.replace(k === 'overview' ? `/audit/engagements/${id}` : `/audit/engagements/${id}?tab=${k}`, { scroll: false });
+    },
+    [router, id],
+  );
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['engagements', id],
@@ -85,18 +103,26 @@ export default function EngagementDetailPage(): JSX.Element {
   }
 
   const vc = data.viewerContext;
+  // Internal-team-only restriction (not a "wait until X happens" gate — see
+  // resolveViewerContext) — keep the tab visible but disabled with a reason,
+  // rather than removing it, so a restricted auditee sees "not for your role"
+  // instead of the feature appearing to not exist.
+  const RESTRICTED_TAB_REASON = "Internal audit material — not visible to your role on this engagement.";
   const tabs: TabItem[] = TAB_DEFS
     .filter((t) => t.key !== 'assets' || canReadAssets)
-    .filter((t) => {
-      if (!vc) return true;
-      if (t.key === 'working-papers') return vc.canViewWorkingPapers;
-      if (t.key === 'evidence') return vc.canViewInternalEvidence;
-      if (t.key === 'checklists') return vc.canViewChecklists;
-      return true;
+    .map((t) => {
+      const restricted =
+        !!vc &&
+        ((t.key === 'working-papers' && !vc.canViewWorkingPapers) ||
+          (t.key === 'evidence' && !vc.canViewInternalEvidence) ||
+          (t.key === 'checklists' && !vc.canViewChecklists));
+      return { ...t, disabled: restricted, disabledReason: restricted ? RESTRICTED_TAB_REASON : undefined };
     })
     .map((t) => ({
       key: t.key,
       label: t.label,
+      disabled: t.disabled,
+      disabledReason: t.disabledReason,
       count:
         t.key === 'findings'
           ? data.findings?.length ?? 0
@@ -159,6 +185,7 @@ export default function EngagementDetailPage(): JSX.Element {
       {tab === 'overview' && <OverviewTab engagement={data} />}
       {tab === 'working-papers' && vc?.canViewWorkingPapers !== false && <WorkingPapersTab engagement={data} />}
       {tab === 'evidence' && vc?.canViewInternalEvidence !== false && <EvidenceTab engagement={data} />}
+      {tab === 'requests' && <EvidenceRequestsTab engagement={data} />}
       {tab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
       {tab === 'findings' && <FindingsTab engagement={data} />}
       {tab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}

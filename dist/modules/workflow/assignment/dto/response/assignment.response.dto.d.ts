@@ -32,6 +32,8 @@ export interface WorkloadResponseDto {
         status: string;
         count: number;
     }>;
+    /** Hours the user has logged on their active engagements. */
+    loggedHours: number;
 }
 export interface AssignmentCandidateDto {
     id: string;

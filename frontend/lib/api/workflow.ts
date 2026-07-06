@@ -31,8 +31,14 @@ export const workflowApi = {
     api.get<ResolvedApprovalChain>(
       `/workflow/approvals/chain/${entityType}/${entityId}`,
     ),
-  approve: (id: string, comment?: string) =>
-    api.post<WorkflowApproval>(`/workflow/approvals/${id}/approve`, { comment }),
+  // `edits` is honored server-side only for audit report approvals — lets the
+  // approver fix a small issue themselves instead of rejecting and forcing a
+  // full resubmission back through level 1.
+  approve: (
+    id: string,
+    comment?: string,
+    edits?: { executiveSummary?: string; scope?: string; methodology?: string },
+  ) => api.post<WorkflowApproval>(`/workflow/approvals/${id}/approve`, { comment, edits }),
   reject: (id: string, reason: string) =>
     api.post<WorkflowApproval>(`/workflow/approvals/${id}/reject`, { reason }),
   cancel: (id: string) => api.post(`/workflow/approvals/${id}/cancel`),

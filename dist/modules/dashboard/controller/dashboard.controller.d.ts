@@ -5,6 +5,8 @@ export declare class DashboardController {
     readonly router: Router;
     constructor(dashboardService: DashboardService);
     private _registerRoutes;
+    private _getCommitteePack;
+    private _exportCommitteePack;
     private _getAuditSummary;
     private _getFindingsSummary;
     private _getRiskOverview;

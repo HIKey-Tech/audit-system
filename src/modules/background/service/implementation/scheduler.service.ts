@@ -5,6 +5,7 @@ import { logger } from '../../../../shared/utils/logger.util';
 import { config } from '../../../../shared/config/app.config';
 import { AppError } from '../../../../shared/errors/app.error';
 import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
+import { NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { workflowEscalationService } from '../../../workflow/escalation/service/implementation/escalation.service';
 import { DocumentService } from '../../../document/service/implementation/document.service';
 import { directoryMappingService } from '../../../integration/service/implementation/directory-mapping.service';
@@ -21,6 +22,7 @@ export const JOB_KEYS = {
   TOKEN_CLEANUP_HOURLY: 'BG:TOKEN:CLEANUP:HOURLY',
   AUDIT_REMINDER_DAILY: 'BG:AUDIT:REMINDER:DAILY',
   AUDIT_FINDING_OVERDUE_DAILY: 'BG:AUDIT:FINDING_OVERDUE:DAILY',
+  USER_MFA_GRACE_REMINDER_DAILY: 'BG:USER:MFA_GRACE_REMINDER:DAILY',
   MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
   WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
   AUDIT_RECONCILE_STATUS_HOURLY: 'BG:AUDIT:RECONCILE:STATUS:HOURLY',
@@ -28,6 +30,7 @@ export const JOB_KEYS = {
   REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
   DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
   INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
+  RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
 } as const;
 
 export type JobKey = (typeof JOB_KEYS)[keyof typeof JOB_KEYS];
@@ -353,6 +356,80 @@ export const registerAllJobs = (): void => {
     },
   });
 
+  // BG:USER:MFA_GRACE_REMINDER:DAILY — warn users before their mandatory-2FA
+  // grace deadline passes, instead of only gating at login (mfa_grace_until is
+  // set lazily on first login — see AuthService.login).
+  schedulerService.register({
+    key: JOB_KEYS.USER_MFA_GRACE_REMINDER_DAILY,
+    name: 'MFA Grace Deadline Reminder',
+    description: 'Warns not-yet-enrolled users 3 days and 1 day before their mandatory 2FA grace period ends',
+    cronExpression: '0 9 * * *', // Every day at 09:00
+    handler: async () => {
+      const now = new Date();
+      const users = await prisma.user.findMany({
+        where: {
+          deleted_at: null,
+          is_active: true,
+          mfa_enabled: false,
+          mfa_grace_until: { not: null, gte: now },
+        },
+        select: { id: true, email: true, display_name: true, mfa_grace_until: true },
+      });
+
+      let notificationsSent = 0;
+
+      for (const user of users) {
+        const daysRemaining = Math.ceil(
+          (user.mfa_grace_until!.getTime() - now.getTime()) / 86_400_000,
+        );
+        // Fire only at the two checkpoints — the daily re-run naturally re-fires
+        // each day the countdown lands on one of these, matching the existing
+        // reminder jobs' re-fire-while-true pattern rather than new dedup state.
+        if (daysRemaining !== 3 && daysRemaining !== 1) continue;
+
+        const variables = {
+          recipientName: user.display_name ?? user.email,
+          daysRemaining: String(daysRemaining),
+          graceDeadline: user.mfa_grace_until!.toISOString(),
+        };
+
+        try {
+          await notificationQueueService.enqueue(
+            'in_app',
+            {
+              userId: user.id,
+              title: 'Set up two-factor authentication',
+              body: `Two-factor authentication setup is required within ${daysRemaining} day(s), or you will be locked out until you enroll.`,
+              type: 'warning',
+              referenceType: 'user',
+              referenceId: user.id,
+              metadata: { daysRemaining, graceDeadline: variables.graceDeadline },
+              eventKey: 'user.mfa.grace_reminder',
+              variables,
+            },
+            { priority: NOTIFICATION_PRIORITY.HIGH },
+          );
+          await notificationQueueService.enqueue(
+            'email',
+            {
+              to: user.email,
+              subject: 'Action required: set up two-factor authentication',
+              text: `Your IAMS account requires two-factor authentication. You have ${daysRemaining} day(s) left in your grace period before this is enforced at login.`,
+              eventKey: 'user.mfa.grace_reminder',
+              variables,
+            },
+            { priority: NOTIFICATION_PRIORITY.HIGH },
+          );
+          notificationsSent += 2;
+        } catch (err) {
+          logger.error('MFA grace reminder notification failed', { err, userId: user.id });
+        }
+      }
+
+      logger.info('MFA grace reminder job completed', { usersChecked: users.length, notificationsSent });
+    },
+  });
+
   // BG:AUDIT:FINDING_OVERDUE:DAILY — nag auditees + lead auditors on findings approaching or past their due date
   schedulerService.register({
     key: JOB_KEYS.AUDIT_FINDING_OVERDUE_DAILY,
@@ -538,6 +615,68 @@ export const registerAllJobs = (): void => {
         { count: oldLogs.length },
       );
       // TODO: push to data warehouse via DataWarehouseClient
+    },
+  });
+
+  // BG:RETENTION:PURGE:WEEKLY — enforce the NDPR data-retention schedule
+  // (docs/NDPR_RETENTION_SCHEDULE.md). Periods live in system_config
+  // `data_retention`; 0 disables a category. Runs after the Sunday 02:00
+  // archive job so any future warehouse export sees logs before they purge.
+  schedulerService.register({
+    key: JOB_KEYS.RETENTION_PURGE_WEEKLY,
+    name: 'Data Retention Purge',
+    description: 'Hard-deletes audit logs, notifications, email logs, and consumed auth tokens older than the configured NDPR retention periods (system_config: data_retention).',
+    cronExpression: '0 4 * * 0', // Every Sunday at 04:00
+    handler: async () => {
+      const defaults = { auditLogDays: 2555, notificationDays: 365, emailLogDays: 365, authTokenDays: 90 };
+      let retention = defaults;
+      const cfg = await prisma.system_Config.findUnique({
+        where: { key: 'data_retention' },
+        select: { value: true },
+      });
+      if (cfg?.value) {
+        try {
+          retention = { ...defaults, ...JSON.parse(cfg.value) };
+        } catch (err) {
+          logger.warn('Invalid data_retention config; using defaults', { err });
+        }
+      }
+
+      const cutoff = (days: number): Date => {
+        const date = new Date();
+        date.setDate(date.getDate() - days);
+        return date;
+      };
+      const purged: Record<string, number> = {};
+
+      // ponytail: unbatched deleteMany per table; chunk by created_at if weekly volumes ever make this lock too long
+      if (retention.auditLogDays > 0) {
+        purged.auditLogs = (await prisma.audit_Log.deleteMany({
+          where: { created_at: { lt: cutoff(retention.auditLogDays) } },
+        })).count;
+      }
+      if (retention.notificationDays > 0) {
+        purged.notifications = (await prisma.notification.deleteMany({
+          where: { created_at: { lt: cutoff(retention.notificationDays) } },
+        })).count;
+      }
+      if (retention.emailLogDays > 0) {
+        purged.emailLogs = (await prisma.email_Log.deleteMany({
+          where: { created_at: { lt: cutoff(retention.emailLogDays) } },
+        })).count;
+      }
+      if (retention.authTokenDays > 0) {
+        // Both tables hold IP addresses / per-user auth artifacts; rows are
+        // dead minutes after issuance, so a created_at cutoff is safe.
+        purged.passwordResetTokens = (await prisma.password_Reset_Token.deleteMany({
+          where: { created_at: { lt: cutoff(retention.authTokenDays) } },
+        })).count;
+        purged.mfaEmailOtps = (await prisma.mfa_Email_Otp.deleteMany({
+          where: { created_at: { lt: cutoff(retention.authTokenDays) } },
+        })).count;
+      }
+
+      logger.info('Data retention purge completed', { retention, purged });
     },
   });
 

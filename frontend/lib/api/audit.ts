@@ -7,8 +7,10 @@ import type {
   AuditEngagement,
   AuditEngagementDetail,
   AuditWorkingPaper,
+  WorkingPaperComment,
   WorkingPaperImportPreview,
   AuditEvidence,
+  EvidenceRequest,
   AuditFinding,
   AuditChecklistItem,
   ChecklistTemplateConfig,
@@ -79,7 +81,28 @@ export interface AddPlanItemDto {
   notes?: string | null;
 }
 
+export interface PlanningRecommendation {
+  universeId: string;
+  name: string;
+  category: string;
+  riskScore: number;
+  auditFrequency: string;
+  lastAuditedAt: string | null;
+  openFindingsCount: number;
+  score: number;
+  components: {
+    riskScore: number;
+    openFindings: number;
+    overdueForAudit: number;
+    neverAudited: number;
+    timeSinceLastAudit: number;
+  };
+  reasons: string[];
+}
+
 export const plansApi = {
+  /** Composite audit-priority ranking of universe entities, highest first. */
+  recommendations: () => api.get<PlanningRecommendation[]>('/audit/plans/recommendations'),
   list: (q?: PlansListQuery) =>
     api.getPaginated<AuditPlan>('/audit/plans', q as Record<string, string | number | boolean | undefined>),
   get: (id: string) => api.get<AuditPlan>(`/audit/plans/${id}`),
@@ -130,6 +153,7 @@ export interface CreateEngagementFromPlanDto {
   plannedStartDate: string;
   plannedEndDate: string;
   slaDeadline: string;
+  plannedHours?: number;
   planItemId: string;
   universeId?: string;
   auditType?: string;
@@ -145,6 +169,7 @@ export interface CreateAdhocEngagementDto {
   plannedStartDate: string;
   plannedEndDate: string;
   slaDeadline: string;
+  plannedHours?: number;
   universeId: string;
   auditType: string;
   priority: string;
@@ -162,6 +187,7 @@ export interface UpdateEngagementDto {
   slaDeadline?: string;
   priority?: string;
   adhocReason?: string | null;
+  plannedHours?: number | null;
 }
 
 export const engagementsApi = {
@@ -185,6 +211,35 @@ export const engagementsApi = {
       `/audit/engagements/eligible-users`,
       q as Record<string, string | number | boolean | undefined>,
     ),
+};
+
+// ============================================================
+// Time entries
+// ============================================================
+export interface TimeEntry {
+  id: string;
+  engagementId: string;
+  userId: string;
+  userName: string;
+  entryDate: string;
+  hours: number;
+  description: string | null;
+  createdAt: string;
+}
+
+export interface EngagementTimeSummary {
+  plannedHours: number | null;
+  totalHours: number;
+  byUser: Array<{ userId: string; userName: string; hours: number }>;
+  entries: TimeEntry[];
+}
+
+export const timeEntriesApi = {
+  list: (engagementId: string) =>
+    api.get<EngagementTimeSummary>(`/audit/engagements/${engagementId}/time-entries`),
+  log: (engagementId: string, dto: { entryDate: string; hours: number; description?: string }) =>
+    api.post<TimeEntry>(`/audit/engagements/${engagementId}/time-entries`, dto),
+  remove: (id: string) => api.delete(`/audit/time-entries/${id}`),
 };
 
 // ============================================================
@@ -230,10 +285,17 @@ export const workingPapersApi = {
     api.put<AuditWorkingPaper>(`/audit/working-papers/${id}`, dto),
   submit: (id: string) =>
     api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/submit`),
-  approve: (id: string, comment?: string) =>
-    api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/approve`, { comment }),
+  approve: (id: string, edits?: { content: string }) =>
+    api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/approve`, edits ? { edits } : {}),
   reject: (id: string, reason: string) =>
     api.post<AuditWorkingPaper>(`/audit/working-papers/${id}/reject`, { reason }),
+  // Review comments (reviewer ↔ preparer back-and-forth)
+  listComments: (id: string) =>
+    api.get<WorkingPaperComment[]>(`/audit/working-papers/${id}/comments`),
+  addComment: (id: string, body: string) =>
+    api.post<WorkingPaperComment>(`/audit/working-papers/${id}/comments`, { body }),
+  resolveComment: (commentId: string) =>
+    api.post<WorkingPaperComment>(`/audit/working-papers/comments/${commentId}/resolve`),
   exportFile: async (
     id: string,
     format: 'pdf' | 'docx' = 'docx',
@@ -281,6 +343,28 @@ export const evidenceApi = {
 };
 
 // ============================================================
+// Evidence requests (PBC — documents the auditor asks the auditee for)
+// ============================================================
+export const evidenceRequestsApi = {
+  listByEngagement: (engagementId: string) =>
+    api.get<EvidenceRequest[]>(`/audit/engagements/${engagementId}/evidence-requests`),
+  mine: () => api.get<EvidenceRequest[]>('/audit/evidence-requests/mine'),
+  create: (
+    engagementId: string,
+    dto: { title: string; description?: string; dueDate?: string; assignedToId?: string },
+  ) => api.post<EvidenceRequest>(`/audit/engagements/${engagementId}/evidence-requests`, dto),
+  respond: (id: string, file: File) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    return api.upload<EvidenceRequest>(`/audit/evidence-requests/${id}/respond`, fd);
+  },
+  accept: (id: string) => api.post<EvidenceRequest>(`/audit/evidence-requests/${id}/accept`),
+  return: (id: string, reason: string) =>
+    api.post<EvidenceRequest>(`/audit/evidence-requests/${id}/return`, { reason }),
+  cancel: (id: string) => api.delete(`/audit/evidence-requests/${id}`),
+};
+
+// ============================================================
 // Findings
 // ============================================================
 export interface FindingsListQuery {
@@ -306,6 +390,9 @@ export interface CreateFindingDto {
   additionalAuditeeIds?: string[];
   dueDate: string;
   workingPaperId?: string;
+  /** Source control test this finding was raised from. */
+  checklistId?: string;
+  riskId?: string;
 }
 
 export const findingsApi = {
@@ -332,6 +419,42 @@ export const findingsApi = {
   /** Fix 4: no DELETE /audit/findings — stub that throws */
   remove: (_id: string): Promise<void> => {
     throw new Error('Not supported: findings cannot be deleted via API');
+  },
+};
+
+// ============================================================
+// Sampling
+// ============================================================
+export interface SamplingParams {
+  method: 'random' | 'interval' | 'high_value';
+  sampleSize: number;
+  seed?: number;
+  valueColumn?: string;
+  threshold?: number;
+}
+
+export interface SamplingRunResult {
+  populationEvidenceId: string;
+  sampleEvidenceId: string;
+  populationCount: number;
+  sampleCount: number;
+  method: string;
+  seed: number;
+  methodologyMarkdown: string;
+  previewRows: Record<string, unknown>[];
+  previewColumns: string[];
+}
+
+export const samplingApi = {
+  run: (engagementId: string, file: File, params: SamplingParams) => {
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('method', params.method);
+    fd.append('sampleSize', String(params.sampleSize));
+    if (params.seed !== undefined) fd.append('seed', String(params.seed));
+    if (params.valueColumn) fd.append('valueColumn', params.valueColumn);
+    if (params.threshold !== undefined) fd.append('threshold', String(params.threshold));
+    return api.upload<SamplingRunResult>(`/audit/engagements/${engagementId}/sampling`, fd);
   },
 };
 

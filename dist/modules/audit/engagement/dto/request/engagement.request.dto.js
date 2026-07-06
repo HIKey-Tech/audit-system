@@ -21,6 +21,7 @@ const EngagementBaseSchema = zod_1.z.object({
     plannedStartDate: zod_1.z.string().datetime(),
     plannedEndDate: zod_1.z.string().datetime(),
     slaDeadline: zod_1.z.string().datetime(),
+    plannedHours: zod_1.z.number().int().positive().max(100000).optional(),
     checklistControls: zod_1.z.array(exports.ChecklistControlSchema).max(200).optional(),
 });
 const EngagementScopeSchema = zod_1.z.object({
@@ -44,6 +45,7 @@ exports.UpdateEngagementRequestSchema = zod_1.z.object({
     slaDeadline: zod_1.z.string().datetime().optional(),
     priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority).optional(),
     adhocReason: zod_1.z.string().max(5000).nullable().optional(),
+    plannedHours: zod_1.z.number().int().positive().max(100000).nullable().optional(),
 });
 exports.UpdateEngagementStatusRequestSchema = zod_1.z.object({
     status: zod_1.z.nativeEnum(audit_enum_1.EngagementStatus),

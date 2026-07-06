@@ -40,6 +40,12 @@ const CUSTOMIZATION_KEYS = [
     title: 'Analytics Visibility',
     description: 'Controls KPI groups shown in analytics and management reporting.',
   },
+  {
+    key: 'planning_priority_weights',
+    title: 'Planning Priority Weights',
+    description:
+      'Relative importance of risk score, unresolved findings, audit overdue, never audited, and time since last audit in the recommended-audit ranking. Any scale — weights are normalized by their sum.',
+  },
 ] as const;
 
 const tryParse = (raw: string | null | undefined): JsonValue => {

@@ -11,13 +11,13 @@ const nextForwardStatus = async (
   status: EngagementStatus,
   engagementId: string,
 ): Promise<EngagementStatus | null> => {
-  if (status === EngagementStatus.InProgress && (await canEnterUnderReview(engagementId))) {
+  if (status === EngagementStatus.InProgress && (await canEnterUnderReview(engagementId)).met) {
     return EngagementStatus.UnderReview;
   }
-  if (status === EngagementStatus.UnderReview && (await canEnterReported(engagementId))) {
+  if (status === EngagementStatus.UnderReview && (await canEnterReported(engagementId)).met) {
     return EngagementStatus.Reported;
   }
-  if (status === EngagementStatus.Reported && (await canClose(engagementId))) {
+  if (status === EngagementStatus.Reported && (await canClose(engagementId)).met) {
     return EngagementStatus.Closed;
   }
   return null;

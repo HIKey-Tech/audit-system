@@ -84,6 +84,7 @@ const STRUCTURED_KEYS = new Set([
   'audit_taxonomy',
   'approval_matrix',
   'checklist_templates',
+  'planning_priority_weights',
 ]);
 
 const KNOWN_KEYS = new Set(GROUPS.flatMap((g) => g.fields.map((f) => f.key)));

@@ -8,13 +8,13 @@ const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const engagement_gates_1 = require("./engagement-gates");
 /** Compute the immediate forward target if its gates are met, else null. Forward-only. */
 const nextForwardStatus = async (status, engagementId) => {
-    if (status === audit_enum_1.EngagementStatus.InProgress && (await (0, engagement_gates_1.canEnterUnderReview)(engagementId))) {
+    if (status === audit_enum_1.EngagementStatus.InProgress && (await (0, engagement_gates_1.canEnterUnderReview)(engagementId)).met) {
         return audit_enum_1.EngagementStatus.UnderReview;
     }
-    if (status === audit_enum_1.EngagementStatus.UnderReview && (await (0, engagement_gates_1.canEnterReported)(engagementId))) {
+    if (status === audit_enum_1.EngagementStatus.UnderReview && (await (0, engagement_gates_1.canEnterReported)(engagementId)).met) {
         return audit_enum_1.EngagementStatus.Reported;
     }
-    if (status === audit_enum_1.EngagementStatus.Reported && (await (0, engagement_gates_1.canClose)(engagementId))) {
+    if (status === audit_enum_1.EngagementStatus.Reported && (await (0, engagement_gates_1.canClose)(engagementId)).met) {
         return audit_enum_1.EngagementStatus.Closed;
     }
     return null;

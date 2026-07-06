@@ -212,6 +212,16 @@ export default function UniverseDetailPage(): JSX.Element {
                 {data.lastAuditedAt ? formatDate(data.lastAuditedAt) : 'Never'}
               </dd>
             </div>
+            <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Open findings</dt>
+              <dd className="mt-1 text-sm">
+                {typeof data.openFindingsCount === 'number' && data.openFindingsCount > 0 ? (
+                  <span className="font-semibold text-danger">{data.openFindingsCount} unresolved</span>
+                ) : (
+                  <span className="text-text-primary">None</span>
+                )}
+              </dd>
+            </div>
           </dl>
         </Card>
 

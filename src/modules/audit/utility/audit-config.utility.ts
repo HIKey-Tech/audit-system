@@ -191,6 +191,32 @@ export const getApprovalMatrix = async (): Promise<ApprovalMatrix> => {
   return { ...DEFAULT_APPROVAL_MATRIX, ...parsed };
 };
 
+/**
+ * Relative importance of each signal in the audit-planning priority score.
+ * Values are relative weights (any scale — they are normalized by their sum),
+ * editable by admins in Settings so GBB defines what "priority" means.
+ */
+export interface PlanningPriorityWeights {
+  riskScore: number;
+  openFindings: number;
+  overdueForAudit: number;
+  neverAudited: number;
+  timeSinceLastAudit: number;
+}
+
+export const DEFAULT_PLANNING_PRIORITY_WEIGHTS: PlanningPriorityWeights = {
+  riskScore: 40,
+  openFindings: 25,
+  overdueForAudit: 20,
+  neverAudited: 10,
+  timeSinceLastAudit: 5,
+};
+
+export const getPlanningPriorityWeights = async (): Promise<PlanningPriorityWeights> => {
+  const parsed = await getJsonConfig<Partial<PlanningPriorityWeights>>('planning_priority_weights', {});
+  return { ...DEFAULT_PLANNING_PRIORITY_WEIGHTS, ...parsed };
+};
+
 const getJsonConfig = async <T>(key: string, fallback: T): Promise<T> => {
   const config = await prisma.system_Config.findUnique({
     where: { key },

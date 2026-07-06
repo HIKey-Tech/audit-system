@@ -245,9 +245,70 @@ class FollowUpService {
                 }
             }
         }
+        // Close the risk loop: a verified finding is new evidence about the risk
+        // picture of the audited entity. Nudge the owners of related risks (the
+        // finding's directly-linked risk plus risks tied to the engagement's
+        // universe entity) to reassess. Fire-and-forget — never blocks verification.
+        if (isVerified) {
+            void this._suggestRiskReassessment(findingId, finding.title, finding.engagement_id).catch((err) => logger_util_1.logger.warn('Risk reassessment suggestion failed', { findingId, err }));
+        }
         logger_util_1.logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
+    }
+    /** Notify the owners of risks related to a just-verified finding that a reassessment may be due. */
+    async _suggestRiskReassessment(findingId, findingTitle, engagementId) {
+        const [finding, engagement] = await Promise.all([
+            prisma_client_1.prisma.audit_Finding.findUnique({ where: { id: findingId }, select: { risk_id: true } }),
+            prisma_client_1.prisma.audit_Engagement.findUnique({
+                where: { id: engagementId },
+                select: { universe_id: true, universe: { select: { name: true } } },
+            }),
+        ]);
+        if (!engagement)
+            return;
+        const risks = await prisma_client_1.prisma.risk_Register.findMany({
+            where: {
+                deleted_at: null,
+                OR: [
+                    ...(finding?.risk_id ? [{ id: finding.risk_id }] : []),
+                    { universe_id: engagement.universe_id },
+                ],
+            },
+            select: {
+                id: true,
+                title: true,
+                owner: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
+            },
+        });
+        for (const risk of risks) {
+            const ownerName = risk.owner.display_name ?? `${risk.owner.first_name} ${risk.owner.last_name}`.trim();
+            const variables = {
+                ownerName,
+                riskTitle: risk.title,
+                findingTitle,
+                entityName: engagement.universe.name,
+            };
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                userId: risk.owner.id,
+                title: 'Risk reassessment suggested',
+                body: `Finding "${findingTitle}" affecting ${engagement.universe.name} was verified — consider reassessing risk "${risk.title}".`,
+                type: 'info',
+                referenceType: 'risk_register',
+                referenceId: risk.id,
+                eventKey: 'risk.reassessment.suggested',
+                variables,
+            });
+            if (risk.owner.email) {
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+                    to: risk.owner.email,
+                    subject: `Risk reassessment suggested: ${risk.title}`,
+                    text: `Audit finding "${findingTitle}" affecting ${engagement.universe.name} has been verified. Consider reassessing risk "${risk.title}" in the risk register.`,
+                    eventKey: 'risk.reassessment.suggested',
+                    variables,
+                });
+            }
+        }
     }
     async getFollowUp(findingId, actor) {
         const followUp = await prisma_client_1.prisma.audit_Follow_Up.findUnique({

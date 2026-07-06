@@ -1,5 +1,6 @@
 import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import { borderedTableLayout, mm } from '../../../../shared/utils/pdf.util';
+import { markdownToPdfContent } from './markdown.utility';
 
 export { WP_REVIEWABLE_STATUSES } from '../../utility/audit.utility';
 
@@ -69,17 +70,8 @@ export const parseWorkingPaperSections = (content: string | null | undefined): W
 /** Brand navy used across the working-paper PDF. */
 const BRAND = '#1E3A8A';
 
-/** Split a section's free text into pdfmake paragraph blocks. */
-const renderSectionBody = (content: string): Content[] => {
-  const paragraphs = content
-    .split(/\n{2,}/)
-    .map((paragraph) => paragraph.trim())
-    .filter(Boolean);
-
-  // pdfmake renders single '\n' as a line break inside a text node, so each
-  // paragraph keeps its internal line breaks without extra handling.
-  return paragraphs.map((paragraph) => ({ text: paragraph, margin: [0, 3, 0, 3] }));
-};
+/** Render a section's Markdown body into pdfmake blocks (plain text degrades cleanly). */
+const renderSectionBody = (content: string): Content[] => markdownToPdfContent(content);
 
 /**
  * Build a pdfmake document definition for a working paper.

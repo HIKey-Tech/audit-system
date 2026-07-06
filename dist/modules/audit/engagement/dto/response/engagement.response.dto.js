@@ -30,6 +30,8 @@ const mapEngagementToResponse = (engagement, extras) => ({
     slaDeadline: engagement.sla_deadline.toISOString(),
     isAdhoc: engagement.is_adhoc,
     adhocReason: engagement.adhoc_reason,
+    plannedHours: engagement.planned_hours,
+    actualHours: extras?.actualHours,
     createdById: engagement.created_by_id,
     createdAt: engagement.created_at.toISOString(),
     updatedAt: engagement.updated_at.toISOString(),

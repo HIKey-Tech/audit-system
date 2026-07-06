@@ -173,6 +173,27 @@ export default function FindingDetailPage(): JSX.Element {
                 {formatDate(data.dueDate)}{overdue && ' · Overdue'}
               </dd>
             </div>
+            {data.controlReference && (
+              <div>
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Raised from control</dt>
+                <dd className="mt-1 text-sm text-text-primary" title={data.controlDescription}>
+                  <span className="font-mono text-xs">{data.controlReference}</span>
+                  {data.controlDescription && (
+                    <span className="text-text-secondary"> — {data.controlDescription}</span>
+                  )}
+                </dd>
+              </div>
+            )}
+            {data.riskTitle && data.riskId && (
+              <div>
+                <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Linked risk</dt>
+                <dd className="mt-1 text-sm">
+                  <Link href={`/risk/${data.riskId}`} className="text-primary hover:underline">
+                    {data.riskTitle}
+                  </Link>
+                </dd>
+              </div>
+            )}
             <div className="col-span-2">
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Description</dt>
               <dd className="mt-1 text-sm text-text-primary whitespace-pre-wrap">{data.description}</dd>

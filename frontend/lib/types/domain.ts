@@ -280,6 +280,8 @@ export interface UniverseEngagementHistory {
 export interface AuditUniverseDetail extends AuditUniverseEntity {
   linkedRisks?: UniverseLinkedRisk[];
   engagementHistory?: UniverseEngagementHistory[];
+  /** Findings not yet closed across this entity's engagements. */
+  openFindingsCount?: number;
 }
 
 export interface AuditPlanItem {
@@ -296,18 +298,6 @@ export interface AuditPlanItem {
   notes: string | null;
 }
 
-export interface AuditPlanApprovalStep {
-  id: string;
-  level: number;
-  approverId: string;
-  approverName: string;
-  status: string;
-  comment: string | null;
-  rejectionReason?: string | null;
-  decidedAt: string | null;
-  createdAt: string;
-}
-
 export interface AuditPlan {
   id: string;
   title: string;
@@ -322,7 +312,6 @@ export interface AuditPlan {
   createdAt: string;
   updatedAt: string;
   items?: AuditPlanItem[];
-  approvalChain?: AuditPlanApprovalStep[];
 }
 
 export interface AuditEngagement {
@@ -345,6 +334,9 @@ export interface AuditEngagement {
   slaDeadline: string;
   isAdhoc: boolean;
   adhocReason: string | null;
+  plannedHours: number | null;
+  /** Sum of logged time entries; only populated on the detail response. */
+  actualHours?: number;
   createdById: string;
   createdAt: string;
   updatedAt: string;
@@ -401,6 +393,9 @@ export interface AuditEngagementDetail extends AuditEngagement {
   evidenceCount?: number;
   assetCount?: number;
   viewerContext?: ViewerContext;
+  /** Reasons the engagement hasn't auto-advanced past its current status yet.
+   * Present (possibly empty) only when the current status has a forward gate. */
+  pendingGates?: string[];
 }
 
 export interface ViewerContext {
@@ -442,6 +437,18 @@ export interface AuditAssignment {
   userName: string;
   role: string;
   assignedAt: string;
+}
+
+/** Review comment on a working paper — reviewer ↔ preparer back-and-forth. */
+export interface WorkingPaperComment {
+  id: string;
+  workingPaperId: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  resolvedAt: string | null;
+  resolvedByName: string | null;
+  createdAt: string;
 }
 
 export interface AuditWorkingPaper {
@@ -489,6 +496,27 @@ export interface WorkingPaperImportPreview {
   warnings: string[];
 }
 
+/** Evidence request (PBC item) — auditor asks the auditee for documents. */
+export interface EvidenceRequest {
+  id: string;
+  engagementId: string;
+  engagementReference: string;
+  engagementTitle: string;
+  title: string;
+  description: string | null;
+  dueDate: string | null;
+  status: 'open' | 'submitted' | 'fulfilled' | string;
+  returnReason: string | null;
+  requestedById: string;
+  requestedByName: string;
+  assignedToId: string;
+  assignedToName: string;
+  fulfilledAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+  evidence: { id: string; fileName: string; uploadedAt: string }[];
+}
+
 export interface AuditEvidence {
   id: string;
   engagementId: string;
@@ -509,6 +537,13 @@ export interface AuditFinding {
   id: string;
   engagementId: string;
   engagementReference: string;
+  /** Source linkage — which working paper / control test / risk this finding came from. */
+  workingPaperId?: string | null;
+  checklistId?: string | null;
+  controlReference?: string;
+  controlDescription?: string;
+  riskId?: string | null;
+  riskTitle?: string;
   title: string;
   description: string;
   category: string;
@@ -559,7 +594,6 @@ export interface AuditReport {
   issuedAt: string | null;
   issuedById: string | null;
   issuedByName: string | null;
-  approvalChain?: AuditPlanApprovalStep[];
   createdAt: string;
   updatedAt: string;
 }
@@ -736,17 +770,19 @@ export interface Risk {
 // ============================================================
 // Workflow
 // ============================================================
+// Mirrors backend ApprovalStepResponseDto.
 export interface WorkflowApprovalStep {
   id: string;
   approvalId: string;
   level: number;
-  approverId: string;
-  approverName: string;
+  approverId: string | null;
+  requiredPermission: string | null;
   status: string;
   comment: string | null;
   signatureId: string | null;
-  decidedAt: string | null;
+  actedAt: string | null;
   createdAt: string;
+  approver?: WorkflowUserBrief;
 }
 
 export interface SignedApprovalDocument {
@@ -760,12 +796,16 @@ export interface WorkflowApproval {
   id: string;
   entityType: string;
   entityId: string;
+  /** Human-readable name of the record awaiting approval (list endpoints). */
+  entityTitle?: string | null;
+  /** Parent engagement, when the entity belongs to one (list endpoints). */
+  engagementId?: string | null;
   status: string;
   currentLevel: number;
-  totalLevels: number;
   rejectionReason: string | null;
   submittedById: string;
-  submittedByName: string;
+  submittedBy?: WorkflowUserBrief;
+  completedAt: string | null;
   createdAt: string;
   updatedAt: string;
   steps?: WorkflowApprovalStep[];

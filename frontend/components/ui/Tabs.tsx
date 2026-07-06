@@ -1,6 +1,7 @@
 'use client';
 
 import { ReactNode } from 'react';
+import { Lock } from 'lucide-react';
 import { cn } from '@/lib/utils/cn';
 
 export interface TabItem {
@@ -8,6 +9,11 @@ export interface TabItem {
   label: ReactNode;
   count?: number | null;
   countTone?: 'default' | 'danger';
+  /** Renders greyed out with a lock icon instead of the tab being removed
+   * entirely — so it reads as "not visible yet" rather than "doesn't exist". */
+  disabled?: boolean;
+  /** Tooltip shown on hover/focus when `disabled` is true. */
+  disabledReason?: string;
 }
 
 interface TabsProps {
@@ -28,16 +34,22 @@ export const Tabs = ({ tabs, active, onChange, className }: TabsProps): JSX.Elem
             type="button"
             role="tab"
             aria-selected={isActive}
-            onClick={() => onChange(t.key)}
+            aria-disabled={t.disabled}
+            disabled={t.disabled}
+            title={t.disabled ? t.disabledReason : undefined}
+            onClick={() => !t.disabled && onChange(t.key)}
             className={cn(
               'relative inline-flex items-center gap-2 px-4 py-2.5 text-sm font-medium transition-colors',
               'border-b-2 -mb-px',
-              isActive
-                ? 'border-primary text-primary'
-                : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-strong',
+              t.disabled
+                ? 'cursor-not-allowed border-transparent text-text-muted opacity-60'
+                : isActive
+                  ? 'border-primary text-primary'
+                  : 'border-transparent text-text-secondary hover:text-text-primary hover:border-border-strong',
             )}
           >
             {t.label}
+            {t.disabled && <Lock className="h-3 w-3" />}
             {typeof t.count === 'number' && t.count > 0 && (
               <span
                 className={cn(

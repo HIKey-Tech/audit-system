@@ -143,7 +143,12 @@ export class ApprovalController {
 
   private async _approve(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const approval = await this.approvalService.approve(req.params.id, req.user!, req.body.comment);
+      const approval = await this.approvalService.approve(
+        req.params.id,
+        req.user!,
+        req.body.comment,
+        req.body.edits,
+      );
       res.status(200).json(buildResponse(approval, 'Approval step approved'));
     } catch (err) {
       next(err);

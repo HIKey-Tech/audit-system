@@ -2,52 +2,23 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { z } from 'zod';
-import { Plus, AlertTriangle, X } from 'lucide-react';
-import { toast } from 'sonner';
+import { useQuery } from '@tanstack/react-query';
+import { Plus, AlertTriangle } from 'lucide-react';
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { SlideOver } from '@/components/ui/SlideOver';
-import { FormField } from '@/components/ui/FormField';
-import { Input, Select, Textarea } from '@/components/ui/Input';
-import { UserSelect } from '@/components/common/UserSelect';
 import { findingsApi } from '@/lib/api/audit';
-import { usersApi } from '@/lib/api/users';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
-
-/** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
-function toISODatetime(dateStr: string): string {
-  return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
-}
-
-const Schema = z.object({
-  title: z.string().min(2).max(200),
-  description: z.string().min(1),
-  category: z.enum(['it', 'financial', 'compliance', 'systems', 'operational']),
-  severity: z.enum(['critical', 'high', 'medium', 'low', 'informational']),
-  rootCause: z.string().min(1, 'Root cause is required'),
-  riskImplication: z.string().min(1, 'Risk implication is required'),
-  recommendation: z.string().min(1, 'Recommendation is required'),
-  auditeeId: z.string().min(1),
-  additionalAuditeeIds: z.array(z.string()).optional(),
-  dueDate: z.string().min(1),
-});
-
-type FormValues = z.infer<typeof Schema>;
+import { NewFindingSlideOver } from './NewFindingSlideOver';
 
 export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
-  const qc = useQueryClient();
   const canWrite = usePermission('finding:create');
 
   const [open, setOpen] = useState(false);
@@ -56,82 +27,6 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
     queryKey: ['engagements', engagement.id, 'findings'],
     queryFn: () => findingsApi.listByEngagement(engagement.id),
   });
-
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    watch,
-    reset,
-    formState: { errors },
-  } = useForm<FormValues>({
-    resolver: zodResolver(Schema),
-    defaultValues: {
-      title: '',
-      description: '',
-      // Default to the engagement's audit domain so findings stay attributable
-      // to the module they were raised in (overridable, e.g. cross-domain "operational").
-      category: (engagement.auditType as FormValues['category']) ?? 'compliance',
-      severity: 'medium',
-      rootCause: '',
-      riskImplication: '',
-      recommendation: '',
-      auditeeId: engagement.auditeeId,
-      additionalAuditeeIds: [],
-      dueDate: '',
-    },
-  });
-
-  // Names for the co-responder chips.
-  const usersList = useQuery({
-    queryKey: ['users', 'all'],
-    queryFn: () => usersApi.list({ pageSize: 100 }),
-    staleTime: 5 * 60_000,
-  });
-  const userName = (id: string): string => {
-    const u = usersList.data?.items.find((x) => x.id === id);
-    return u ? u.displayName || `${u.firstName} ${u.lastName}` : id;
-  };
-
-  const create = useMutation({
-    mutationFn: (v: FormValues) =>
-      findingsApi.create(engagement.id, {
-        title: v.title,
-        description: v.description,
-        category: v.category,
-        severity: v.severity,
-        rootCause: v.rootCause,
-        riskImplication: v.riskImplication,
-        recommendation: v.recommendation,
-        auditeeId: v.auditeeId,
-        additionalAuditeeIds: v.additionalAuditeeIds,
-        dueDate: toISODatetime(v.dueDate),
-      }),
-    onSuccess: () => {
-      toast.success('Finding created');
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'findings'] });
-      qc.invalidateQueries({ queryKey: ['findings'] });
-      setOpen(false);
-      reset();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
-
-  const onSubmit = handleSubmit((v) => create.mutate(v));
-  const auditeeId = watch('auditeeId');
-  const additionalAuditeeIds = watch('additionalAuditeeIds') ?? [];
-
-  const addResponder = (id: string): void => {
-    if (!id || id === auditeeId || additionalAuditeeIds.includes(id)) return;
-    setValue('additionalAuditeeIds', [...additionalAuditeeIds, id]);
-  };
-  const removeResponder = (id: string): void => {
-    setValue(
-      'additionalAuditeeIds',
-      additionalAuditeeIds.filter((x) => x !== id),
-    );
-  };
 
   return (
     <div>
@@ -180,7 +75,14 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
                   >
                     <div className="min-w-0 flex-1">
                       <p className="truncate text-sm font-medium text-text-primary">{f.title}</p>
-                      <p className="text-[11px] text-text-muted">{f.auditeeName}</p>
+                      <p className="text-[11px] text-text-muted">
+                        {f.auditeeName}
+                        {f.controlReference && (
+                          <span className="ml-2 rounded bg-surface-alt px-1.5 py-0.5 font-mono text-[10px] text-text-secondary">
+                            from {f.controlReference}
+                          </span>
+                        )}
+                      </p>
                     </div>
                     <Badge tone="gray">{humanizeStatus(f.category)}</Badge>
                     <StatusBadge status={f.severity} />
@@ -201,96 +103,7 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
         )}
       </Card>
 
-      <SlideOver
-        open={open}
-        onClose={() => setOpen(false)}
-        title="New finding"
-        width="xl"
-        footer={
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={() => setOpen(false)}>
-              Cancel
-            </Button>
-            <Button size="sm" onClick={onSubmit} isLoading={create.isPending}>
-              Raise finding
-            </Button>
-          </div>
-        }
-      >
-        <form onSubmit={onSubmit} className="space-y-4" noValidate>
-          <FormField label="Title" required error={errors.title?.message}>
-            <Input error={errors.title?.message} {...register('title')} />
-          </FormField>
-          <FormField label="Description" required error={errors.description?.message}>
-            <Textarea rows={4} error={errors.description?.message} {...register('description')} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Category" required error={errors.category?.message}>
-              <Select error={errors.category?.message} {...register('category')}>
-                <option value="it">IT</option>
-                <option value="financial">Financial</option>
-                <option value="compliance">Compliance</option>
-                <option value="systems">Systems</option>
-                <option value="operational">Operational</option>
-              </Select>
-            </FormField>
-            <FormField label="Severity" required error={errors.severity?.message}>
-              <Select error={errors.severity?.message} {...register('severity')}>
-                <option value="critical">Critical</option>
-                <option value="high">High</option>
-                <option value="medium">Medium</option>
-                <option value="low">Low</option>
-                <option value="informational">Informational</option>
-              </Select>
-            </FormField>
-          </div>
-          <FormField label="Root cause" required error={errors.rootCause?.message}>
-            <Textarea rows={3} {...register('rootCause')} />
-          </FormField>
-          <FormField label="Risk implication" required error={errors.riskImplication?.message}>
-            <Textarea rows={3} {...register('riskImplication')} />
-          </FormField>
-          <FormField label="Recommendation" required error={errors.recommendation?.message}>
-            <Textarea rows={3} {...register('recommendation')} />
-          </FormField>
-          <div className="grid grid-cols-2 gap-3">
-            <FormField label="Auditee" required error={errors.auditeeId?.message}>
-              <UserSelect value={auditeeId} onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })} />
-            </FormField>
-            <FormField label="Due date" required error={errors.dueDate?.message}>
-              <Input type="date" error={errors.dueDate?.message} {...register('dueDate')} />
-            </FormField>
-          </div>
-          <FormField label="Additional auditees">
-            <UserSelect
-              value=""
-              placeholder="Add a co-responder…"
-              excludeIds={[auditeeId, ...additionalAuditeeIds]}
-              onChange={addResponder}
-            />
-            {additionalAuditeeIds.length > 0 && (
-              <div className="mt-2 flex flex-wrap gap-1.5">
-                {additionalAuditeeIds.map((id) => (
-                  <span
-                    key={id}
-                    className="inline-flex items-center gap-1 rounded-full bg-surface-alt px-2.5 py-1 text-xs text-text-primary"
-                  >
-                    {userName(id)}
-                    <button
-                      type="button"
-                      onClick={() => removeResponder(id)}
-                      className="text-text-muted hover:text-danger"
-                      aria-label={`Remove ${userName(id)}`}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
-          </FormField>
-        </form>
-      </SlideOver>
+      <NewFindingSlideOver engagement={engagement} open={open} onClose={() => setOpen(false)} />
     </div>
   );
 };

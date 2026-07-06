@@ -18,10 +18,14 @@ import {
   UpdateWorkingPaperRequestDto,
 } from '../../dto/request/working-paper.request.dto';
 import {
+  WorkingPaperCommentResponseDto,
   WorkingPaperImportPreviewResponseDto,
   WorkingPaperResponseDto,
   mapWorkingPaperToResponse,
+  mapWpCommentToResponse,
+  wpCommentInclude,
 } from '../../dto/response/working-paper.response.dto';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import {
   IWorkingPaperService,
   WorkingPaperExportFormat,
@@ -40,6 +44,7 @@ import {
   buildWorkingPaperDocDefinition,
   parseWorkingPaperSections,
 } from '../../utility/working-paper.utility';
+import { markdownToPlainText } from '../../utility/markdown.utility';
 import { renderPdf } from '../../../../../shared/utils/pdf.util';
 
 export class WorkingPaperService implements IWorkingPaperService {
@@ -202,18 +207,86 @@ export class WorkingPaperService implements IWorkingPaperService {
     return mapWorkingPaperToResponse(updated);
   }
 
-  async approveWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
+  async approveWorkingPaper(id: string, actor: ActorContext, edits?: { content?: string }): Promise<WorkingPaperResponseDto> {
     assertHasPermission(actor.permissions, 'working_paper:approve');
     const paper = await this._getPaper(id);
     if (paper.status !== WorkingPaperStatus.Submitted) throw AppError.badRequest('Only submitted working papers can be approved');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditWorkingPaper, id);
-    await this.approvalService.approve(approval.id, actor);
+    // Approve-with-edit: the approver's content fix is applied atomically with
+    // the approval step, so a small issue doesn't force reject + resubmission.
+    await this.approvalService.approve(approval.id, actor, undefined, edits?.content ? { content: edits.content } : undefined);
     const updated = await this._getPaper(id);
 
-    logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id });
+    logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id, edited: !!edits?.content });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.approve', module: 'audit', entityType: 'audit_working_paper', entityId: id });
     return mapWorkingPaperToResponse(updated);
+  }
+
+  // ──────────── Review comments (reviewer ↔ preparer back-and-forth) ────────────
+
+  async addComment(workingPaperId: string, body: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto> {
+    assertHasPermission(actor.permissions, 'working_paper:read');
+    const paper = await this._getPaper(workingPaperId);
+    await assertCanViewInternalArtifacts(paper.engagement_id, actor);
+
+    const comment = await prisma.audit_Working_Paper_Comment.create({
+      data: { working_paper_id: workingPaperId, author_id: actor.id, body },
+      include: wpCommentInclude,
+    });
+
+    logger.info('Working paper comment added', { workingPaperId, commentId: comment.id, actorId: actor.id });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.comment', module: 'audit', entityType: 'audit_working_paper', entityId: workingPaperId });
+
+    // Tell the preparer someone commented on their paper (unless they did).
+    if (paper.created_by_id !== actor.id) {
+      await notificationQueueService.enqueueSafe('in_app', {
+        userId: paper.created_by_id,
+        title: 'New comment on your working paper',
+        body: `${comment.author.display_name ?? 'A reviewer'} commented on "${paper.title}": ${body.slice(0, 200)}`,
+        type: 'info',
+        referenceType: 'audit_engagement',
+        referenceId: paper.engagement_id,
+      });
+    }
+
+    return mapWpCommentToResponse(comment);
+  }
+
+  async listComments(workingPaperId: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto[]> {
+    assertHasPermission(actor.permissions, 'working_paper:read');
+    const paper = await this._getPaper(workingPaperId);
+    await assertCanViewInternalArtifacts(paper.engagement_id, actor);
+
+    const comments = await prisma.audit_Working_Paper_Comment.findMany({
+      where: { working_paper_id: workingPaperId },
+      include: wpCommentInclude,
+      orderBy: { created_at: 'asc' },
+    });
+    return comments.map(mapWpCommentToResponse);
+  }
+
+  async resolveComment(commentId: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto> {
+    const comment = await prisma.audit_Working_Paper_Comment.findUnique({
+      where: { id: commentId },
+      include: { working_paper: { select: { created_by_id: true } } },
+    });
+    if (!comment) throw AppError.notFound('Working paper comment');
+    if (comment.resolved_at) throw AppError.badRequest('Comment is already resolved');
+    // The comment's author, the paper's preparer, or a reviewer may resolve.
+    const canResolve =
+      comment.author_id === actor.id ||
+      comment.working_paper.created_by_id === actor.id ||
+      actor.permissions.includes('working_paper:approve');
+    if (!canResolve) throw AppError.forbidden('You cannot resolve this comment');
+
+    const updated = await prisma.audit_Working_Paper_Comment.update({
+      where: { id: commentId },
+      data: { resolved_at: new Date(), resolved_by_id: actor.id },
+      include: wpCommentInclude,
+    });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.comment_resolve', module: 'audit', entityType: 'audit_working_paper', entityId: updated.working_paper_id });
+    return mapWpCommentToResponse(updated);
   }
 
   async rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
@@ -289,7 +362,15 @@ export class WorkingPaperService implements IWorkingPaperService {
             date: exportDate,
             status: paper.status,
             version: String(paper.version_number),
-            content: paper.content,
+            // The {content} placeholder takes plain text with line breaks —
+            // parse the stored sections (never the raw JSON string) and render
+            // each section's Markdown down to readable text.
+            content: parseWorkingPaperSections(paper.content)
+              .map((section, idx) => {
+                const heading = (section.title || `Section ${idx + 1}`).toUpperCase();
+                return `${heading}\n${markdownToPlainText(section.content)}`;
+              })
+              .join('\n\n'),
           });
 
     logger.info('Working paper exported', { workingPaperId: id, format });

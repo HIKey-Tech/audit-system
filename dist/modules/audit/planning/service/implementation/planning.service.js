@@ -10,6 +10,7 @@ const approval_service_1 = require("../../../../workflow/approval/service/implem
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const planning_response_dto_1 = require("../../dto/response/planning.response.dto");
 const planInclude = {
     approved_by: { select: { display_name: true, first_name: true, last_name: true } },
@@ -18,10 +19,110 @@ const planInclude = {
         orderBy: { created_at: 'asc' },
     },
 };
+/** Months per audit-frequency value, mirroring the AuditFrequency enum. */
+const FREQUENCY_MONTHS = {
+    monthly: 1,
+    quarterly: 3,
+    biannual: 6,
+    annual: 12,
+};
+const monthsSince = (date, now) => (now.getTime() - date.getTime()) / (30.44 * 24 * 60 * 60 * 1000);
 class PlanningService {
     approvalService;
     constructor(approvalService = approval_service_1.workflowApprovalService) {
         this.approvalService = approvalService;
+    }
+    /**
+     * Composite audit-priority ranking over the active audit universe — the
+     * defensible "what should we audit next year" list. Each signal is scored
+     * 0-100 and blended with admin-configurable weights
+     * (system_config.planning_priority_weights), so GBB decides what "priority"
+     * means without a redeploy. The per-entity component breakdown and reasons
+     * are returned so the ranking is explainable, not a black box.
+     */
+    async getRecommendations() {
+        const [weights, entities, openFindings] = await Promise.all([
+            (0, audit_config_utility_1.getPlanningPriorityWeights)(),
+            prisma_client_1.prisma.audit_Universe.findMany({
+                where: { deleted_at: null, status: audit_enum_1.UniverseStatus.Active },
+                select: {
+                    id: true,
+                    name: true,
+                    category: true,
+                    risk_score: true,
+                    audit_frequency: true,
+                    last_audited_at: true,
+                },
+            }),
+            prisma_client_1.prisma.audit_Finding.findMany({
+                where: {
+                    deleted_at: null,
+                    status: { not: audit_enum_1.FindingStatus.Closed },
+                    engagement: { deleted_at: null },
+                },
+                select: { engagement: { select: { universe_id: true } } },
+            }),
+        ]);
+        const openByUniverse = new Map();
+        for (const finding of openFindings) {
+            const key = finding.engagement.universe_id;
+            openByUniverse.set(key, (openByUniverse.get(key) ?? 0) + 1);
+        }
+        const weightSum = weights.riskScore + weights.openFindings + weights.overdueForAudit + weights.neverAudited + weights.timeSinceLastAudit;
+        const now = new Date();
+        const recommendations = entities.map((entity) => {
+            const riskScore = (0, audit_utility_1.decimalToNumber)(entity.risk_score) ?? 0;
+            const openCount = openByUniverse.get(entity.id) ?? 0;
+            const frequencyMonths = FREQUENCY_MONTHS[entity.audit_frequency];
+            const monthsSinceAudit = entity.last_audited_at ? monthsSince(entity.last_audited_at, now) : null;
+            const overdue = monthsSinceAudit !== null && frequencyMonths !== undefined && monthsSinceAudit > frequencyMonths;
+            const components = {
+                riskScore: Math.min((riskScore / 25) * 100, 100),
+                openFindings: Math.min(openCount * 25, 100),
+                overdueForAudit: overdue ? 100 : 0,
+                neverAudited: entity.last_audited_at === null ? 100 : 0,
+                timeSinceLastAudit: monthsSinceAudit === null ? 100 : Math.min((monthsSinceAudit / 24) * 100, 100),
+            };
+            const score = weightSum <= 0
+                ? 0
+                : (weights.riskScore * components.riskScore +
+                    weights.openFindings * components.openFindings +
+                    weights.overdueForAudit * components.overdueForAudit +
+                    weights.neverAudited * components.neverAudited +
+                    weights.timeSinceLastAudit * components.timeSinceLastAudit) /
+                    weightSum;
+            const reasons = [];
+            if (riskScore >= 13)
+                reasons.push(`High risk score (${riskScore})`);
+            if (openCount > 0)
+                reasons.push(`${openCount} unresolved finding${openCount === 1 ? '' : 's'}`);
+            if (entity.last_audited_at === null)
+                reasons.push('Never audited');
+            else if (overdue)
+                reasons.push(`Audit overdue (${entity.audit_frequency} cycle)`);
+            else if (monthsSinceAudit !== null && monthsSinceAudit >= 12) {
+                reasons.push(`Last audited ${Math.floor(monthsSinceAudit)} months ago`);
+            }
+            return {
+                universeId: entity.id,
+                name: entity.name,
+                category: entity.category,
+                riskScore,
+                auditFrequency: entity.audit_frequency,
+                lastAuditedAt: entity.last_audited_at?.toISOString() ?? null,
+                openFindingsCount: openCount,
+                score: Math.round(score),
+                components: {
+                    riskScore: Math.round(components.riskScore),
+                    openFindings: Math.round(components.openFindings),
+                    overdueForAudit: components.overdueForAudit,
+                    neverAudited: components.neverAudited,
+                    timeSinceLastAudit: Math.round(components.timeSinceLastAudit),
+                },
+                reasons,
+            };
+        });
+        return recommendations.sort((a, b) => b.score - a.score);
     }
     async createPlan(dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:create');

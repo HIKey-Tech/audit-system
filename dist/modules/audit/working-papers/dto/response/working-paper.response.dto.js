@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapWorkingPaperToResponse = void 0;
+exports.mapWpCommentToResponse = exports.wpCommentInclude = exports.mapWorkingPaperToResponse = void 0;
 const evidence_response_dto_1 = require("../../../evidence/dto/response/evidence.response.dto");
 const mapWorkingPaperToResponse = (paper) => ({
     id: paper.id,
@@ -21,4 +21,22 @@ const mapWorkingPaperToResponse = (paper) => ({
     evidence: paper.evidence?.map(evidence_response_dto_1.mapEvidenceToResponse),
 });
 exports.mapWorkingPaperToResponse = mapWorkingPaperToResponse;
+// ──────────── Review comments ────────────
+const client_1 = require("@prisma/client");
+exports.wpCommentInclude = client_1.Prisma.validator()({
+    author: { select: { display_name: true, first_name: true, last_name: true } },
+    resolved_by: { select: { display_name: true, first_name: true, last_name: true } },
+});
+const wpUserName = (u) => u ? (u.display_name ?? `${u.first_name} ${u.last_name}`.trim()) : null;
+const mapWpCommentToResponse = (c) => ({
+    id: c.id,
+    workingPaperId: c.working_paper_id,
+    authorId: c.author_id,
+    authorName: wpUserName(c.author) ?? 'Unknown',
+    body: c.body,
+    resolvedAt: c.resolved_at?.toISOString() ?? null,
+    resolvedByName: wpUserName(c.resolved_by),
+    createdAt: c.created_at.toISOString(),
+});
+exports.mapWpCommentToResponse = mapWpCommentToResponse;
 //# sourceMappingURL=working-paper.response.dto.js.map

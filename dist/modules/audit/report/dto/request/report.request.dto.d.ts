@@ -9,14 +9,14 @@ export declare const GenerateReportRequestSchema: z.ZodObject<{
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
-    templateId?: string | undefined;
     executiveSummary?: string | undefined;
+    templateId?: string | undefined;
 }, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
-    templateId?: string | undefined;
     executiveSummary?: string | undefined;
+    templateId?: string | undefined;
 }>;
 export declare const UpdateReportRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
@@ -28,14 +28,14 @@ export declare const UpdateReportRequestSchema: z.ZodObject<{
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
-    templateId?: string | undefined;
     executiveSummary?: string | undefined;
+    templateId?: string | undefined;
 }, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
-    templateId?: string | undefined;
     executiveSummary?: string | undefined;
+    templateId?: string | undefined;
 }>;
 export declare const RejectReportRequestSchema: z.ZodObject<{
     reason: z.ZodString;

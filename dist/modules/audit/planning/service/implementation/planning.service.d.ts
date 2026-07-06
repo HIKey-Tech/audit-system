@@ -3,10 +3,19 @@ import { IApprovalService } from '../../../../workflow/approval/service/interfac
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { AddPlanItemRequestDto, CreatePlanRequestDto, PlanQueryDto, UpdatePlanRequestDto } from '../../dto/request/planning.request.dto';
 import { PlanResponseDto } from '../../dto/response/planning.response.dto';
-import { IPlanningService } from '../interface/planning.service.interface';
+import { IPlanningService, PlanningRecommendationDto } from '../interface/planning.service.interface';
 export declare class PlanningService implements IPlanningService {
     private readonly approvalService;
     constructor(approvalService?: IApprovalService);
+    /**
+     * Composite audit-priority ranking over the active audit universe — the
+     * defensible "what should we audit next year" list. Each signal is scored
+     * 0-100 and blended with admin-configurable weights
+     * (system_config.planning_priority_weights), so GBB decides what "priority"
+     * means without a redeploy. The per-entity component breakdown and reasons
+     * are returned so the ranking is explainable, not a black box.
+     */
+    getRecommendations(): Promise<PlanningRecommendationDto[]>;
     createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto>;
     updatePlan(planId: string, dto: UpdatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto>;
     deletePlan(planId: string, actor: ActorContext): Promise<void>;

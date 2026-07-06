@@ -305,6 +305,46 @@ const NOTIFICATION_TEMPLATES: Array<{
       'In-app variant of SLA reminder. Variables: engagementTitle, engagementReference, daysRemaining.',
   },
 
+  // user.mfa.grace_reminder
+  {
+    eventKey: 'user.mfa.grace_reminder',
+    channel: 'email',
+    name: 'MFA Grace Reminder — Email',
+    subject: 'Action required: set up two-factor authentication',
+    body: 'Dear {{recipientName}},\n\nYour IAMS account requires two-factor authentication. You have {{daysRemaining}} day(s) left before this is enforced at login (deadline: {{graceDeadline}}).\n\nPlease log in to IAMS and complete 2FA setup from your profile.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Warns a not-yet-enrolled user before their mandatory-2FA grace period ends. Variables: recipientName, daysRemaining, graceDeadline.',
+  },
+  {
+    eventKey: 'user.mfa.grace_reminder',
+    channel: 'in_app',
+    name: 'MFA Grace Reminder — In-App',
+    subject: null,
+    body: 'Two-factor authentication setup is required within {{daysRemaining}} day(s), or you will be locked out until you enroll.',
+    description:
+      'In-app variant of the MFA grace reminder. Variables: daysRemaining, graceDeadline.',
+  },
+
+  // risk.reassessment.suggested
+  {
+    eventKey: 'risk.reassessment.suggested',
+    channel: 'email',
+    name: 'Risk Reassessment Suggested — Email',
+    subject: 'Risk reassessment suggested: {{riskTitle}}',
+    body: 'Dear {{ownerName}},\n\nAudit finding "{{findingTitle}}" affecting {{entityName}} has been verified.\n\nAs the owner of risk "{{riskTitle}}", please review whether this outcome changes the risk\'s likelihood or impact, and record a new assessment in the risk register if so.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Nudges a risk owner to reassess after a related audit finding is verified. Variables: ownerName, riskTitle, findingTitle, entityName.',
+  },
+  {
+    eventKey: 'risk.reassessment.suggested',
+    channel: 'in_app',
+    name: 'Risk Reassessment Suggested — In-App',
+    subject: null,
+    body: 'Finding "{{findingTitle}}" affecting {{entityName}} was verified — consider reassessing risk "{{riskTitle}}".',
+    description:
+      'In-app variant of the risk reassessment suggestion. Variables: findingTitle, entityName, riskTitle.',
+  },
+
   // workflow.request.created (also reused when a chain advances to the next recipient)
   {
     eventKey: 'workflow.request.created',
@@ -522,6 +562,7 @@ const PERMISSIONS: PermissionSeed[] = [
   permission('evidence:read', 'View evidence', 'audit'),
   permission('evidence:upload', 'Upload evidence', 'audit'),
   permission('evidence:dispute', 'Dispute evidence', 'audit'),
+  permission('evidence:request', 'Request evidence from auditees', 'audit'),
   permission('finding:read', 'View findings', 'audit'),
   permission('finding:create', 'Create findings', 'audit'),
   permission('finding:update', 'Update findings', 'audit'),
@@ -555,6 +596,7 @@ const PERMISSIONS: PermissionSeed[] = [
   permission('risk_monitoring:read', 'View risk monitoring data', 'risk'),
 
   permission('dashboard:read', 'View dashboard data', 'dashboard'),
+  permission('committee_pack:read', 'View and export the audit committee pack', 'dashboard'),
 
   permission('asset:read', 'View asset registry records', 'asset'),
   permission('asset:create', 'Create asset registry records', 'asset'),
@@ -603,7 +645,7 @@ const ROLES: Array<{
       'engagement:read', 'engagement:create', 'engagement:update', 'engagement:read_all',
       'checklist:read', 'checklist:create', 'checklist:update',
       'working_paper:read', 'working_paper:create', 'working_paper:update', 'working_paper:submit', 'working_paper:approve', 'working_paper:reject',
-      'evidence:read', 'evidence:upload', 'evidence:dispute',
+      'evidence:read', 'evidence:upload', 'evidence:dispute', 'evidence:request',
       'finding:read', 'finding:create', 'finding:update', 'finding:close', 'finding:read_all',
       'followup:read', 'followup:verify',
       'report:read', 'report:create', 'report:update', 'report:submit', 'report:approve', 'report:reject', 'report:issue', 'report:export',
@@ -640,7 +682,7 @@ const ROLES: Array<{
       'engagement:read', 'engagement:update',
       'checklist:read', 'checklist:create', 'checklist:update',
       'working_paper:read', 'working_paper:create', 'working_paper:update', 'working_paper:submit', 'working_paper:approve', 'working_paper:reject',
-      'evidence:read', 'evidence:upload',
+      'evidence:read', 'evidence:upload', 'evidence:request',
       'finding:read', 'finding:create', 'finding:update', 'finding:close',
       'followup:read', 'followup:verify',
       'report:read', 'report:export',
@@ -668,7 +710,7 @@ const ROLES: Array<{
       'engagement:read',
       'checklist:read', 'checklist:create', 'checklist:update',
       'working_paper:read', 'working_paper:create', 'working_paper:update', 'working_paper:submit',
-      'evidence:read', 'evidence:upload',
+      'evidence:read', 'evidence:upload', 'evidence:request',
       'finding:read', 'finding:create', 'finding:update',
       'followup:read',
       'report:read',
@@ -701,6 +743,7 @@ const ROLES: Array<{
       'engagement:read', 'engagement:read_all',
       'finding:read', 'finding:read_all',
       'report:read', 'report:approve:oversight',
+      'committee_pack:read',
       'approval:read', 'approval:approve', 'approval:reject',
       'risk:read', 'risk:read_all',
       'risk_monitoring:read',
@@ -723,6 +766,7 @@ const ROLES: Array<{
       'engagement:read', 'engagement:read_all',
       'finding:read', 'finding:read_all',
       'report:read', 'report:issue', 'report:approve:final',
+      'committee_pack:read',
       'approval:read', 'approval:approve', 'approval:reject',
       'risk:read', 'risk:read_all',
       'risk_monitoring:read',
@@ -735,6 +779,18 @@ const ROLES: Array<{
       'notification:read', 'notification:update',
       'log:read', 'log:summary',
       'request:create', 'request:read', 'request:receive', 'request:act',
+    ],
+  },
+  {
+    // Access is the permission slug, not this role: any GBB-defined role
+    // granted committee_pack:read can view/export the pack.
+    name: 'audit_committee',
+    description: 'Audit committee member — periodic oversight pack access only',
+    isSystem: false,
+    permissions: [
+      'committee_pack:read',
+      'dashboard:read',
+      'notification:read', 'notification:update',
     ],
   },
   {
@@ -1174,6 +1230,18 @@ const SYSTEM_CONFIGS: Array<{
     isPublic: false,
   },
   {
+    key: 'planning_priority_weights',
+    value: JSON.stringify({
+      riskScore: 40,
+      openFindings: 25,
+      overdueForAudit: 20,
+      neverAudited: 10,
+      timeSinceLastAudit: 5,
+    }, null, 2),
+    description: 'Relative weights (normalized by their sum) blending the audit-planning priority score: risk score, unresolved findings, audit overdue per frequency, never audited, and time since last audit.',
+    isPublic: false,
+  },
+  {
     key: 'audit_sla_rules',
     value: JSON.stringify({
       defaultEngagementSlaDays: 30,
@@ -1413,6 +1481,26 @@ const SYSTEM_CONFIGS: Array<{
     key: 'version_retention',
     value: JSON.stringify({ enabled: false, keepLastVersions: 10 }),
     description: 'Opt-in document version retention policy. OFF by default to preserve full audit traceability and immutability. When enabled, the weekly prune job keeps only the N most recent document_versions per document and deletes older storage files.',
+    isPublic: false,
+  },
+  {
+    key: 'escalation_matrix',
+    value: JSON.stringify({
+      auditEngagement: { level3: ['director'], beyond: ['cae'] },
+      workflowApproval: { level3: ['director'], level4: ['cae'], otherwise: ['audit_manager'] },
+    }, null, 2),
+    description: 'Escalation notification targets per tier. Maps escalation levels beyond the entity\'s own assignees (lead auditor / manager / current approver) to the role names whose holders are notified. Edit when GBB renames or restructures oversight roles.',
+    isPublic: false,
+  },
+  {
+    key: 'data_retention',
+    value: JSON.stringify({
+      auditLogDays: 2555,
+      notificationDays: 365,
+      emailLogDays: 365,
+      authTokenDays: 90,
+    }, null, 2),
+    description: 'NDPR data-retention periods in days, enforced by the weekly retention purge job (BG:RETENTION:PURGE:WEEKLY). auditLogDays: compliance audit trail (default ~7 years); notificationDays: in-app notifications; emailLogDays: email delivery logs; authTokenDays: consumed/expired password-reset tokens and email OTPs (both hold IP addresses). Set a value to 0 to disable purging for that category. See docs/NDPR_RETENTION_SCHEDULE.md.',
     isPublic: false,
   },
 ];
@@ -1784,11 +1872,12 @@ async function main(): Promise<void> {
         is_public: cfg.isPublic,
         updated_by_id: adminUserId || null,
       },
+      // Never touch `value` on re-seed: existing rows may hold admin-edited
+      // config (approval matrix, priority weights, retention periods) that a
+      // re-run must not silently reset to defaults.
       update: {
-        value: cfg.value,
         description: cfg.description,
         is_public: cfg.isPublic,
-        updated_by_id: adminUserId || null,
       },
     });
   }

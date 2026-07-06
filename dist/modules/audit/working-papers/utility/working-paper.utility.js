@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.buildWorkingPaperDocDefinition = exports.parseWorkingPaperSections = exports.escapeHtml = exports.WP_REVIEWABLE_STATUSES = void 0;
 const pdf_util_1 = require("../../../../shared/utils/pdf.util");
+const markdown_utility_1 = require("./markdown.utility");
 var audit_utility_1 = require("../../utility/audit.utility");
 Object.defineProperty(exports, "WP_REVIEWABLE_STATUSES", { enumerable: true, get: function () { return audit_utility_1.WP_REVIEWABLE_STATUSES; } });
 /**
@@ -42,16 +43,8 @@ const parseWorkingPaperSections = (content) => {
 exports.parseWorkingPaperSections = parseWorkingPaperSections;
 /** Brand navy used across the working-paper PDF. */
 const BRAND = '#1E3A8A';
-/** Split a section's free text into pdfmake paragraph blocks. */
-const renderSectionBody = (content) => {
-    const paragraphs = content
-        .split(/\n{2,}/)
-        .map((paragraph) => paragraph.trim())
-        .filter(Boolean);
-    // pdfmake renders single '\n' as a line break inside a text node, so each
-    // paragraph keeps its internal line breaks without extra handling.
-    return paragraphs.map((paragraph) => ({ text: paragraph, margin: [0, 3, 0, 3] }));
-};
+/** Render a section's Markdown body into pdfmake blocks (plain text degrades cleanly). */
+const renderSectionBody = (content) => (0, markdown_utility_1.markdownToPdfContent)(content);
 /**
  * Build a pdfmake document definition for a working paper.
  * Rendered to a PDF Buffer via `renderPdf` in the service layer.

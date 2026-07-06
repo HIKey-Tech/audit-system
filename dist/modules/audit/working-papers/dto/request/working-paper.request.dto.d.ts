@@ -52,4 +52,30 @@ export type CreateWorkingPaperRequestDto = z.infer<typeof CreateWorkingPaperRequ
 export type UpdateWorkingPaperRequestDto = z.infer<typeof UpdateWorkingPaperRequestSchema>;
 export type ImportWorkingPaperMetadataDto = z.infer<typeof ImportWorkingPaperMetadataSchema>;
 export type RejectWorkingPaperRequestDto = z.infer<typeof RejectWorkingPaperRequestSchema>;
+export declare const ApproveWorkingPaperRequestSchema: z.ZodObject<{
+    edits: z.ZodOptional<z.ZodObject<{
+        content: z.ZodString;
+    }, "strip", z.ZodTypeAny, {
+        content: string;
+    }, {
+        content: string;
+    }>>;
+}, "strip", z.ZodTypeAny, {
+    edits?: {
+        content: string;
+    } | undefined;
+}, {
+    edits?: {
+        content: string;
+    } | undefined;
+}>;
+export declare const AddWorkingPaperCommentSchema: z.ZodObject<{
+    body: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    body: string;
+}, {
+    body: string;
+}>;
+export type ApproveWorkingPaperRequestDto = z.infer<typeof ApproveWorkingPaperRequestSchema>;
+export type AddWorkingPaperCommentDto = z.infer<typeof AddWorkingPaperCommentSchema>;
 //# sourceMappingURL=working-paper.request.dto.d.ts.map

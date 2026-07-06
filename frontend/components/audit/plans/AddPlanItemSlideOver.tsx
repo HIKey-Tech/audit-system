@@ -12,9 +12,28 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { plansApi, universeApi } from '@/lib/api/audit';
+import { riskScoreLabel } from '@/lib/utils/status';
+import type { AuditUniverseEntity } from '@/lib/types/domain';
 
 function toISODatetime(dateStr: string): string {
   return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
+}
+
+const FREQUENCY_MONTHS: Record<string, number> = {
+  monthly: 1,
+  quarterly: 3,
+  biannual: 6,
+  annual: 12,
+};
+
+/** "Never audited", "Audit overdue (annual)", or null when the entity is within cycle. */
+function auditDueFlag(e: AuditUniverseEntity): string | null {
+  if (!e.lastAuditedAt) return 'Never audited';
+  const months = FREQUENCY_MONTHS[e.auditFrequency];
+  if (!months) return null;
+  const due = new Date(e.lastAuditedAt);
+  due.setMonth(due.getMonth() + months);
+  return due < new Date() ? `Audit overdue (${e.auditFrequency})` : null;
 }
 
 const Schema = z.object({
@@ -43,10 +62,35 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
     enabled: open,
   });
 
+  // Server-side composite priority ranking (risk + open findings + overdue +
+  // never audited + staleness, admin-configurable weights). When it fails the
+  // client-side risk-score sort below still gives a sensible ordering.
+  const recommendations = useQuery({
+    queryKey: ['plans', 'recommendations'],
+    queryFn: () => plansApi.recommendations(),
+    enabled: open,
+    retry: false,
+  });
+  const recByUniverseId = new Map((recommendations.data ?? []).map((r) => [r.universeId, r]));
+
+  // The picker should answer "what most needs auditing", not present an
+  // alphabetical list — composite score first, risk score as fallback.
+  const rankedEntities = [...(universe.data?.items ?? [])].sort((a, b) => {
+    const ra = recByUniverseId.get(a.id)?.score;
+    const rb = recByUniverseId.get(b.id)?.score;
+    if (ra !== undefined && rb !== undefined) return rb - ra;
+    return (b.riskScore ?? 0) - (a.riskScore ?? 0);
+  });
+  const suggested = recommendations.data
+    ? recommendations.data.filter((r) => r.reasons.length > 0).slice(0, 5)
+    : null;
+  const fallbackSuggested = rankedEntities.filter((e) => auditDueFlag(e) !== null).slice(0, 5);
+
   const {
     register,
     handleSubmit,
     reset,
+    setValue,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
@@ -111,14 +155,75 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
       }
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
-        <FormField label="Auditable entity" required error={errors.universeId?.message}>
+        {suggested && suggested.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Recommended — composite priority (weights configurable in Settings)
+            </p>
+            <ul className="mt-1.5 space-y-1.5">
+              {suggested.map((r) => (
+                <li key={r.universeId}>
+                  <button
+                    type="button"
+                    onClick={() => setValue('universeId', r.universeId, { shouldValidate: true })}
+                    className="text-left text-xs text-amber-900 hover:underline dark:text-amber-200"
+                  >
+                    <span className="font-medium">{r.name}</span>
+                    <span className="ml-1.5 rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-bold dark:bg-amber-900/60">
+                      {r.score}
+                    </span>
+                  </button>
+                  <span className="ml-1 text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                    {r.reasons.join(' · ')}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : !suggested && fallbackSuggested.length > 0 ? (
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+              Suggested — highest risk, audit due
+            </p>
+            <ul className="mt-1.5 space-y-1">
+              {fallbackSuggested.map((e) => (
+                <li key={e.id}>
+                  <button
+                    type="button"
+                    onClick={() => setValue('universeId', e.id, { shouldValidate: true })}
+                    className="text-left text-xs text-amber-900 hover:underline dark:text-amber-200"
+                  >
+                    <span className="font-medium">{e.name}</span>
+                    {' — '}risk {e.riskScore} ({riskScoreLabel(e.riskScore)}) · {auditDueFlag(e)}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : null}
+
+        <FormField
+          label="Auditable entity"
+          required
+          error={errors.universeId?.message}
+          hint={
+            recommendations.data
+              ? 'Sorted by composite audit priority, highest first.'
+              : 'Sorted by risk score, highest first.'
+          }
+        >
           <Select error={errors.universeId?.message} {...register('universeId')}>
             <option value="">Select entity…</option>
-            {universe.data?.items.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.name}
-              </option>
-            ))}
+            {rankedEntities.map((e) => {
+              const rec = recByUniverseId.get(e.id);
+              const due = auditDueFlag(e);
+              return (
+                <option key={e.id} value={e.id}>
+                  {e.name} — {rec ? `priority ${rec.score}` : `risk ${e.riskScore} (${riskScoreLabel(e.riskScore)})`}
+                  {due ? ` · ${due}` : ''}
+                </option>
+              );
+            })}
           </Select>
         </FormField>
 

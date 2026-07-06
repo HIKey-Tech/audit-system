@@ -3,7 +3,7 @@ import { IWorkingPaperTemplateService } from '../../../../settings/service/inter
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { CreateWorkingPaperRequestDto, ImportWorkingPaperMetadataDto, UpdateWorkingPaperRequestDto } from '../../dto/request/working-paper.request.dto';
-import { WorkingPaperImportPreviewResponseDto, WorkingPaperResponseDto } from '../../dto/response/working-paper.response.dto';
+import { WorkingPaperCommentResponseDto, WorkingPaperImportPreviewResponseDto, WorkingPaperResponseDto } from '../../dto/response/working-paper.response.dto';
 import { IWorkingPaperService, WorkingPaperExportFormat, WorkingPaperImportFileDto } from '../interface/working-paper.service.interface';
 export declare class WorkingPaperService implements IWorkingPaperService {
     private readonly documentService;
@@ -14,7 +14,12 @@ export declare class WorkingPaperService implements IWorkingPaperService {
     previewWorkingPaperImport(engagementId: string, file: WorkingPaperImportFileDto, dto: ImportWorkingPaperMetadataDto, actor: ActorContext): Promise<WorkingPaperImportPreviewResponseDto>;
     updateWorkingPaper(id: string, dto: UpdateWorkingPaperRequestDto, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     submitWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
-    approveWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
+    approveWorkingPaper(id: string, actor: ActorContext, edits?: {
+        content?: string;
+    }): Promise<WorkingPaperResponseDto>;
+    addComment(workingPaperId: string, body: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto>;
+    listComments(workingPaperId: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto[]>;
+    resolveComment(commentId: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto>;
     rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     getWorkingPaperById(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     listWorkingPapers(engagementId: string, actor: ActorContext): Promise<WorkingPaperResponseDto[]>;

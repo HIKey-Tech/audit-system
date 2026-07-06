@@ -66,6 +66,7 @@ export const StartAuditWizard = ({
   const [end, setEnd] = useState('');
   const [sla, setSla] = useState('');
   const [slaTouched, setSlaTouched] = useState(false);
+  const [plannedHours, setPlannedHours] = useState('');
   // per-engagement checklist controls (customisable, pre-filled from the template)
   const [checklistControls, setChecklistControls] = useState<ChecklistTemplateControl[]>([]);
   const [checklistTouched, setChecklistTouched] = useState(false);
@@ -225,6 +226,7 @@ export const StartAuditWizard = ({
             plannedStartDate: toISO(start),
             plannedEndDate: toISO(end),
             slaDeadline: toISO(sla),
+            plannedHours: Number(plannedHours) > 0 ? Math.round(Number(plannedHours)) : undefined,
             planItemId,
             checklistControls: checklistControlsArg,
           })
@@ -236,6 +238,7 @@ export const StartAuditWizard = ({
             plannedStartDate: toISO(start),
             plannedEndDate: toISO(end),
             slaDeadline: toISO(sla),
+            plannedHours: Number(plannedHours) > 0 ? Math.round(Number(plannedHours)) : undefined,
             universeId,
             auditType,
             priority,
@@ -565,6 +568,16 @@ export const StartAuditWizard = ({
                 type="date"
                 value={sla}
                 onChange={(e) => { setSla(e.target.value); setSlaTouched(true); }}
+              />
+            </FormField>
+            <FormField label="Budgeted hours" optional tooltip="Total effort budget for the engagement. The team logs actual hours against it from the engagement overview.">
+              <Input
+                type="number"
+                min="1"
+                step="1"
+                value={plannedHours}
+                onChange={(e) => setPlannedHours(e.target.value)}
+                placeholder="e.g. 120"
               />
             </FormField>
           </div>

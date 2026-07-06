@@ -36,6 +36,8 @@ export interface WorkloadResponseDto {
   userId: string;
   totalActive: number;
   byStatus: Array<{ status: string; count: number }>;
+  /** Hours the user has logged on their active engagements. */
+  loggedHours: number;
 }
 
 export interface AssignmentCandidateDto {

@@ -31,6 +31,9 @@ export interface UniverseResponseDto {
     updatedAt: string;
     linkedRisks?: UniverseLinkedRiskDto[];
     engagementHistory?: UniverseEngagementHistoryDto[];
+    /** Findings not yet closed across all of this entity's engagements — audit
+     * results feeding back into the risk view of the entity. */
+    openFindingsCount?: number;
 }
 export declare const mapUniverseToResponse: (entity: {
     id: string;

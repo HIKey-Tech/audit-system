@@ -26,6 +26,7 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     slaDeadline: z.ZodString;
+    plannedHours: z.ZodOptional<z.ZodNumber>;
     checklistControls: z.ZodOptional<z.ZodArray<z.ZodObject<{
         controlReference: z.ZodString;
         controlDescription: z.ZodString;
@@ -57,6 +58,7 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
     auditType?: AuditType | undefined;
+    plannedHours?: number | undefined;
     checklistControls?: {
         controlReference: string;
         controlDescription: string;
@@ -74,6 +76,7 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
     auditType?: AuditType | undefined;
+    plannedHours?: number | undefined;
     checklistControls?: {
         controlReference: string;
         controlDescription: string;
@@ -88,6 +91,7 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     slaDeadline: z.ZodString;
+    plannedHours: z.ZodOptional<z.ZodNumber>;
     checklistControls: z.ZodOptional<z.ZodArray<z.ZodObject<{
         controlReference: z.ZodString;
         controlDescription: z.ZodString;
@@ -119,6 +123,7 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     auditManagerId: string;
     auditeeId: string;
     adhocReason: string;
+    plannedHours?: number | undefined;
     checklistControls?: {
         controlReference: string;
         controlDescription: string;
@@ -136,6 +141,7 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     auditManagerId: string;
     auditeeId: string;
     adhocReason: string;
+    plannedHours?: number | undefined;
     checklistControls?: {
         controlReference: string;
         controlDescription: string;
@@ -152,6 +158,7 @@ export declare const UpdateEngagementRequestSchema: z.ZodObject<{
     slaDeadline: z.ZodOptional<z.ZodString>;
     priority: z.ZodOptional<z.ZodNativeEnum<typeof AuditPriority>>;
     adhocReason: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    plannedHours: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     priority?: AuditPriority | undefined;
@@ -161,6 +168,7 @@ export declare const UpdateEngagementRequestSchema: z.ZodObject<{
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
     auditeeId?: string | undefined;
+    plannedHours?: number | null | undefined;
     adhocReason?: string | null | undefined;
 }, {
     title?: string | undefined;
@@ -171,6 +179,7 @@ export declare const UpdateEngagementRequestSchema: z.ZodObject<{
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
     auditeeId?: string | undefined;
+    plannedHours?: number | null | undefined;
     adhocReason?: string | null | undefined;
 }>;
 export declare const UpdateEngagementStatusRequestSchema: z.ZodObject<{

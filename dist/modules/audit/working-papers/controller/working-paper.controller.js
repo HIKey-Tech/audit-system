@@ -66,7 +66,25 @@ class WorkingPaperController {
          * @desc   Approve working paper
          * @access Private - working_paper:approve
          */
-        this.router.post('/working-papers/:id/approve', (0, auth_middleware_1.requirePermission)('working_paper:approve'), this._approveWorkingPaper.bind(this));
+        this.router.post('/working-papers/:id/approve', (0, auth_middleware_1.requirePermission)('working_paper:approve'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.ApproveWorkingPaperRequestSchema), this._approveWorkingPaper.bind(this));
+        /**
+         * @route  POST /audit/working-papers/:id/comments
+         * @desc   Add a review comment (reviewer ↔ preparer back-and-forth)
+         * @access Private - working_paper:read
+         */
+        this.router.post('/working-papers/:id/comments', (0, auth_middleware_1.requirePermission)('working_paper:read'), (0, validate_middleware_1.validate)(working_paper_request_dto_1.AddWorkingPaperCommentSchema), this._addComment.bind(this));
+        /**
+         * @route  GET /audit/working-papers/:id/comments
+         * @desc   List review comments on a working paper
+         * @access Private - working_paper:read
+         */
+        this.router.get('/working-papers/:id/comments', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._listComments.bind(this));
+        /**
+         * @route  POST /audit/working-papers/comments/:commentId/resolve
+         * @desc   Mark a review comment as addressed
+         * @access Private - working_paper:read (author/preparer/reviewer enforced in service)
+         */
+        this.router.post('/working-papers/comments/:commentId/resolve', (0, auth_middleware_1.requirePermission)('working_paper:read'), this._resolveComment.bind(this));
         /**
          * @route  POST /audit/working-papers/:id/reject
          * @desc   Reject working paper
@@ -126,8 +144,35 @@ class WorkingPaperController {
     }
     async _approveWorkingPaper(req, res, next) {
         try {
-            const paper = await this.workingPaperService.approveWorkingPaper(req.params.id, req.user);
+            const paper = await this.workingPaperService.approveWorkingPaper(req.params.id, req.user, req.body.edits);
             res.status(200).json((0, api_response_type_1.buildResponse)(paper, 'Working paper approved'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _addComment(req, res, next) {
+        try {
+            const comment = await this.workingPaperService.addComment(req.params.id, req.body.body, req.user);
+            res.status(201).json((0, api_response_type_1.buildResponse)(comment, 'Comment added'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listComments(req, res, next) {
+        try {
+            const comments = await this.workingPaperService.listComments(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(comments));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _resolveComment(req, res, next) {
+        try {
+            const comment = await this.workingPaperService.resolveComment(req.params.commentId, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(comment, 'Comment resolved'));
         }
         catch (err) {
             next(err);

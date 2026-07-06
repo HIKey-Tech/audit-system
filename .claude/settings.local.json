@@ -3,7 +3,10 @@
     "allow": [
       "Bash(npx prisma *)",
       "Read(//tmp/**)",
-      "Bash(dir C:\\\\Users\\\\david\\\\audit\\\\audit-system *)"
+      "Bash(dir C:\\\\Users\\\\david\\\\audit\\\\audit-system *)",
+      "Bash(python \"C:\\\\Users\\\\david\\\\AppData\\\\Local\\\\Temp\\\\claude\\\\C--Users-david-audit-audit-system\\\\c6bd50d7-07cb-4cea-81b8-ec88df093bb0\\\\scratchpad\\\\build_manual.py\")",
+      "Bash(pip install *)",
+      "Bash(python -c ' *)"
     ]
   }
 }

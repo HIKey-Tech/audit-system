@@ -1,8 +1,9 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ListChecks } from 'lucide-react';
+import { ListChecks, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Paperclip, Check, Download } from 'lucide-react';
@@ -11,10 +12,12 @@ import { Card } from '@/components/ui/Card';
 import { Select, Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { checklistsApi, evidenceApi } from '@/lib/api/audit';
+import { checklistsApi, evidenceApi, findingsApi } from '@/lib/api/audit';
 import { documentsApi } from '@/lib/api/documents';
 import { humanizeStatus } from '@/lib/utils/status';
+import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail, AuditChecklistItem } from '@/lib/types/domain';
+import { NewFindingSlideOver, type FindingPrefill } from './NewFindingSlideOver';
 
 function normalizeChecklists(
   data: Record<string, AuditChecklistItem[]> | AuditChecklistItem[] | undefined | null,
@@ -39,6 +42,9 @@ function normalizeChecklists(
 
 export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
+  const canRaiseFinding = usePermission('finding:create');
+  const [findingPrefill, setFindingPrefill] = useState<FindingPrefill | null>(null);
+
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'checklists'],
     queryFn: () => checklistsApi.listByEngagement(engagement.id),
@@ -53,6 +59,31 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
     () => new Map((evidence.data ?? []).map((e) => [e.id, e])),
     [evidence.data],
   );
+
+  // Findings already raised from a control test — so a failed control shows its
+  // finding instead of offering to raise a duplicate.
+  const findings = useQuery({
+    queryKey: ['engagements', engagement.id, 'findings'],
+    queryFn: () => findingsApi.listByEngagement(engagement.id),
+  });
+  const findingByChecklistId = useMemo(
+    () => new Map((findings.data ?? []).filter((f) => f.checklistId).map((f) => [f.checklistId!, f])),
+    [findings.data],
+  );
+
+  const openFindingForm = (item: AuditChecklistItem): void => {
+    setFindingPrefill({
+      checklistId: item.id,
+      title: `Control ${item.controlReference} failed: ${item.controlDescription.slice(0, 120)}`,
+      description: [
+        `Control ${item.controlReference} — ${item.controlDescription}`,
+        item.testProcedure ? `Test procedure: ${item.testProcedure}` : null,
+        item.notes ? `Test notes: ${item.notes}` : null,
+      ]
+        .filter(Boolean)
+        .join('\n\n'),
+    });
+  };
 
   const update = useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: { result: string; notes?: string | null } }) =>
@@ -164,6 +195,29 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
                           isUploading={attachEvidence.isPending && attachEvidence.variables?.itemId === item.id}
                           onFile={(file) => attachEvidence.mutate({ itemId: item.id, file })}
                         />
+                        {item.result === 'failed' &&
+                          (findingByChecklistId.get(item.id) ? (
+                            <Link
+                              href={`/audit/findings/${findingByChecklistId.get(item.id)!.id}`}
+                              className="inline-flex h-8 items-center gap-1.5 rounded-md border border-red-200 bg-red-50 px-2.5 text-xs font-medium text-red-700 hover:bg-red-100"
+                              title={findingByChecklistId.get(item.id)!.title}
+                            >
+                              <AlertTriangle className="h-3.5 w-3.5" />
+                              Finding raised
+                            </Link>
+                          ) : (
+                            canRaiseFinding && (
+                              <button
+                                type="button"
+                                onClick={() => openFindingForm(item)}
+                                className="inline-flex h-8 items-center gap-1.5 rounded-md border border-red-300 bg-white px-2.5 text-xs font-medium text-red-700 transition-colors hover:bg-red-50"
+                                title="Raise a finding from this failed control — the finding stays linked to this test"
+                              >
+                                <AlertTriangle className="h-3.5 w-3.5" />
+                                Raise finding
+                              </button>
+                            )
+                          ))}
                       </div>
                     </div>
                     {item.evidenceId && evidenceById.get(item.evidenceId) && (
@@ -184,6 +238,13 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
           ))}
         </>
       )}
+
+      <NewFindingSlideOver
+        engagement={engagement}
+        open={findingPrefill !== null}
+        onClose={() => setFindingPrefill(null)}
+        prefill={findingPrefill ?? undefined}
+      />
     </div>
   );
 };

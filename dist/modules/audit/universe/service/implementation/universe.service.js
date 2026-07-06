@@ -132,6 +132,15 @@ class UniverseService {
                 categoryName: r.categoryName,
             }));
         }
+        // Audit results feeding back into the entity's risk picture: how many
+        // findings raised against this entity's engagements are still unresolved.
+        response.openFindingsCount = await prisma_client_1.prisma.audit_Finding.count({
+            where: {
+                deleted_at: null,
+                status: { not: audit_enum_1.FindingStatus.Closed },
+                engagement: { universe_id: id, deleted_at: null },
+            },
+        });
         return response;
     }
     async listEntities(query) {

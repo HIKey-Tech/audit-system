@@ -64,6 +64,11 @@ model User {
   working_papers_created          Audit_Working_Paper[]    @relation("WorkingPaperCreatedBy")
   working_papers_reviewed         Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
   evidence_uploaded               Audit_Evidence[]         @relation("EvidenceUploadedBy")
+  evidence_requests_made          Audit_Evidence_Request[] @relation("EvidenceRequestRequestedBy")
+  evidence_requests_assigned      Audit_Evidence_Request[] @relation("EvidenceRequestAssignedTo")
+  wp_comments_authored            Audit_Working_Paper_Comment[] @relation("WPCommentAuthor")
+  wp_comments_resolved            Audit_Working_Paper_Comment[] @relation("WPCommentResolvedBy")
+  time_entries                    Audit_Time_Entry[]       @relation("TimeEntryUser")
   findings_as_auditee             Audit_Finding[]          @relation("FindingAuditee")
   finding_responder_for           Audit_Finding_Responder[] @relation("FindingResponderUser")
   findings_created                Audit_Finding[]          @relation("FindingCreatedBy")
@@ -822,6 +827,7 @@ model Audit_Engagement {
   sla_deadline       DateTime
   is_adhoc           Boolean   @default(false)
   adhoc_reason       String?   @db.NVarChar(Max)
+  planned_hours      Int? // budgeted effort for the engagement; actuals live in audit_time_entries
   // Optional per-engagement checklist control set chosen at creation, as a JSON
   // array of { controlReference, controlDescription, testProcedure }. When set,
   // populateChecklists uses this instead of the global per-audit-type template.
@@ -839,11 +845,13 @@ model Audit_Engagement {
   created_by           User                  @relation("EngagementCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   working_papers       Audit_Working_Paper[]
   evidence             Audit_Evidence[]
+  evidence_requests    Audit_Evidence_Request[]
   findings             Audit_Finding[]
   report               Audit_Report?
   checklists           Audit_Checklist[]
   workflow_assignments Workflow_Assignment[]
   asset_links          Audit_Engagement_Asset[]
+  time_entries         Audit_Time_Entry[]
 
   @@index([status])
   @@index([audit_type])
@@ -880,6 +888,7 @@ model Audit_Working_Paper {
   reviewed_by User?            @relation("WorkingPaperReviewedBy", fields: [reviewed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   evidence    Audit_Evidence[]
   findings    Audit_Finding[]
+  comments    Audit_Working_Paper_Comment[]
 
   @@index([engagement_id])
   @@index([template_id])
@@ -890,11 +899,32 @@ model Audit_Working_Paper {
   @@map("audit_working_papers")
 }
 
+// Review comments on a working paper — the reviewer↔preparer back-and-forth
+// that otherwise happens outside the system (tracked-changes lite). Comments
+// are immutable; "resolve" marks them addressed.
+model Audit_Working_Paper_Comment {
+  id               String    @id @default(uuid())
+  working_paper_id String
+  author_id        String
+  body             String    @db.NVarChar(Max)
+  resolved_at      DateTime?
+  resolved_by_id   String?
+  created_at       DateTime  @default(now())
+
+  working_paper Audit_Working_Paper @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  author        User                @relation("WPCommentAuthor", fields: [author_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  resolved_by   User?               @relation("WPCommentResolvedBy", fields: [resolved_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([working_paper_id])
+  @@map("audit_working_paper_comments")
+}
+
 model Audit_Evidence {
   id               String   @id @default(uuid())
   engagement_id    String
   working_paper_id String?
   finding_id       String?
+  request_id       String? // evidence request (PBC item) this file was provided against
   document_id      String
   file_name        String
   file_type        String
@@ -912,12 +942,61 @@ model Audit_Evidence {
   remediations  Audit_Follow_Up[]    @relation("FollowUpRemediationEvidence")
   checklists    Audit_Checklist[]
   asset_links   Audit_Evidence_Asset[]
+  request       Audit_Evidence_Request? @relation(fields: [request_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
   @@index([engagement_id])
   @@index([working_paper_id])
   @@index([finding_id])
   @@index([uploaded_by_id])
+  @@index([request_id])
   @@map("audit_evidence")
+}
+
+// Evidence request (PBC — "provided by client" item): an auditor asks the
+// auditee for specific documents during fieldwork; the auditee uploads files
+// against it; the auditor accepts or returns it. Digitalizes the request list
+// that otherwise lives in email.
+model Audit_Evidence_Request {
+  id              String    @id @default(uuid())
+  engagement_id   String
+  title           String
+  description     String?   @db.NVarChar(Max)
+  due_date        DateTime?
+  status          String    @default("open") // open | submitted | fulfilled
+  return_reason   String?   @db.NVarChar(Max) // set when the auditor returns a submission (status goes back to open)
+  requested_by_id String
+  assigned_to_id  String
+  fulfilled_at    DateTime?
+  deleted_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  engagement   Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  requested_by User             @relation("EvidenceRequestRequestedBy", fields: [requested_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  assigned_to  User             @relation("EvidenceRequestAssignedTo", fields: [assigned_to_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  evidence     Audit_Evidence[]
+
+  @@index([engagement_id])
+  @@index([assigned_to_id, status])
+  @@map("audit_evidence_requests")
+}
+
+model Audit_Time_Entry {
+  id            String    @id @default(uuid())
+  engagement_id String
+  user_id       String
+  entry_date    DateTime
+  hours         Decimal   @db.Decimal(5, 2)
+  description   String?   @db.NVarChar(500)
+  deleted_at    DateTime?
+  created_at    DateTime  @default(now())
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  user       User             @relation("TimeEntryUser", fields: [user_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([engagement_id])
+  @@index([user_id])
+  @@map("audit_time_entries")
 }
 
 model Audit_Finding {

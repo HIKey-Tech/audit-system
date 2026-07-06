@@ -30,6 +30,12 @@ import { ChecklistController } from './checklists/controller/checklist.controlle
 import { RepositoryController } from './repository/controller/repository.controller';
 import { ComplianceService } from './compliance/service/implementation/compliance.service';
 import { ComplianceController } from './compliance/controller/compliance.controller';
+import { SamplingService } from './sampling/service/implementation/sampling.service';
+import { SamplingController } from './sampling/controller/sampling.controller';
+import { EvidenceRequestService } from './evidence-request/service/implementation/evidence-request.service';
+import { EvidenceRequestController } from './evidence-request/controller/evidence-request.controller';
+import { TimeEntryService } from './time-entry/service/implementation/time-entry.service';
+import { TimeEntryController } from './time-entry/controller/time-entry.controller';
 
 export const createAuditModule = (): Router => {
   const router = Router();
@@ -65,6 +71,7 @@ export const createAuditModule = (): Router => {
   const checklistController = new ChecklistController(checklistService);
   const repositoryController = new RepositoryController(repositoryService);
   const complianceController = new ComplianceController(new ComplianceService());
+  const samplingController = new SamplingController(new SamplingService(evidenceService));
 
   router.use('/audit/universe', universeController.router);
   router.use('/audit/plans', planningController.router);
@@ -77,6 +84,9 @@ export const createAuditModule = (): Router => {
   router.use('/audit', checklistController.router);
   router.use('/audit', repositoryController.router);
   router.use('/audit', complianceController.router);
+  router.use('/audit', samplingController.router);
+  router.use('/audit', new EvidenceRequestController(new EvidenceRequestService(documentService)).router);
+  router.use('/audit', new TimeEntryController(new TimeEntryService()).router);
 
   return router;
 };

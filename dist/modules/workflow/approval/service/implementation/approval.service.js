@@ -213,11 +213,25 @@ class ApprovalService {
             },
         });
     }
-    async approve(approvalId, actor, comment) {
+    async approve(approvalId, actor, comment, edits) {
         const approval = await this._getPendingApproval(approvalId);
         const currentStep = this._getActionableStep(approval, actor);
         const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
         const now = new Date();
+        const hasEdits = !!edits && Object.keys(edits).length > 0;
+        if (hasEdits) {
+            const isReport = approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditReport;
+            const isWorkingPaper = approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper;
+            if (!isReport && !isWorkingPaper) {
+                throw app_error_1.AppError.badRequest('Approve-with-edit is only supported for audit report and working paper approvals');
+            }
+            if (isReport && edits.content !== undefined) {
+                throw app_error_1.AppError.badRequest('`content` edits apply to working papers only');
+            }
+            if (isWorkingPaper && (edits.executiveSummary !== undefined || edits.scope !== undefined || edits.methodology !== undefined)) {
+                throw app_error_1.AppError.badRequest('Working paper approvals only accept `content` edits');
+            }
+        }
         // Approve & Sign: record the approver's active signature on the step (null if none).
         const sigRef = await signature_service_1.userSignatureService.getActiveSignatureRef(actor.id);
         const updated = await prisma_client_1.prisma.$transaction(async (tx) => {
@@ -235,6 +249,25 @@ class ApprovalService {
             });
             if (claimed.count === 0) {
                 throw app_error_1.AppError.conflict('This approval step has already been actioned');
+            }
+            // Approve-with-edit: apply the approver's fix in the same transaction as
+            // the step claim, so the chain simply continues instead of the entity
+            // being rejected and having to restart a full resubmission at level 1.
+            if (hasEdits && approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditReport) {
+                await tx.audit_Report.update({
+                    where: { id: approval.entity_id },
+                    data: {
+                        ...(edits.executiveSummary !== undefined && { executive_summary: edits.executiveSummary }),
+                        ...(edits.scope !== undefined && { scope: edits.scope }),
+                        ...(edits.methodology !== undefined && { methodology: edits.methodology }),
+                    },
+                });
+            }
+            if (hasEdits && approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper && edits.content !== undefined) {
+                await tx.audit_Working_Paper.update({
+                    where: { id: approval.entity_id },
+                    data: { content: edits.content },
+                });
             }
             if (nextStep) {
                 await tx.workflow_Approval.update({
@@ -282,14 +315,14 @@ class ApprovalService {
                     .catch((err) => logger_util_1.logger.warn('Engagement reconcile after approval failed', { approvalId, err }));
             }
         }
-        logger_util_1.logger.info('Workflow approval step approved', { approvalId, approverId: actor.id });
+        logger_util_1.logger.info('Workflow approval step approved', { approvalId, approverId: actor.id, edited: !!edits });
         audit_log_service_1.auditLogService.logAsync({
             userId: actor.id,
             action: 'workflow.approval.approve',
             module: 'workflow',
             entityType: approval.entity_type,
             entityId: approval.entity_id,
-            newValues: { approvalId, comment },
+            newValues: { approvalId, comment, editedFields: edits ? Object.keys(edits) : undefined },
         });
         return (0, approval_response_dto_1.mapApprovalToResponse)(updated);
     }
@@ -337,6 +370,52 @@ class ApprovalService {
             newValues: { approvalId, reason },
         });
         return (0, approval_response_dto_1.mapApprovalToResponse)(updated);
+    }
+    /**
+     * When an engagement's manager changes, any already-created approval steps
+     * pinned to the OLD manager (ENGAGEMENT_MANAGER_APPROVER levels — see
+     * `_resolveApproverChain`) are stuck: unlike permission-pool levels, a pinned
+     * level has no active-holder fallback. Migrate every still-pending pinned step
+     * on this engagement's working papers / reports / finding closures to the new
+     * manager so the approval can still be actioned.
+     */
+    async reassignEngagementManagerApprovals(engagementId, oldManagerId, newManagerId, tx = prisma_client_1.prisma) {
+        if (oldManagerId === newManagerId)
+            return 0;
+        const [papers, reports, findings] = await Promise.all([
+            tx.audit_Working_Paper.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+            tx.audit_Report.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+            tx.audit_Finding.findMany({ where: { engagement_id: engagementId, deleted_at: null }, select: { id: true } }),
+        ]);
+        const entityIds = [
+            ...papers.map((p) => p.id),
+            ...reports.map((r) => r.id),
+            ...findings.map((f) => f.id),
+        ];
+        if (entityIds.length === 0)
+            return 0;
+        const result = await tx.workflow_Approval_Step.updateMany({
+            where: {
+                approver_id: oldManagerId,
+                status: workflow_enum_1.WorkflowApprovalStepStatus.Pending,
+                approval: { entity_id: { in: entityIds }, status: workflow_enum_1.WorkflowApprovalStatus.Pending },
+            },
+            data: { approver_id: newManagerId },
+        });
+        if (result.count > 0) {
+            logger_util_1.logger.info('Pinned engagement-manager approval steps reassigned', {
+                engagementId, oldManagerId, newManagerId, stepsReassigned: result.count,
+            });
+            audit_log_service_1.auditLogService.logAsync({
+                userId: newManagerId,
+                action: 'workflow.approval.reassign_manager',
+                module: 'workflow',
+                entityType: 'audit_engagement',
+                entityId: engagementId,
+                newValues: { oldManagerId, newManagerId, stepsReassigned: result.count },
+            });
+        }
+        return result.count;
     }
     async getApprovalById(approvalId, actor) {
         const approval = await prisma_client_1.prisma.workflow_Approval.findUnique({
@@ -388,7 +467,7 @@ class ApprovalService {
         const approvals = [...approvalsById.values()];
         const paged = approvals.slice(skip, skip + take);
         return {
-            approvals: paged.map(approval_response_dto_1.mapApprovalToResponse),
+            approvals: await Promise.all(paged.map((a) => this._toEnrichedResponse(a))),
             meta: (0, api_response_type_1.buildPaginationMeta)(approvals.length, page, pageSize),
         };
     }
@@ -413,7 +492,7 @@ class ApprovalService {
             }),
         ]);
         return {
-            approvals: approvals.map(approval_response_dto_1.mapApprovalToResponse),
+            approvals: await Promise.all(approvals.map((a) => this._toEnrichedResponse(a))),
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
@@ -770,6 +849,59 @@ class ApprovalService {
         void this._notifyUser(userId, notification, context).catch((err) => {
             logger_util_1.logger.warn('Workflow approval notification failed', { err, userId });
         });
+    }
+    /**
+     * List-endpoint enrichment: attach a human-readable entity title and the
+     * parent engagement id so the inbox can show *what* is being approved and
+     * link to it, instead of a bare entity type.
+     */
+    async _toEnrichedResponse(approval) {
+        const base = (0, approval_response_dto_1.mapApprovalToResponse)(approval);
+        let entityTitle = null;
+        let engagementId = null;
+        try {
+            if (approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditReport) {
+                const report = await prisma_client_1.prisma.audit_Report.findUnique({
+                    where: { id: approval.entity_id },
+                    select: { title: true, engagement_id: true, engagement: { select: { reference_number: true } } },
+                });
+                if (report) {
+                    entityTitle = `${report.title} (${report.engagement.reference_number})`;
+                    engagementId = report.engagement_id;
+                }
+            }
+            else if (approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditWorkingPaper) {
+                const wp = await prisma_client_1.prisma.audit_Working_Paper.findUnique({
+                    where: { id: approval.entity_id },
+                    select: { title: true, engagement_id: true },
+                });
+                if (wp) {
+                    entityTitle = wp.title;
+                    engagementId = wp.engagement_id;
+                }
+            }
+            else if (approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditFindingClosure) {
+                const finding = await prisma_client_1.prisma.audit_Finding.findUnique({
+                    where: { id: approval.entity_id },
+                    select: { title: true, engagement_id: true, engagement: { select: { reference_number: true } } },
+                });
+                if (finding) {
+                    entityTitle = `${finding.title} (${finding.engagement.reference_number})`;
+                    engagementId = finding.engagement_id;
+                }
+            }
+            else if (approval.entity_type === workflow_enum_1.WorkflowEntityType.AuditPlan) {
+                const plan = await prisma_client_1.prisma.audit_Plan.findUnique({
+                    where: { id: approval.entity_id },
+                    select: { title: true },
+                });
+                entityTitle = plan?.title ?? null;
+            }
+        }
+        catch (err) {
+            logger_util_1.logger.warn('Failed to resolve approval entity display', { approvalId: approval.id, err });
+        }
+        return { ...base, entityTitle, engagementId };
     }
     async _resolveEntityReference(entityType, entityId) {
         if (entityType === workflow_enum_1.WorkflowEntityType.AuditReport) {

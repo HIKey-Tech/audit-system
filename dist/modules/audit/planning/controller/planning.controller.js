@@ -29,6 +29,14 @@ class PlanningController {
          */
         this.router.get('/', (0, auth_middleware_1.requirePermission)('plan:read'), (0, validate_middleware_1.validate)(planning_request_dto_1.PlanQuerySchema, 'query'), this._listPlans.bind(this));
         /**
+         * @route  GET /audit/plans/recommendations
+         * @desc   Composite audit-priority ranking of universe entities (risk score,
+         *         open findings, audit overdue, never audited, time since last audit)
+         *         with configurable weights — registered before /:id
+         * @access Private - plan:read
+         */
+        this.router.get('/recommendations', (0, auth_middleware_1.requirePermission)('plan:read'), this._getRecommendations.bind(this));
+        /**
          * @route  GET /audit/plans/:id
          * @desc   Get audit plan
          * @access Private - audit:read
@@ -153,6 +161,15 @@ class PlanningController {
         try {
             const plan = await this.planningService.getPlanById(req.params.id);
             res.status(200).json((0, api_response_type_1.buildResponse)(plan));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getRecommendations(_req, res, next) {
+        try {
+            const recommendations = await this.planningService.getRecommendations();
+            res.status(200).json((0, api_response_type_1.buildResponse)(recommendations));
         }
         catch (err) {
             next(err);

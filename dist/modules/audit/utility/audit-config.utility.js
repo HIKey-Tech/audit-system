@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.parseChecklistTemplateSnapshot = exports.serializeChecklistControls = exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.setChecklistTemplateConfig = exports.getChecklistTemplateConfig = exports.CHECKLIST_TEMPLATE_CONFIG_KEY = exports.getEngagementControls = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
+exports.parseChecklistTemplateSnapshot = exports.serializeChecklistControls = exports.getPlanningPriorityWeights = exports.DEFAULT_PLANNING_PRIORITY_WEIGHTS = exports.getApprovalMatrix = exports.DEFAULT_APPROVAL_MATRIX = exports.ENGAGEMENT_MANAGER_APPROVER = exports.setChecklistTemplateConfig = exports.getChecklistTemplateConfig = exports.CHECKLIST_TEMPLATE_CONFIG_KEY = exports.getEngagementControls = exports.getChecklistTemplateControls = exports.getAuditSlaRules = exports.getAuditLifecycleRules = exports.DEFAULT_CHECKLIST_TEMPLATE_CONFIG = exports.DEFAULT_AUDIT_SLA_RULES = exports.DEFAULT_AUDIT_LIFECYCLE_RULES = void 0;
 const prisma_client_1 = require("../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../shared/utils/logger.util");
 const audit_enum_1 = require("../domain/enum/audit.enum");
@@ -142,6 +142,18 @@ const getApprovalMatrix = async () => {
     return { ...exports.DEFAULT_APPROVAL_MATRIX, ...parsed };
 };
 exports.getApprovalMatrix = getApprovalMatrix;
+exports.DEFAULT_PLANNING_PRIORITY_WEIGHTS = {
+    riskScore: 40,
+    openFindings: 25,
+    overdueForAudit: 20,
+    neverAudited: 10,
+    timeSinceLastAudit: 5,
+};
+const getPlanningPriorityWeights = async () => {
+    const parsed = await getJsonConfig('planning_priority_weights', {});
+    return { ...exports.DEFAULT_PLANNING_PRIORITY_WEIGHTS, ...parsed };
+};
+exports.getPlanningPriorityWeights = getPlanningPriorityWeights;
 const getJsonConfig = async (key, fallback) => {
     const config = await prisma_client_1.prisma.system_Config.findUnique({
         where: { key },

@@ -97,13 +97,28 @@ function buildBlockers(
       const tested = (cp?.total ?? 0) - (cp?.notTested ?? 0);
       const wp = e.workingPaperStats;
       const out: Blocker[] = [];
-      if ((cp?.total ?? 0) === 0 || (cp?.notTested ?? 0) > 0) {
+      // pendingGates comes from the backend's configurable lifecycle rules
+      // (system_config.audit_lifecycle_rules) — only show a blocker line for a
+      // sub-gate GBB actually has enabled, not just because the count is nonzero.
+      // Undefined pendingGates (older cached response) falls back to the old
+      // unconditional checks so nothing regresses mid-rollout.
+      const gates = e.pendingGates;
+      const checklistGateActive = gates
+        ? gates.some((g) => g.toLowerCase().includes('checklist'))
+        : (cp?.total ?? 0) === 0 || (cp?.notTested ?? 0) > 0;
+      const workingPaperGateActive = gates
+        ? gates.some((g) => g.toLowerCase().includes('working paper'))
+        : (wp?.total ?? 0) === 0 || (wp?.approved ?? 0) < (wp?.total ?? 0);
+
+      if (checklistGateActive) {
         out.push({ text: `${lead} to finish testing controls (${tested}/${cp?.total ?? 0} done).` });
       }
-      if ((wp?.total ?? 0) === 0) {
-        out.push({ text: `${lead} to create at least one working paper.` });
-      } else if ((wp?.approved ?? 0) < (wp?.total ?? 0)) {
-        out.push({ text: `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).` });
+      if (workingPaperGateActive) {
+        if ((wp?.total ?? 0) === 0) {
+          out.push({ text: `${lead} to create at least one working paper.` });
+        } else {
+          out.push({ text: `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).` });
+        }
       }
       if (out.length === 0) out.push({ text: 'Fieldwork complete — moving to Quality Review.' });
       return out;

@@ -1,7 +1,8 @@
 'use client';
 
 import type React from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import {
   Activity,
   AlertTriangle,
@@ -10,6 +11,7 @@ import {
   Briefcase,
   CheckCircle2,
   Clock,
+  Download,
   FileSearch,
   FileText,
   ShieldCheck,
@@ -17,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
+import { Button } from '@/components/ui/Button';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
 import { Tooltip } from '@/components/ui/Tooltip';
@@ -35,7 +38,21 @@ const statusOrder = ['planned', 'in_progress', 'under_review', 'reported', 'clos
 const ANALYTICS_REFRESH_MS = 60_000;
 
 export default function AnalyticsPage(): JSX.Element {
-  const { analyticsScope } = usePermissions();
+  const { analyticsScope, hasPermission } = usePermissions();
+  const committeePackMut = useMutation({
+    mutationFn: dashboardApi.downloadCommitteePack,
+    onSuccess: ({ blob, fileName }) => {
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Export failed'),
+  });
   const query = useQuery({
     queryKey: ['dashboard', 'analytics'],
     queryFn: dashboardApi.getAnalytics,
@@ -83,6 +100,17 @@ export default function AnalyticsPage(): JSX.Element {
         subtitle={analyticsScope.description}
         actions={
           <div className="flex flex-wrap items-center gap-2">
+            {hasPermission('committee_pack:read') && (
+              <Button
+                variant="secondary"
+                size="sm"
+                onClick={() => committeePackMut.mutate()}
+                disabled={committeePackMut.isPending}
+              >
+                <Download className="mr-1.5 h-4 w-4" />
+                {committeePackMut.isPending ? 'Preparing…' : 'Committee pack (PDF)'}
+              </Button>
+            )}
             <ScopeBadge scope={analyticsScope} />
             <LiveIndicator
               generatedAt={data.generatedAt}

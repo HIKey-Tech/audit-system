@@ -68,6 +68,20 @@ export declare const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix;
  */
 export declare const getApprovalMatrix: () => Promise<ApprovalMatrix>;
 /**
+ * Relative importance of each signal in the audit-planning priority score.
+ * Values are relative weights (any scale — they are normalized by their sum),
+ * editable by admins in Settings so GBB defines what "priority" means.
+ */
+export interface PlanningPriorityWeights {
+    riskScore: number;
+    openFindings: number;
+    overdueForAudit: number;
+    neverAudited: number;
+    timeSinceLastAudit: number;
+}
+export declare const DEFAULT_PLANNING_PRIORITY_WEIGHTS: PlanningPriorityWeights;
+export declare const getPlanningPriorityWeights: () => Promise<PlanningPriorityWeights>;
+/**
  * Serialize a per-engagement checklist control set for storage on the engagement.
  * Returns null when there is nothing to store (so populate falls back to the
  * global per-audit-type template).

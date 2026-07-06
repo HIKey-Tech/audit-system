@@ -1,0 +1,250 @@
+'use client';
+
+import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { FlaskConical, FileSpreadsheet, CheckCircle2 } from 'lucide-react';
+import { toast } from 'sonner';
+
+import { SlideOver } from '@/components/ui/SlideOver';
+import { Button } from '@/components/ui/Button';
+import { FormField } from '@/components/ui/FormField';
+import { Input, Select } from '@/components/ui/Input';
+import { samplingApi, type SamplingRunResult } from '@/lib/api/audit';
+
+/** Read the header row of a CSV file for the value-column dropdown. */
+const readCsvHeaders = async (file: File): Promise<string[]> => {
+  const head = await file.slice(0, 64 * 1024).text();
+  const firstLine = head.split(/\r?\n/, 1)[0] ?? '';
+  return firstLine
+    .split(',')
+    .map((h) => h.trim().replace(/^"|"$/g, ''))
+    .filter(Boolean);
+};
+
+/**
+ * Audit sampling tool: upload a population CSV, draw a reproducible sample
+ * (recorded seed), store both files as engagement evidence, and hand the
+ * methodology write-up straight into a new working paper.
+ */
+export const SamplingToolSlideOver = ({
+  engagementId,
+  open,
+  onClose,
+  onCreateWorkingPaper,
+}: {
+  engagementId: string;
+  open: boolean;
+  onClose: () => void;
+  /** Opens the working-paper form prefilled with the methodology markdown. */
+  onCreateWorkingPaper: (title: string, content: string) => void;
+}): JSX.Element => {
+  const [file, setFile] = useState<File | null>(null);
+  const [headers, setHeaders] = useState<string[]>([]);
+  const [method, setMethod] = useState<'random' | 'interval' | 'high_value'>('random');
+  const [sampleSize, setSampleSize] = useState('25');
+  const [seed, setSeed] = useState('');
+  const [valueColumn, setValueColumn] = useState('');
+  const [threshold, setThreshold] = useState('');
+  const [result, setResult] = useState<SamplingRunResult | null>(null);
+
+  const reset = (): void => {
+    setFile(null);
+    setHeaders([]);
+    setMethod('random');
+    setSampleSize('25');
+    setSeed('');
+    setValueColumn('');
+    setThreshold('');
+    setResult(null);
+  };
+
+  const handleClose = (): void => {
+    reset();
+    onClose();
+  };
+
+  const run = useMutation({
+    mutationFn: () =>
+      samplingApi.run(engagementId, file!, {
+        method,
+        sampleSize: parseInt(sampleSize, 10),
+        seed: seed.trim() ? parseInt(seed, 10) : undefined,
+        valueColumn: method === 'high_value' ? valueColumn : undefined,
+        threshold: method === 'high_value' && threshold.trim() ? parseFloat(threshold) : undefined,
+      }),
+    onSuccess: (r) => {
+      setResult(r);
+      toast.success(`Sample drawn — ${r.sampleCount} of ${r.populationCount} items (seed ${r.seed})`);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Sampling failed'),
+  });
+
+  const canRun =
+    Boolean(file) &&
+    parseInt(sampleSize, 10) > 0 &&
+    (method !== 'high_value' || Boolean(valueColumn));
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={handleClose}
+      title="Sampling tool"
+      description="Draw a defensible, reproducible sample from a population file. Population and sample are stored as engagement evidence."
+      width="xl"
+      footer={
+        result ? (
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={reset}>
+              New sample
+            </Button>
+            <Button variant="secondary" size="sm" onClick={handleClose}>
+              Done
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => {
+                onCreateWorkingPaper(
+                  `Sampling — ${file?.name ?? 'population'}`,
+                  result.methodologyMarkdown,
+                );
+                handleClose();
+              }}
+            >
+              Create working paper from this
+            </Button>
+          </div>
+        ) : (
+          <div className="flex justify-end gap-2">
+            <Button variant="secondary" size="sm" onClick={handleClose}>
+              Cancel
+            </Button>
+            <Button
+              size="sm"
+              leftIcon={<FlaskConical className="h-3.5 w-3.5" />}
+              disabled={!canRun}
+              isLoading={run.isPending}
+              onClick={() => run.mutate()}
+            >
+              Draw sample
+            </Button>
+          </div>
+        )
+      }
+    >
+      {result ? (
+        <div className="space-y-4">
+          <div className="flex items-start gap-2 rounded-md border border-emerald-200 bg-emerald-50 p-3 text-sm text-emerald-800">
+            <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" />
+            <div>
+              <p className="font-medium">
+                {result.sampleCount} of {result.populationCount} items selected — seed {result.seed}
+              </p>
+              <p className="mt-0.5 text-xs">
+                Population and sample files are attached to this engagement&apos;s Evidence tab. Re-running
+                the same method with seed {result.seed} reproduces this exact selection.
+              </p>
+            </div>
+          </div>
+
+          <div>
+            <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+              Sample preview {result.previewRows.length < result.sampleCount && `(first ${result.previewRows.length})`}
+            </p>
+            <div className="overflow-x-auto rounded-md border border-border">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr>
+                    {result.previewColumns.map((c) => (
+                      <th key={c} className="border-b border-border bg-surface-alt px-2 py-1.5 text-left font-semibold">
+                        {c}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {result.previewRows.map((row, i) => (
+                    <tr key={i} className="odd:bg-surface even:bg-surface-alt/40">
+                      {result.previewColumns.map((c) => (
+                        <td key={c} className="px-2 py-1.5">
+                          {String(row[c] ?? '')}
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4">
+          <FormField
+            label="Population file (CSV)"
+            required
+            hint="Export the population from the source system as CSV — e.g. a GL dump or transaction listing."
+          >
+            <label className="flex cursor-pointer items-center gap-2 rounded-md border border-dashed border-border p-3 text-sm text-text-secondary hover:bg-surface-alt">
+              <FileSpreadsheet className="h-4 w-4" />
+              {file ? <span className="text-text-primary">{file.name}</span> : 'Choose a .csv file…'}
+              <input
+                type="file"
+                accept=".csv,text/csv"
+                className="hidden"
+                onChange={async (e) => {
+                  const f = e.target.files?.[0] ?? null;
+                  setFile(f);
+                  setValueColumn('');
+                  setHeaders(f ? await readCsvHeaders(f).catch(() => []) : []);
+                  e.target.value = '';
+                }}
+              />
+            </label>
+          </FormField>
+
+          <div className="grid grid-cols-2 gap-3">
+            <FormField label="Method" required>
+              <Select value={method} onChange={(e) => setMethod(e.target.value as typeof method)}>
+                <option value="random">Simple random</option>
+                <option value="interval">Systematic interval</option>
+                <option value="high_value">High value</option>
+              </Select>
+            </FormField>
+            <FormField label="Sample size" required>
+              <Input
+                type="number"
+                min={1}
+                value={sampleSize}
+                onChange={(e) => setSampleSize(e.target.value)}
+              />
+            </FormField>
+          </div>
+
+          {method === 'high_value' && (
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="Value column" required hint="The monetary/numeric column to rank by.">
+                <Select value={valueColumn} onChange={(e) => setValueColumn(e.target.value)}>
+                  <option value="">Select column…</option>
+                  {headers.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Threshold" hint="Optional — select all items at or above this value.">
+                <Input type="number" value={threshold} onChange={(e) => setThreshold(e.target.value)} />
+              </FormField>
+            </div>
+          )}
+
+          <FormField
+            label="Seed"
+            hint="Optional — leave blank for a fresh random seed. The seed used is always recorded, so any sample can be reproduced."
+          >
+            <Input type="number" min={0} value={seed} onChange={(e) => setSeed(e.target.value)} />
+          </FormField>
+        </div>
+      )}
+    </SlideOver>
+  );
+};

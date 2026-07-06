@@ -31,6 +31,7 @@ import {
   Server,
   LayoutGrid,
   Library,
+  CircleHelp,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -88,6 +89,24 @@ const NAV: NavItem[] = [
 
   {
     type: 'group',
+    label: 'Audit Lifecycle',
+    icon: Briefcase,
+    description: 'The end-to-end flow: universe → plans → engagements → findings → reports.',
+    children: [
+      // Ordered to follow the audit lifecycle: scope the universe → plan → execute
+      // engagements → raise findings → issue reports.
+      { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse', description: 'Registry of auditable entities and their risk scores.' },
+      { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit plans and their approval status.' },
+      { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
+      { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
+      { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
+      { type: 'link', label: 'Control Library', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR).' },
+      { type: 'link', label: 'Evidence Repository', href: '/audit/repository', icon: Archive, matchPrefix: '/audit/repository', visKey: 'engagements', description: 'Central, searchable store of all audit records, supporting documents, and evidence.' },
+    ],
+  },
+
+  {
+    type: 'group',
     label: 'Audit Modules',
     icon: LayoutGrid,
     description: 'Dedicated workspaces for IT, Financial, Systems, and Compliance audits.',
@@ -102,32 +121,25 @@ const NAV: NavItem[] = [
     })),
   },
 
+  { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
+  { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister', description: 'Enterprise risks with likelihood × impact scoring.' },
+  { type: 'link', label: 'How IAMS works', href: '/help', icon: CircleHelp, matchPrefix: '/help', description: 'The audit lifecycle explained — who does what, and where.' },
+
+  // Registries, admin, and system surfaces — out of the auditor's daily path.
   {
     type: 'group',
-    label: 'Audit',
-    icon: Briefcase,
-    description: 'Engagements, findings, plans, universe, and reports.',
+    label: 'System',
+    icon: Settings,
+    description: 'Registries, analytics, logs, and administration.',
     children: [
-      // Ordered to follow the audit lifecycle: scope the universe → plan → execute
-      // engagements → raise findings → issue reports.
-      { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse', description: 'Registry of auditable entities and their risk scores.' },
-      { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit plans and their approval status.' },
-      { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
-      { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
-      { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
-      { type: 'link', label: 'Compliance Frameworks', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR).' },
-      { type: 'link', label: 'Evidence Repository', href: '/audit/repository', icon: Archive, matchPrefix: '/audit/repository', visKey: 'engagements', description: 'Central, searchable store of all audit records, supporting documents, and evidence.' },
+      { type: 'link', label: 'Assets', href: '/assets', icon: Server, matchPrefix: '/assets', visKey: 'assets', description: 'Asset registry with ownership, classification, attestations, and audit links.' },
+      { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents', description: 'Files and evidence attached to audit records.' },
+      { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics', description: 'Dashboards and metrics on the audit programme.' },
+      { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs', description: 'Tamper-evident trail of every action in the system.' },
+      { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users', description: 'User accounts, roles, and permissions.' },
+      { type: 'link', label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings', visKey: 'settings', description: 'Templates, roles, and system configuration.' },
     ],
   },
-
-  { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
-  { type: 'link', label: 'Assets', href: '/assets', icon: Server, matchPrefix: '/assets', visKey: 'assets', description: 'Asset registry with ownership, classification, attestations, and audit links.' },
-  { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister', description: 'Enterprise risks with likelihood × impact scoring.' },
-  { type: 'link', label: 'Documents', href: '/documents', icon: FolderOpen, matchPrefix: '/documents', visKey: 'documents', description: 'Files and evidence attached to audit records.' },
-  { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics', description: 'Dashboards and metrics on the audit programme.' },
-  { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs', description: 'Tamper-evident trail of every action in the system.' },
-  { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users', description: 'User accounts, roles, and permissions.' },
-  { type: 'link', label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings', visKey: 'settings', description: 'Templates, roles, and system configuration.' },
 ];
 
 export const Sidebar = (): JSX.Element => {

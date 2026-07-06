@@ -49,6 +49,9 @@ export interface EngagementResponseDto {
     slaDeadline: string;
     isAdhoc: boolean;
     adhocReason: string | null;
+    plannedHours: number | null;
+    /** Sum of logged time entries; only populated on the detail response. */
+    actualHours?: number;
     createdById: string;
     createdAt: string;
     updatedAt: string;
@@ -62,6 +65,9 @@ export interface EngagementResponseDto {
     evidenceCount?: number;
     assetCount?: number;
     viewerContext?: ViewerContext;
+    /** Why the engagement hasn't auto-advanced to the next status yet (empty/absent
+     * when there's no forward gate to report, e.g. status is planned or closed). */
+    pendingGates?: string[];
 }
 export declare const mapEngagementToResponse: (engagement: {
     id: string;
@@ -82,6 +88,7 @@ export declare const mapEngagementToResponse: (engagement: {
     sla_deadline: Date;
     is_adhoc: boolean;
     adhoc_reason: string | null;
+    planned_hours: number | null;
     created_by_id: string;
     created_at: Date;
     updated_at: Date;
@@ -103,6 +110,7 @@ export declare const mapEngagementToResponse: (engagement: {
     reportStatus?: string | null;
     evidenceCount?: number;
     assetCount?: number;
+    actualHours?: number;
 }) => EngagementResponseDto;
 export {};
 //# sourceMappingURL=engagement.response.dto.d.ts.map

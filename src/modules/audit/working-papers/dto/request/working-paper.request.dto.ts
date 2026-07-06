@@ -27,3 +27,15 @@ export type CreateWorkingPaperRequestDto = z.infer<typeof CreateWorkingPaperRequ
 export type UpdateWorkingPaperRequestDto = z.infer<typeof UpdateWorkingPaperRequestSchema>;
 export type ImportWorkingPaperMetadataDto = z.infer<typeof ImportWorkingPaperMetadataSchema>;
 export type RejectWorkingPaperRequestDto = z.infer<typeof RejectWorkingPaperRequestSchema>;
+
+export const ApproveWorkingPaperRequestSchema = z.object({
+  // Approve-with-edit: full serialized paper content as fixed by the approver.
+  edits: z.object({ content: z.string().min(1) }).optional(),
+});
+
+export const AddWorkingPaperCommentSchema = z.object({
+  body: z.string().min(1).max(5000),
+});
+
+export type ApproveWorkingPaperRequestDto = z.infer<typeof ApproveWorkingPaperRequestSchema>;
+export type AddWorkingPaperCommentDto = z.infer<typeof AddWorkingPaperCommentSchema>;

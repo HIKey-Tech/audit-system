@@ -14,6 +14,7 @@ export declare class PlanningController {
     private _approvePlan;
     private _rejectPlan;
     private _getPlanById;
+    private _getRecommendations;
     private _listPlans;
 }
 //# sourceMappingURL=planning.controller.d.ts.map

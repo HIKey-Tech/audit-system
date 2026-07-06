@@ -15,10 +15,21 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { workflowApi } from '@/lib/api/workflow';
+import type { WorkflowApproval } from '@/lib/types/domain';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { formatRelative } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
+
+/** Where to inspect the record awaiting approval before signing off on it. */
+const entityHref = (a: WorkflowApproval): string | null => {
+  if (a.entityType === 'audit_plan') return `/audit/plans/${a.entityId}`;
+  if (a.entityType === 'audit_finding_closure') return `/audit/findings/${a.entityId}`;
+  if (a.engagementId) return `/audit/engagements/${a.engagementId}`;
+  return null;
+};
+
+const submitterName = (a: WorkflowApproval): string => a.submittedBy?.displayName ?? 'Unknown';
 
 export default function ApprovalsPage(): JSX.Element {
   const qc = useQueryClient();
@@ -103,15 +114,23 @@ export default function ApprovalsPage(): JSX.Element {
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-center gap-2">
                       <Badge tone="gray">{humanizeStatus(a.entityType)}</Badge>
+                      {a.entityTitle && (
+                        <span className="text-sm font-medium text-text-primary truncate">{a.entityTitle}</span>
+                      )}
                       <StatusBadge status={a.status} />
                     </div>
                     <p className="mt-1 text-xs text-text-secondary">
-                      Submitted by {a.submittedByName} · {formatRelative(a.updatedAt)}
+                      Submitted by {submitterName(a)} · {formatRelative(a.updatedAt)}
                     </p>
                     {a.rejectionReason && (
                       <p className="mt-1 text-xs text-danger">Reason: {a.rejectionReason}</p>
                     )}
                   </div>
+                  {entityHref(a) && (
+                    <Link href={entityHref(a)!} className="text-xs font-medium text-primary hover:underline">
+                      View
+                    </Link>
+                  )}
                 </li>
               ))}
             </ul>
@@ -141,12 +160,24 @@ export default function ApprovalsPage(): JSX.Element {
                     <div className="min-w-0 flex-1">
                       <div className="flex flex-wrap items-center gap-2">
                         <Badge tone="gray">{humanizeStatus(a.entityType)}</Badge>
-                        <span className="text-sm font-medium text-text-primary">
-                          Level {a.currentLevel} of {a.totalLevels}
+                        {a.entityTitle && (
+                          <span className="text-sm font-medium text-text-primary truncate">{a.entityTitle}</span>
+                        )}
+                        <span className="text-xs text-text-secondary">
+                          Level {a.currentLevel}
+                          {a.steps?.length ? ` of ${a.steps.length}` : ''}
                         </span>
                       </div>
                       <p className="mt-1 text-xs text-text-secondary">
-                        Submitted by {a.submittedByName} · {formatRelative(a.createdAt)}
+                        Submitted by {submitterName(a)} · {formatRelative(a.createdAt)}
+                        {entityHref(a) && (
+                          <>
+                            {' · '}
+                            <Link href={entityHref(a)!} className="font-medium text-primary hover:underline">
+                              Review before signing
+                            </Link>
+                          </>
+                        )}
                       </p>
                     </div>
                     <span

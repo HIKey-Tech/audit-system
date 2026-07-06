@@ -37,6 +37,15 @@ export class PlanningController {
     this.router.get('/', requirePermission('plan:read'), validate(PlanQuerySchema, 'query'), this._listPlans.bind(this));
 
     /**
+     * @route  GET /audit/plans/recommendations
+     * @desc   Composite audit-priority ranking of universe entities (risk score,
+     *         open findings, audit overdue, never audited, time since last audit)
+     *         with configurable weights — registered before /:id
+     * @access Private - plan:read
+     */
+    this.router.get('/recommendations', requirePermission('plan:read'), this._getRecommendations.bind(this));
+
+    /**
      * @route  GET /audit/plans/:id
      * @desc   Get audit plan
      * @access Private - audit:read
@@ -169,6 +178,15 @@ export class PlanningController {
     try {
       const plan = await this.planningService.getPlanById(req.params.id);
       res.status(200).json(buildResponse(plan));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getRecommendations(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const recommendations = await this.planningService.getRecommendations();
+      res.status(200).json(buildResponse(recommendations));
     } catch (err) {
       next(err);
     }

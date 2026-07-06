@@ -25,9 +25,12 @@ const REFERENCE_HREF: Record<string, (id: string) => string> = {
   audit_engagement: (id) => `/audit/engagements/${id}`,
   audit_finding: (id) => `/audit/findings/${id}`,
   audit_plan: (id) => `/audit/plans/${id}`,
-  audit_report: (id) => `/audit/engagements/${id}`,
+  // Legacy audit_report rows carry the *report* id, which has no page of its
+  // own — land on the reports register. New report notifications reference the
+  // engagement directly.
+  audit_report: () => `/audit/reports`,
   risk_register: (id) => `/risk/${id}`,
-  workflow_approval: () => `/workflow`,
+  workflow_approval: () => `/workflow/approvals`,
 };
 
 export default function NotificationsPage(): JSX.Element {

@@ -128,7 +128,7 @@ class ApprovalController {
     }
     async _approve(req, res, next) {
         try {
-            const approval = await this.approvalService.approve(req.params.id, req.user, req.body.comment);
+            const approval = await this.approvalService.approve(req.params.id, req.user, req.body.comment, req.body.edits);
             res.status(200).json((0, api_response_type_1.buildResponse)(approval, 'Approval step approved'));
         }
         catch (err) {

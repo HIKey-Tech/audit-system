@@ -226,10 +226,19 @@ class AssignmentService {
             const status = assignment.engagement.status;
             counts.set(status, (counts.get(status) ?? 0) + 1);
         }
+        const loggedTime = await prisma_client_1.prisma.audit_Time_Entry.aggregate({
+            where: {
+                user_id: userId,
+                deleted_at: null,
+                engagement: { deleted_at: null, status: { in: assignment_matching_util_1.ACTIVE_ENGAGEMENT_STATUSES } },
+            },
+            _sum: { hours: true },
+        });
         return {
             userId,
             totalActive: assignments.length,
             byStatus: Array.from(counts.entries()).map(([status, count]) => ({ status, count })),
+            loggedHours: Number(loggedTime._sum.hours ?? 0),
         };
     }
     async getCandidates(engagementId, actor) {
