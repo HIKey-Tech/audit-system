@@ -5,6 +5,23 @@
 # Seed:       docker compose -f docker-compose.prod.yml --profile ops run --rm db-seed
 
 services:
+  mssql:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=${MSSQL_SA_PASSWORD}
+    volumes:
+      - /opt/iams/mssql:/var/opt/mssql
+    networks: [iams]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"$$MSSQL_SA_PASSWORD\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    # No ports: — internal only, reached at mssql:1433 from iams-api.
+
   iams-api:
     build:
       context: .
@@ -18,6 +35,9 @@ services:
       - /opt/iams/logs:/app/logs
     networks: [iams]
     restart: unless-stopped
+    depends_on:
+      mssql:
+        condition: service_healthy
     # Background jobs run in-process (node-cron) — never scale this service
     # beyond one replica or every job runs N times.
 
@@ -65,6 +85,9 @@ services:
     command: ["npx", "prisma", "migrate", "deploy"]
     networks: [iams]
     profiles: [ops]
+    depends_on:
+      mssql:
+        condition: service_healthy
 
   db-seed:
     build:
@@ -75,6 +98,9 @@ services:
     command: ["npx", "prisma", "db", "seed"]
     networks: [iams]
     profiles: [ops]
+    depends_on:
+      mssql:
+        condition: service_healthy
 
 networks:
   iams: {}
