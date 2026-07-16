@@ -32,15 +32,12 @@ RUN npm ci --omit=dev \
     && rm -rf node_modules/prisma node_modules/typescript node_modules/@prisma/engines \
               node_modules/.bin/prisma node_modules/.bin/tsc node_modules/.bin/tsserver
 
-FROM node:20-bookworm-slim AS runtime
+# Full (non-slim) image: it already ships openssl (Prisma engine) and
+# ca-certificates (outbound TLS). GBB egress blocks apt entirely — plain http
+# gets 403 and the slim image lacks the CA roots to bootstrap https — so the
+# runtime stage must not need apt at all.
+FROM node:20-bookworm AS runtime
 ENV NODE_ENV=production
-# openssl: required by Prisma's query engine. ca-certificates: outbound TLS
-# (Azure SQL, Entra ID, Microsoft Graph, SMTP).
-# apt over https: GBB egress returns 403 on plain-http repo traffic.
-RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
-    && apt-get update \
-    && apt-get install -y --no-install-recommends openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=prod-deps /app/node_modules ./node_modules
 # Overlay the Prisma client generated in the build stage (prod-deps has only the stub)
