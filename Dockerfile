@@ -7,7 +7,12 @@
 #   prod-deps — production-only node_modules
 #   runtime   — slim final image: dist + prod deps + generated Prisma client
 
-FROM node:20-bookworm-slim AS deps
+# Full (non-slim) node image in every stage: Prisma detects the OpenSSL version
+# when generating its client, and the slim image (no openssl) makes it guess
+# 1.1.x — which then can't initialize on the OpenSSL-3 runtime image. Keeping
+# all stages on the same base removes the guesswork. (apt is blocked on the
+# GBB network, so openssl can't simply be installed into slim.)
+FROM node:20-bookworm AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
@@ -22,7 +27,7 @@ RUN npx prisma generate
 COPY src ./src
 RUN npm run build
 
-FROM node:20-bookworm-slim AS prod-deps
+FROM node:20-bookworm AS prod-deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 # prisma CLI + typescript survive --omit=dev as optional peers of
