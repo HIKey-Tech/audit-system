@@ -278,17 +278,18 @@ You're looking for a certificate (`.crt` / `.pem`, maybe a separate chain or
 `ca-bundle` file) and a private key (`.key`). Ask GBB IT for the exact paths
 if the find turns up nothing obvious.
 
-**5.2 Copy them into place** (fill in the real paths):
+**5.2 Copy them into place** (fill in the real paths). As deployed, GBB's
+files live in `/etc/ssl/galaxybackbone.com.ng/` — a wildcard cert (`.crt`),
+key (`.key`), and two CA bundles. Use `awk 1 | tr -d '\r'` rather than plain
+`cat`: some of the files lack trailing newlines, and glued-together PEM blocks
+make nginx fail with `PEM routines::bad end line`.
 
 ```bash
-# certificate first, then chain/intermediate (if GBB gave one), into fullchain.pem
-sudo sh -c 'cat /path/to/audit.crt /path/to/chain.crt > /opt/iams/certs/fullchain.pem'   # fill in
-sudo cp /path/to/audit.key /opt/iams/certs/privkey.pem                                   # fill in
+# certificate first, then chain/intermediates, into fullchain.pem
+sudo sh -c 'awk 1 "/etc/ssl/galaxybackbone.com.ng/galaxybackbone.com.ng.crt" "/etc/ssl/galaxybackbone.com.ng/CA Bundle 1.pem" "/etc/ssl/galaxybackbone.com.ng/CA Bundle 2.pem" | tr -d "\r" > /opt/iams/certs/fullchain.pem'
+sudo cp "/etc/ssl/galaxybackbone.com.ng/galaxybackbone.com.ng.key" /opt/iams/certs/privkey.pem
 sudo chmod 600 /opt/iams/certs/*
 ```
-
-(If there's no separate chain file, just `cat` the one certificate into
-`fullchain.pem`.)
 
 **5.3 Check nothing else is squatting on ports 80/443.** GBB's mail said
 "kindly use Nginx service" — if they pre-installed nginx *on the host*, it
@@ -457,5 +458,8 @@ df -h /opt/iams
 | SSO redirect error | Entra redirect URI must be exactly `https://audit.galaxybackbone.com.ng/api/auth/callback` |
 | nginx container won't start / port already in use | a host-level nginx is holding 80/443 — `sudo systemctl disable --now nginx` (§5.3) |
 | Browser shows certificate warning | `fullchain.pem` missing the chain/intermediate cert, or the self-signed stopgap is still in place (§5) |
+| nginx: `PEM routines::bad end line` | PEM blocks glued together — rebuild fullchain with the `awk 1` command in §5.2 |
+| nginx restart-loops with `host not found in upstream "iams-api"` | the api container is down — fix `iams-api` first (`logs iams-api`); nginx recovers on its own once it's healthy |
+| api crash-loops with `PrismaClientInitializationError` | Prisma client generated against a different OpenSSL than the runtime — rebuild with all Dockerfile stages on the same (full bookworm) base |
 | Download links show localhost | `APP_URL` wrong in `.env` |
 | `mssql` never healthy | `docker compose logs mssql` — usually a weak `MSSQL_SA_PASSWORD` (must meet SQL Server complexity rules) or `/opt/iams/mssql` not owned by uid 10001 |
