@@ -1519,7 +1519,8 @@ type SeedUser = {
 
 const SEEDED_USERS: SeedUser[] = [
   {
-    email: 'admin@example.com',
+    email: 'superadmin@gbb.gov.ng',
+    legacyEmail: 'admin@example.com',
     password: 'Bello@123456!',
     firstName: 'Bello',
     lastName: 'Adesanya',
@@ -1655,8 +1656,13 @@ async function main(): Promise<void> {
   logger.info('Roles seeded', { count: ROLES.length });
 
   // 3. Upsert seed users + role assignments.
+  // In production only the super admin is seeded; the other accounts are dev/test fixtures.
+  const usersToSeed =
+    process.env.NODE_ENV === 'production'
+      ? SEEDED_USERS.filter((u) => u.roles.includes('super_admin'))
+      : SEEDED_USERS;
   let adminUserId = '';
-  for (const seedUser of SEEDED_USERS) {
+  for (const seedUser of usersToSeed) {
     const displayName = seedUser.firstName + ' ' + seedUser.lastName;
     const passwordHash = await bcrypt.hash(seedUser.password, 12);
     const seedUserIsSuperAdmin = seedUser.roles.includes('super_admin');
