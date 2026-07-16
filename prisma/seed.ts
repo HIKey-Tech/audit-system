@@ -1722,7 +1722,9 @@ async function main(): Promise<void> {
       data: roles.map((role) => ({ user_id: user.id, role_id: role.id })),
     });
 
-    if (seedUser.email === 'admin@example.com') {
+    // Templates below need a creator: admin@example.com in dev, but that user
+    // isn't seeded in production — fall back to the first (super admin) user.
+    if (seedUser.email === 'admin@example.com' || !adminUserId) {
       adminUserId = user.id;
     }
     logger.info('User seeded', {
