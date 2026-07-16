@@ -12,8 +12,9 @@ anything that needs admin rights. You never need the root account directly.
 ## First, three things people always get confused about
 
 **"Host"** = the address people type in the browser to reach IAMS. For you
-that's the **VPS IP `197.159.79.65`** (no DNS name). Everywhere this runbook
-says `<host>`, `<IP>`, or `${HOST}`, put that same IP.
+that's the domain GBB assigned: **`audit.galaxybackbone.com.ng`**. Everywhere
+this runbook says `<host>` or `${HOST}`, put that domain. (SSH still uses the
+raw IP `197.159.79.65` — the domain is for the browser, the IP is for you.)
 
 **Docker** = instead of installing SQL Server, Node, nginx, etc. on the VM,
 each part runs in its own sealed box (a *container*). One command starts them
@@ -41,15 +42,13 @@ drop the certificate files in place.
 | Item | Why | Who provides |
 |---|---|---|
 | VPS IP + the `ams_vm` password | login | GBB IT |
-| TLS certificate + key for the IP (GBB internal CA) — or you self-sign in §5 | HTTPS; login cookies are `secure` and won't work over plain http | GBB IT / you |
+| TLS certificate + key for `audit.galaxybackbone.com.ng` — **GBB has already placed these on the server** ("We have added the SSL certificates to the audit server"); you locate and wire them up in §5 | HTTPS; login cookies are `secure` and won't work over plain http | GBB IT |
 | SMTP host/port/credentials, relay allowed from the VPS IP | password reset, 2FA OTP, notifications | GBB IT |
-| Entra ID (Azure AD) tenant ID, client ID, client secret; redirect URI set to `https://<IP>/api/auth/callback` | Microsoft SSO login | Azure tenant owner |
+| Entra ID (Azure AD) tenant ID, client ID, client secret; redirect URI set to `https://audit.galaxybackbone.com.ng/api/auth/callback` | Microsoft SSO login | Azure tenant owner |
 | Git access (deploy key or credentials) for this repo | pulling the code onto the VPS | you |
 
-> **Azure AD + raw IP:** Entra sometimes refuses a bare IP as a redirect URI.
-> If it does when you register `https://<IP>/api/auth/callback`, you'll need an
-> internal DNS name for SSO. Either way, **local super-admin login works
-> without SSO**, so you can go live first and wire SSO up after.
+> **SSO can wait:** local super-admin login works without SSO, so you can go
+> live first and wire Entra up after.
 
 ---
 
@@ -68,6 +67,7 @@ sudo apt update && sudo apt install -y ufw fail2ban
 sudo ufw default deny incoming
 sudo ufw default allow outgoing
 sudo ufw allow 22/tcp
+sudo ufw allow 80/tcp    # only serves the redirect to https
 sudo ufw allow 443/tcp
 sudo ufw --force enable
 ```
@@ -122,12 +122,12 @@ it generates the secrets and writes `/opt/iams/app/.env` in one shot.
 cd /opt/iams/app
 
 # fill in — your values
-HOST=197.159.79.65
-SMTP_HOST=smtp.gbb.internal
-SMTP_USER=iams@gbb.gov.ng
+HOST=audit.galaxybackbone.com.ng
+SMTP_HOST=mail.govmail.gbb.com.ng
+SMTP_USER=audit@galaxybackbone.com.ng
 SMTP_PASSWORD=changeme
-AZURE_AD_TENANT_ID=changeme
-AZURE_AD_CLIENT_ID=changeme
+AZURE_AD_TENANT_ID=d42d9496-c1e3-4c70-891d-d1bfc026ef1b
+AZURE_AD_CLIENT_ID=8da18b00-5491-4448-9ea6-e897b10555c7
 AZURE_AD_CLIENT_SECRET=changeme
 
 # generated — nothing to fill in below this line
@@ -153,7 +153,7 @@ JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
 MFA_MANDATORY=true
 MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY}
-MFA_ISSUER=GBB IAMS
+MFA_ISSUER="GBB IAMS"
 
 OIDC_PROVIDER=azure_ad
 AZURE_AD_TENANT_ID=${AZURE_AD_TENANT_ID}
@@ -165,8 +165,8 @@ SSO_DEFAULT_ROLE=viewer
 SSO_REQUIRE_IDP_MFA=true
 
 SMTP_HOST=${SMTP_HOST}
-SMTP_PORT=587
-SMTP_SECURE=false
+SMTP_PORT=465
+SMTP_SECURE=true
 SMTP_USER=${SMTP_USER}
 SMTP_PASSWORD=${SMTP_PASSWORD}
 EMAIL_FROM="IAMS <${SMTP_USER}>"
@@ -177,6 +177,12 @@ STORAGE_LOCAL_PATH=/data/uploads
 CACHE_DRIVER=redis
 REDIS_URL=redis://redis:6379
 
+PASSWORD_RESET_TOKEN_TTL=30m
+MFA_CHALLENGE_TTL=5m
+MFA_ENROLL_TTL=15m
+MFA_EMAIL_OTP_TTL=10m
+MFA_EMAIL_OTP_MAX_ATTEMPTS=5
+MFA_BACKUP_CODE_COUNT=10
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX_REQUESTS=300
 LOG_LEVEL=info
@@ -257,35 +263,65 @@ Users, or they arrive through Entra SSO.
 
 ## 5. TLS certificate
 
-nginx needs a certificate + key at `/opt/iams/certs/fullchain.pem` and
-`/opt/iams/certs/privkey.pem`. Two ways:
+GBB has already put the SSL certificate for `audit.galaxybackbone.com.ng` on
+the server. Our nginx container expects it as two files:
+`/opt/iams/certs/fullchain.pem` (certificate + any intermediate/chain certs)
+and `/opt/iams/certs/privkey.pem` (private key).
 
-**Option A — GBB internal CA (preferred):** copy the `fullchain.pem` and
-`privkey.pem` GBB issued for your IP into `/opt/iams/certs`, then:
+**5.1 Find where GBB put the files:**
 
 ```bash
+sudo find /etc/ssl /etc/nginx /etc/pki /root /home -name "*.pem" -o -name "*.crt" -o -name "*.key" 2>/dev/null
+```
+
+You're looking for a certificate (`.crt` / `.pem`, maybe a separate chain or
+`ca-bundle` file) and a private key (`.key`). Ask GBB IT for the exact paths
+if the find turns up nothing obvious.
+
+**5.2 Copy them into place** (fill in the real paths):
+
+```bash
+# certificate first, then chain/intermediate (if GBB gave one), into fullchain.pem
+sudo sh -c 'cat /path/to/audit.crt /path/to/chain.crt > /opt/iams/certs/fullchain.pem'   # fill in
+sudo cp /path/to/audit.key /opt/iams/certs/privkey.pem                                   # fill in
 sudo chmod 600 /opt/iams/certs/*
 ```
 
-**Option B — self-signed (quickest; browsers show a one-time warning):**
+(If there's no separate chain file, just `cat` the one certificate into
+`fullchain.pem`.)
+
+**5.3 Check nothing else is squatting on ports 80/443.** GBB's mail said
+"kindly use Nginx service" — if they pre-installed nginx *on the host*, it
+holds ports 80/443 and our nginx **container** can't start. Check and stop it:
 
 ```bash
-sudo openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
-  -keyout /opt/iams/certs/privkey.pem -out /opt/iams/certs/fullchain.pem \
-  -subj "/CN=${HOST}" -addext "subjectAltName=IP:${HOST}"
-sudo chmod 600 /opt/iams/certs/*
+sudo ss -ltnp | grep -E ':80 |:443 '
+# if a host nginx shows up:
+sudo systemctl disable --now nginx
 ```
 
-(Let's Encrypt is **not** an option here — it needs a public DNS name, and you
-have an internal IP.)
+(All the routing lives in the container's config — the host nginx isn't
+needed. If GBB insists their host nginx stays, tell me and we'll flip it
+around instead.)
 
-Restart nginx to pick up the certificate:
+**5.4 Restart our nginx to pick up the certificate:**
 
 ```bash
 docker compose -f docker-compose.prod.yml restart nginx
 ```
 
-Now `https://<IP>/login` should load.
+Now `https://audit.galaxybackbone.com.ng/login` should load with a valid
+padlock — no browser warning.
+
+> **Stopgap if you must test before finding the real certs** — self-sign
+> (browsers will warn):
+>
+> ```bash
+> sudo openssl req -x509 -newkey rsa:2048 -nodes -days 825 \
+>   -keyout /opt/iams/certs/privkey.pem -out /opt/iams/certs/fullchain.pem \
+>   -subj "/CN=${HOST}" -addext "subjectAltName=DNS:${HOST}"
+> sudo chmod 600 /opt/iams/certs/*
+> ```
 
 ---
 
@@ -362,7 +398,7 @@ docker compose -f docker-compose.prod.yml ps
 
 Then in a browser:
 
-1. `https://<IP>/login` loads over HTTPS.
+1. `https://audit.galaxybackbone.com.ng/login` loads with a valid padlock, and plain `http://` redirects to `https://`.
 2. Log in as `superadmin@gbb.gov.ng` → change the password → set up 2FA.
 3. (If SSO is wired) "Sign in with Microsoft" completes and lands on the dashboard.
 4. Upload a document to an engagement, then download it.
@@ -376,7 +412,7 @@ Then in a browser:
 
 - [ ] All secrets generated fresh in §3 — nothing from the dev `.env` reused.
 - [ ] `.env` is `chmod 600`, owner `ams_vm`.
-- [ ] UFW: only 22 and 443 open. fail2ban active. No container publishes any other port.
+- [ ] UFW: only 22, 80 (redirect-only), and 443 open. fail2ban active. No container publishes any other port.
 - [ ] HTTPS works; cookies are httpOnly + secure.
 - [ ] `NODE_ENV=production`, rate limiting on.
 - [ ] `MFA_MANDATORY=true`.
@@ -418,6 +454,8 @@ df -h /opt/iams
 | "storage is not writable" | ownership of `/opt/iams/uploads` (should be uid 1000) |
 | Uploads fail near 50 MB | nginx `client_max_body_size` vs the app's cap |
 | No emails at all | `/api/v1/jobs` queue, then `email_logs` table, then SMTP relay allow-list |
-| SSO redirect error | Entra redirect URI must be exactly `https://<IP>/api/auth/callback` |
+| SSO redirect error | Entra redirect URI must be exactly `https://audit.galaxybackbone.com.ng/api/auth/callback` |
+| nginx container won't start / port already in use | a host-level nginx is holding 80/443 — `sudo systemctl disable --now nginx` (§5.3) |
+| Browser shows certificate warning | `fullchain.pem` missing the chain/intermediate cert, or the self-signed stopgap is still in place (§5) |
 | Download links show localhost | `APP_URL` wrong in `.env` |
 | `mssql` never healthy | `docker compose logs mssql` — usually a weak `MSSQL_SA_PASSWORD` (must meet SQL Server complexity rules) or `/opt/iams/mssql` not owned by uid 10001 |

@@ -36,7 +36,9 @@ FROM node:20-bookworm-slim AS runtime
 ENV NODE_ENV=production
 # openssl: required by Prisma's query engine. ca-certificates: outbound TLS
 # (Azure SQL, Entra ID, Microsoft Graph, SMTP).
-RUN apt-get update \
+# apt over https: GBB egress returns 403 on plain-http repo traffic.
+RUN sed -i 's|http://|https://|g' /etc/apt/sources.list.d/debian.sources \
+    && apt-get update \
     && apt-get install -y --no-install-recommends openssl ca-certificates \
     && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
