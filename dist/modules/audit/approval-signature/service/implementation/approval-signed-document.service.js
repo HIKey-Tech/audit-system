@@ -4,6 +4,7 @@ exports.approvalSignedDocumentService = exports.ApprovalSignedDocumentService = 
 // src/modules/audit/approval-signature/service/implementation/approval-signed-document.service.ts
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const document_1 = require("../../../../document");
 const report_template_service_1 = require("../../../../settings/service/implementation/report-template.service");
 const system_config_service_1 = require("../../../../settings/service/implementation/system-config.service");
@@ -51,6 +52,34 @@ class ApprovalSignedDocumentService {
         }
         catch (err) {
             logger_util_1.logger.warn('Approval signed-document generation failed', { approvalId, err });
+            await this._notifyGenerationFailure(approvalId);
+        }
+    }
+    /**
+     * The generation runs fire-and-forget after the approval commits, so a
+     * failure here is otherwise invisible — the approval "succeeds" but the
+     * signed artifact never appears. Tell the submitter so someone can act.
+     * Best-effort: never throws.
+     */
+    async _notifyGenerationFailure(approvalId) {
+        try {
+            const approval = await prisma_client_1.prisma.workflow_Approval.findUnique({
+                where: { id: approvalId },
+                select: { submitted_by_id: true, entity_type: true },
+            });
+            if (!approval)
+                return;
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                userId: approval.submitted_by_id,
+                title: 'Signed document generation failed',
+                body: `The approval completed, but the signed ${approval.entity_type.replace(/_/g, ' ')} document could not be generated. Contact an administrator — the signed copy can be regenerated once the underlying issue (e.g. document storage) is resolved.`,
+                type: 'error',
+                referenceType: 'workflow_approval',
+                referenceId: approvalId,
+            });
+        }
+        catch (notifyErr) {
+            logger_util_1.logger.warn('Failed to notify signed-document generation failure', { approvalId, notifyErr });
         }
     }
     async _renderForEntity(entityType, entityId) {

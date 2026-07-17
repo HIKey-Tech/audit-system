@@ -32,5 +32,8 @@ export declare class AssetController {
     private _unlinkFromEvidence;
     private _listAssetsForUniverse;
     private _listAssetsForEngagement;
+    private _listAssetsForFinding;
+    private _listAssetsForRisk;
+    private _listAssetsForEvidence;
 }
 //# sourceMappingURL=asset.controller.d.ts.map

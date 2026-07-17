@@ -157,7 +157,13 @@ export default function PlanDetailPage(): JSX.Element {
             </Button>
           );
         }
-        return <span className="text-text-muted text-xs">Pending plan approval</span>;
+        // Approved but the viewer can't create engagements — say so instead of
+        // wrongly implying the plan is still awaiting approval.
+        return (
+          <span className="text-text-muted text-xs">
+            {data.status === 'approved' ? 'No engagement yet' : 'Pending plan approval'}
+          </span>
+        );
       },
       width: '170px',
     },

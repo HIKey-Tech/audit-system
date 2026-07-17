@@ -8,6 +8,7 @@ export declare class AssignmentController {
     private _assignStaff;
     private _getAssignments;
     private _getMyAssignments;
+    private _getVisibleAssignments;
     private _getUserWorkload;
     private _removeAssignment;
     private _getCandidates;

@@ -28,6 +28,9 @@ export interface IAssetService {
   listAssets(query: AssetQueryDto, actor: AssetActorContext): Promise<{ assets: AssetResponseDto[]; meta: PaginationMeta }>;
   listAssetsForUniverse(universeId: string, actor: AssetActorContext): Promise<AssetResponseDto[]>;
   listAssetsForEngagement(engagementId: string, actor: AssetActorContext): Promise<AssetResponseDto[]>;
+  listAssetsForFinding(findingId: string, actor: AssetActorContext): Promise<AssetResponseDto[]>;
+  listAssetsForRisk(riskId: string, actor: AssetActorContext): Promise<AssetResponseDto[]>;
+  listAssetsForEvidence(evidenceId: string, actor: AssetActorContext): Promise<AssetResponseDto[]>;
 
   createRelationship(assetId: string, dto: CreateAssetRelationshipRequestDto, actor: AssetActorContext): Promise<AssetRelationshipResponseDto>;
   listRelationships(assetId: string, actor: AssetActorContext): Promise<AssetRelationshipResponseDto[]>;

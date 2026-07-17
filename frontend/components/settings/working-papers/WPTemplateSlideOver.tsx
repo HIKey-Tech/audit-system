@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 import { Plus, Trash2, GripVertical } from 'lucide-react';
 
 import { SlideOver } from '@/components/ui/SlideOver';
@@ -123,7 +124,7 @@ export const WPTemplateSlideOver = ({ open, onClose, template }: Props): JSX.Ele
   const onSubmit = handleSubmit((values) => {
     if (isEdit) updateMut.mutate(values);
     else createMut.mutate(values);
-  });
+  }, toastOnInvalid);
 
   const isPending = isSubmitting || createMut.isPending || updateMut.isPending;
 

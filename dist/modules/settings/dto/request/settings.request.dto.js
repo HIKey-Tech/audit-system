@@ -52,7 +52,8 @@ exports.CreateReportTemplateRequestSchema = zod_1.z.object({
     headerConfig: ConfigObjectSchema.nullable().optional(),
     footerConfig: ConfigObjectSchema.nullable().optional(),
     signatureConfig: ConfigObjectSchema.nullable().optional(),
-    availableVariables: zod_1.z.array(ReportVariableSchema).min(1),
+    // A template may legitimately declare no dynamic variables; don't force one.
+    availableVariables: zod_1.z.array(ReportVariableSchema),
     isActive: zod_1.z.boolean().optional(),
     isDefault: zod_1.z.boolean().optional(),
 });
@@ -63,7 +64,7 @@ exports.UpdateReportTemplateRequestSchema = zod_1.z.object({
     headerConfig: ConfigObjectSchema.nullable().optional(),
     footerConfig: ConfigObjectSchema.nullable().optional(),
     signatureConfig: ConfigObjectSchema.nullable().optional(),
-    availableVariables: zod_1.z.array(ReportVariableSchema).min(1).optional(),
+    availableVariables: zod_1.z.array(ReportVariableSchema).optional(),
     isActive: zod_1.z.boolean().optional(),
     isDefault: zod_1.z.boolean().optional(),
 });

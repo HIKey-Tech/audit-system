@@ -128,6 +128,9 @@ export const assetsApi = {
 
   listForUniverse: (universeId: string) => api.get<Asset[]>(`/audit/universe/${universeId}/assets`),
   listForEngagement: (engagementId: string) => api.get<Asset[]>(`/audit/engagements/${engagementId}/assets`),
+  listForFinding: (findingId: string) => api.get<Asset[]>(`/audit/findings/${findingId}/assets`),
+  listForRisk: (riskId: string) => api.get<Asset[]>(`/audit/risks/${riskId}/assets`),
+  listForEvidence: (evidenceId: string) => api.get<Asset[]>(`/audit/evidence/${evidenceId}/assets`),
   linkToEngagement: (engagementId: string, payload: EngagementAssetPayload) =>
     api.post<AssetLink>(`/audit/engagements/${engagementId}/assets`, payload),
   unlinkFromEngagement: (engagementId: string, assetId: string) =>

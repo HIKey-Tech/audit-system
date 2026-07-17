@@ -1,6 +1,7 @@
 // src/modules/audit/approval-signature/service/implementation/approval-signed-document.service.ts
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../../shared/utils/logger.util';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { DocumentService } from '../../../../document';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { reportTemplateService } from '../../../../settings/service/implementation/report-template.service';
@@ -57,6 +58,33 @@ export class ApprovalSignedDocumentService implements IApprovalSignedDocumentSer
       });
     } catch (err) {
       logger.warn('Approval signed-document generation failed', { approvalId, err });
+      await this._notifyGenerationFailure(approvalId);
+    }
+  }
+
+  /**
+   * The generation runs fire-and-forget after the approval commits, so a
+   * failure here is otherwise invisible — the approval "succeeds" but the
+   * signed artifact never appears. Tell the submitter so someone can act.
+   * Best-effort: never throws.
+   */
+  private async _notifyGenerationFailure(approvalId: string): Promise<void> {
+    try {
+      const approval = await prisma.workflow_Approval.findUnique({
+        where: { id: approvalId },
+        select: { submitted_by_id: true, entity_type: true },
+      });
+      if (!approval) return;
+      await notificationQueueService.enqueueSafe('in_app', {
+        userId: approval.submitted_by_id,
+        title: 'Signed document generation failed',
+        body: `The approval completed, but the signed ${approval.entity_type.replace(/_/g, ' ')} document could not be generated. Contact an administrator — the signed copy can be regenerated once the underlying issue (e.g. document storage) is resolved.`,
+        type: 'error',
+        referenceType: 'workflow_approval',
+        referenceId: approvalId,
+      });
+    } catch (notifyErr) {
+      logger.warn('Failed to notify signed-document generation failure', { approvalId, notifyErr });
     }
   }
 

@@ -104,6 +104,8 @@ export declare const FindingQuerySchema: z.ZodObject<{
     category: z.ZodOptional<z.ZodNativeEnum<typeof FindingCategory>>;
     controlReference: z.ZodOptional<z.ZodString>;
     auditeeId: z.ZodOptional<z.ZodString>;
+    riskId: z.ZodOptional<z.ZodString>;
+    universeId: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodEnum<["created_at", "updated_at", "due_date", "severity", "status"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "strip", z.ZodTypeAny, {
@@ -115,6 +117,8 @@ export declare const FindingQuerySchema: z.ZodObject<{
     status?: FindingStatus | undefined;
     category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
+    universeId?: string | undefined;
+    riskId?: string | undefined;
     controlReference?: string | undefined;
     auditeeId?: string | undefined;
 }, {
@@ -126,6 +130,8 @@ export declare const FindingQuerySchema: z.ZodObject<{
     pageSize?: number | undefined;
     sortBy?: "created_at" | "updated_at" | "status" | "due_date" | "severity" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
+    universeId?: string | undefined;
+    riskId?: string | undefined;
     controlReference?: string | undefined;
     auditeeId?: string | undefined;
 }>;

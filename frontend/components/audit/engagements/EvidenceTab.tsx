@@ -5,12 +5,17 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, FileType2, Download, AlertOctagon } from 'lucide-react';
 import { toast } from 'sonner';
 
+import Link from 'next/link';
+
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Select } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { evidenceApi } from '@/lib/api/audit';
+import { assetsApi } from '@/lib/api/assets';
 import { documentsApi } from '@/lib/api/documents';
 import { formatDate, formatFileSize } from '@/lib/utils/format';
 import { useSession, hasPermission } from '@/components/providers/AuthProvider';
@@ -21,6 +26,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
   const qc = useQueryClient();
   const session = useSession();
   const canDispute = hasPermission(session, 'evidence:dispute');
+  const canLinkAsset = hasPermission(session, 'asset:link');
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [disputing, setDisputing] = useState<AuditEvidence | null>(null);
@@ -126,6 +132,11 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
                     {formatFileSize(ev.fileSize)} · {ev.uploadedByName} · {formatDate(ev.createdAt)}
                     {ev.isDisputed && ' · Disputed'}
                   </p>
+                  <EvidenceAssetLinks
+                    evidenceId={ev.id}
+                    engagementId={engagement.id}
+                    canLink={canLinkAsset}
+                  />
                 </div>
                 <div className="flex items-center gap-2">
                   <a
@@ -168,6 +179,85 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
         tone="danger"
         isLoading={dispute.isPending}
       />
+    </div>
+  );
+};
+
+/**
+ * Per-evidence asset links. Shows the assets this evidence item substantiates
+ * as chips, and (for asset:link holders) lets you attach one of the engagement's
+ * in-scope assets — surfacing the previously-orphaned evidence↔asset link.
+ */
+const EvidenceAssetLinks = ({
+  evidenceId,
+  engagementId,
+  canLink,
+}: {
+  evidenceId: string;
+  engagementId: string;
+  canLink: boolean;
+}): JSX.Element | null => {
+  const qc = useQueryClient();
+  const linked = useQuery({
+    queryKey: ['evidence', evidenceId, 'assets'],
+    queryFn: () => assetsApi.listForEvidence(evidenceId),
+  });
+  const scopeAssets = useQuery({
+    queryKey: ['engagements', engagementId, 'assets'],
+    queryFn: () => assetsApi.listForEngagement(engagementId),
+    enabled: canLink,
+  });
+
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['evidence', evidenceId, 'assets'] });
+  const link = useMutation({
+    mutationFn: (assetId: string) => assetsApi.linkToEvidence(assetId, evidenceId),
+    onSuccess: () => { toast.success('Asset linked'); invalidate(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to link asset'),
+  });
+  const unlink = useMutation({
+    mutationFn: (assetId: string) => assetsApi.unlinkFromEvidence(assetId, evidenceId),
+    onSuccess: () => { toast.success('Asset unlinked'); invalidate(); },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to unlink asset'),
+  });
+
+  const linkedIds = new Set((linked.data ?? []).map((a) => a.id));
+  const options = (scopeAssets.data ?? []).filter((a) => !linkedIds.has(a.id));
+
+  if (!canLink && (!linked.data || linked.data.length === 0)) return null;
+
+  return (
+    <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+      {(linked.data ?? []).map((a) => (
+        <span key={a.id} className="inline-flex items-center gap-1">
+          <Link href={`/assets/${a.id}`}>
+            <Badge tone="blue">{a.assetTag}</Badge>
+          </Link>
+          {canLink && (
+            <button
+              type="button"
+              onClick={() => unlink.mutate(a.id)}
+              className="text-[11px] text-text-muted hover:text-danger"
+              title="Unlink asset"
+            >
+              ×
+            </button>
+          )}
+        </span>
+      ))}
+      {canLink && options.length > 0 && (
+        <Select
+          value=""
+          onChange={(e) => e.target.value && link.mutate(e.target.value)}
+          className="h-6 w-40 text-[11px]"
+        >
+          <option value="">+ Link asset…</option>
+          {options.map((a) => (
+            <option key={a.id} value={a.id}>
+              {a.assetTag} — {a.name}
+            </option>
+          ))}
+        </Select>
+      )}
     </div>
   );
 };

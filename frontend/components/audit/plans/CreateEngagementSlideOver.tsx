@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -106,7 +107,7 @@ export const CreateEngagementSlideOver = ({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v));
+  const onSubmit = handleSubmit((v) => create.mutate(v), toastOnInvalid);
 
   const lead = watch('leadAuditorId');
   const manager = watch('auditManagerId');

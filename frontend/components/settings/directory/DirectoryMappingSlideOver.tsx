@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -97,7 +98,7 @@ export const DirectoryMappingSlideOver = ({ open, onClose, mapping }: Props): JS
   const onSubmit = handleSubmit((values) => {
     if (isEdit) updateMut.mutate(values);
     else createMut.mutate(values);
-  });
+  }, toastOnInvalid);
 
   const isPending = isSubmitting || createMut.isPending || updateMut.isPending;
 

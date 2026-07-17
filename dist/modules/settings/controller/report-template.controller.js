@@ -21,25 +21,25 @@ class ReportTemplateController {
          * @desc   List report templates
          * @access Private - settings:read
          */
-        this.router.get('/', (0, auth_middleware_1.requirePermission)('settings:read'), (0, validate_middleware_1.validate)(settings_request_dto_1.ReportTemplateQuerySchema, 'query'), this._listTemplates.bind(this));
+        this.router.get('/', (0, auth_middleware_1.requireAnyPermission)('settings:read', 'report:read'), (0, validate_middleware_1.validate)(settings_request_dto_1.ReportTemplateQuerySchema, 'query'), this._listTemplates.bind(this));
         /**
          * @route  GET /settings/report-templates/default
          * @desc   Get default report template
          * @access Private - settings:read
          */
-        this.router.get('/default', (0, auth_middleware_1.requirePermission)('settings:read'), this._getDefaultTemplate.bind(this));
+        this.router.get('/default', (0, auth_middleware_1.requireAnyPermission)('settings:read', 'report:read'), this._getDefaultTemplate.bind(this));
         /**
          * @route  GET /settings/report-templates/variables
          * @desc   Get variables available in the default report template
          * @access Private - settings:read
          */
-        this.router.get('/variables', (0, auth_middleware_1.requirePermission)('settings:read'), this._getAvailableVariables.bind(this));
+        this.router.get('/variables', (0, auth_middleware_1.requireAnyPermission)('settings:read', 'report:read'), this._getAvailableVariables.bind(this));
         /**
          * @route  GET /settings/report-templates/:id
          * @desc   Get report template by ID
          * @access Private - settings:read
          */
-        this.router.get('/:id', (0, auth_middleware_1.requirePermission)('settings:read'), this._getTemplateById.bind(this));
+        this.router.get('/:id', (0, auth_middleware_1.requireAnyPermission)('settings:read', 'report:read'), this._getTemplateById.bind(this));
         /**
          * @route  POST /settings/report-templates
          * @desc   Create report template

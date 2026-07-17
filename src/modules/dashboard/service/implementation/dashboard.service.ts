@@ -609,6 +609,8 @@ export class DashboardService {
       deleted_at: null,
       OR: [
         { lead_auditor_id: userId },
+        { audit_manager_id: userId },
+        { auditee_id: userId },
         { workflow_assignments: { some: { user_id: userId } } },
       ],
       status: { notIn: ENGAGEMENT_CLOSED_LIKE_STATUSES as unknown as string[] },
@@ -651,14 +653,28 @@ export class DashboardService {
       prisma.audit_Finding.findMany({
         where: {
           deleted_at: null,
-          status: 'in_remediation',
-          engagement: {
-            deleted_at: null,
-            OR: [
-              { lead_auditor_id: userId },
-              { workflow_assignments: { some: { user_id: userId } } },
-            ],
-          },
+          OR: [
+            // Auditor view: findings being remediated on engagements they work.
+            {
+              status: 'in_remediation',
+              engagement: {
+                deleted_at: null,
+                OR: [
+                  { lead_auditor_id: userId },
+                  { workflow_assignments: { some: { user_id: userId } } },
+                ],
+              },
+            },
+            // Auditee view: findings assigned to them that still need action.
+            {
+              status: { in: ['open', 'management_response_received', 'in_remediation'] },
+              engagement: { deleted_at: null },
+              OR: [
+                { auditee_id: userId },
+                { responders: { some: { user_id: userId } } },
+              ],
+            },
+          ],
         },
         orderBy: { due_date: 'asc' },
         select: {

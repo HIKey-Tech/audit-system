@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -53,7 +54,7 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to create plan'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v));
+  const onSubmit = handleSubmit((v) => create.mutate(v), toastOnInvalid);
 
   return (
     <SlideOver

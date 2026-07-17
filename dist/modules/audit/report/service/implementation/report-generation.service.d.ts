@@ -73,6 +73,14 @@ interface ReportData {
         auditee: ReportUserBrief;
     };
     findings: ReportFinding[];
+    assetsInScope: ReportAsset[];
+}
+interface ReportAsset {
+    assetTag: string;
+    name: string;
+    assetType: string;
+    criticality: string;
+    scopeRole: string;
 }
 interface TemplateConfig {
     template: ReportTemplateResponseDto;
@@ -99,6 +107,7 @@ export declare class ReportGenerationService implements IReportGenerationService
     private _docxMetadataRow;
     private _buildDocxSectionContent;
     private _buildDocxFindingsSummaryTable;
+    private _buildDocxAssetsInScopeTable;
     private _docxHeaderCell;
     private _severityDocxCell;
     private _buildDocxDetailedFindings;

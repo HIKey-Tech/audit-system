@@ -180,6 +180,37 @@ class AssignmentService {
         });
         return assignments.map(assignment_response_dto_1.mapAssignmentToResponse);
     }
+    /**
+     * Assignments the actor can see and manage: oversight (engagement:read_all)
+     * sees every assignment; otherwise assignments on engagements the actor leads,
+     * manages, or is assigned to. This is the management view behind the
+     * Assignments page — distinct from `getMyAssignments`, which is the actor's
+     * own personal assignments only. Without this, a manager who assigns staff
+     * could never see the assignments they created.
+     */
+    async getVisibleAssignments(actor) {
+        const isOversight = actor.permissions.includes('engagement:read_all');
+        const where = {
+            engagement: {
+                deleted_at: null,
+                ...(isOversight
+                    ? {}
+                    : {
+                        OR: [
+                            { lead_auditor_id: actor.id },
+                            { audit_manager_id: actor.id },
+                            { workflow_assignments: { some: { user_id: actor.id } } },
+                        ],
+                    }),
+            },
+        };
+        const assignments = await prisma_client_1.prisma.workflow_Assignment.findMany({
+            where,
+            include: assignmentInclude,
+            orderBy: { assigned_at: 'desc' },
+        });
+        return assignments.map(assignment_response_dto_1.mapAssignmentToResponse);
+    }
     async getMyAssignments(userId, filters) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(filters);
         const where = {

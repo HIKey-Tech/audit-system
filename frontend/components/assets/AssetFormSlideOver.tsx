@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -202,7 +203,7 @@ export const AssetFormSlideOver = ({ open, asset, canAdmin, onClose }: Props): J
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to save asset'),
   });
 
-  const onSubmit = handleSubmit((values) => save.mutate(values));
+  const onSubmit = handleSubmit((values) => save.mutate(values), toastOnInvalid);
 
   return (
     <SlideOver

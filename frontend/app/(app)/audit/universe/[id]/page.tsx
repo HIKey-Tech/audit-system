@@ -216,7 +216,12 @@ export default function UniverseDetailPage(): JSX.Element {
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Open findings</dt>
               <dd className="mt-1 text-sm">
                 {typeof data.openFindingsCount === 'number' && data.openFindingsCount > 0 ? (
-                  <span className="font-semibold text-danger">{data.openFindingsCount} unresolved</span>
+                  <Link
+                    href={`/audit/findings?universeId=${data.id}`}
+                    className="font-semibold text-danger hover:underline"
+                  >
+                    {data.openFindingsCount} unresolved
+                  </Link>
                 ) : (
                   <span className="text-text-primary">None</span>
                 )}

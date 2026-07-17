@@ -7,6 +7,7 @@ export interface IAssignmentService {
   assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto>;
   removeAssignment(assignmentId: string, removedBy: WorkflowActorContext): Promise<void>;
   getAssignments(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentResponseDto[]>;
+  getVisibleAssignments(actor: WorkflowActorContext): Promise<AssignmentResponseDto[]>;
   getMyAssignments(
     userId: string,
     filters: MyAssignmentsQueryDto,

@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -148,7 +149,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
     } else {
       createMut.mutate(v);
     }
-  });
+  }, toastOnInvalid);
 
   const activeCategories = categories.data ?? [];
   const categoryHelp = categories.isLoading

@@ -23,6 +23,7 @@ export declare class DocumentService implements IDocumentService {
      * linked to an engagement keeps access to its shared documents.
      */
     assertCanUserAccess(documentId: string, actor: DocumentAccessActor): Promise<void>;
+    getEntityType(documentId: string): Promise<string | null>;
     getFileById(id: string): Promise<ServedFileDto>;
     serveFile(storedName: string, actor: DocumentAccessActor): Promise<ServedFileDto>;
     uploadNewVersion(documentId: string, dto: UploadVersionDto, actor?: DocumentAccessActor): Promise<DocumentVersionResponseDto>;

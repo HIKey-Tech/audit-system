@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -12,21 +13,29 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { Select } from '@/components/ui/Input';
+import { Select, Textarea } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 import { findingsApi, followUpApi } from '@/lib/api/audit';
+import { documentsApi } from '@/lib/api/documents';
+import { LinkedAssetsCard } from '@/components/common/LinkedAssetsCard';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { cn } from '@/lib/utils/cn';
 
-const STATUSES = ['open', 'management_response_received', 'in_remediation', 'verified'] as const;
+// Manual, auditor-settable statuses. `verified` is deliberately excluded — it is
+// only reachable through the Verify action below, which captures verification
+// notes, so a finding can never be marked verified without a recorded rationale.
+const STATUSES = ['open', 'management_response_received', 'in_remediation'] as const;
+const MANUAL_STATUS_SET = new Set<string>(STATUSES);
 
 export default function FindingDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const qc = useQueryClient();
-  const { hasPermission } = usePermissions();
+  const { hasPermission, user } = usePermissions();
   const canChangeStatus = hasPermission('finding:update');
   const canClose = hasPermission('finding:close');
+  const canVerify = hasPermission('followup:verify');
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['findings', params?.id],
@@ -41,11 +50,16 @@ export default function FindingDetailPage(): JSX.Element {
     retry: false,
   });
 
+  const invalidate = (): void => {
+    qc.invalidateQueries({ queryKey: ['findings', params!.id] });
+    qc.invalidateQueries({ queryKey: ['findings', params!.id, 'follow-up'] });
+  };
+
   const updateStatus = useMutation({
     mutationFn: (status: string) => findingsApi.updateStatus(params!.id, status),
     onSuccess: () => {
       toast.success('Status updated');
-      qc.invalidateQueries({ queryKey: ['findings', params!.id] });
+      invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
@@ -54,8 +68,48 @@ export default function FindingDetailPage(): JSX.Element {
     mutationFn: () => findingsApi.close(params!.id),
     onSuccess: () => {
       toast.success('Finding closure sent for approval');
-      qc.invalidateQueries({ queryKey: ['findings', params!.id] });
+      invalidate();
       qc.invalidateQueries({ queryKey: ['workflow', 'approvals'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  // ── Follow-up actions ────────────────────────────────────────
+  const [response, setResponse] = useState('');
+  const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
+  const [verification, setVerification] = useState<'verified' | 'rejected'>('verified');
+  const [notes, setNotes] = useState('');
+
+  const submitResponse = useMutation({
+    mutationFn: () => followUpApi.submitResponse(params!.id, { managementResponse: response }),
+    onSuccess: () => {
+      toast.success('Management response submitted');
+      setResponse('');
+      invalidate();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const uploadEvidence = useMutation({
+    mutationFn: () => followUpApi.uploadEvidence(params!.id, evidenceFile!),
+    onSuccess: () => {
+      toast.success('Remediation evidence uploaded');
+      setEvidenceFile(null);
+      invalidate();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const submitVerify = useMutation({
+    mutationFn: () =>
+      followUpApi.verify(params!.id, {
+        verificationStatus: verification,
+        verificationNotes: notes || undefined,
+      }),
+    onSuccess: () => {
+      toast.success('Verification recorded');
+      setNotes('');
+      invalidate();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
@@ -85,6 +139,18 @@ export default function FindingDetailPage(): JSX.Element {
 
   const overdue = new Date(data.dueDate) < new Date() && !['verified', 'pending_closure', 'closed'].includes(data.status);
 
+  // Who may act on the follow-up. The auditee (or a co-responder) submits the
+  // management response and remediation evidence; the audit team verifies.
+  const isResponder =
+    data.auditeeId === user.id ||
+    (data.additionalAuditees ?? []).some((a) => a.id === user.id);
+  const canRespond = isResponder && hasPermission('followup:respond');
+  const canSubmitEvidence = isResponder && hasPermission('followup:evidence');
+  const isSettled = ['pending_closure', 'closed'].includes(data.status);
+  // The manual status dropdown only makes sense before verification. Afterwards
+  // the status is driven by the Verify action and the closure workflow.
+  const showStatusDropdown = canChangeStatus && MANUAL_STATUS_SET.has(data.status);
+
   return (
     <div>
       <PageHeader
@@ -100,7 +166,7 @@ export default function FindingDetailPage(): JSX.Element {
                 Back
               </Button>
             </Link>
-            {canChangeStatus && (
+            {showStatusDropdown && (
               <div className="w-48">
                 <Select
                   value={data.status}
@@ -221,32 +287,141 @@ export default function FindingDetailPage(): JSX.Element {
 
         <Card>
           <CardHeader title="Follow-up" />
-          {!followUp.data ? (
-            <p className="text-xs text-text-muted">No follow-up recorded yet.</p>
-          ) : (
-            <div className="space-y-3 text-xs">
-              <div>
-                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Verification</p>
-                <StatusBadge status={followUp.data.verificationStatus} />
-              </div>
-              {followUp.data.managementResponse && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Management response</p>
-                  <p className="text-text-primary whitespace-pre-wrap mt-1">{followUp.data.managementResponse}</p>
-                </div>
-              )}
-              {followUp.data.verificationNotes && (
-                <div>
-                  <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Verifier notes</p>
-                  <p className="text-text-primary whitespace-pre-wrap mt-1">{followUp.data.verificationNotes}</p>
-                </div>
-              )}
-              {followUp.data.verifiedByName && (
-                <p className="text-text-muted">Verified by {followUp.data.verifiedByName}</p>
-              )}
+          <div className="space-y-4 text-xs">
+            <div>
+              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Verification</p>
+              <StatusBadge status={followUp.data?.verificationStatus ?? 'pending'} />
             </div>
-          )}
+
+            {followUp.data?.managementResponse && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Management response</p>
+                <p className="text-text-primary whitespace-pre-wrap mt-1">{followUp.data.managementResponse}</p>
+              </div>
+            )}
+            {followUp.data?.remediationEvidence && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Remediation evidence</p>
+                <a
+                  href={documentsApi.downloadUrl(followUp.data.remediationEvidence.documentId)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="mt-1 inline-flex items-center gap-1 font-medium text-primary hover:underline"
+                >
+                  {followUp.data.remediationEvidence.fileName}
+                </a>
+              </div>
+            )}
+            {followUp.data?.verificationNotes && (
+              <div>
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Verifier notes</p>
+                <p className="text-text-primary whitespace-pre-wrap mt-1">{followUp.data.verificationNotes}</p>
+              </div>
+            )}
+            {followUp.data?.verifiedByName && (
+              <p className="text-text-muted">Verified by {followUp.data.verifiedByName}</p>
+            )}
+
+            {/* Auditee: submit a management response */}
+            {canRespond && !isSettled && (
+              <div className="rounded-md border border-border bg-surface-alt p-3">
+                <FormField label="Management response" required>
+                  <Textarea
+                    rows={4}
+                    value={response}
+                    onChange={(e) => setResponse(e.target.value)}
+                    placeholder="Describe planned remediation and timeline…"
+                  />
+                </FormField>
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (!response.trim()) {
+                        toast.error('Response cannot be empty');
+                        return;
+                      }
+                      submitResponse.mutate();
+                    }}
+                    isLoading={submitResponse.isPending}
+                  >
+                    Submit response
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Auditee: upload remediation evidence */}
+            {canSubmitEvidence && !isSettled && (
+              <div className="rounded-md border border-border bg-surface-alt p-3">
+                <FormField label="Remediation evidence">
+                  <input
+                    type="file"
+                    onChange={(e) => setEvidenceFile(e.target.files?.[0] ?? null)}
+                    className="block w-full rounded-md border border-border bg-white px-3 py-2 text-xs text-text-primary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
+                  />
+                </FormField>
+                <div className="mt-2 flex justify-end">
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      if (!evidenceFile) {
+                        toast.error('Choose a file to upload');
+                        return;
+                      }
+                      uploadEvidence.mutate();
+                    }}
+                    isLoading={uploadEvidence.isPending}
+                  >
+                    Upload evidence
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Audit team: verify or reject remediation */}
+            {canVerify && !isSettled && followUp.data && (
+              <div className="rounded-md border border-border bg-surface-alt p-3">
+                <FormField label="Verification">
+                  <div className="flex items-center gap-4">
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="verify"
+                        checked={verification === 'verified'}
+                        onChange={() => setVerification('verified')}
+                      />
+                      Verified
+                    </label>
+                    <label className="inline-flex items-center gap-2">
+                      <input
+                        type="radio"
+                        name="verify"
+                        checked={verification === 'rejected'}
+                        onChange={() => setVerification('rejected')}
+                      />
+                      Rejected
+                    </label>
+                  </div>
+                </FormField>
+                <FormField label="Notes">
+                  <Textarea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="How remediation was verified…" />
+                </FormField>
+                <div className="mt-2 flex justify-end">
+                  <Button size="sm" onClick={() => submitVerify.mutate()} isLoading={submitVerify.isPending}>
+                    Save verification
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {!followUp.data && !canRespond && !canSubmitEvidence && !canVerify && (
+              <p className="text-xs text-text-muted">No follow-up recorded yet.</p>
+            )}
+          </div>
         </Card>
+
+        <LinkedAssetsCard scope="finding" id={params!.id} />
       </div>
     </div>
   );

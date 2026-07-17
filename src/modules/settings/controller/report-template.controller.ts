@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission, requireAnyPermission } from '../../../shared/middleware/auth.middleware';
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
 import { IReportTemplateService } from '../service/interface/report-template.service.interface';
@@ -27,7 +27,7 @@ export class ReportTemplateController {
      */
     this.router.get(
       '/',
-      requirePermission('settings:read'),
+      requireAnyPermission('settings:read', 'report:read'),
       validate(ReportTemplateQuerySchema, 'query'),
       this._listTemplates.bind(this),
     );
@@ -39,7 +39,7 @@ export class ReportTemplateController {
      */
     this.router.get(
       '/default',
-      requirePermission('settings:read'),
+      requireAnyPermission('settings:read', 'report:read'),
       this._getDefaultTemplate.bind(this),
     );
 
@@ -50,7 +50,7 @@ export class ReportTemplateController {
      */
     this.router.get(
       '/variables',
-      requirePermission('settings:read'),
+      requireAnyPermission('settings:read', 'report:read'),
       this._getAvailableVariables.bind(this),
     );
 
@@ -61,7 +61,7 @@ export class ReportTemplateController {
      */
     this.router.get(
       '/:id',
-      requirePermission('settings:read'),
+      requireAnyPermission('settings:read', 'report:read'),
       this._getTemplateById.bind(this),
     );
 

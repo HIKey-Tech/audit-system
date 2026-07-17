@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 import { Check, ChevronDown, X } from 'lucide-react';
 
 import { SlideOver } from '@/components/ui/SlideOver';
@@ -161,7 +162,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
   const onSubmit = handleSubmit((values) => {
     if (isEdit) updateMut.mutate(values);
     else createMut.mutate(values);
-  });
+  }, toastOnInvalid);
 
   const toggleRole = (id: string) => {
     setSelectedRoleIds((prev) =>

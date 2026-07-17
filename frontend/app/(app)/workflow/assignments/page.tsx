@@ -29,9 +29,12 @@ export default function AssignmentsPage(): JSX.Element {
   const canAssign = hasPermission('assignment:create');
   const [open, setOpen] = useState(false);
 
+  // The Assignments page is a management view: it must show the assignments the
+  // user can act on (their engagements' staffing), not just their own personal
+  // assignments — otherwise a manager who assigns staff sees an empty page.
   const mine = useQuery({
-    queryKey: ['workflow', 'assignments', 'mine'],
-    queryFn: () => workflowApi.listMine(),
+    queryKey: ['workflow', 'assignments', 'manageable'],
+    queryFn: () => workflowApi.listManageable(),
   });
 
   const columns: Column<WorkflowAssignment>[] = [

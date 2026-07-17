@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -116,7 +117,7 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
   const onSubmit = handleSubmit((values) => {
     if (isEdit) updateMut.mutate(values);
     else createMut.mutate(values);
-  });
+  }, toastOnInvalid);
 
   const ownerId = watch('ownerId');
 

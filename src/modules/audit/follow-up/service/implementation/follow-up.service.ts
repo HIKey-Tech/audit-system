@@ -364,7 +364,8 @@ export class FollowUpService implements IFollowUpService {
             responders: { select: { user_id: true } }
           }
         },
-        remediation_evidence: true
+        remediation_evidence: true,
+        verified_by: { select: { display_name: true, first_name: true, last_name: true } },
       },
     });
     if (!followUp || followUp.finding.deleted_at !== null) throw AppError.notFound('Audit follow-up');

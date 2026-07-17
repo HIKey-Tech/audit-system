@@ -11,6 +11,9 @@ const mapFollowUpToResponse = (followUp) => ({
     remediationEvidenceId: followUp.remediation_evidence_id,
     verificationStatus: followUp.verification_status,
     verifiedById: followUp.verified_by_id,
+    verifiedByName: followUp.verified_by
+        ? (followUp.verified_by.display_name ?? `${followUp.verified_by.first_name} ${followUp.verified_by.last_name}`.trim())
+        : null,
     verifiedAt: followUp.verified_at?.toISOString() ?? null,
     verificationNotes: followUp.verification_notes,
     createdAt: followUp.created_at.toISOString(),

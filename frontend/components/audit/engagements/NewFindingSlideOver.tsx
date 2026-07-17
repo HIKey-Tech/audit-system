@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { X } from 'lucide-react';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { Button } from '@/components/ui/Button';
 import { SlideOver } from '@/components/ui/SlideOver';
@@ -150,7 +151,7 @@ export const NewFindingSlideOver = ({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v));
+  const onSubmit = handleSubmit((v) => create.mutate(v), toastOnInvalid);
   const auditeeId = watch('auditeeId');
   const additionalAuditeeIds = watch('additionalAuditeeIds') ?? [];
 

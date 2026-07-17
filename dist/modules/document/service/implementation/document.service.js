@@ -182,6 +182,15 @@ class DocumentService {
             throw app_error_1.AppError.notFound('Document');
         await this._assertCanAccess(doc, actor);
     }
+    async getEntityType(documentId) {
+        const doc = await prisma_client_1.prisma.document.findUnique({
+            where: { id: documentId, deleted_at: null },
+            select: { entity_type: true },
+        });
+        if (!doc)
+            throw app_error_1.AppError.notFound('Document');
+        return doc.entity_type;
+    }
     async getFileById(id) {
         const doc = await prisma_client_1.prisma.document.findUnique({
             where: { id, deleted_at: null },

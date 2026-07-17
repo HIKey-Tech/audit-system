@@ -32,6 +32,19 @@ class RiskRegisterService {
                 },
                 include: prisma_types_1.riskRegisterWithDetailsInclude,
             });
+            // Record the initial scoring as the first assessment snapshot, so the
+            // register's current_score is always backed by an assessment (the trend
+            // and history start from creation instead of showing "no assessments").
+            await tx.risk_Assessment.create({
+                data: {
+                    risk_id: created.id,
+                    likelihood: dto.likelihood,
+                    impact: dto.impact,
+                    score,
+                    notes: 'Initial assessment recorded at risk creation.',
+                    assessed_by_id: actor.id,
+                },
+            });
             if (dto.universeId)
                 await this._syncUniverseRiskScore(tx, dto.universeId);
             return created;

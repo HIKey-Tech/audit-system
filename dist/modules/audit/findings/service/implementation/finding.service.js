@@ -325,6 +325,8 @@ class FindingService {
             ...(query.severity && { severity: query.severity }),
             ...(query.status && { status: query.status }),
             ...(query.category && { category: query.category }),
+            ...(query.riskId && { risk_id: query.riskId }),
+            ...(query.universeId && { engagement: { universe_id: query.universeId } }),
             ...(query.controlReference && {
                 checklist: { control_reference: { contains: query.controlReference } },
             }),

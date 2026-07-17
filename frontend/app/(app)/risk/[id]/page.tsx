@@ -16,11 +16,13 @@ import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { riskApi } from '@/lib/api/risk';
+import { findingsApi } from '@/lib/api/audit';
 import { formatDateTime } from '@/lib/utils/format';
-import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
+import { riskScoreLabel, riskScoreTone, humanizeStatus } from '@/lib/utils/status';
 import type { RiskAssessment } from '@/lib/types/domain';
 import { NewAssessmentSlideOver } from '@/components/risk/NewAssessmentSlideOver';
 import { RiskFormSlideOver } from '@/components/risk/RiskFormSlideOver';
+import { LinkedAssetsCard } from '@/components/common/LinkedAssetsCard';
 
 export default function RiskDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
@@ -44,6 +46,14 @@ export default function RiskDetailPage(): JSX.Element {
   const trend = useQuery({
     queryKey: ['risk', id, 'trend'],
     queryFn: () => riskApi.getTrend(id),
+    enabled: Boolean(id),
+  });
+
+  // Findings that cite this risk — closes the finding→risk loop (a finding shows
+  // its risk; now the risk shows the findings that reference it).
+  const linkedFindings = useQuery({
+    queryKey: ['risk', id, 'findings'],
+    queryFn: () => findingsApi.list({ riskId: id, pageSize: 50 }),
     enabled: Boolean(id),
   });
 
@@ -219,6 +229,34 @@ export default function RiskDetailPage(): JSX.Element {
           className="rounded-none border-0 border-t border-border"
         />
       </Card>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
+        <Card>
+          <CardHeader title="Linked findings" subtitle={`${linkedFindings.data?.items?.length ?? 0} cite this risk`} />
+          {linkedFindings.isLoading ? (
+            <Skeleton className="h-4 w-2/3" />
+          ) : !linkedFindings.data?.items?.length ? (
+            <EmptyState compact title="No findings reference this risk" />
+          ) : (
+            <ul className="divide-y divide-border">
+              {linkedFindings.data.items.map((f) => (
+                <li key={f.id} className="flex items-center justify-between gap-2 py-2">
+                  <Link href={`/audit/findings/${f.id}`} className="min-w-0">
+                    <p className="truncate text-sm font-medium text-primary hover:underline">{f.title}</p>
+                    <p className="font-mono text-[11px] text-text-secondary">{f.engagementReference}</p>
+                  </Link>
+                  <div className="flex shrink-0 items-center gap-1.5">
+                    <StatusBadge status={f.severity} />
+                    <Badge tone="gray">{humanizeStatus(f.status)}</Badge>
+                  </div>
+                </li>
+              ))}
+            </ul>
+          )}
+        </Card>
+
+        <LinkedAssetsCard scope="risk" id={id} />
+      </div>
 
       <NewAssessmentSlideOver open={open} onClose={() => setOpen(false)} riskId={r.id} />
       <RiskFormSlideOver open={editOpen} onClose={() => setEditOpen(false)} risk={r} />

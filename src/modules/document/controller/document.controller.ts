@@ -249,11 +249,12 @@ export class DocumentController {
      * @desc   Stream the raw file bytes for a document, regardless of
      *         storage provider. Lets the browser download from a same-origin
      *         URL so cross-origin S3/Azure objects don't require bucket CORS.
-     * @access Private — document:read
+     * @access Private — document:read, EXCEPT user-signature images, which are
+     *         shown across the approval chain (approvers, auditees, executives)
+     *         who don't hold document:read. The per-document ACL still applies.
      */
     this.router.get(
       '/:id/file',
-      requirePermission('document:read'),
       this._getFileById.bind(this),
     );
 
@@ -407,6 +408,14 @@ export class DocumentController {
 
   private async _getFileById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      // Signature images are the one document class shown across the whole
+      // approval chain, so they are exempt from the generic document:read gate;
+      // everything else still requires it. The per-document ACL (assertCanUserAccess)
+      // runs for both.
+      const entityType = await this.documentService.getEntityType(req.params.id);
+      if (entityType !== 'user_signature' && !req.user!.isSuperAdmin && !req.user!.permissions.includes('document:read')) {
+        throw AppError.forbidden('Insufficient permissions');
+      }
       await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       const file = await this.documentService.getFileById(req.params.id);
       this._sendFile(res, file);

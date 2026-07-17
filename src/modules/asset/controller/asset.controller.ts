@@ -195,6 +195,27 @@ export class AssetController {
     this.auditRouter.get('/engagements/:id/assets', requirePermission('asset:read'), this._listAssetsForEngagement.bind(this));
 
     /**
+     * @route  GET /audit/findings/:id/assets
+     * @desc   List assets linked to a finding
+     * @access Private - asset:read
+     */
+    this.auditRouter.get('/findings/:id/assets', requirePermission('asset:read'), this._listAssetsForFinding.bind(this));
+
+    /**
+     * @route  GET /audit/risks/:id/assets
+     * @desc   List assets linked to a risk-register entry
+     * @access Private - asset:read
+     */
+    this.auditRouter.get('/risks/:id/assets', requirePermission('asset:read'), this._listAssetsForRisk.bind(this));
+
+    /**
+     * @route  GET /audit/evidence/:id/assets
+     * @desc   List assets linked to an evidence item
+     * @access Private - asset:read
+     */
+    this.auditRouter.get('/evidence/:id/assets', requirePermission('asset:read'), this._listAssetsForEvidence.bind(this));
+
+    /**
      * @route  POST /audit/engagements/:id/assets
      * @desc   Add asset to engagement scope
      * @access Private - asset:link
@@ -428,6 +449,33 @@ export class AssetController {
   private async _listAssetsForEngagement(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const assets = await this.assetService.listAssetsForEngagement(req.params.id, req.user!);
+      res.status(200).json(buildResponse(assets));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listAssetsForFinding(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const assets = await this.assetService.listAssetsForFinding(req.params.id, req.user!);
+      res.status(200).json(buildResponse(assets));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listAssetsForRisk(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const assets = await this.assetService.listAssetsForRisk(req.params.id, req.user!);
+      res.status(200).json(buildResponse(assets));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listAssetsForEvidence(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const assets = await this.assetService.listAssetsForEvidence(req.params.id, req.user!);
       res.status(200).json(buildResponse(assets));
     } catch (err) {
       next(err);

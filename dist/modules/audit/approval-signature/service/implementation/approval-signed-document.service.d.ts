@@ -8,6 +8,13 @@ export declare class ApprovalSignedDocumentService implements IApprovalSignedDoc
     private readonly workingPapers;
     constructor(documents?: IDocumentService, reportGen?: ReportGenerationService, workingPapers?: WorkingPaperService);
     generateForCompletedApproval(approvalId: string): Promise<void>;
+    /**
+     * The generation runs fire-and-forget after the approval commits, so a
+     * failure here is otherwise invisible — the approval "succeeds" but the
+     * signed artifact never appears. Tell the submitter so someone can act.
+     * Best-effort: never throws.
+     */
+    private _notifyGenerationFailure;
     private _renderForEntity;
     private _certificateData;
     /** Signature-panel entries from approved steps, embedding each approver's recorded signature image. */

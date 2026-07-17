@@ -86,7 +86,7 @@ class ApprovalService {
         });
         if (existing)
             throw app_error_1.AppError.conflict('A pending approval already exists for this entity');
-        const levels = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
+        const levels = await this._resolveApproverChain(db, dto.entityType, dto.entityId, submittedBy.id);
         if (levels.length === 0)
             throw app_error_1.AppError.badRequest('No approvers configured for this approval');
         const createApprovalRecord = async (client) => {
@@ -216,6 +216,12 @@ class ApprovalService {
     async approve(approvalId, actor, comment, edits) {
         const approval = await this._getPendingApproval(approvalId);
         const currentStep = this._getActionableStep(approval, actor);
+        // Segregation of duties: whoever prepared/submitted the item for approval
+        // may not also approve it. Rejecting your own submission is fine — only the
+        // approval sign-off is gated. A different authorized user must sign.
+        if (approval.submitted_by_id === actor.id) {
+            throw app_error_1.AppError.forbidden('You submitted this item for approval and cannot also approve it (segregation of duties). It must be approved by a different authorized user.');
+        }
         const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
         const now = new Date();
         const hasEdits = !!edits && Object.keys(edits).length > 0;
@@ -617,7 +623,7 @@ class ApprovalService {
         }
         return { entityType, entityId, exists: false, status: null, currentLevel: null, levels };
     }
-    async _resolveApproverChain(db, entityType, entityId) {
+    async _resolveApproverChain(db, entityType, entityId, submittedById) {
         const matrix = await (0, audit_config_utility_1.getApprovalMatrix)();
         const chain = this._chainForEntity(matrix, entityType);
         if (chain.length === 0)
@@ -635,6 +641,18 @@ class ApprovalService {
                 }
                 if (!managerPermission) {
                     throw app_error_1.AppError.badRequest(`No approver permission configured for ${entityType} manager approval`);
+                }
+                // Segregation of duties: if the engagement manager is also the person who
+                // submitted this item, pinning the level to them would deadlock (they may
+                // not approve their own submission). Fall back to the permission pool so a
+                // different qualified approver can act. Requires another holder to exist.
+                if (submittedById && engagementManagerId === submittedById) {
+                    const hasOtherHolder = await this._hasActiveUserWithPermission(db, managerPermission, submittedById);
+                    if (!hasOtherHolder) {
+                        throw app_error_1.AppError.badRequest(`You submitted this ${entityType.replace(/_/g, ' ')} and are its only eligible approver. Another user holding '${managerPermission}' must be available to approve it (segregation of duties).`);
+                    }
+                    specs.push({ approverId: null, requiredPermission: managerPermission });
+                    continue;
                 }
                 // Pinned to the engagement's manager, who must still hold the permission to act.
                 specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
@@ -699,9 +717,12 @@ class ApprovalService {
         }
         return null;
     }
-    async _hasActiveUserWithPermission(db, permissionSlug) {
+    async _hasActiveUserWithPermission(db, permissionSlug, excludeUserId) {
         const user = await db.user.findFirst({
-            where: this._activeHolderWhere(permissionSlug),
+            where: {
+                ...this._activeHolderWhere(permissionSlug),
+                ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+            },
             select: { id: true },
         });
         return user !== null;

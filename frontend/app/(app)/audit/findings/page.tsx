@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
 import { Search, AlertTriangle } from 'lucide-react';
@@ -20,13 +20,17 @@ import { cn } from '@/lib/utils/cn';
 
 export default function FindingsListPage(): JSX.Element {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  // Deep-link scope: e.g. the audit-universe "open findings" count links here
+  // with ?universeId=… so the register opens pre-filtered to that entity.
+  const universeId = searchParams?.get('universeId') ?? undefined;
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState('');
   const [status, setStatus] = useState('');
   const [category, setCategory] = useState('');
 
   const query = useQuery({
-    queryKey: ['findings', { search, severity, status, category }],
+    queryKey: ['findings', { search, severity, status, category, universeId }],
     queryFn: () =>
       findingsApi.list({
         pageSize: 100,
@@ -34,6 +38,7 @@ export default function FindingsListPage(): JSX.Element {
         severity: severity || undefined,
         status: status || undefined,
         category: category || undefined,
+        universeId,
       }),
   });
 

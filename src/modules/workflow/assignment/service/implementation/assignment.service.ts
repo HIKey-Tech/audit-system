@@ -239,6 +239,39 @@ export class AssignmentService implements IAssignmentService {
     return assignments.map(mapAssignmentToResponse);
   }
 
+  /**
+   * Assignments the actor can see and manage: oversight (engagement:read_all)
+   * sees every assignment; otherwise assignments on engagements the actor leads,
+   * manages, or is assigned to. This is the management view behind the
+   * Assignments page — distinct from `getMyAssignments`, which is the actor's
+   * own personal assignments only. Without this, a manager who assigns staff
+   * could never see the assignments they created.
+   */
+  async getVisibleAssignments(actor: WorkflowActorContext): Promise<AssignmentResponseDto[]> {
+    const isOversight = actor.permissions.includes('engagement:read_all');
+    const where: Prisma.Workflow_AssignmentWhereInput = {
+      engagement: {
+        deleted_at: null,
+        ...(isOversight
+          ? {}
+          : {
+              OR: [
+                { lead_auditor_id: actor.id },
+                { audit_manager_id: actor.id },
+                { workflow_assignments: { some: { user_id: actor.id } } },
+              ],
+            }),
+      },
+    };
+
+    const assignments = await prisma.workflow_Assignment.findMany({
+      where,
+      include: assignmentInclude,
+      orderBy: { assigned_at: 'desc' },
+    });
+    return assignments.map(mapAssignmentToResponse);
+  }
+
   async getMyAssignments(
     userId: string,
     filters: MyAssignmentsQueryDto,

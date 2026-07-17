@@ -9,6 +9,7 @@ const crypto_1 = __importDefault(require("crypto"));
 const client_1 = require("@prisma/client");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const document_1 = require("../../../../document");
 const signed_document_utility_1 = require("../../utility/signed-document.utility");
 // Documents attached to a request are stored with this entity_type (see request.service.ts).
@@ -70,6 +71,29 @@ class SignedDocumentService {
         }
         catch (err) {
             logger_util_1.logger.warn('Signed-PDF generation failed for request', { requestId, err });
+            await this._notifyGenerationFailure(requestId);
+        }
+    }
+    /** Fire-and-forget generation means failures are otherwise invisible — tell the initiator. Best-effort. */
+    async _notifyGenerationFailure(requestId) {
+        try {
+            const request = await prisma_client_1.prisma.workflow_Request.findUnique({
+                where: { id: requestId },
+                select: { initiator_id: true, reference_number: true },
+            });
+            if (!request)
+                return;
+            await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                userId: request.initiator_id,
+                title: 'Signed document generation failed',
+                body: `Request ${request.reference_number} completed, but its signed PDF could not be generated. Contact an administrator — it can be regenerated once the underlying issue is resolved.`,
+                type: 'error',
+                referenceType: 'workflow_request',
+                referenceId: requestId,
+            });
+        }
+        catch (notifyErr) {
+            logger_util_1.logger.warn('Failed to notify signed-PDF generation failure', { requestId, notifyErr });
         }
     }
     async list(requestId) {

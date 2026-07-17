@@ -18,6 +18,8 @@ const SEVERITY_ORDER = {
     low: 4,
     informational: 5,
 };
+/** "excluded_reference" → "Excluded Reference"; leaves already-readable text alone. */
+const titleCase = (value) => value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 const SEVERITY_COLOURS = {
     critical: { bg: 'DC2626', text: 'FFFFFF' },
     high: { bg: 'EA580C', text: 'FFFFFF' },
@@ -142,6 +144,13 @@ class ReportGenerationService {
                                 },
                             },
                         },
+                        asset_links: {
+                            where: { asset: { deleted_at: null } },
+                            include: {
+                                asset: { select: { asset_tag: true, name: true, asset_type: true, criticality: true } },
+                            },
+                            orderBy: { scope_role: 'asc' },
+                        },
                     },
                 },
             },
@@ -230,6 +239,13 @@ class ReportGenerationService {
                     }
                     : null,
             })),
+            assetsInScope: report.engagement.asset_links.map((link) => ({
+                assetTag: link.asset.asset_tag,
+                name: link.asset.name,
+                assetType: link.asset.asset_type,
+                criticality: link.asset.criticality,
+                scopeRole: link.scope_role,
+            })),
         };
     }
     async fetchTemplateAndConfig(templateId) {
@@ -293,6 +309,23 @@ class ReportGenerationService {
             }));
             children.push(...this._buildDocxSectionContent(section.key, data));
         });
+        // Assets in scope — appended when the engagement has linked assets, so the
+        // technology/data/service scope always reaches the report regardless of
+        // whether the template declares an assets section.
+        if (data.assetsInScope.length > 0) {
+            children.push(new docx_1.Paragraph({
+                spacing: { before: 240, after: 120 },
+                children: [
+                    new docx_1.TextRun({
+                        text: `${config.template.sections.length + 1}. Assets in Scope`,
+                        bold: true,
+                        size: 24,
+                        color: header.primaryColor,
+                    }),
+                ],
+            }));
+            children.push(this._buildDocxAssetsInScopeTable(data.assetsInScope));
+        }
         // Signature block
         children.push(this._buildDocxSignatureBlock(data, approval, config, sigMap));
         // Footer notice
@@ -489,6 +522,35 @@ class ReportGenerationService {
                     verticalAlign: docx_1.VerticalAlign.CENTER,
                 }),
             ],
+        }));
+        return new docx_1.Table({
+            rows: [headerRow, ...dataRows],
+            width: { size: 100, type: docx_1.WidthType.PERCENTAGE },
+            borders: {
+                top: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                bottom: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                left: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                right: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                insideHorizontal: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                insideVertical: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+            },
+        });
+    }
+    _buildDocxAssetsInScopeTable(assets) {
+        const headerRow = new docx_1.TableRow({
+            children: [
+                this._docxHeaderCell('Tag'),
+                this._docxHeaderCell('Asset'),
+                this._docxHeaderCell('Type'),
+                this._docxHeaderCell('Criticality'),
+                this._docxHeaderCell('Scope Role'),
+            ],
+        });
+        const dataRows = assets.map((a) => new docx_1.TableRow({
+            children: [a.assetTag, a.name, a.assetType, a.criticality, a.scopeRole].map((v) => new docx_1.TableCell({
+                children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: titleCase(v) })] })],
+                verticalAlign: docx_1.VerticalAlign.CENTER,
+            })),
         }));
         return new docx_1.Table({
             rows: [headerRow, ...dataRows],
@@ -961,6 +1023,33 @@ class ReportGenerationService {
                     break;
             }
         });
+        // Assets in scope — always appended when the engagement has linked assets,
+        // so scope reaches the report even if the template omits an assets section.
+        if (data.assetsInScope.length > 0) {
+            sectionsContent.push({
+                text: `${config.template.sections.length + 1}. Assets in Scope`,
+                style: 'sectionTitle',
+                margin: [0, 18, 0, 8],
+            });
+            sectionsContent.push({
+                table: {
+                    headerRows: 1,
+                    widths: ['auto', '*', 'auto', 'auto', 'auto'],
+                    body: [
+                        ['Tag', 'Asset', 'Type', 'Criticality', 'Scope Role'].map((h) => ({ text: h, bold: true, fillColor: '#f1f5f9' })),
+                        ...data.assetsInScope.map((a) => [
+                            titleCase(a.assetTag),
+                            titleCase(a.name),
+                            titleCase(a.assetType),
+                            titleCase(a.criticality),
+                            titleCase(a.scopeRole),
+                        ]),
+                    ],
+                },
+                layout: pdf_util_1.borderedTableLayout,
+                margin: [0, 0, 0, 8],
+            });
+        }
         const reviewedSig = sigImg(reviewedStepId);
         const approvedSig = sigImg(approvedStepId);
         const signatureColumns = {

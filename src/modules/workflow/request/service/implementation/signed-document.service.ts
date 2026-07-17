@@ -3,6 +3,7 @@ import crypto from 'crypto';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../../shared/utils/logger.util';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { DocumentService } from '../../../../document';
 import {
@@ -81,6 +82,28 @@ export class SignedDocumentService implements ISignedDocumentService {
       }
     } catch (err) {
       logger.warn('Signed-PDF generation failed for request', { requestId, err });
+      await this._notifyGenerationFailure(requestId);
+    }
+  }
+
+  /** Fire-and-forget generation means failures are otherwise invisible — tell the initiator. Best-effort. */
+  private async _notifyGenerationFailure(requestId: string): Promise<void> {
+    try {
+      const request = await prisma.workflow_Request.findUnique({
+        where: { id: requestId },
+        select: { initiator_id: true, reference_number: true },
+      });
+      if (!request) return;
+      await notificationQueueService.enqueueSafe('in_app', {
+        userId: request.initiator_id,
+        title: 'Signed document generation failed',
+        body: `Request ${request.reference_number} completed, but its signed PDF could not be generated. Contact an administrator — it can be regenerated once the underlying issue is resolved.`,
+        type: 'error',
+        referenceType: 'workflow_request',
+        referenceId: requestId,
+      });
+    } catch (notifyErr) {
+      logger.warn('Failed to notify signed-PDF generation failure', { requestId, notifyErr });
     }
   }
 

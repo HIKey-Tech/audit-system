@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ListChecks, AlertTriangle } from 'lucide-react';
@@ -71,14 +71,20 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
     [findings.data],
   );
 
+  // Latest notes text per checklist row, including drafts not yet saved (the
+  // NotesInput saves on blur, so a fresh note can still be missing from the
+  // cached query row when "Raise finding" is clicked straight after typing).
+  const notesDrafts = useRef(new Map<string, string>());
+
   const openFindingForm = (item: AuditChecklistItem): void => {
+    const notes = notesDrafts.current.get(item.id) ?? item.notes;
     setFindingPrefill({
       checklistId: item.id,
       title: `Control ${item.controlReference} failed: ${item.controlDescription.slice(0, 120)}`,
       description: [
         `Control ${item.controlReference} — ${item.controlDescription}`,
         item.testProcedure ? `Test procedure: ${item.testProcedure}` : null,
-        item.notes ? `Test notes: ${item.notes}` : null,
+        notes ? `Test notes: ${notes}` : null,
       ]
         .filter(Boolean)
         .join('\n\n'),
@@ -187,6 +193,7 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
                         </Select>
                         <NotesInput
                           initial={item.notes ?? ''}
+                          onDraft={(v) => notesDrafts.current.set(item.id, v)}
                           onSave={(v) => update.mutate({ id: item.id, dto: { result: item.result, notes: v || null } })}
                         />
                         <EvidenceAttach
@@ -251,9 +258,11 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
 
 const NotesInput = ({
   initial,
+  onDraft,
   onSave,
 }: {
   initial: string;
+  onDraft: (v: string) => void;
   onSave: (v: string) => void;
 }): JSX.Element => {
   const [value, setValue] = useState(initial);
@@ -261,7 +270,10 @@ const NotesInput = ({
     <Input
       value={value}
       placeholder="Notes…"
-      onChange={(e) => setValue(e.target.value)}
+      onChange={(e) => {
+        setValue(e.target.value);
+        onDraft(e.target.value);
+      }}
       onBlur={() => {
         if (value !== initial) onSave(value);
       }}

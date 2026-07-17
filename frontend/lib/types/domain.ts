@@ -604,6 +604,7 @@ export interface AuditFollowUp {
   managementResponse: string | null;
   responseDate: string | null;
   remediationEvidenceId: string | null;
+  remediationEvidence?: Pick<AuditEvidence, 'id' | 'documentId' | 'fileName'> | null;
   verificationStatus: string;
   verificationNotes: string | null;
   verifiedById: string | null;

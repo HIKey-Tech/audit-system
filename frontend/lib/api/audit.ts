@@ -374,6 +374,8 @@ export interface FindingsListQuery {
   status?: string;
   category?: string;
   auditeeId?: string;
+  riskId?: string;
+  universeId?: string;
   search?: string;
 }
 

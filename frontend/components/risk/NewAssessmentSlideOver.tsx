@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -61,7 +62,7 @@ export const NewAssessmentSlideOver = ({ open, onClose, riskId }: Props): JSX.El
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v));
+  const onSubmit = handleSubmit((v) => create.mutate(v), toastOnInvalid);
 
   const likelihood = Number(watch('likelihood') || 0);
   const impact = Number(watch('impact') || 0);

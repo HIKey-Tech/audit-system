@@ -91,6 +91,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
@@ -135,7 +136,15 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to add item'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v));
+  // Invalid submits must never look like a dead button — surface the first
+  // field error as a toast in addition to the inline field messages.
+  const onSubmit = handleSubmit(
+    (v) => create.mutate(v),
+    (errs) => {
+      const first = Object.values(errs).find((e) => e?.message)?.message;
+      toast.error(typeof first === 'string' ? first : 'Please fix the highlighted fields');
+    },
+  );
 
   return (
     <SlideOver
@@ -212,7 +221,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
               : 'Sorted by risk score, highest first.'
           }
         >
-          <Select error={errors.universeId?.message} {...register('universeId')}>
+          <Select error={errors.universeId?.message} value={watch('universeId')} {...register('universeId')}>
             <option value="">Select entity…</option>
             {rankedEntities.map((e) => {
               const rec = recByUniverseId.get(e.id);
@@ -229,7 +238,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Audit type" required error={errors.auditType?.message}>
-            <Select error={errors.auditType?.message} {...register('auditType')}>
+            <Select error={errors.auditType?.message} value={watch('auditType')} {...register('auditType')}>
               <option value="it">IT</option>
               <option value="financial">Financial</option>
               <option value="compliance">Compliance</option>
@@ -237,7 +246,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
             </Select>
           </FormField>
           <FormField label="Priority" required error={errors.priority?.message}>
-            <Select error={errors.priority?.message} {...register('priority')}>
+            <Select error={errors.priority?.message} value={watch('priority')} {...register('priority')}>
               <option value="critical">Critical</option>
               <option value="high">High</option>
               <option value="medium">Medium</option>

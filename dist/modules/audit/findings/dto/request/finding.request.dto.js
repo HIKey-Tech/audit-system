@@ -47,6 +47,8 @@ exports.FindingQuerySchema = zod_1.z.object({
     category: zod_1.z.nativeEnum(audit_enum_1.FindingCategory).optional(),
     controlReference: zod_1.z.string().trim().optional(),
     auditeeId: zod_1.z.string().uuid().optional(),
+    riskId: zod_1.z.string().uuid().optional(),
+    universeId: zod_1.z.string().uuid().optional(),
     sortBy: zod_1.z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
 });

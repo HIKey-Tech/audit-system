@@ -17,6 +17,7 @@ export interface FollowUpResponseDto {
     remediationEvidenceId: string | null;
     verificationStatus: string;
     verifiedById: string | null;
+    verifiedByName: string | null;
     verifiedAt: string | null;
     verificationNotes: string | null;
     createdAt: string;
@@ -33,6 +34,11 @@ export declare const mapFollowUpToResponse: (followUp: {
     remediation_evidence_id: string | null;
     verification_status: string;
     verified_by_id: string | null;
+    verified_by?: {
+        display_name: string | null;
+        first_name: string;
+        last_name: string;
+    } | null;
     verified_at: Date | null;
     verification_notes: string | null;
     created_at: Date;

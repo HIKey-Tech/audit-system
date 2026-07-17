@@ -26,6 +26,8 @@ export interface IDocumentService {
      * cannot probe for documents they may not see.
      */
     assertCanUserAccess(documentId: string, actor: DocumentAccessActor): Promise<void>;
+    /** Returns a document's entity_type (used to exempt signature images from the read gate). */
+    getEntityType(documentId: string): Promise<string | null>;
     /**
      * List documents owned by `ownerId` only. The standalone Documents page is
      * personal storage — a user must never see another user's uploads here.

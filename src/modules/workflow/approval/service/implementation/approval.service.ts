@@ -108,7 +108,7 @@ export class ApprovalService implements IApprovalService {
     });
     if (existing) throw AppError.conflict('A pending approval already exists for this entity');
 
-    const levels = await this._resolveApproverChain(db, dto.entityType, dto.entityId);
+    const levels = await this._resolveApproverChain(db, dto.entityType, dto.entityId, submittedBy.id);
     if (levels.length === 0) throw AppError.badRequest('No approvers configured for this approval');
 
     const createApprovalRecord = async (client: Prisma.TransactionClient) => {
@@ -279,6 +279,16 @@ export class ApprovalService implements IApprovalService {
   ): Promise<ApprovalResponseDto> {
     const approval = await this._getPendingApproval(approvalId);
     const currentStep = this._getActionableStep(approval, actor);
+
+    // Segregation of duties: whoever prepared/submitted the item for approval
+    // may not also approve it. Rejecting your own submission is fine — only the
+    // approval sign-off is gated. A different authorized user must sign.
+    if (approval.submitted_by_id === actor.id) {
+      throw AppError.forbidden(
+        'You submitted this item for approval and cannot also approve it (segregation of duties). It must be approved by a different authorized user.',
+      );
+    }
+
     const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
     const now = new Date();
 
@@ -749,6 +759,7 @@ export class ApprovalService implements IApprovalService {
     db: Prisma.TransactionClient | typeof prisma,
     entityType: WorkflowEntityType,
     entityId: string,
+    submittedById?: string,
   ): Promise<ApproverLevelSpec[]> {
     const matrix = await getApprovalMatrix();
     const chain = this._chainForEntity(matrix, entityType);
@@ -768,6 +779,20 @@ export class ApprovalService implements IApprovalService {
         }
         if (!managerPermission) {
           throw AppError.badRequest(`No approver permission configured for ${entityType} manager approval`);
+        }
+        // Segregation of duties: if the engagement manager is also the person who
+        // submitted this item, pinning the level to them would deadlock (they may
+        // not approve their own submission). Fall back to the permission pool so a
+        // different qualified approver can act. Requires another holder to exist.
+        if (submittedById && engagementManagerId === submittedById) {
+          const hasOtherHolder = await this._hasActiveUserWithPermission(db, managerPermission, submittedById);
+          if (!hasOtherHolder) {
+            throw AppError.badRequest(
+              `You submitted this ${entityType.replace(/_/g, ' ')} and are its only eligible approver. Another user holding '${managerPermission}' must be available to approve it (segregation of duties).`,
+            );
+          }
+          specs.push({ approverId: null, requiredPermission: managerPermission });
+          continue;
         }
         // Pinned to the engagement's manager, who must still hold the permission to act.
         specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
@@ -839,9 +864,13 @@ export class ApprovalService implements IApprovalService {
   private async _hasActiveUserWithPermission(
     db: Prisma.TransactionClient | typeof prisma,
     permissionSlug: string,
+    excludeUserId?: string,
   ): Promise<boolean> {
     const user = await db.user.findFirst({
-      where: this._activeHolderWhere(permissionSlug),
+      where: {
+        ...this._activeHolderWhere(permissionSlug),
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+      },
       select: { id: true },
     });
     return user !== null;

@@ -243,6 +243,15 @@ export class DocumentService implements IDocumentService {
     await this._assertCanAccess(doc, actor);
   }
 
+  async getEntityType(documentId: string): Promise<string | null> {
+    const doc = await prisma.document.findUnique({
+      where: { id: documentId, deleted_at: null },
+      select: { entity_type: true },
+    });
+    if (!doc) throw AppError.notFound('Document');
+    return doc.entity_type;
+  }
+
   async getFileById(id: string): Promise<ServedFileDto> {
     const doc = await prisma.document.findUnique({
       where: { id, deleted_at: null },

@@ -236,6 +236,33 @@ class AssetService {
         });
         return links.map((link) => (0, asset_response_dto_1.mapAssetToResponse)(link.asset));
     }
+    async listAssetsForFinding(findingId, actor) {
+        (0, asset_utility_1.assertHasPermission)(actor, 'asset:read');
+        const links = await prisma_client_1.prisma.audit_Finding_Asset.findMany({
+            where: { finding_id: findingId, asset: { deleted_at: null } },
+            include: { asset: { include: prisma_types_1.assetWithDetailsInclude } },
+            orderBy: { created_at: 'desc' },
+        });
+        return links.map((link) => (0, asset_response_dto_1.mapAssetToResponse)(link.asset));
+    }
+    async listAssetsForRisk(riskId, actor) {
+        (0, asset_utility_1.assertHasPermission)(actor, 'asset:read');
+        const links = await prisma_client_1.prisma.risk_Asset_Link.findMany({
+            where: { risk_id: riskId, asset: { deleted_at: null } },
+            include: { asset: { include: prisma_types_1.assetWithDetailsInclude } },
+            orderBy: { created_at: 'desc' },
+        });
+        return links.map((link) => (0, asset_response_dto_1.mapAssetToResponse)(link.asset));
+    }
+    async listAssetsForEvidence(evidenceId, actor) {
+        (0, asset_utility_1.assertHasPermission)(actor, 'asset:read');
+        const links = await prisma_client_1.prisma.audit_Evidence_Asset.findMany({
+            where: { evidence_id: evidenceId, asset: { deleted_at: null } },
+            include: { asset: { include: prisma_types_1.assetWithDetailsInclude } },
+            orderBy: { created_at: 'desc' },
+        });
+        return links.map((link) => (0, asset_response_dto_1.mapAssetToResponse)(link.asset));
+    }
     async createRelationship(assetId, dto, actor) {
         (0, asset_utility_1.assertHasPermission)(actor, 'asset:update');
         if (assetId === dto.targetAssetId) {
@@ -430,6 +457,16 @@ class AssetService {
         (0, asset_utility_1.assertHasPermission)(actor, 'asset:link');
         await this._assertAssetExists(dto.assetId);
         await this._assertCanManageEngagementAssetLinks(engagementId, actor);
+        // Scope is defined during the engagement's active life. A closed engagement
+        // is a finished record — don't let its asset scope be edited after the fact.
+        // (Unlink stays allowed so an erroneous link can still be cleaned up.)
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findUnique({
+            where: { id: engagementId },
+            select: { status: true },
+        });
+        if (engagement?.status === 'closed') {
+            throw app_error_1.AppError.badRequest('Cannot change the asset scope of a closed engagement');
+        }
         const link = await prisma_client_1.prisma.audit_Engagement_Asset.upsert({
             where: { engagement_id_asset_id: { engagement_id: engagementId, asset_id: dto.assetId } },
             create: {

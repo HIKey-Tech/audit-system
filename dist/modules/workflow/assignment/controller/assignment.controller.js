@@ -35,6 +35,13 @@ class AssignmentController {
          */
         this.router.get('/mine', (0, auth_middleware_1.requirePermission)('assignment:read'), (0, validate_middleware_1.validate)(assignment_request_dto_1.MyAssignmentsQuerySchema, 'query'), this._getMyAssignments.bind(this));
         /**
+         * @route  GET /workflow/assignments
+         * @desc   Assignments the caller can manage — oversight sees all; a lead/manager
+         *         sees assignments on engagements they run. Backs the Assignments page.
+         * @access Private - assignment:read
+         */
+        this.router.get('/', (0, auth_middleware_1.requirePermission)('assignment:read'), this._getVisibleAssignments.bind(this));
+        /**
          * @route  GET /workflow/assignments/workload/:userId
          * @desc   Get user workload
          * @access Private - audit:read
@@ -75,6 +82,15 @@ class AssignmentController {
         try {
             const { assignments, meta } = await this.assignmentService.getMyAssignments(req.user.id, req.query);
             res.status(200).json((0, api_response_type_1.buildResponse)(assignments, 'Assignments retrieved', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getVisibleAssignments(req, res, next) {
+        try {
+            const assignments = await this.assignmentService.getVisibleAssignments(req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(assignments, 'Assignments retrieved'));
         }
         catch (err) {
             next(err);

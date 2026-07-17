@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Edit2, FolderTree, Plus, Power, RotateCcw } from 'lucide-react';
 import { toast } from 'sonner';
+import { toastOnInvalid } from '@/lib/utils/form';
 
 import { Badge } from '@/components/ui/Badge';
 import { Button } from '@/components/ui/Button';
@@ -259,7 +260,7 @@ const RiskCategorySlideOver = ({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to save category'),
   });
 
-  const onSubmit = handleSubmit((values) => save.mutate(values));
+  const onSubmit = handleSubmit((values) => save.mutate(values), toastOnInvalid);
 
   return (
     <SlideOver

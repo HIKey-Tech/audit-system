@@ -48,6 +48,8 @@ export const FindingQuerySchema = z.object({
   category: z.nativeEnum(FindingCategory).optional(),
   controlReference: z.string().trim().optional(),
   auditeeId: z.string().uuid().optional(),
+  riskId: z.string().uuid().optional(),
+  universeId: z.string().uuid().optional(),
   sortBy: z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
