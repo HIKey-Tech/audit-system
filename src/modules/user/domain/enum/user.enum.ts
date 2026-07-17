@@ -5,15 +5,6 @@ export enum UserStatus {
   SUSPENDED = 'suspended',
 }
 
-export enum SystemRole {
-  SUPER_ADMIN = 'super_admin',
-  AUDIT_MANAGER = 'audit_manager',
-  AUDIT_LEAD = 'audit_lead',
-  AUDITOR = 'auditor',
-  AUDITEE = 'auditee',
-  VIEWER = 'viewer',
-}
-
 export enum OidcProvider {
   AZURE_AD = 'azure_ad',
   GENERIC = 'generic',
