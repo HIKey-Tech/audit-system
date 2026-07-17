@@ -459,6 +459,7 @@ df -h /opt/iams
 | nginx container won't start / port already in use | a host-level nginx is holding 80/443 — `sudo systemctl disable --now nginx` (§5.3) |
 | Browser shows certificate warning | `fullchain.pem` missing the chain/intermediate cert, or the self-signed stopgap is still in place (§5) |
 | nginx: `PEM routines::bad end line` | PEM blocks glued together — rebuild fullchain with the `awk 1` command in §5.2 |
+| Login returns 502; nginx error log says `upstream sent too big header` | Set-Cookie headers (access JWT with all permissions) overflow nginx's default proxy buffer — nginx.conf `location /` needs the `proxy_buffer_size 32k` block; `git pull` + `restart nginx` |
 | nginx restart-loops with `host not found in upstream "iams-api"` | the api container is down — fix `iams-api` first (`logs iams-api`); nginx recovers on its own once it's healthy |
 | api crash-loops with `PrismaClientInitializationError` | Prisma client generated against a different OpenSSL than the runtime — rebuild with all Dockerfile stages on the same (full bookworm) base |
 | Download links show localhost | `APP_URL` wrong in `.env` |
