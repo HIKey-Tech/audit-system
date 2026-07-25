@@ -3,6 +3,8 @@ import type { Document_Version, Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../shared/errors/app.error';
 import { logger } from '../../../../shared/utils/logger.util';
+import { sha256Hex } from '../../../../shared/utils/hash.util';
+import { auditLogService } from '../../../logging/service/implementation/audit-log.service';
 import { config } from '../../../../shared/config/app.config';
 import {
   PaginationMeta,
@@ -59,6 +61,7 @@ export class DocumentService implements IDocumentService {
           file_size: dto.fileSize,
           storage_path: storedName,
           storage_provider: storageProvider,
+          content_sha256: sha256Hex(dto.buffer),
           module: dto.module,
           entity_type: dto.entityType,
           entity_id: dto.entityId,
@@ -261,11 +264,13 @@ export class DocumentService implements IDocumentService {
         file_size: true,
         storage_provider: true,
         storage_path: true,
+        content_sha256: true,
       },
     });
     if (!doc) throw AppError.notFound('Document');
 
     const buffer = await this._storageClient(doc.storage_provider).read(doc.storage_path);
+    this._verifyIntegrity(doc.content_sha256, buffer, doc.storage_path);
     return {
       buffer,
       mimeType: doc.mime_type,
@@ -285,6 +290,7 @@ export class DocumentService implements IDocumentService {
         original_name: true,
         file_size: true,
         storage_provider: true,
+        content_sha256: true,
         entity_type: true,
         entity_id: true,
         uploaded_by_id: true,
@@ -295,6 +301,9 @@ export class DocumentService implements IDocumentService {
     let originalName: string;
     let fileSize: number;
     let storageProvider: string;
+    // Only the current file (Document row) is sealed; historical Document_Version
+    // rows carry no hash, so we verify only when serving from the Document branch.
+    let expectedHash: string | null = null;
 
     if (doc) {
       await this._assertCanAccess(doc, actor);
@@ -302,6 +311,7 @@ export class DocumentService implements IDocumentService {
       originalName = doc.original_name;
       fileSize = doc.file_size;
       storageProvider = doc.storage_provider;
+      expectedHash = doc.content_sha256;
     } else {
       const version = await prisma.document_Version.findFirst({
         where: {
@@ -326,7 +336,37 @@ export class DocumentService implements IDocumentService {
     }
 
     const buffer = await this._storageClient(storageProvider).read(storedName);
+    this._verifyIntegrity(expectedHash, buffer, storedName);
     return { buffer, mimeType, originalName, fileSize };
+  }
+
+  /**
+   * Chain-of-custody check: a sealed file whose bytes no longer match its stored
+   * SHA-256 has been altered in storage since upload. Fail closed and record the
+   * event on the audit trail. Legacy rows (null hash) are unsealed and skipped.
+   */
+  // ponytail: hashes the buffer on every byte-read; gate behind config if it ever gets hot.
+  private _verifyIntegrity(
+    expected: string | null | undefined,
+    buffer: Buffer,
+    storagePath: string,
+  ): void {
+    if (!expected) return;
+    const actual = sha256Hex(buffer);
+    if (actual === expected) return;
+    logger.error('Document integrity check failed — stored file does not match its seal', {
+      storagePath,
+      expected,
+      actual,
+    });
+    auditLogService.logAsync({
+      action: 'document.integrity.failed',
+      module: 'document',
+      entityType: 'document',
+      status: 'failure',
+      newValues: { storagePath, expected, actual },
+    });
+    throw AppError.internal('File integrity check failed: the stored file does not match its recorded hash');
   }
 
   // ────────────────────────────────────────────────────────────
@@ -413,6 +453,7 @@ export class DocumentService implements IDocumentService {
             file_size: dto.fileSize,
             storage_path: storedName,
             storage_provider: storageProvider,
+            content_sha256: sha256Hex(dto.buffer),
             version_number: newVersionNumber,
           },
         });

@@ -23,6 +23,95 @@ export interface SampleDraw {
   methodDescription: string;
 }
 
+// ── Attribute sample-size planning ─────────────────────────────
+// Determines how many items to test for a target confidence and tolerable
+// deviation rate, so the sample size is derived, not guessed. Pure and
+// deterministic; the description records the formula for the working paper.
+
+export interface AttributeSampleSizeParams {
+  /** Population size N (finite-population correction is applied). */
+  populationSize: number;
+  /** Desired confidence level, 0<c<1 (e.g. 0.95). */
+  confidenceLevel: number;
+  /** Tolerable deviation rate, 0<e<=1 (e.g. 0.05). */
+  tolerableRate: number;
+  /** Expected deviation rate, 0<=p<tolerable (default 0). */
+  expectedRate?: number;
+}
+
+export interface AttributeSampleSizeResult {
+  sampleSize: number;
+  /** Two-sided z used for the normal approximation (reference; unused at p=0). */
+  zScore: number;
+  methodDescription: string;
+}
+
+/**
+ * Inverse standard-normal CDF (Acklam's rational approximation, |err| < 1.15e-9).
+ * Returns z such that Φ(z) = p, for 0 < p < 1.
+ */
+export const invNormalCdf = (p: number): number => {
+  if (!(p > 0 && p < 1)) throw new Error('invNormalCdf expects 0 < p < 1');
+  const a = [-3.969683028665376e1, 2.209460984245205e2, -2.759285104469687e2, 1.38357751867269e2, -3.066479806614716e1, 2.506628277459239];
+  const b = [-5.447609879822406e1, 1.615858368580409e2, -1.556989798598866e2, 6.680131188771972e1, -1.328068155288572e1];
+  const c = [-7.784894002430293e-3, -3.223964580411365e-1, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [7.784695709041462e-3, 3.224671290700398e-1, 2.445134137142996, 3.754408661907416];
+  const plow = 0.02425;
+  const phigh = 1 - plow;
+  if (p < plow) {
+    const q = Math.sqrt(-2 * Math.log(p));
+    return (((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+  }
+  if (p <= phigh) {
+    const q = p - 0.5;
+    const r = q * q;
+    return (((((a[0] * r + a[1]) * r + a[2]) * r + a[3]) * r + a[4]) * r + a[5]) * q / (((((b[0] * r + b[1]) * r + b[2]) * r + b[3]) * r + b[4]) * r + 1);
+  }
+  const q = Math.sqrt(-2 * Math.log(1 - p));
+  return -(((((c[0] * q + c[1]) * q + c[2]) * q + c[3]) * q + c[4]) * q + c[5]) / ((((d[0] * q + d[1]) * q + d[2]) * q + d[3]) * q + 1);
+};
+
+/**
+ * Attribute-sampling sample size with finite-population correction.
+ * - expected deviation 0 → exact zero-error formula n0 = ln(1−c)/ln(1−e).
+ * - expected deviation > 0 → normal approximation n0 = z²·p(1−p)/(e−p)².
+ * Throws plain `Error` on invalid parameters (the service maps it to a 400).
+ */
+export const attributeSampleSize = (params: AttributeSampleSizeParams): AttributeSampleSizeResult => {
+  const N = Math.floor(params.populationSize);
+  const c = params.confidenceLevel;
+  const e = params.tolerableRate;
+  const expected = params.expectedRate ?? 0;
+
+  if (!Number.isFinite(N) || N < 1) throw new Error('Population size must be at least 1');
+  if (!(c > 0 && c < 1)) throw new Error('Confidence level must be between 0 and 1 (e.g. 0.95)');
+  if (!(e > 0 && e <= 1)) throw new Error('Tolerable rate must be between 0 and 1');
+  if (!(expected >= 0 && expected < 1)) throw new Error('Expected rate must be between 0 and 1');
+  if (expected >= e) throw new Error('Expected rate must be smaller than the tolerable rate');
+
+  const z = invNormalCdf(1 - (1 - c) / 2);
+  let n0: number;
+  let formula: string;
+  if (expected === 0) {
+    n0 = Math.log(1 - c) / Math.log(1 - e);
+    formula = `Zero-expected-error attribute sampling: n0 = ln(1−${c}) / ln(1−${e}) = ${n0.toFixed(2)}`;
+  } else {
+    const precision = e - expected;
+    n0 = (z * z * expected * (1 - expected)) / (precision * precision);
+    formula = `Normal-approximation attribute sampling: n0 = z²·p(1−p)/(e−p)² with two-sided z=${z.toFixed(4)} at ${(c * 100).toFixed(0)}% confidence, p=${expected}, e=${e} → ${n0.toFixed(2)}`;
+  }
+
+  const corrected = n0 / (1 + (n0 - 1) / N); // finite-population correction
+  const sampleSize = Math.min(Math.max(1, Math.ceil(corrected)), N);
+  const census = sampleSize >= N ? ' Sample meets or exceeds the population — test 100% (census).' : '';
+
+  return {
+    sampleSize,
+    zScore: Number(z.toFixed(4)),
+    methodDescription: `${formula}; finite-population correction for N=${N} → n=${sampleSize}.${census}`,
+  };
+};
+
 /** Mulberry32 — tiny seeded PRNG; same seed always yields the same sequence. */
 export const mulberry32 = (seed: number): (() => number) => {
   let a = seed >>> 0;

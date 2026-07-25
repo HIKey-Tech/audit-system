@@ -268,6 +268,10 @@ model Audit_Log {
   status        String   @default("success") // success | failure
   error_message String?
   duration_ms   Int?
+  // Tamper-evidence: each sealed row hashes (prev_hash + its own fields). Any edit
+  // or deletion breaks the chain and is caught by verifyChain(). Null = pre-seal legacy row.
+  prev_hash     String?
+  row_hash      String?
   created_at    DateTime @default(now())
 
   user User? @relation(fields: [user_id], references: [id], onDelete: SetNull)
@@ -373,6 +377,7 @@ model Document {
   file_size        Int
   storage_path     String
   storage_provider String // local | azure_blob | aws_s3
+  content_sha256   String? // SHA-256 of the stored bytes at upload; verified on read (chain of custody). Null = pre-seal legacy row.
   module           String
   entity_type      String?
   entity_id        String?

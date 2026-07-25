@@ -22,7 +22,7 @@ import {
   WorkflowApprovalStepStatus,
   WorkflowEntityType,
 } from '../../../domain/enum/workflow.enum';
-import { assertHasPermission } from '../../../utility/workflow.utility';
+import { assertHasPermission, assertNotSelfApproval } from '../../../utility/workflow.utility';
 import { ApprovalEditsDto, CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
 import {
   ApprovalResponseDto,
@@ -283,11 +283,7 @@ export class ApprovalService implements IApprovalService {
     // Segregation of duties: whoever prepared/submitted the item for approval
     // may not also approve it. Rejecting your own submission is fine — only the
     // approval sign-off is gated. A different authorized user must sign.
-    if (approval.submitted_by_id === actor.id) {
-      throw AppError.forbidden(
-        'You submitted this item for approval and cannot also approve it (segregation of duties). It must be approved by a different authorized user.',
-      );
-    }
+    assertNotSelfApproval(approval.submitted_by_id, actor.id);
 
     const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
     const now = new Date();

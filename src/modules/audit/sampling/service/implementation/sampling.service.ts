@@ -4,8 +4,8 @@ import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { IEvidenceService } from '../../../evidence/service/interface/evidence.service.interface';
-import { RunSamplingRequestDto } from '../../dto/request/sampling.request.dto';
-import { drawSample, SampleDraw } from '../../utility/sampler.utility';
+import { RunSamplingRequestDto, SampleSizeRequestDto } from '../../dto/request/sampling.request.dto';
+import { attributeSampleSize, AttributeSampleSizeResult, drawSample, SampleDraw } from '../../utility/sampler.utility';
 import {
   ISamplingService,
   SamplingRunFile,
@@ -121,6 +121,14 @@ export class SamplingService implements ISamplingService {
       ),
       previewColumns: columns,
     };
+  }
+
+  calculateSampleSize(dto: SampleSizeRequestDto): AttributeSampleSizeResult {
+    try {
+      return attributeSampleSize(dto);
+    } catch (err) {
+      throw AppError.badRequest(err instanceof Error ? err.message : 'Sample-size calculation failed');
+    }
   }
 
   private _parsePopulation(buffer: Buffer): Record<string, unknown>[] {

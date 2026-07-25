@@ -4,7 +4,7 @@ import { authenticate, requirePermission } from '../../../../shared/middleware/a
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { AppError } from '../../../../shared/errors/app.error';
 import { buildResponse } from '../../../../shared/types/api-response.type';
-import { RunSamplingRequestSchema } from '../dto/request/sampling.request.dto';
+import { RunSamplingRequestSchema, SampleSizeRequestSchema } from '../dto/request/sampling.request.dto';
 import { ISamplingService } from '../service/interface/sampling.service.interface';
 
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 50 * 1024 * 1024 } });
@@ -33,6 +33,27 @@ export class SamplingController {
       validate(RunSamplingRequestSchema),
       this._runSampling.bind(this),
     );
+
+    /**
+     * @route  POST /audit/sampling/sample-size
+     * @desc   Derive an attribute sample size from confidence + tolerable/expected rate
+     * @access Private - evidence:upload (planning a test the same auditors run)
+     */
+    this.router.post(
+      '/sampling/sample-size',
+      requirePermission('evidence:upload'),
+      validate(SampleSizeRequestSchema),
+      this._calculateSampleSize.bind(this),
+    );
+  }
+
+  private async _calculateSampleSize(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = this.samplingService.calculateSampleSize(req.body);
+      res.status(200).json(buildResponse(result, 'Sample size calculated'));
+    } catch (err) {
+      next(err);
+    }
   }
 
   private async _runSampling(req: Request, res: Response, next: NextFunction): Promise<void> {

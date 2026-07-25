@@ -1,5 +1,6 @@
 import { ActorContext } from '../../../domain/entity/audit.entity';
-import { RunSamplingRequestDto } from '../../dto/request/sampling.request.dto';
+import { RunSamplingRequestDto, SampleSizeRequestDto } from '../../dto/request/sampling.request.dto';
+import { AttributeSampleSizeResult } from '../../utility/sampler.utility';
 
 export interface SamplingRunFile {
   originalName: string;
@@ -29,4 +30,6 @@ export interface ISamplingService {
     dto: RunSamplingRequestDto,
     actor: ActorContext,
   ): Promise<SamplingRunResultDto>;
+
+  calculateSampleSize(dto: SampleSizeRequestDto): AttributeSampleSizeResult;
 }

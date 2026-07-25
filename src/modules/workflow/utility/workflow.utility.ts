@@ -14,6 +14,18 @@ export const assertHasPermission = (
 };
 
 /**
+ * Segregation of duties: whoever submitted an item for approval may not also
+ * approve it. Rejecting your own submission is fine — only the sign-off is gated.
+ */
+export const assertNotSelfApproval = (submittedById: string, actorId: string): void => {
+  if (submittedById === actorId) {
+    throw AppError.forbidden(
+      'You submitted this item for approval and cannot also approve it (segregation of duties). It must be approved by a different authorized user.',
+    );
+  }
+};
+
+/**
  * Admin-configurable escalation matrix. Maps escalation tiers to the role names
  * whose holders are notified once an escalation passes the entity's own
  * assignees (lead auditor / engagement manager / current approver). Stored in
