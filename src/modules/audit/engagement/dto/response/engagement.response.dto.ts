@@ -40,6 +40,8 @@ export interface EngagementResponseDto {
   referenceNumber: string;
   title: string;
   universeId: string;
+  /** Flattened auditable-entity name for list/detail/report views (from `universe.name`). */
+  universeName: string | null;
   planItemId: string | null;
   planTitle: string | null;
   auditType: string;
@@ -125,6 +127,7 @@ export const mapEngagementToResponse = (
   referenceNumber: engagement.reference_number,
   title: engagement.title,
   universeId: engagement.universe_id,
+  universeName: engagement.universe?.name ?? null,
   planItemId: engagement.plan_item_id,
   planTitle: engagement.plan_item?.plan?.title ?? null,
   auditType: engagement.audit_type,

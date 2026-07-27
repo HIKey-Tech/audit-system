@@ -343,7 +343,11 @@ export class AssignmentService implements IAssignmentService {
     };
   }
 
-  async getCandidates(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentCandidateDto[]> {
+  async getCandidates(
+    engagementId: string,
+    actor: WorkflowActorContext,
+    opts?: { search?: string; limit?: number },
+  ): Promise<AssignmentCandidateDto[]> {
     assertHasPermission(actor.permissions, 'assignment:create');
     // Need the engagement's audit type + priority to score skill fit and weight workload.
     const engagement = await prisma.audit_Engagement.findFirst({
@@ -352,44 +356,68 @@ export class AssignmentService implements IAssignmentService {
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
 
-    // Get already-assigned user IDs for this engagement
+    const search = opts?.search?.trim();
+    const limit = Math.min(Math.max(opts?.limit ?? 50, 1), 100);
+
+    // Already-assigned users are excluded at the DB so `take` returns a full page.
     const existingAssignments = await prisma.workflow_Assignment.findMany({
       where: { engagement_id: engagementId },
       select: { user_id: true },
     });
-    const assignedIds = new Set(existingAssignments.map(a => a.user_id));
+    const assignedIds = existingAssignments.map(a => a.user_id);
 
-    // Get all active users
-    const users = await prisma.user.findMany({
-      where: { deleted_at: null, is_active: true },
-      select: {
-        id: true,
-        display_name: true,
-        first_name: true,
-        last_name: true,
-        email: true,
-        department: true,
-        job_title: true,
-        skills: true,
-        max_concurrent_engagements: true,
-      },
-    });
+    // ponytail: skill ranking is over the loaded page (search filter + `take: limit`),
+    // not the whole directory — `skills` is JSON we can't rank in SQL, and loading every
+    // AD-synced user on each picker open was the slow path. Type a name to find anyone.
+    const userWhere: Prisma.UserWhereInput = {
+      deleted_at: null,
+      is_active: true,
+      id: { notIn: assignedIds },
+      ...(search
+        ? {
+            OR: [
+              { display_name: { contains: search } },
+              { first_name: { contains: search } },
+              { last_name: { contains: search } },
+              { email: { contains: search } },
+              { department: { contains: search } },
+            ],
+          }
+        : {}),
+    };
 
-    // Get active engagement counts per user
-    const activeAssignments = await prisma.workflow_Assignment.groupBy({
-      by: ['user_id'],
-      where: {
-        engagement: {
-          status: { in: ACTIVE_ENGAGEMENT_STATUSES },
-          deleted_at: null,
+    // Candidate page + org-wide active-workload counts run in parallel.
+    const [users, activeAssignments] = await Promise.all([
+      prisma.user.findMany({
+        where: userWhere,
+        select: {
+          id: true,
+          display_name: true,
+          first_name: true,
+          last_name: true,
+          email: true,
+          department: true,
+          job_title: true,
+          skills: true,
+          max_concurrent_engagements: true,
         },
-      },
-      _count: { user_id: true },
-    });
+        orderBy: [{ display_name: 'asc' }, { created_at: 'asc' }],
+        take: limit,
+      }),
+      prisma.workflow_Assignment.groupBy({
+        by: ['user_id'],
+        where: {
+          engagement: {
+            status: { in: ACTIVE_ENGAGEMENT_STATUSES },
+            deleted_at: null,
+          },
+        },
+        _count: { user_id: true },
+      }),
+    ]);
     const workloadMap = new Map(activeAssignments.map(a => [a.user_id, a._count.user_id]));
 
     return users
-      .filter(u => !assignedIds.has(u.id))
       .map(u => {
         const skills = parseSkillsJson(u.skills);
         const activeEngagementCount = workloadMap.get(u.id) ?? 0;

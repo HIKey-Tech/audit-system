@@ -56,9 +56,10 @@ export const workflowApi = {
   workload: (userId: string) =>
     api.get<unknown>(`/workflow/assignments/workload/${userId}`),
   removeAssignment: (id: string) => api.delete(`/workflow/assignments/${id}`),
-  getCandidates: (engagementId: string) =>
+  getCandidates: (engagementId: string, opts?: { search?: string; limit?: number }) =>
     api.get<AssignmentCandidateDto[]>(
       `/workflow/assignments/candidates/${engagementId}`,
+      opts as Record<string, string | number | boolean | undefined> | undefined,
     ),
 
   // approval signed documents (frozen on completion)

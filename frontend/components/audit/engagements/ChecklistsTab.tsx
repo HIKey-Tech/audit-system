@@ -94,9 +94,22 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
   const update = useMutation({
     mutationFn: ({ id, dto }: { id: string; dto: { result: string; notes?: string | null } }) =>
       checklistsApi.update(id, dto),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'checklists'] });
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+    onSuccess: (updated) => {
+      // Patch the returned row into the cached checklist in place — no refetch. This skips
+      // the heavy full engagement-detail refetch on every test; the Overview progress ring
+      // refreshes on next detail load (a single test rarely advances status, and the backend
+      // reconcile is fire-and-forget with an hourly backstop job).
+      qc.setQueryData<Record<string, AuditChecklistItem[]>>(
+        ['engagements', engagement.id, 'checklists'],
+        (old) => {
+          if (!old) return old;
+          const next: Record<string, AuditChecklistItem[]> = {};
+          for (const [group, items] of Object.entries(old)) {
+            next[group] = items.map((it) => (it.id === updated.id ? updated : it));
+          }
+          return next;
+        },
+      );
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });

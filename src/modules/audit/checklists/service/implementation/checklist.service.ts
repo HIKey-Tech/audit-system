@@ -111,8 +111,17 @@ export class ChecklistService implements IChecklistService {
       newValues: mapChecklistToResponse(item),
     });
 
-    // A tested control may complete the fieldwork gate — let the engagement advance itself.
-    await reconcileEngagementStatus(item.engagement_id, actor.id);
+    // A tested control may complete the fieldwork gate — let the engagement advance
+    // itself. Reconcile is forward-only + idempotent with an hourly backstop job, so
+    // we don't block the test response on it (a full reconcile is several queries and,
+    // over a remote DB, was the bulk of the per-test latency).
+    // ponytail: fire-and-forget; BG:AUDIT:RECONCILE:STATUS:HOURLY backstops any miss.
+    void reconcileEngagementStatus(item.engagement_id, actor.id).catch((err) =>
+      logger.warn('Post-checklist reconcile failed (will retry hourly)', {
+        engagementId: item.engagement_id,
+        err,
+      }),
+    );
 
     return mapChecklistToResponse(item);
   }

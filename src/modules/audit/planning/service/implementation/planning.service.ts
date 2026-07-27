@@ -39,6 +39,14 @@ const FREQUENCY_MONTHS: Record<string, number> = {
 const monthsSince = (date: Date, now: Date): number =>
   (now.getTime() - date.getTime()) / (30.44 * 24 * 60 * 60 * 1000);
 
+// ponytail: 60s org-wide cache for the recommendations ranking. The Add-plan-item
+// picker reopens constantly, and each recompute is a full-universe scan + open-finding
+// scan + per-entity scoring. Recommendations are the same for everyone (no per-user
+// input), so one cached list serves all callers; 60s staleness is fine for a planning
+// aid. Upgrade path: invalidate on universe/finding writes if fresher ranking is needed.
+let recommendationsCache: { at: number; data: PlanningRecommendationDto[] } | null = null;
+const RECOMMENDATIONS_TTL_MS = 60_000;
+
 export class PlanningService implements IPlanningService {
   constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
 
@@ -51,6 +59,10 @@ export class PlanningService implements IPlanningService {
    * are returned so the ranking is explainable, not a black box.
    */
   async getRecommendations(): Promise<PlanningRecommendationDto[]> {
+    if (recommendationsCache && Date.now() - recommendationsCache.at < RECOMMENDATIONS_TTL_MS) {
+      return recommendationsCache.data;
+    }
+
     const [weights, entities, openFindings] = await Promise.all([
       getPlanningPriorityWeights(),
       prisma.audit_Universe.findMany({
@@ -140,7 +152,9 @@ export class PlanningService implements IPlanningService {
       };
     });
 
-    return recommendations.sort((a, b) => b.score - a.score);
+    const sorted = recommendations.sort((a, b) => b.score - a.score);
+    recommendationsCache = { at: Date.now(), data: sorted };
+    return sorted;
   }
 
   async createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {

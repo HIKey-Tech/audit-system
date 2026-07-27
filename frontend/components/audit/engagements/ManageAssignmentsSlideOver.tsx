@@ -1,14 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
-import { UserPlus, Trash2, Award, Briefcase, Activity, Check } from 'lucide-react';
+import { UserPlus, Trash2, Award, Briefcase, Activity, Check, Search } from 'lucide-react';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
-import { Select } from '@/components/ui/Input';
+import { Select, Input } from '@/components/ui/Input';
 import { workflowApi } from '@/lib/api/workflow';
 import { initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
@@ -28,6 +28,15 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
 
   const [roleToAssign, setRoleToAssign] = useState<Record<string, 'lead_auditor' | 'supporting_auditor'>>({});
 
+  // Server-side candidate search: the backend filters + caps the list, so we don't
+  // pull the whole directory. Debounce so typing doesn't fire a request per keystroke.
+  const [search, setSearch] = useState('');
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => clearTimeout(t);
+  }, [search]);
+
   // Query: get current assignments
   const assignments = useQuery({
     queryKey: ['engagements', engagement.id, 'assignments'],
@@ -35,10 +44,10 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
     enabled: open,
   });
 
-  // Query: get matching candidates
+  // Query: get matching candidates (skill-ranked among the loaded page)
   const candidates = useQuery({
-    queryKey: ['engagements', engagement.id, 'candidates'],
-    queryFn: () => workflowApi.getCandidates(engagement.id),
+    queryKey: ['engagements', engagement.id, 'candidates', debouncedSearch],
+    queryFn: () => workflowApi.getCandidates(engagement.id, { search: debouncedSearch || undefined, limit: 50 }),
     enabled: open,
   });
 
@@ -144,13 +153,25 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
           </h3>
           <p className="text-[11px] text-text-secondary mb-3">
             Candidates are ranked by expertise matching the audit type: <strong className="text-primary uppercase">{engagement.auditType}</strong>.
+            Search by name, email, or department to find anyone specific.
           </p>
+
+          <div className="mb-3">
+            <Input
+              leftIcon={<Search className="h-4 w-4" />}
+              placeholder="Search staff by name, email, or department…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
 
           {candidates.isLoading ? (
             <p className="text-xs text-text-muted">Loading candidates…</p>
           ) : sortedCandidates.length === 0 ? (
             <p className="text-xs text-text-muted bg-surface-alt p-3 rounded-md">
-              All active staff members are already assigned to this engagement.
+              {debouncedSearch
+                ? `No unassigned staff match "${debouncedSearch}".`
+                : 'All active staff members are already assigned to this engagement.'}
             </p>
           ) : (
             <div className="space-y-3">

@@ -13,7 +13,11 @@ export interface IAssignmentService {
     filters: MyAssignmentsQueryDto,
   ): Promise<{ assignments: AssignmentResponseDto[]; meta: PaginationMeta }>;
   getUserWorkload(userId: string): Promise<WorkloadResponseDto>;
-  getCandidates(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentCandidateDto[]>;
+  getCandidates(
+    engagementId: string,
+    actor: WorkflowActorContext,
+    opts?: { search?: string; limit?: number },
+  ): Promise<AssignmentCandidateDto[]>;
   /** Active (unfinished) engagement count per user, keyed by user id. */
   getActiveWorkloadMap(): Promise<Map<string, number>>;
 }
