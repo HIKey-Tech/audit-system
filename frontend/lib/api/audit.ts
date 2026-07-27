@@ -447,6 +447,19 @@ export interface SamplingRunResult {
   previewColumns: string[];
 }
 
+export interface SampleSizeParams {
+  populationSize: number;
+  confidenceLevel: number;
+  tolerableRate: number;
+  expectedRate?: number;
+}
+
+export interface SampleSizeResult {
+  sampleSize: number;
+  zScore: number;
+  methodDescription: string;
+}
+
 export const samplingApi = {
   run: (engagementId: string, file: File, params: SamplingParams) => {
     const fd = new FormData();
@@ -458,6 +471,9 @@ export const samplingApi = {
     if (params.threshold !== undefined) fd.append('threshold', String(params.threshold));
     return api.upload<SamplingRunResult>(`/audit/engagements/${engagementId}/sampling`, fd);
   },
+  /** Attribute-sampling size calculator (no file/engagement needed — pure planning math). */
+  sampleSize: (params: SampleSizeParams) =>
+    api.post<SampleSizeResult>('/audit/sampling/sample-size', params),
 };
 
 // ============================================================
