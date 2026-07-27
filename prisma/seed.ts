@@ -480,7 +480,7 @@ const permission = (
   action: slug.split(':')[1] ?? slug,
 });
 
-const PERMISSIONS: PermissionSeed[] = [
+export const PERMISSIONS: PermissionSeed[] = [
   permission('auth:logout', 'Logout current session', 'user'),
   permission('auth:logout_all', 'Logout all sessions', 'user'),
 
@@ -623,7 +623,7 @@ const PERMISSIONS: PermissionSeed[] = [
 // ------------------------------------------------------------
 // Roles + their permission sets
 // ------------------------------------------------------------
-const ROLES: Array<{
+export const ROLES: Array<{
   name: string;
   description: string;
   isSystem: boolean;
@@ -1894,9 +1894,13 @@ async function main(): Promise<void> {
   logger.info('Seed complete');
 }
 
-main()
-  .catch((err: unknown) => {
-    logger.error('Seed failed', { err });
-    process.exit(1);
-  })
-  .finally(() => prisma.$disconnect());
+// Only run the full seed when executed directly (`ts-node prisma/seed.ts`).
+// Importing this file (e.g. scripts/seed-role-permissions.ts) must NOT re-seed.
+if (require.main === module) {
+  main()
+    .catch((err: unknown) => {
+      logger.error('Seed failed', { err });
+      process.exit(1);
+    })
+    .finally(() => prisma.$disconnect());
+}
