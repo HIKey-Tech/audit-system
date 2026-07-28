@@ -9,6 +9,7 @@ import { EngagementStatus } from '../../../domain/enum/audit.enum';
 import { assertHasPermission } from '../../../utility/audit.utility';
 import { CreateEvidenceRequestDto } from '../../dto/request/evidence-request.request.dto';
 import {
+  AssignableUserDto,
   EvidenceRequestResponseDto,
   evidenceRequestInclude,
   mapEvidenceRequestToResponse,
@@ -62,6 +63,42 @@ export class EvidenceRequestService implements IEvidenceRequestService {
     );
 
     return mapEvidenceRequestToResponse(request);
+  }
+
+  async listAssignableUsers(engagementId: string, actor: ActorContext): Promise<AssignableUserDto[]> {
+    assertHasPermission(actor.permissions, 'evidence:request');
+    const engagement = await prisma.audit_Engagement.findFirst({
+      where: { id: engagementId, deleted_at: null },
+      select: { id: true, auditee_id: true },
+    });
+    if (!engagement) throw AppError.notFound('Audit engagement');
+
+    // ponytail: active users, capped at 200 for the picker. Evidence requests are
+    // low-frequency; add a search param like the assignment-candidates endpoint if
+    // GBB's directory ever outgrows a single dropdown.
+    const users = await prisma.user.findMany({
+      where: { deleted_at: null, is_active: true },
+      select: {
+        id: true,
+        display_name: true,
+        first_name: true,
+        last_name: true,
+        email: true,
+        department: true,
+        job_title: true,
+      },
+      orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+      take: 200,
+    });
+
+    return users.map((u) => ({
+      id: u.id,
+      displayName: u.display_name || `${u.first_name} ${u.last_name}`.trim(),
+      email: u.email,
+      department: u.department,
+      jobTitle: u.job_title,
+      isAuditee: u.id === engagement.auditee_id,
+    }));
   }
 
   async listForEngagement(engagementId: string, actor: ActorContext): Promise<EvidenceRequestResponseDto[]> {

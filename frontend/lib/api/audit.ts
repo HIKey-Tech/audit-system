@@ -345,9 +345,21 @@ export const evidenceApi = {
 // ============================================================
 // Evidence requests (PBC — documents the auditor asks the auditee for)
 // ============================================================
+export interface EvidenceRequestAssignee {
+  id: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  jobTitle: string | null;
+  isAuditee: boolean;
+}
+
 export const evidenceRequestsApi = {
   listByEngagement: (engagementId: string) =>
     api.get<EvidenceRequest[]>(`/audit/engagements/${engagementId}/evidence-requests`),
+  /** Active users a request can be assigned to (the auditee is flagged as default). */
+  assignableUsers: (engagementId: string) =>
+    api.get<EvidenceRequestAssignee[]>(`/audit/engagements/${engagementId}/evidence-requests/assignable-users`),
   mine: () => api.get<EvidenceRequest[]>('/audit/evidence-requests/mine'),
   create: (
     engagementId: string,

@@ -436,6 +436,13 @@ docker compose -f docker-compose.prod.yml --profile ops run --rm db-migrate
 docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml logs -f iams-api
 ```
+cd /opt/iams/app
+git pull
+source .env
+docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml --profile ops run --build --rm db-migrate
+docker compose -f docker-compose.prod.yml up -d
+docker compose -f docker-compose.prod.yml ps
 
 Run `db-seed` again only when a release note says to (new permissions/templates).
 

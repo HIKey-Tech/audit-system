@@ -1,6 +1,6 @@
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { CreateEvidenceRequestDto } from '../../dto/request/evidence-request.request.dto';
-import { EvidenceRequestResponseDto } from '../../dto/response/evidence-request.response.dto';
+import { AssignableUserDto, EvidenceRequestResponseDto } from '../../dto/response/evidence-request.response.dto';
 
 export interface RespondFileDto {
   originalName: string;
@@ -11,6 +11,7 @@ export interface RespondFileDto {
 
 export interface IEvidenceRequestService {
   createRequest(engagementId: string, dto: CreateEvidenceRequestDto, actor: ActorContext): Promise<EvidenceRequestResponseDto>;
+  listAssignableUsers(engagementId: string, actor: ActorContext): Promise<AssignableUserDto[]>;
   listForEngagement(engagementId: string, actor: ActorContext): Promise<EvidenceRequestResponseDto[]>;
   listMine(actor: ActorContext): Promise<EvidenceRequestResponseDto[]>;
   respond(requestId: string, file: RespondFileDto, actor: ActorContext): Promise<EvidenceRequestResponseDto>;

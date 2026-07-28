@@ -31,6 +31,14 @@ export class EvidenceRequestController {
     this.router.post('/engagements/:id/evidence-requests', requirePermission('evidence:request'), validate(CreateEvidenceRequestSchema), this._create.bind(this));
 
     /**
+     * @route  GET /audit/engagements/:id/evidence-requests/assignable-users
+     * @desc   Active users an evidence request can be assigned to (auditee flagged as default)
+     * @access Private - evidence:request
+     * @note   Registered before the bare list route so "assignable-users" is not read as data.
+     */
+    this.router.get('/engagements/:id/evidence-requests/assignable-users', requirePermission('evidence:request'), this._listAssignableUsers.bind(this));
+
+    /**
      * @route  GET /audit/engagements/:id/evidence-requests
      * @desc   List evidence requests on an engagement (auditee sees only their own)
      * @access Private - authenticated; service scopes visibility
@@ -77,6 +85,15 @@ export class EvidenceRequestController {
     try {
       const request = await this.evidenceRequestService.createRequest(req.params.id, req.body, req.user!);
       res.status(201).json(buildResponse(request, 'Evidence request created'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listAssignableUsers(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const users = await this.evidenceRequestService.listAssignableUsers(req.params.id, req.user!);
+      res.status(200).json(buildResponse(users));
     } catch (err) {
       next(err);
     }

@@ -31,6 +31,17 @@ export interface EvidenceRequestResponseDto {
   evidence: { id: string; fileName: string; uploadedAt: string }[];
 }
 
+/** A person an evidence request can be assigned to (who will upload the document). */
+export interface AssignableUserDto {
+  id: string;
+  displayName: string;
+  email: string;
+  department: string | null;
+  jobTitle: string | null;
+  /** True for the engagement's default auditee. */
+  isAuditee: boolean;
+}
+
 const userName = (u: { display_name: string | null; first_name: string; last_name: string }): string =>
   u.display_name ?? `${u.first_name} ${u.last_name}`.trim();
 

@@ -11,7 +11,7 @@ import { StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Input, Textarea, Select } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { evidenceRequestsApi } from '@/lib/api/audit';
 import { formatDate, formatRelative } from '@/lib/utils/format';
@@ -33,6 +33,7 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [dueDate, setDueDate] = useState('');
+  const [assignedToId, setAssignedToId] = useState('');
   const [returning, setReturning] = useState<EvidenceRequest | null>(null);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
@@ -40,6 +41,13 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'evidence-requests'],
     queryFn: () => evidenceRequestsApi.listByEngagement(engagement.id),
+  });
+
+  // People the request can be directed to — loaded only when the auditor opens the form.
+  const assignees = useQuery({
+    queryKey: ['engagements', engagement.id, 'evidence-request-assignees'],
+    queryFn: () => evidenceRequestsApi.assignableUsers(engagement.id),
+    enabled: showForm && canRequest,
   });
 
   const refresh = () => {
@@ -54,13 +62,15 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
         title: title.trim(),
         description: description.trim() || undefined,
         dueDate: dueDate || undefined,
+        assignedToId: assignedToId || undefined,
       }),
     onSuccess: () => {
-      toast.success('Request sent to the auditee');
+      toast.success('Evidence request sent');
       setShowForm(false);
       setTitle('');
       setDescription('');
       setDueDate('');
+      setAssignedToId('');
       refresh();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to create request'),
@@ -156,6 +166,23 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
             </FormField>
             <FormField label="Due date (optional)">
               <Input type="date" value={dueDate} onChange={(e) => setDueDate(e.target.value)} />
+            </FormField>
+            <FormField label="Request from" hint="Who should provide this document. Defaults to the engagement's auditee.">
+              <Select value={assignedToId} onChange={(e) => setAssignedToId(e.target.value)}>
+                <option value="">
+                  {engagement.auditeeName
+                    ? `${engagement.auditeeName} — auditee (default)`
+                    : 'Engagement auditee (default)'}
+                </option>
+                {(assignees.data ?? [])
+                  .filter((u) => !u.isAuditee)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.displayName}
+                      {u.department ? ` — ${u.department}` : ''}
+                    </option>
+                  ))}
+              </Select>
             </FormField>
           </div>
           <div className="mt-3 flex justify-end gap-2">
