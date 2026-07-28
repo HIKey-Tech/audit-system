@@ -708,8 +708,11 @@ export class ApprovalService implements IApprovalService {
             resolvedApprover: mapWorkflowUserBrief(step.approver), candidates: [],
           });
         } else {
-          // Open permission pool, not yet acted — show candidate holders.
-          const candidates = step.required_permission ? await this._activeHoldersBrief(step.required_permission) : [];
+          // Open permission pool, not yet acted — show candidate holders, minus the
+          // submitter (SoD: they can't approve their own submission at any level).
+          const candidates = step.required_permission
+            ? await this._activeHoldersBrief(step.required_permission, approval.submitted_by_id)
+            : [];
           levels.push({
             level: step.level, kind: 'permission', status,
             requiredPermission: step.required_permission, resolvedApprover: null, candidates,
@@ -795,11 +798,14 @@ export class ApprovalService implements IApprovalService {
         continue;
       }
 
-      // `level` is a permission slug: any active holder may act. Ensure at least
-      // one exists so the level can't dead-end.
-      const hasHolder = await this._hasActiveUserWithPermission(db, level);
+      // `level` is a permission slug: any active holder may act — except the
+      // submitter (SoD). Ensure at least one *other* holder exists so the level
+      // can't dead-end on a submitter who is barred from approving their own item.
+      const hasHolder = await this._hasActiveUserWithPermission(db, level, submittedById);
       if (!hasHolder) {
-        throw AppError.badRequest(`No active user holding permission '${level}' is available for ${entityType} approval`);
+        throw AppError.badRequest(
+          `No active user (other than you) holding permission '${level}' is available for ${entityType} approval (segregation of duties).`,
+        );
       }
       specs.push({ approverId: null, requiredPermission: level });
     }
@@ -896,9 +902,17 @@ export class ApprovalService implements IApprovalService {
   }
 
   /** All active users who currently hold a permission, resolved to display-ready briefs. */
-  private async _activeHoldersBrief(permissionSlug: string): Promise<WorkflowUserBrief[]> {
+  private async _activeHoldersBrief(
+    permissionSlug: string,
+    excludeUserId?: string,
+  ): Promise<WorkflowUserBrief[]> {
     const users = await prisma.user.findMany({
-      where: this._activeHolderWhere(permissionSlug),
+      where: {
+        ...this._activeHolderWhere(permissionSlug),
+        // Segregation of duties: the submitter can never approve their own item at
+        // any level, so they're never a real candidate — don't list them.
+        ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+      },
       select: workflowUserSelect,
       orderBy: { display_name: 'asc' },
     });
