@@ -1,8 +1,8 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download, FlaskConical, FileType2 } from 'lucide-react';
+import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download, FlaskConical, FileType2, ChevronDown, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -58,6 +58,85 @@ const WritePreviewToggle = ({
     </button>
   </div>
 );
+
+/** Split-button export: primary downloads PDF (signature images embedded), the
+ * chevron menu offers Word (.docx, typed sign-off block). Mirrors the report tab. */
+const WorkingPaperExportButton = ({ paperId }: { paperId: string }): JSX.Element => {
+  const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
+  const [showMenu, setShowMenu] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!showMenu) return;
+    const onClick = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node)) setShowMenu(false);
+    };
+    document.addEventListener('mousedown', onClick);
+    return () => document.removeEventListener('mousedown', onClick);
+  }, [showMenu]);
+
+  const handleExport = async (format: 'pdf' | 'docx') => {
+    setExportingFormat(format);
+    setShowMenu(false);
+    try {
+      const { blob, fileName } = await workingPapersApi.exportFile(paperId, format);
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Export failed');
+    } finally {
+      setExportingFormat(null);
+    }
+  };
+
+  return (
+    <div ref={menuRef} className="relative flex">
+      <Button
+        size="sm"
+        variant="secondary"
+        leftIcon={<Download className="h-3.5 w-3.5" />}
+        isLoading={exportingFormat === 'pdf'}
+        disabled={exportingFormat === 'docx'}
+        onClick={() => handleExport('pdf')}
+        className="rounded-r-none border-r-0"
+      >
+        Export PDF
+      </Button>
+      <button
+        type="button"
+        onClick={() => setShowMenu((v) => !v)}
+        disabled={exportingFormat !== null}
+        aria-label="More export options"
+        className="inline-flex h-8 items-center rounded-r-md border border-border bg-white px-1.5 text-text-secondary hover:bg-surface-alt focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        <ChevronDown className="h-3.5 w-3.5" />
+      </button>
+      {showMenu && (
+        <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-border bg-white py-1 shadow-lg">
+          <button
+            type="button"
+            onClick={() => handleExport('docx')}
+            disabled={exportingFormat !== null}
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-surface-alt disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {exportingFormat === 'docx' ? (
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <FileText className="h-3.5 w-3.5" />
+            )}
+            Export Word (.docx)
+          </button>
+        </div>
+      )}
+    </div>
+  );
+};
 
 /** Plain-text snapshot of the engagement's control test results, for embedding
  * into a working paper so the tester doesn't transcribe their own system's data. */
@@ -124,21 +203,6 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
       refresh();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
-
-  const exportMut = useMutation({
-    mutationFn: (id: string) => workingPapersApi.exportFile(id, 'docx'),
-    onSuccess: ({ blob, fileName }) => {
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      URL.revokeObjectURL(url);
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Export failed'),
   });
 
   const canCreate = canCreateWP && engagement.status === 'in_progress';
@@ -213,15 +277,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                     <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setEditing(wp)}>
                       View
                     </Button>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      leftIcon={<Download className="h-3.5 w-3.5" />}
-                      onClick={() => exportMut.mutate(wp.id)}
-                      isLoading={exportMut.isPending && exportMut.variables === wp.id}
-                    >
-                      Export
-                    </Button>
+                    <WorkingPaperExportButton paperId={wp.id} />
                     {canSubmitWP && (wp.status === 'draft' || wp.status === 'rejected') && (
                       <Button
                         size="sm"
