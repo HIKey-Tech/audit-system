@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, FileType2, Download, AlertOctagon } from 'lucide-react';
 import { toast } from 'sonner';
@@ -14,7 +14,7 @@ import { Select } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
-import { evidenceApi } from '@/lib/api/audit';
+import { evidenceApi, workingPapersApi } from '@/lib/api/audit';
 import { assetsApi } from '@/lib/api/assets';
 import { documentsApi } from '@/lib/api/documents';
 import { formatDate, formatFileSize } from '@/lib/utils/format';
@@ -35,6 +35,17 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
     queryKey: ['engagements', engagement.id, 'evidence'],
     queryFn: () => evidenceApi.listByEngagement(engagement.id),
   });
+
+  // Resolve a linked working-paper id to its title so each evidence row shows
+  // which paper it supports (the other half of the WP "Linked evidence" section).
+  const workingPapers = useQuery({
+    queryKey: ['engagements', engagement.id, 'working-papers'],
+    queryFn: () => workingPapersApi.listByEngagement(engagement.id),
+  });
+  const wpTitleById = useMemo(
+    () => new Map((workingPapers.data ?? []).map((wp) => [wp.id, wp.title])),
+    [workingPapers.data],
+  );
 
   // Evidence upload/dispute change the engagement's evidence aggregate, so refresh
   // both the evidence list AND the engagement detail (the StatusStepper reads
@@ -132,6 +143,13 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
                     {formatFileSize(ev.fileSize)} · {ev.uploadedByName} · {formatDate(ev.createdAt)}
                     {ev.isDisputed && ' · Disputed'}
                   </p>
+                  {ev.workingPaperId && (
+                    <div className="mt-1">
+                      <Badge tone="blue">
+                        WP: {wpTitleById.get(ev.workingPaperId) ?? 'Working paper'}
+                      </Badge>
+                    </div>
+                  )}
                   <EvidenceAssetLinks
                     evidenceId={ev.id}
                     engagementId={engagement.id}

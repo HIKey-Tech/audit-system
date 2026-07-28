@@ -340,6 +340,12 @@ export const evidenceApi = {
   },
   dispute: (id: string, reason: string) =>
     api.post(`/audit/evidence/${id}/dispute`, { reason }),
+  /** Attach an existing engagement evidence item to a working paper. */
+  linkWorkingPaper: (evidenceId: string, workingPaperId: string) =>
+    api.post<AuditEvidence>(`/audit/evidence/${evidenceId}/link/working-paper/${workingPaperId}`),
+  /** Detach evidence from its working paper (leaves it attached to the engagement). */
+  unlinkWorkingPaper: (evidenceId: string) =>
+    api.delete(`/audit/evidence/${evidenceId}/link/working-paper`),
 };
 
 // ============================================================

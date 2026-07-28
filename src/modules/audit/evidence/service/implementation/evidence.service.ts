@@ -77,6 +77,15 @@ export class EvidenceService implements IEvidenceService {
     return mapEvidenceToResponse(updated);
   }
 
+  async unlinkFromWorkingPaper(evidenceId: string, actor: ActorContext): Promise<EvidenceResponseDto> {
+    assertHasPermission(actor.permissions, 'evidence:upload');
+    await this._getEvidence(evidenceId);
+    const updated = await prisma.audit_Evidence.update({ where: { id: evidenceId }, data: { working_paper_id: null } });
+    logger.info('Evidence unlinked from working paper', { evidenceId, actorId: actor.id });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.unlink_working_paper', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId });
+    return mapEvidenceToResponse(updated);
+  }
+
   async linkToFinding(evidenceId: string, findingId: string, actor: ActorContext): Promise<EvidenceResponseDto> {
     assertHasPermission(actor.permissions, 'evidence:upload');
     const evidence = await this._getEvidence(evidenceId);

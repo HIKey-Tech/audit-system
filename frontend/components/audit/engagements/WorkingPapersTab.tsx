@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download, FlaskConical } from 'lucide-react';
+import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download, FlaskConical, FileType2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -14,8 +14,9 @@ import { FormField } from '@/components/ui/FormField';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { checklistsApi, workingPapersApi } from '@/lib/api/audit';
+import { checklistsApi, evidenceApi, workingPapersApi } from '@/lib/api/audit';
 import { wpTemplatesApi } from '@/lib/api/settings';
+import { documentsApi } from '@/lib/api/documents';
 import { Markdown } from '@/components/common/Markdown';
 import { SamplingToolSlideOver } from './SamplingToolSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
@@ -1054,10 +1055,132 @@ const ViewPaperSlideOver = ({
             </FormField>
           )}
 
+          <PaperEvidenceLinks paperId={paper.id} engagementId={paper.engagementId} />
+
           <PaperComments paperId={paper.id} />
         </div>
       )}
     </SlideOver>
+  );
+};
+
+/**
+ * Linked evidence — attaches engagement evidence to this specific working paper,
+ * so the paper cites the exact files that support its testing. Reads and writes
+ * the same evidence cache as the Evidence tab (`['engagements', id, 'evidence']`),
+ * so a link/unlink here shows up on the Evidence tab too, and vice-versa.
+ */
+const PaperEvidenceLinks = ({
+  paperId,
+  engagementId,
+}: {
+  paperId: string;
+  engagementId: string;
+}): JSX.Element => {
+  const qc = useQueryClient();
+  const canLink = usePermission('evidence:upload');
+
+  const evidence = useQuery({
+    queryKey: ['engagements', engagementId, 'evidence'],
+    queryFn: () => evidenceApi.listByEngagement(engagementId),
+  });
+
+  const all = evidence.data ?? [];
+  const linked = all.filter((e) => e.workingPaperId === paperId);
+  const available = all.filter((e) => !e.workingPaperId);
+
+  const refresh = () => qc.invalidateQueries({ queryKey: ['engagements', engagementId, 'evidence'] });
+
+  const link = useMutation({
+    mutationFn: (evidenceId: string) => evidenceApi.linkWorkingPaper(evidenceId, paperId),
+    onSuccess: () => {
+      toast.success('Evidence linked to working paper');
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to link evidence'),
+  });
+
+  const unlink = useMutation({
+    mutationFn: (evidenceId: string) => evidenceApi.unlinkWorkingPaper(evidenceId),
+    onSuccess: () => {
+      toast.success('Evidence unlinked');
+      refresh();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to unlink evidence'),
+  });
+
+  return (
+    <div className="border-t border-border pt-4">
+      <p className="mb-2 text-xs font-semibold uppercase tracking-wider text-text-secondary">
+        Linked evidence{linked.length > 0 ? ` (${linked.length})` : ''}
+      </p>
+
+      {evidence.isLoading ? (
+        <Skeleton className="h-10 w-full" />
+      ) : linked.length === 0 ? (
+        <p className="text-xs text-text-muted">
+          No evidence linked to this working paper yet.
+          {canLink && ' Attach files uploaded on the Evidence tab below.'}
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {linked.map((ev) => (
+            <li
+              key={ev.id}
+              className="flex items-center gap-2 rounded-md border border-border bg-surface-alt/60 px-3 py-2"
+            >
+              <FileType2 className="h-3.5 w-3.5 shrink-0 text-primary" />
+              <span className="min-w-0 flex-1 truncate text-xs text-text-primary">{ev.fileName}</span>
+              <a
+                href={documentsApi.downloadUrl(ev.documentId)}
+                target="_blank"
+                rel="noreferrer"
+                className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              >
+                <Download className="h-3.5 w-3.5" />
+                Download
+              </a>
+              {canLink && (
+                <button
+                  type="button"
+                  onClick={() => unlink.mutate(ev.id)}
+                  className="text-sm leading-none text-text-muted hover:text-danger"
+                  title="Unlink from this working paper"
+                  disabled={unlink.isPending}
+                >
+                  ×
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {canLink && (
+        <div className="mt-2">
+          {available.length > 0 ? (
+            <Select
+              value=""
+              onChange={(e) => {
+                if (e.target.value) link.mutate(e.target.value);
+              }}
+              className="text-xs"
+            >
+              <option value="">+ Link engagement evidence…</option>
+              {available.map((ev) => (
+                <option key={ev.id} value={ev.id}>
+                  {ev.fileName}
+                </option>
+              ))}
+            </Select>
+          ) : (
+            <p className="text-[11px] text-text-muted">
+              No unlinked evidence available — upload files on the Evidence tab first.
+            </p>
+          )}
+        </div>
+      )}
+    </div>
   );
 };
 
