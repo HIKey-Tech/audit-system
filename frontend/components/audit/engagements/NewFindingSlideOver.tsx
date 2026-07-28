@@ -15,7 +15,9 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { UserSelect } from '@/components/common/UserSelect';
 import { checklistsApi, findingsApi, workingPapersApi } from '@/lib/api/audit';
+import { riskApi } from '@/lib/api/risk';
 import { usersApi } from '@/lib/api/users';
+import { usePermission } from '@/hooks/usePermission';
 import type { AuditChecklistItem, AuditEngagementDetail } from '@/lib/types/domain';
 
 /** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
@@ -36,6 +38,7 @@ const Schema = z.object({
   dueDate: z.string().min(1),
   checklistId: z.string().optional().or(z.literal('')),
   workingPaperId: z.string().optional().or(z.literal('')),
+  riskId: z.string().optional().or(z.literal('')),
 });
 
 type FormValues = z.infer<typeof Schema>;
@@ -80,6 +83,7 @@ export const NewFindingSlideOver = ({
     dueDate: '',
     checklistId: prefill?.checklistId ?? '',
     workingPaperId: '',
+    riskId: '',
   });
 
   const {
@@ -113,14 +117,23 @@ export const NewFindingSlideOver = ({
     enabled: open,
   });
 
-  // Names for the co-responder chips.
+  // Related risk — optional link, only offered to users who can read the register.
+  const canReadRisk = usePermission('risk:read');
+  const risks = useQuery({
+    queryKey: ['risks', 'register', 'picker'],
+    queryFn: () => riskApi.list({ pageSize: 200 }),
+    enabled: open && canReadRisk,
+    staleTime: 5 * 60_000,
+  });
+
+  // Names for the co-responder chips (directory: gated on user:directory).
   const usersList = useQuery({
-    queryKey: ['users', 'all'],
-    queryFn: () => usersApi.list({ pageSize: 100 }),
+    queryKey: ['users', 'directory'],
+    queryFn: () => usersApi.directory(),
     staleTime: 5 * 60_000,
   });
   const userName = (id: string): string => {
-    const u = usersList.data?.items.find((x) => x.id === id);
+    const u = usersList.data?.find((x) => x.id === id);
     return u ? u.displayName || `${u.firstName} ${u.lastName}` : id;
   };
 
@@ -139,6 +152,7 @@ export const NewFindingSlideOver = ({
         dueDate: toISODatetime(v.dueDate),
         checklistId: v.checklistId || undefined,
         workingPaperId: v.workingPaperId || undefined,
+        riskId: v.riskId || undefined,
       }),
     onSuccess: () => {
       toast.success('Finding created');
@@ -235,6 +249,21 @@ export const NewFindingSlideOver = ({
               ))}
             </Select>
           </FormField>
+          {canReadRisk && (
+            <FormField
+              label="Related risk"
+              hint="Link the register risk this finding relates to — closes the risk ↔ finding loop."
+            >
+              <Select {...register('riskId')}>
+                <option value="">None</option>
+                {(risks.data?.items ?? []).map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.title}
+                  </option>
+                ))}
+              </Select>
+            </FormField>
+          )}
         </div>
         <FormField label="Root cause" required error={errors.rootCause?.message}>
           <Textarea rows={3} {...register('rootCause')} />

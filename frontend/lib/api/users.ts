@@ -41,9 +41,22 @@ export interface ChangePasswordDto {
   newPassword: string;
 }
 
+/** Minimal user record for people-pickers — gated on `user:directory` (or `user:read`). */
+export interface UserDirectoryEntry {
+  id: string;
+  displayName: string | null;
+  firstName: string;
+  lastName: string;
+  department: string | null;
+  jobTitle: string | null;
+  isActive: boolean;
+}
+
 export const usersApi = {
   list: (query?: UsersListQuery) =>
     api.getPaginated<UserDto>('/users', query as Record<string, string | number | boolean | undefined>),
+  /** Active-user directory for assign/owner pickers (needs user:directory or user:read). */
+  directory: () => api.get<UserDirectoryEntry[]>('/users/directory'),
   get: (id: string) => api.get<UserDto>(`/users/${id}`),
   me: () => api.get<UserDto>('/users/me'),
   updateMe: (dto: UpdateUserDto) => api.patch<UserDto>('/users/me', dto),

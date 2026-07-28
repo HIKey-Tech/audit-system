@@ -24,8 +24,8 @@ export const UserSelect = ({
   excludeIds = [],
 }: UserSelectProps): JSX.Element => {
   const { data, isLoading } = useQuery({
-    queryKey: ['users', 'all'],
-    queryFn: () => usersApi.list({ pageSize: 100 }),
+    queryKey: ['users', 'directory'],
+    queryFn: () => usersApi.directory(),
     staleTime: 5 * 60_000,
   });
 
@@ -39,8 +39,8 @@ export const UserSelect = ({
       disabled={isLoading}
     >
       <option value="">{isLoading ? 'Loading users…' : placeholder}</option>
-      {data?.items
-        .filter((u) => u.isActive && !excludeIds.includes(u.id))
+      {data
+        ?.filter((u) => u.isActive && !excludeIds.includes(u.id))
         .map((u) => (
           <option key={u.id} value={u.id}>
             {u.displayName || `${u.firstName} ${u.lastName}`}

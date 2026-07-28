@@ -12,6 +12,7 @@ import {
 } from '../../dto/request/user.request.dto';
 import {
   UserResponseDto,
+  UserDirectoryDto,
   RoleListResponseDto,
   PermissionListResponseDto,
   PermissionGroupResponseDto,
@@ -43,6 +44,9 @@ export interface IUserService {
   listUsers(
     query: UserQueryDto,
   ): Promise<{ users: UserResponseDto[]; meta: PaginationMeta }>;
+
+  /** Minimal active-user directory for people-pickers (gated on `user:directory`). */
+  listDirectory(): Promise<UserDirectoryDto[]>;
 
   listRoles(
     query: RoleQueryDto,

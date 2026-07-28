@@ -102,6 +102,19 @@ export class UserController {
     );
 
     /**
+     * @route  GET /users/directory
+     * @desc   Minimal active-user directory for people-pickers (assign auditee,
+     *         add co-responder, pick an owner). Non-sensitive fields only.
+     * @access Private — user:directory OR user:read
+     * @note   Registered before /:id so "directory" is not read as an id.
+     */
+    this.router.get(
+      '/directory',
+      requireAnyPermission('user:directory', 'user:read'),
+      this._listDirectory.bind(this),
+    );
+
+    /**
      * @route  GET /users/:id
      * @desc   Get user by ID
      * @access Private — user:read
@@ -216,6 +229,15 @@ export class UserController {
     try {
       const { users, meta } = await this.userService.listUsers(req.query as never);
       res.status(200).json({ ...buildResponse(users), meta });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listDirectory(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const users = await this.userService.listDirectory();
+      res.status(200).json(buildResponse(users));
     } catch (err) {
       next(err);
     }

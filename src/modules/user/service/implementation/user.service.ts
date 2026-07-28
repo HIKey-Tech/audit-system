@@ -27,10 +27,12 @@ import {
 } from '../../dto/request/user.request.dto';
 import {
   UserResponseDto,
+  UserDirectoryDto,
   RoleListResponseDto,
   PermissionListResponseDto,
   PermissionGroupResponseDto,
   mapUserToResponse,
+  mapUserToDirectory,
   mapRoleToResponse,
   mapPermissionToResponse,
 } from '../../dto/response/user.response.dto';
@@ -179,6 +181,24 @@ export class UserService implements IUserService {
       users: (users as UserWithRoles[]).map(mapUserToResponse),
       meta: buildPaginationMeta(total, page, pageSize),
     };
+  }
+
+  async listDirectory(): Promise<UserDirectoryDto[]> {
+    const users = await prisma.user.findMany({
+      where: { deleted_at: null, is_active: true },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        display_name: true,
+        department: true,
+        job_title: true,
+        is_active: true,
+      },
+      orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+      take: 500,
+    });
+    return users.map(mapUserToDirectory);
   }
 
   async listRoles(
