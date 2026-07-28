@@ -18,6 +18,13 @@ export interface IMfaService {
   /** Dispatch a login email OTP (used when the enrolled method is 'email'). */
   startEmailChallenge(userId: string, email: string): Promise<void>;
 
+  /**
+   * Re-dispatch a login email OTP for an active challenge. Server-enforced
+   * cooldown + per-window cap; returns the cooldown so the UI can disable the
+   * button. Throws 429 when called too soon or too often.
+   */
+  resendEmailChallenge(userId: string, email: string): Promise<{ cooldownSeconds: number }>;
+
   /** Verify a login code (TOTP, email OTP, or a backup code). Throws on failure. */
   verifyChallenge(userId: string, code: string): Promise<void>;
 

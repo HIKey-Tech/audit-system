@@ -1,13 +1,16 @@
 'use client';
 
-import { useState, Suspense } from 'react';
+import { useEffect, useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Loader2, ShieldCheck, AlertCircle, ArrowLeft } from 'lucide-react';
+import { Loader2, ShieldCheck, AlertCircle, ArrowLeft, RotateCcw } from 'lucide-react';
 
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
+
+/** Seconds the Resend button stays disabled after each send (initial + resend). */
+const RESEND_COOLDOWN_SECONDS = 45;
 
 const Verify2faInner = (): JSX.Element => {
   const router = useRouter();
@@ -19,6 +22,45 @@ const Verify2faInner = (): JSX.Element => {
   const [useBackup, setUseBackup] = useState(false);
   const [serverError, setServerError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  // Resend (email method): cooldown counts down to 0, then the button enables.
+  // Starts on mount because the first code was already sent at login.
+  const [cooldown, setCooldown] = useState(method === 'email' ? RESEND_COOLDOWN_SECONDS : 0);
+  const [resending, setResending] = useState(false);
+  const [resendMsg, setResendMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (cooldown <= 0) return;
+    const t = setTimeout(() => setCooldown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [cooldown]);
+
+  const onResend = async (): Promise<void> => {
+    if (cooldown > 0 || resending) return;
+    setResending(true);
+    setResendMsg(null);
+    setServerError(null);
+    try {
+      const res = await fetch('/api/auth/2fa/resend', { method: 'POST', credentials: 'include' });
+      const json = (await res.json().catch(() => ({}))) as {
+        success?: boolean;
+        message?: string;
+        data?: { cooldownSeconds?: number };
+      };
+      if (!res.ok || !json.success) {
+        // Includes the server-enforced 429 ("please wait Ns") — re-disable to match.
+        setServerError(json.message || 'Could not resend the code');
+        setCooldown(RESEND_COOLDOWN_SECONDS);
+        return;
+      }
+      setResendMsg('A new code has been sent to your email.');
+      setCooldown(json.data?.cooldownSeconds ?? RESEND_COOLDOWN_SECONDS);
+    } catch {
+      setServerError('Could not reach the server');
+    } finally {
+      setResending(false);
+    }
+  };
 
   const onSubmit = async (e: React.FormEvent): Promise<void> => {
     e.preventDefault();
@@ -107,6 +149,25 @@ const Verify2faInner = (): JSX.Element => {
             <Button type="submit" fullWidth isLoading={submitting} size="lg">
               {submitting ? 'Verifying…' : 'Verify'}
             </Button>
+
+            {method === 'email' && !useBackup && (
+              <div className="text-center">
+                {resendMsg && <p className="mb-1.5 text-xs text-success">{resendMsg}</p>}
+                <button
+                  type="button"
+                  onClick={onResend}
+                  disabled={cooldown > 0 || resending}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline"
+                >
+                  <RotateCcw className={`h-3.5 w-3.5 ${resending ? 'animate-spin' : ''}`} />
+                  {resending
+                    ? 'Sending…'
+                    : cooldown > 0
+                      ? `Resend code in ${cooldown}s`
+                      : "Didn't get it? Resend code"}
+                </button>
+              </div>
+            )}
 
             <div className="flex items-center justify-between">
               <button

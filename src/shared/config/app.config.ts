@@ -63,6 +63,10 @@ export const config = {
     enrollTtl: requireDurationEnv('MFA_ENROLL_TTL', '15m'),
     emailOtpTtl: requireDurationEnv('MFA_EMAIL_OTP_TTL', '10m'),
     emailOtpMaxAttempts: parseInt(optionalEnv('MFA_EMAIL_OTP_MAX_ATTEMPTS', '5'), 10),
+    // Seconds a user must wait between requesting email OTP resends (server-enforced).
+    emailOtpResendCooldown: parseInt(optionalEnv('MFA_EMAIL_OTP_RESEND_COOLDOWN', '30'), 10),
+    // Max OTP sends (initial + resends) allowed within one code lifetime — anti email-bomb.
+    emailOtpMaxSends: parseInt(optionalEnv('MFA_EMAIL_OTP_MAX_SENDS', '5'), 10),
     backupCodeCount: parseInt(optionalEnv('MFA_BACKUP_CODE_COUNT', '10'), 10),
     // 32-byte key (hex or base64) for AES-256-GCM at-rest encryption of TOTP
     // secrets. Falls back to a key derived from JWT_SECRET when unset (dev only).

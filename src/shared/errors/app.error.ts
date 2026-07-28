@@ -15,6 +15,7 @@ export enum ErrorCode {
   // Validation
   VALIDATION_ERROR = 'VALIDATION_ERROR',
   BAD_REQUEST = 'BAD_REQUEST',
+  TOO_MANY_REQUESTS = 'TOO_MANY_REQUESTS',
 
   // Server
   INTERNAL_ERROR = 'INTERNAL_ERROR',
@@ -66,6 +67,10 @@ export class AppError extends Error {
 
   static badRequest(message: string, details?: unknown): AppError {
     return new AppError(message, 400, ErrorCode.BAD_REQUEST, details);
+  }
+
+  static tooManyRequests(message = 'Too many requests'): AppError {
+    return new AppError(message, 429, ErrorCode.TOO_MANY_REQUESTS);
   }
 
   static validationError(details: unknown): AppError {

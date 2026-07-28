@@ -121,7 +121,7 @@ export const NewFindingSlideOver = ({
   const canReadRisk = usePermission('risk:read');
   const risks = useQuery({
     queryKey: ['risks', 'register', 'picker'],
-    queryFn: () => riskApi.list({ pageSize: 200 }),
+    queryFn: () => riskApi.list({ pageSize: 100 }),
     enabled: open && canReadRisk,
     staleTime: 5 * 60_000,
   });

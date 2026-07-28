@@ -66,6 +66,17 @@ export class MfaController {
     );
 
     /**
+     * @route  POST /auth/2fa/resend
+     * @desc   Resend the login email OTP (server-enforced cooldown + cap)
+     * @access Challenge token
+     */
+    this.router.post(
+      '/resend',
+      requireMfaToken('mfa_challenge'),
+      this._resend.bind(this),
+    );
+
+    /**
      * @route  POST /auth/2fa/backup-codes/regenerate
      * @desc   Regenerate backup codes for the authenticated user
      * @access Private
@@ -129,6 +140,16 @@ export class MfaController {
         req.headers['user-agent'],
       );
       res.status(200).json(buildResponse(auth, 'Login successful'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _resend(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { id, email } = req.mfaToken!;
+      const result = await this.mfaService.resendEmailChallenge(id, email);
+      res.status(200).json(buildResponse(result, 'A new verification code has been sent'));
     } catch (err) {
       next(err);
     }
