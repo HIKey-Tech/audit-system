@@ -342,8 +342,14 @@ export class FindingService implements IFindingService {
       });
     }
     if (isAuditee) {
-      // A responder sees a finding whether they are the primary auditee or a co-responder.
+      // A responder sees a finding whether they are the primary auditee or a co-responder,
+      // but — exactly like the engagement Findings tab — only once the engagement's report
+      // has been issued (reported/closed). Before that, findings are draft/internal, so this
+      // gate stops the standalone Findings page leaking pre-issue findings to the auditee.
       and.push(this._auditeeMatch(actor.id));
+      and.push({
+        engagement: { status: { in: [EngagementStatus.Reported, EngagementStatus.Closed] } },
+      });
     } else if (!isOversight) {
       and.push({
         engagement: {

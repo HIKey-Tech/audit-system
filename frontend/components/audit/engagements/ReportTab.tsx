@@ -20,7 +20,8 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { Select } from '@/components/ui/Input';
 import { InfoHint } from '@/components/ui/InfoHint';
 import { reportTemplatesApi } from '@/lib/api/settings';
-import { reportsApi } from '@/lib/api/audit';
+import { reportsApi, findingsApi } from '@/lib/api/audit';
+import { assetsApi } from '@/lib/api/assets';
 import { workflowApi } from '@/lib/api/workflow';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
@@ -59,6 +60,20 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     queryKey: ['settings', 'report-templates', 'list'],
     queryFn: () => reportTemplatesApi.list(),
   });
+
+  // The report preview auto-assembles findings + assets in scope. The engagement
+  // detail only carries finding aggregates and no asset list, so fetch both here
+  // (live, viewer-scoped) — the same data the exported PDF/DOCX pulls.
+  const findings = useQuery({
+    queryKey: ['engagements', engagement.id, 'findings'],
+    queryFn: () => findingsApi.listByEngagement(engagement.id),
+  });
+  const assets = useQuery({
+    queryKey: ['engagements', engagement.id, 'assets'],
+    queryFn: () => assetsApi.listForEngagement(engagement.id),
+  });
+  const reportFindings = findings.data ?? [];
+  const scopeAssets = assets.data ?? [];
 
   const refresh = () => {
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
@@ -422,11 +437,11 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           </Card>
           <Card>
             <CardHeader title="Findings summary" />
-            {(engagement.findings ?? []).length === 0 ? (
+            {(reportFindings).length === 0 ? (
               <p className="text-xs text-text-muted">No findings.</p>
             ) : (
               <ul className="space-y-2">
-                {(engagement.findings ?? []).map((f) => (
+                {(reportFindings).map((f) => (
                   <li key={f.id} className="flex items-center justify-between gap-2 text-xs">
                     <span className="truncate text-text-primary">{f.title}</span>
                     <StatusBadge status={f.severity} size="xs" />
@@ -506,7 +521,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           {/* Section 4: Findings Summary */}
           <div className="space-y-2">
             <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(3, '4. Findings Summary Table')}</h2>
-            {(engagement.findings ?? []).length === 0 ? (
+            {(reportFindings).length === 0 ? (
               <p className="text-xs text-slate-500 italic pl-1">No findings were identified during the course of this engagement.</p>
             ) : (
               <div className="overflow-hidden border border-slate-200 rounded-md">
@@ -520,7 +535,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-200 bg-white">
-                    {(engagement.findings ?? []).map((f, idx) => (
+                    {(reportFindings).map((f, idx) => (
                       <tr key={f.id} className="hover:bg-slate-50/50">
                         <td className="px-4 py-2 font-medium text-slate-500">{idx + 1}</td>
                         <td className="px-4 py-2 text-slate-900 font-medium">{f.title}</td>
@@ -536,7 +551,38 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             )}
           </div>
 
-          {/* Section 5: Signature Blocks */}
+          {/* Section 5: Assets in Scope — auto-assembled from the engagement's linked assets */}
+          {scopeAssets.length > 0 && (
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">5. Assets in Scope</h2>
+              <div className="overflow-hidden border border-slate-200 rounded-md">
+                <table className="min-w-full divide-y divide-slate-200 text-xs">
+                  <thead className="bg-slate-50 text-text-secondary border-b border-slate-200">
+                    <tr>
+                      <th scope="col" className="px-4 py-2 text-left font-semibold">Tag</th>
+                      <th scope="col" className="px-4 py-2 text-left font-semibold">Name</th>
+                      <th scope="col" className="px-4 py-2 text-left font-semibold">Type</th>
+                      <th scope="col" className="px-4 py-2 text-center font-semibold">Criticality</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-200 bg-white">
+                    {scopeAssets.map((a) => (
+                      <tr key={a.id} className="hover:bg-slate-50/50">
+                        <td className="px-4 py-2 font-medium text-slate-900">{a.assetTag}</td>
+                        <td className="px-4 py-2 text-slate-700">{a.name}</td>
+                        <td className="px-4 py-2 capitalize text-slate-500">{a.assetType?.replace(/_/g, ' ')}</td>
+                        <td className="px-4 py-2 text-center">
+                          <StatusBadge status={a.criticality ?? 'low'} size="xs" />
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          {/* Signature Blocks */}
           <div className="pt-6 border-t border-slate-200">
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-700">
               <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
