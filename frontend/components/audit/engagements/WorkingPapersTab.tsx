@@ -17,7 +17,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { checklistsApi, evidenceApi, workingPapersApi } from '@/lib/api/audit';
 import { wpTemplatesApi } from '@/lib/api/settings';
 import { documentsApi } from '@/lib/api/documents';
-import { Markdown } from '@/components/common/Markdown';
+import { WorkingPaperDocument } from './WorkingPaperDocument';
 import { SamplingToolSlideOver } from './SamplingToolSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
@@ -338,8 +338,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
       </Card>
 
       <CreateOrEditPaperSlideOver
-        engagementId={engagement.id}
-        auditType={engagement.auditType}
+        engagement={engagement}
         open={createOpen}
         onClose={() => {
           setCreateOpen(false);
@@ -367,6 +366,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
       />
       <ViewPaperSlideOver
         paper={editing}
+        engagement={engagement}
         canEdit={canUpdateWP}
         onClose={() => setEditing(null)}
         onSaved={refresh}
@@ -391,16 +391,14 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
 };
 
 const CreateOrEditPaperSlideOver = ({
-  engagementId,
-  auditType,
+  engagement,
   open,
   onClose,
   onSaved,
   initialTitle,
   initialContent,
 }: {
-  engagementId: string;
-  auditType: string;
+  engagement: AuditEngagementDetail;
   open: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -408,6 +406,8 @@ const CreateOrEditPaperSlideOver = ({
   initialTitle?: string;
   initialContent?: string;
 }): JSX.Element => {
+  const engagementId = engagement.id;
+  const auditType = engagement.auditType;
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [sectionContents, setSectionContents] = useState<string[]>([]);
@@ -487,17 +487,28 @@ const CreateOrEditPaperSlideOver = ({
     });
   };
 
+  const testResultsSection =
+    includeTestResults && checklistItems.length > 0
+      ? { title: 'Control Test Results (auto-generated)', content: buildTestResultsText(checklistItems) }
+      : null;
+
+  // Exactly what will be saved — so the preview is the document, not a guess.
+  const previewSections: PaperSection[] = [
+    ...(selectedTemplate
+      ? selectedTemplate.sections.map((section, index) => ({
+          title: section.title,
+          content: sectionContents[index] ?? '',
+        }))
+      : [{ title: '', content }]),
+    ...(testResultsSection ? [testResultsSection] : []),
+  ];
+
   const submit = async (alsoSubmit: boolean) => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
       toast.error('Title required');
       return;
     }
-
-    const testResultsSection =
-      includeTestResults && checklistItems.length > 0
-        ? { title: 'Control Test Results (auto-generated)', content: buildTestResultsText(checklistItems) }
-        : null;
 
     let payloadContent: string;
     if (selectedTemplate) {
@@ -603,27 +614,20 @@ const CreateOrEditPaperSlideOver = ({
             </div>
           </div>
 
-          <FormField label="Title" required>
-            <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. WP-01 Sample Selection" />
-          </FormField>
+          {!previewing && (
+            <FormField label="Title" required>
+              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. WP-01 Sample Selection" />
+            </FormField>
+          )}
 
           {previewing ? (
-            selectedTemplate ? (
-              selectedTemplate.sections.map((section, index) => (
-                <div key={`${section.title}-${index}`}>
-                  <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                    {section.title}
-                  </p>
-                  <div className="rounded-md border border-border bg-surface p-3">
-                    <Markdown content={sectionContents[index] ?? ''} />
-                  </div>
-                </div>
-              ))
-            ) : (
-              <div className="rounded-md border border-border bg-surface p-3">
-                <Markdown content={content} />
-              </div>
-            )
+            <WorkingPaperDocument
+              title={title}
+              sections={previewSections}
+              engagementReference={engagement.referenceNumber}
+              engagementTitle={engagement.title}
+              preparedBy={engagement.leadAuditorName ?? undefined}
+            />
           ) : selectedTemplate ? (
             selectedTemplate.sections.map((section, index) => {
               const fieldId = `working-paper-section-${index}`;
@@ -939,11 +943,13 @@ const parsePaperSections = (raw: string | null | undefined): PaperSection[] | nu
 
 const ViewPaperSlideOver = ({
   paper,
+  engagement,
   canEdit,
   onClose,
   onSaved,
 }: {
   paper: AuditWorkingPaper | null;
+  engagement: AuditEngagementDetail;
   canEdit: boolean;
   onClose: () => void;
   onSaved: () => void;
@@ -1054,24 +1060,18 @@ const ViewPaperSlideOver = ({
           )}
 
           {showRendered ? (
-            <>
-              {isStructured ? (
-                sections.map((section, index) => (
-                  <div key={`${section.title}-${index}`}>
-                    <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                      {section.title}
-                    </p>
-                    <div className="rounded-md border border-border bg-surface p-3">
-                      <Markdown content={section.content} />
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="rounded-md border border-border bg-surface p-3">
-                  <Markdown content={content} />
-                </div>
-              )}
-            </>
+            <WorkingPaperDocument
+              title={title}
+              sections={isStructured ? sections : [{ title: '', content }]}
+              engagementReference={engagement.referenceNumber}
+              engagementTitle={engagement.title}
+              workingPaperType={paper.workingPaperType}
+              preparedBy={paper.createdByName}
+              status={paper.status}
+              version={paper.version}
+              reviewerName={paper.reviewerName}
+              reviewedAt={paper.reviewedAt}
+            />
           ) : (
             <>
               <FormField label="Title">
