@@ -100,7 +100,7 @@ export const StatusStepper = ({ engagement, onNavigateTab }: StatusStepperProps)
       {/* Stepper Graphic */}
       <div className="relative mt-5 mb-3 px-4">
         {/* Connection Bar */}
-        <div className="absolute top-[18px] left-[32px] right-[32px] h-[2px] bg-slate-200 dark:bg-slate-700 -z-10">
+        <div className="absolute top-[18px] left-[32px] right-[32px] h-[2px] bg-slate-200 -z-10">
           <div
             className="h-full bg-primary transition-all duration-500 ease-out"
             style={{ width: `${progressPercent}%` }}
@@ -122,7 +122,7 @@ export const StatusStepper = ({ engagement, onNavigateTab }: StatusStepperProps)
                     'h-9 w-9 rounded-full flex items-center justify-center border-2 transition-all duration-300',
                     isCompleted && 'bg-emerald-500 border-emerald-500 text-white shadow-sm',
                     isActive && 'bg-primary border-primary text-white shadow-md scale-110 ring-4 ring-primary/20 animate-pulse-subtle',
-                    isUpcoming && 'bg-surface border-slate-300 dark:border-slate-600 text-text-muted hover:border-slate-400'
+                    isUpcoming && 'bg-surface border-slate-300 text-text-muted hover:border-slate-400'
                   )}
                   title={`${stage.label}: ${stage.description}`}
                 >
@@ -148,7 +148,7 @@ export const StatusStepper = ({ engagement, onNavigateTab }: StatusStepperProps)
       {isOpen && (
         <div className="mt-4 pt-3 border-t border-border/80 transition-all duration-300 animate-fadeIn">
           {engagement.status === 'closed' ? (
-            <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-950/20 text-emerald-800 dark:text-emerald-300 border border-emerald-200/50">
+            <div className="flex items-center gap-3 p-3 rounded-lg bg-emerald-50 text-emerald-800 border border-emerald-200/50">
               <Check className="h-5 w-5 stroke-[2.5] shrink-0" />
               <div className="text-xs">
                 <h4 className="font-semibold">Engagement Completed</h4>

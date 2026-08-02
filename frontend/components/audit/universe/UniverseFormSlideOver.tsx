@@ -43,7 +43,7 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
     setValue,
     watch,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -124,6 +124,7 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit auditable entity' : 'New auditable entity'}
       description="Auditable entities form the universe scoped under the GBB audit plan."

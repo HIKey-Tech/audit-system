@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -44,11 +44,17 @@ export const AssetRelationshipSlideOver = ({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { targetAssetId: '', relationshipType: 'depends_on', description: '' },
   });
+
+  // Reopening after a cancel must start clean — otherwise the previous session's
+  // values (and its dirty flag) carry over into what looks like a fresh panel.
+  useEffect(() => {
+    if (open) reset();
+  }, [open, reset]);
 
   const create = useMutation({
     mutationFn: (values: FormValues) =>
@@ -71,6 +77,7 @@ export const AssetRelationshipSlideOver = ({
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="Add relationship"
       description="Record dependency, hosting, integration, or support relationships."

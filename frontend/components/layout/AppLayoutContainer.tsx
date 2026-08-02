@@ -4,6 +4,7 @@ import React from 'react';
 import { useLayout } from '@/components/providers/LayoutProvider';
 import { Sidebar } from './Sidebar';
 import { Header } from './Header';
+import { CommandPalette } from './CommandPalette';
 import { cn } from '@/lib/utils/cn';
 
 export const AppLayoutContainer = ({
@@ -23,8 +24,12 @@ export const AppLayoutContainer = ({
         )}
       >
         <Header />
-        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">{children}</main>
+        {/* Capped so table rows stay scannable on ultrawide displays. */}
+        <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
+          <div className="mx-auto w-full max-w-[1600px]">{children}</div>
+        </main>
       </div>
+      <CommandPalette />
     </div>
   );
 };

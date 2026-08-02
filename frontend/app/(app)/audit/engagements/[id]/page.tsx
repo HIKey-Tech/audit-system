@@ -161,7 +161,7 @@ export default function EngagementDetailPage(): JSX.Element {
             <span className="font-medium text-text-primary">{data.planTitle}</span>
           </span>
         ) : (
-          <span className="rounded bg-amber-100 dark:bg-amber-900/30 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700 dark:text-amber-400">
+          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[11px] font-semibold text-amber-700">
             Ad-hoc
           </span>
         )}

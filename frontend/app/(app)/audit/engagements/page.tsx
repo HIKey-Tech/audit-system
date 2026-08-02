@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, Briefcase, AlertTriangle } from 'lucide-react';
@@ -14,6 +14,8 @@ import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
+import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { engagementsApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
@@ -27,21 +29,38 @@ export default function EngagementsListPage(): JSX.Element {
   const router = useRouter();
   const { canManageAuditProgramme: canWrite, user } = usePermissions();
 
-  const [tab, setTab] = useState<TabKey>('all');
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [status, setStatus] = useState('');
-  const [auditType, setAuditType] = useState('');
-  const [priority, setPriority] = useState('');
   const [open, setOpen] = useState(false);
+
+  // View state lives in the URL: Back, refresh, and shared links restore it.
+  const { values, set } = useQueryFilters({
+    tab: 'all',
+    page: '1',
+    search: '',
+    status: '',
+    auditType: '',
+    priority: '',
+    sortBy: 'created_at',
+    sortOrder: 'desc',
+  });
+  const tab = (['all', 'mine', 'overdue'].includes(values.tab) ? values.tab : 'all') as TabKey;
+  const page = Math.max(1, Number(values.page) || 1);
+
+  // Typing stays local and responsive; the URL (and so the query) follows once
+  // it settles, and Back/forward flow the other way.
+  const [searchInput, setSearchInput] = useSearchInput(
+    values.search,
+    useCallback((next: string) => set({ search: next, page: '1' }), [set]),
+  );
 
   const queryFilters = {
     page,
     pageSize: 20,
-    search: search || undefined,
-    status: status || undefined,
-    auditType: auditType || undefined,
-    priority: priority || undefined,
+    search: values.search || undefined,
+    status: values.status || undefined,
+    auditType: values.auditType || undefined,
+    priority: values.priority || undefined,
+    sortBy: values.sortBy,
+    sortOrder: values.sortOrder as 'asc' | 'desc',
     leadAuditorId: tab === 'mine' ? user.id : undefined,
     overdue: tab === 'overdue' ? true : undefined,
   };
@@ -69,8 +88,10 @@ export default function EngagementsListPage(): JSX.Element {
 
   const columns: Column<AuditEngagement>[] = [
     {
-      key: 'reference',
+      // Keys of sortable columns are the backend sort field names.
+      key: 'reference_number',
       header: 'Reference',
+      sortable: true,
       render: (e) => <span className="font-mono text-xs text-primary">{e.referenceNumber}</span>,
       width: '140px',
     },
@@ -104,8 +125,9 @@ export default function EngagementsListPage(): JSX.Element {
       width: '170px',
     },
     {
-      key: 'sla',
+      key: 'sla_deadline',
       header: 'SLA Deadline',
+      sortable: true,
       render: (e) => {
         const overdue = new Date(e.slaDeadline) < new Date() && !['reported', 'closed'].includes(e.status);
         return (
@@ -142,28 +164,21 @@ export default function EngagementsListPage(): JSX.Element {
         <Tabs
           tabs={tabs}
           active={tab}
-          onChange={(k) => {
-            setTab(k as TabKey);
-            setPage(1);
-          }}
+          onChange={(k) => set({ tab: k, page: '1' })}
           className="mb-4"
         />
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Input
             placeholder="Search…"
+            aria-label="Search engagements"
             leftIcon={<Search className="h-4 w-4" />}
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
           <Select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
+            value={values.status}
+            aria-label="Filter by status"
+            onChange={(e) => set({ status: e.target.value, page: '1' })}
           >
             <option value="">All statuses</option>
             <option value="planned">Planned</option>
@@ -173,11 +188,9 @@ export default function EngagementsListPage(): JSX.Element {
             <option value="closed">Closed</option>
           </Select>
           <Select
-            value={auditType}
-            onChange={(e) => {
-              setAuditType(e.target.value);
-              setPage(1);
-            }}
+            value={values.auditType}
+            aria-label="Filter by audit type"
+            onChange={(e) => set({ auditType: e.target.value, page: '1' })}
           >
             <option value="">All types</option>
             <option value="it">IT</option>
@@ -186,11 +199,9 @@ export default function EngagementsListPage(): JSX.Element {
             <option value="systems">Systems</option>
           </Select>
           <Select
-            value={priority}
-            onChange={(e) => {
-              setPriority(e.target.value);
-              setPage(1);
-            }}
+            value={values.priority}
+            aria-label="Filter by priority"
+            onChange={(e) => set({ priority: e.target.value, page: '1' })}
           >
             <option value="">All priorities</option>
             <option value="critical">Critical</option>
@@ -209,6 +220,9 @@ export default function EngagementsListPage(): JSX.Element {
         isError={query.isError}
         onRetry={() => query.refetch()}
         onRowClick={(r) => router.push(`/audit/engagements/${r.id}`)}
+        sortBy={values.sortBy}
+        sortOrder={values.sortOrder as 'asc' | 'desc'}
+        onSortChange={(key, order) => set({ sortBy: key, sortOrder: order, page: '1' })}
         emptyState={
           <EmptyState
             icon={<Briefcase className="h-4 w-4" />}
@@ -237,7 +251,7 @@ export default function EngagementsListPage(): JSX.Element {
                 page: query.data.meta.page,
                 pageSize: query.data.meta.pageSize,
                 total: query.data.meta.total,
-                onPageChange: setPage,
+                onPageChange: (p) => set({ page: String(p) }),
               }
             : undefined
         }

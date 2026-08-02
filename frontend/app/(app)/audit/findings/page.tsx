@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -13,6 +13,8 @@ import { Input, Select } from '@/components/ui/Input';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { findingsApi } from '@/lib/api/audit';
+import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
+import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditFinding } from '@/lib/types/domain';
@@ -24,22 +26,38 @@ export default function FindingsListPage(): JSX.Element {
   // Deep-link scope: e.g. the audit-universe "open findings" count links here
   // with ?universeId=… so the register opens pre-filtered to that entity.
   const universeId = searchParams?.get('universeId') ?? undefined;
-  const [search, setSearch] = useState('');
-  const [severity, setSeverity] = useState('');
-  const [status, setStatus] = useState('');
-  const [category, setCategory] = useState('');
+
+  const { values, set } = useQueryFilters({
+    page: '1',
+    search: '',
+    severity: '',
+    status: '',
+    category: '',
+    sortBy: 'created_at',
+    sortOrder: 'desc',
+  });
+  const page = Math.max(1, Number(values.page) || 1);
+
+  const [searchInput, setSearchInput] = useSearchInput(
+    values.search,
+    useCallback((next: string) => set({ search: next, page: '1' }), [set]),
+  );
+
+  const queryFilters = {
+    page,
+    pageSize: 20,
+    search: values.search || undefined,
+    severity: values.severity || undefined,
+    status: values.status || undefined,
+    category: values.category || undefined,
+    sortBy: values.sortBy,
+    sortOrder: values.sortOrder as 'asc' | 'desc',
+    universeId,
+  };
 
   const query = useQuery({
-    queryKey: ['findings', { search, severity, status, category, universeId }],
-    queryFn: () =>
-      findingsApi.list({
-        pageSize: 100,
-        search: search || undefined,
-        severity: severity || undefined,
-        status: status || undefined,
-        category: category || undefined,
-        universeId,
-      }),
+    queryKey: ['findings', queryFilters],
+    queryFn: () => findingsApi.list(queryFilters),
   });
 
   const columns: Column<AuditFinding>[] = [
@@ -71,14 +89,17 @@ export default function FindingsListPage(): JSX.Element {
       width: '160px',
     },
     {
+      // Keys of sortable columns are the backend sort field names.
       key: 'severity',
       header: 'Severity',
+      sortable: true,
       render: (f) => <StatusBadge status={f.severity} />,
       width: '120px',
     },
     {
       key: 'status',
       header: 'Status',
+      sortable: true,
       render: (f) => <StatusBadge status={f.status} />,
       width: '140px',
     },
@@ -89,8 +110,9 @@ export default function FindingsListPage(): JSX.Element {
       width: '180px',
     },
     {
-      key: 'due',
+      key: 'due_date',
       header: 'Due Date',
+      sortable: true,
       render: (f) => {
         const overdue = new Date(f.dueDate) < new Date() && !['verified', 'pending_closure', 'closed'].includes(f.status);
         return (
@@ -114,11 +136,16 @@ export default function FindingsListPage(): JSX.Element {
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Input
             placeholder="Search findings…"
+            aria-label="Search findings"
             leftIcon={<Search className="h-4 w-4" />}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
-          <Select value={severity} onChange={(e) => setSeverity(e.target.value)}>
+          <Select
+            value={values.severity}
+            aria-label="Filter by severity"
+            onChange={(e) => set({ severity: e.target.value, page: '1' })}
+          >
             <option value="">All severities</option>
             <option value="critical">Critical</option>
             <option value="high">High</option>
@@ -126,7 +153,11 @@ export default function FindingsListPage(): JSX.Element {
             <option value="low">Low</option>
             <option value="informational">Informational</option>
           </Select>
-          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+          <Select
+            value={values.status}
+            aria-label="Filter by status"
+            onChange={(e) => set({ status: e.target.value, page: '1' })}
+          >
             <option value="">All statuses</option>
             <option value="open">Open</option>
             <option value="management_response_received">Response received</option>
@@ -134,7 +165,11 @@ export default function FindingsListPage(): JSX.Element {
             <option value="verified">Verified</option>
             <option value="closed">Closed</option>
           </Select>
-          <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+          <Select
+            value={values.category}
+            aria-label="Filter by category"
+            onChange={(e) => set({ category: e.target.value, page: '1' })}
+          >
             <option value="">All categories</option>
             <option value="it">IT</option>
             <option value="financial">Financial</option>
@@ -153,12 +188,25 @@ export default function FindingsListPage(): JSX.Element {
         isError={query.isError}
         onRetry={() => query.refetch()}
         onRowClick={(f) => router.push(`/audit/findings/${f.id}`)}
+        sortBy={values.sortBy}
+        sortOrder={values.sortOrder as 'asc' | 'desc'}
+        onSortChange={(key, order) => set({ sortBy: key, sortOrder: order, page: '1' })}
         emptyState={
           <EmptyState
             icon={<AlertTriangle className="h-4 w-4" />}
             title="No findings"
             description="Findings raised across engagements will appear here."
           />
+        }
+        pagination={
+          query.data
+            ? {
+                page: query.data.meta.page,
+                pageSize: query.data.meta.pageSize,
+                total: query.data.meta.total,
+                onPageChange: (p) => set({ page: String(p) }),
+              }
+            : undefined
         }
       />
     </div>

@@ -59,7 +59,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
     setValue,
     watch,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -170,6 +170,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit risk' : 'New risk'}
       description="Likelihood × impact define the score band."

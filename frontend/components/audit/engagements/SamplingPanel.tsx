@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation } from '@tanstack/react-query';
 import { FlaskConical, FileSpreadsheet, CheckCircle2, ExternalLink } from 'lucide-react';
@@ -33,6 +33,7 @@ export const SamplingPanel = ({
   onCreateWorkingPaper,
   onClose,
   engagementHref,
+  onDirtyChange,
 }: {
   engagementId: string;
   /** When provided, offers "Create working paper from this" (prefills the methodology). */
@@ -41,6 +42,8 @@ export const SamplingPanel = ({
   onClose?: () => void;
   /** When provided, offers a link to the engagement after a sample is drawn. */
   engagementHref?: string;
+  /** Reports whether the panel holds work that closing would discard. */
+  onDirtyChange?: (dirty: boolean) => void;
 }): JSX.Element => {
   const router = useRouter();
   const [file, setFile] = useState<File | null>(null);
@@ -51,6 +54,14 @@ export const SamplingPanel = ({
   const [valueColumn, setValueColumn] = useState('');
   const [threshold, setThreshold] = useState('');
   const [result, setResult] = useState<SamplingRunResult | null>(null);
+
+  // A chosen population file or a drawn sample is work a stray click shouldn't bin.
+  const isDirty = Boolean(file) || Boolean(result);
+  useEffect(() => {
+    onDirtyChange?.(isDirty);
+  }, [isDirty, onDirtyChange]);
+  // Clear the flag on unmount so a reopened panel never starts out "dirty".
+  useEffect(() => () => onDirtyChange?.(false), [onDirtyChange]);
 
   const reset = (): void => {
     setFile(null);

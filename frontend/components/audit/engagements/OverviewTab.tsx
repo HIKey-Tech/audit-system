@@ -71,9 +71,9 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
   return (
     <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
       {isOnlyAssigned && myAssignment && (
-        <div className="col-span-full rounded-lg border border-blue-200 bg-blue-50 dark:bg-blue-950/20 px-4 py-3 flex items-center gap-2">
-          <Users className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" />
-          <p className="text-sm text-blue-800 dark:text-blue-300">
+        <div className="col-span-full rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 flex items-center gap-2">
+          <Users className="h-4 w-4 shrink-0 text-blue-600" />
+          <p className="text-sm text-blue-800">
             You are assigned as{' '}
             <span className="font-semibold">
               {humanizeStatus(myAssignment.role)}

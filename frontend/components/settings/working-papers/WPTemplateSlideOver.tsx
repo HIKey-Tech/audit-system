@@ -56,7 +56,7 @@ export const WPTemplateSlideOver = ({ open, onClose, template }: Props): JSX.Ele
     control,
     reset,
     watch,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -131,6 +131,7 @@ export const WPTemplateSlideOver = ({ open, onClose, template }: Props): JSX.Ele
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit template' : 'New working paper template'}
       description="Sections define the structure auditors follow when writing working papers."

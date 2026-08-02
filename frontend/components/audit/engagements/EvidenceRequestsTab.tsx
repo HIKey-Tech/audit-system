@@ -244,7 +244,7 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
                         )}
                       </p>
                       {r.status === 'open' && r.returnReason && (
-                        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800 dark:bg-amber-900/30 dark:text-amber-300">
+                        <p className="mt-2 rounded-md bg-amber-50 px-2 py-1 text-xs text-amber-800">
                           Returned: {r.returnReason}
                         </p>
                       )}

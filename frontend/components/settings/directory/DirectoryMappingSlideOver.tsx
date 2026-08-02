@@ -44,7 +44,7 @@ export const DirectoryMappingSlideOver = ({ open, onClose, mapping }: Props): JS
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { adGroupId: '', adGroupName: '', roleId: '', isActive: true },
@@ -105,6 +105,7 @@ export const DirectoryMappingSlideOver = ({ open, onClose, mapping }: Props): JS
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit group mapping' : 'New group mapping'}
       description="Map an Azure AD security group to an IAMS role. Members of the group receive the role automatically on sign-in."

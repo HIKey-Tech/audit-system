@@ -33,7 +33,7 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { title: '', year: new Date().getFullYear(), description: '' },
@@ -59,6 +59,7 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="New Audit Plan"
       description="Annual plan headers organise the engagements scheduled for a fiscal year."

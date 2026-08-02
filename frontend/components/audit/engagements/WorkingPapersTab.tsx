@@ -559,10 +559,16 @@ const CreateOrEditPaperSlideOver = ({
     }
   };
 
+  const isDirty =
+    title.trim().length > 0 ||
+    content.trim().length > 0 ||
+    sectionContents.some((s) => s.trim().length > 0);
+
   return (
     <SlideOver
       open={open}
       onClose={handleClose}
+      dirty={isDirty}
       title="New working paper"
       width="xl"
       footer={
@@ -1025,10 +1031,20 @@ const ViewPaperSlideOver = ({
     }
   };
 
+  // Compare against what was loaded, so simply opening a paper isn't "dirty".
+  const isDirty =
+    editable &&
+    Boolean(paper) &&
+    (title !== paper!.title ||
+      (isStructured
+        ? JSON.stringify({ sections }) !== JSON.stringify({ sections: parsePaperSections(paper!.content) })
+        : content !== (paper!.content ?? '')));
+
   return (
     <SlideOver
       open={Boolean(paper)}
       onClose={onClose}
+      dirty={isDirty}
       title={paper?.title ?? 'Working paper'}
       description={paper ? `Version ${paper.version} · ${paper.status}` : undefined}
       width="xl"

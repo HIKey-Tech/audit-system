@@ -33,7 +33,7 @@ const Toggle = ({ checked, onChange }: { checked: boolean; onChange: (v: boolean
     aria-checked={checked}
     onClick={() => onChange(!checked)}
     className={`relative inline-flex h-5 w-9 shrink-0 items-center rounded-full transition-colors ${
-      checked ? 'bg-primary' : 'bg-slate-300 dark:bg-slate-600'
+      checked ? 'bg-primary' : 'bg-slate-300'
     }`}
   >
     <span

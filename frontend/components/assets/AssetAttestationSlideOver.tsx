@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -35,11 +37,17 @@ export const AssetAttestationSlideOver = ({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { status: 'confirmed', notes: '' },
   });
+
+  // Reopening after a cancel must start clean — otherwise the previous session's
+  // values (and its dirty flag) carry over into what looks like a fresh panel.
+  useEffect(() => {
+    if (open) reset();
+  }, [open, reset]);
 
   const attest = useMutation({
     mutationFn: (values: FormValues) =>
@@ -62,6 +70,7 @@ export const AssetAttestationSlideOver = ({
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="Attest asset"
       description="Confirm whether this asset record is accurate for audit reliance."

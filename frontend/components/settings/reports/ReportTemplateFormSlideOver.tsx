@@ -57,7 +57,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
     handleSubmit,
     control,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -133,6 +133,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit report template' : 'New report template'}
       description="Define the structure and available variables for generated audit reports."

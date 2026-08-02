@@ -92,7 +92,7 @@ export const NewFindingSlideOver = ({
     setValue,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({ resolver: zodResolver(Schema), defaultValues: defaults() });
 
   // Re-apply the prefill each time the slide-over opens for a (possibly
@@ -183,6 +183,7 @@ export const NewFindingSlideOver = ({
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="New finding"
       width="xl"

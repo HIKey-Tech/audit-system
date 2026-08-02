@@ -56,7 +56,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -176,6 +176,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit user' : 'New user'}
       description="Manage user accounts and role assignments for the GBB IAMS platform."

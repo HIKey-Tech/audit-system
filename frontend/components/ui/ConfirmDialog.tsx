@@ -3,6 +3,7 @@
 import { useEffect, ReactNode } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import { Button } from './Button';
+import { useScrollLock } from '@/lib/hooks/useScrollLock';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -27,17 +28,19 @@ export const ConfirmDialog = ({
   onConfirm,
   onCancel,
 }: ConfirmDialogProps): JSX.Element | null => {
+  useScrollLock(open);
+
   useEffect(() => {
     if (!open) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onCancel();
+      if (e.key === 'Escape') {
+        // Stop the key reaching an outer overlay (e.g. the SlideOver behind).
+        e.stopPropagation();
+        onCancel();
+      }
     };
-    document.addEventListener('keydown', onKey);
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
-    };
+    document.addEventListener('keydown', onKey, true);
+    return () => document.removeEventListener('keydown', onKey, true);
   }, [open, onCancel]);
 
   if (!open) return null;

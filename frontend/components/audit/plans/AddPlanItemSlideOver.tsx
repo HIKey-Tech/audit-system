@@ -92,7 +92,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
     reset,
     setValue,
     watch,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -149,6 +149,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="Add plan item"
       description="Each item maps to one engagement scheduled within the plan."
@@ -165,8 +166,8 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         {suggested && suggested.length > 0 ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
               Recommended — composite priority (weights configurable in Settings)
             </p>
             <ul className="mt-1.5 space-y-1.5">
@@ -175,14 +176,14 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
                   <button
                     type="button"
                     onClick={() => setValue('universeId', r.universeId, { shouldValidate: true })}
-                    className="text-left text-xs text-amber-900 hover:underline dark:text-amber-200"
+                    className="text-left text-xs text-amber-900 hover:underline"
                   >
                     <span className="font-medium">{r.name}</span>
-                    <span className="ml-1.5 rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-bold dark:bg-amber-900/60">
+                    <span className="ml-1.5 rounded bg-amber-200/70 px-1.5 py-0.5 text-[10px] font-bold">
                       {r.score}
                     </span>
                   </button>
-                  <span className="ml-1 text-[11px] text-amber-800/80 dark:text-amber-300/80">
+                  <span className="ml-1 text-[11px] text-amber-800/80">
                     {r.reasons.join(' · ')}
                   </span>
                 </li>
@@ -190,8 +191,8 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
             </ul>
           </div>
         ) : !suggested && fallbackSuggested.length > 0 ? (
-          <div className="rounded-md border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/30">
-            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700 dark:text-amber-400">
+          <div className="rounded-md border border-amber-200 bg-amber-50 p-3">
+            <p className="text-[10px] font-semibold uppercase tracking-wider text-amber-700">
               Suggested — highest risk, audit due
             </p>
             <ul className="mt-1.5 space-y-1">
@@ -200,7 +201,7 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
                   <button
                     type="button"
                     onClick={() => setValue('universeId', e.id, { shouldValidate: true })}
-                    className="text-left text-xs text-amber-900 hover:underline dark:text-amber-200"
+                    className="text-left text-xs text-amber-900 hover:underline"
                   >
                     <span className="font-medium">{e.name}</span>
                     {' — '}risk {e.riskScore} ({riskScoreLabel(e.riskScore)}) · {auditDueFlag(e)}

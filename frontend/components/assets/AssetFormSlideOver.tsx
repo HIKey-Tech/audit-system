@@ -179,7 +179,7 @@ export const AssetFormSlideOver = ({ open, asset, canAdmin, onClose }: Props): J
     setValue,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: defaultsFor(asset),
@@ -208,6 +208,7 @@ export const AssetFormSlideOver = ({ open, asset, canAdmin, onClose }: Props): J
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit asset' : 'New asset'}
       description="Register ownership, classification, lifecycle, and source context."

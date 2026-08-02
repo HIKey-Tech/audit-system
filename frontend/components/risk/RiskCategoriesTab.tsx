@@ -224,7 +224,7 @@ const RiskCategorySlideOver = ({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<CategoryFormValues>({
     resolver: zodResolver(CategorySchema),
     defaultValues: {
@@ -265,6 +265,7 @@ const RiskCategorySlideOver = ({
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit risk category' : 'New risk category'}
       description="Categories group risk register entries and control the category dropdown."

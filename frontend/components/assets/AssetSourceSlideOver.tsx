@@ -1,5 +1,7 @@
 'use client';
 
+import { useEffect } from 'react';
+
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -50,11 +52,17 @@ export const AssetSourceSlideOver = ({
     register,
     handleSubmit,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { sourceSystem: 'manual', sourceId: '', syncStatus: 'synced', lastSyncedAt: '', rawPayload: '' },
   });
+
+  // Reopening after a cancel must start clean — otherwise the previous session's
+  // values (and its dirty flag) carry over into what looks like a fresh panel.
+  useEffect(() => {
+    if (open) reset();
+  }, [open, reset]);
 
   const save = useMutation({
     mutationFn: (values: FormValues) => {
@@ -87,6 +95,7 @@ export const AssetSourceSlideOver = ({
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="Add source record"
       description="Record provenance from manual entry or approved read-only systems."

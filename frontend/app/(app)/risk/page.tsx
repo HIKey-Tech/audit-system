@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter, useSearchParams } from 'next/navigation';
+import { useState, useCallback } from 'react';
+import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
 import { Plus, Search, ShieldAlert, Clock } from 'lucide-react';
 
@@ -15,6 +15,8 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
+import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { riskApi } from '@/lib/api/risk';
 import { formatDate, formatNumber } from '@/lib/utils/format';
 import { riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
@@ -31,18 +33,12 @@ const TABS: TabItem[] = [
 type RiskTab = 'register' | 'monitoring' | 'categories';
 
 export default function RiskPage(): JSX.Element {
-  const router = useRouter();
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission('risk:create');
-  const searchParams = useSearchParams();
-  const tabParam = searchParams?.get('tab');
-  const initialTab: RiskTab = tabParam === 'monitoring' || tabParam === 'categories' ? tabParam : 'register';
-  const [tab, setTab] = useState<RiskTab>(initialTab);
-
-  const changeTab = (k: RiskTab): void => {
-    setTab(k);
-    router.replace(`?tab=${k}`, { scroll: false });
-  };
+  // The URL is the single source of truth for the tab — no local copy to drift.
+  const { values, set } = useQueryFilters({ tab: 'register' });
+  const tab: RiskTab =
+    values.tab === 'monitoring' || values.tab === 'categories' ? values.tab : 'register';
   const [open, setOpen] = useState(false);
 
   return (
@@ -60,7 +56,7 @@ export default function RiskPage(): JSX.Element {
       />
 
       <Card padded className="mb-4">
-        <Tabs tabs={TABS} active={tab} onChange={(k) => changeTab(k as RiskTab)} />
+        <Tabs tabs={TABS} active={tab} onChange={(k) => set({ tab: k })} />
       </Card>
 
       {tab === 'register' ? (
@@ -87,34 +83,49 @@ const RegisterTab = ({
   canWrite: boolean;
 }): JSX.Element => {
   const router = useRouter();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [status, setStatus] = useState('');
-  const [scoreBand, setScoreBand] = useState<'critical' | 'high' | 'medium' | 'low' | ''>('');
+  const { values, set } = useQueryFilters({
+    page: '1',
+    search: '',
+    categoryId: '',
+    status: '',
+    scoreBand: '',
+    sortBy: 'current_score',
+    sortOrder: 'desc',
+  });
+  const page = Math.max(1, Number(values.page) || 1);
+
+  const [searchInput, setSearchInput] = useSearchInput(
+    values.search,
+    useCallback((next: string) => set({ search: next, page: '1' }), [set]),
+  );
 
   const categories = useQuery({
     queryKey: ['risk', 'categories'],
     queryFn: () => riskApi.listCategories({ isActive: true }),
   });
 
+  const queryFilters = {
+    page,
+    pageSize: 20,
+    search: values.search || undefined,
+    categoryId: values.categoryId || undefined,
+    status: values.status || undefined,
+    scoreBand: (values.scoreBand || undefined) as 'critical' | 'high' | 'medium' | 'low' | undefined,
+    sortBy: values.sortBy,
+    sortOrder: values.sortOrder as 'asc' | 'desc',
+  };
+
   const query = useQuery({
-    queryKey: ['risk', 'register', { page, search, categoryId, status, scoreBand }],
-    queryFn: () =>
-      riskApi.list({
-        page,
-        pageSize: 20,
-        search: search || undefined,
-        categoryId: categoryId || undefined,
-        status: status || undefined,
-        scoreBand: scoreBand || undefined,
-      }),
+    queryKey: ['risk', 'register', queryFilters],
+    queryFn: () => riskApi.list(queryFilters),
   });
 
   const columns: Column<Risk>[] = [
     {
+      // Keys of sortable columns are the backend sort field names.
       key: 'title',
       header: 'Risk',
+      sortable: true,
       render: (r) => <span className="font-medium text-text-primary">{r.title}</span>,
     },
     {
@@ -124,8 +135,9 @@ const RegisterTab = ({
       width: '140px',
     },
     {
-      key: 'score',
+      key: 'current_score',
       header: 'Score',
+      sortable: true,
       render: (r) => {
         const t = riskScoreTone(r.currentScore);
         return (
@@ -182,19 +194,15 @@ const RegisterTab = ({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-4">
           <Input
             placeholder="Search…"
+            aria-label="Search risks"
             leftIcon={<Search className="h-4 w-4" />}
-            value={search}
-            onChange={(e) => {
-              setSearch(e.target.value);
-              setPage(1);
-            }}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
           <Select
-            value={categoryId}
-            onChange={(e) => {
-              setCategoryId(e.target.value);
-              setPage(1);
-            }}
+            value={values.categoryId}
+            aria-label="Filter by category"
+            onChange={(e) => set({ categoryId: e.target.value, page: '1' })}
           >
             <option value="">All categories</option>
             {categories.data?.map((c) => (
@@ -204,11 +212,9 @@ const RegisterTab = ({
             ))}
           </Select>
           <Select
-            value={status}
-            onChange={(e) => {
-              setStatus(e.target.value);
-              setPage(1);
-            }}
+            value={values.status}
+            aria-label="Filter by status"
+            onChange={(e) => set({ status: e.target.value, page: '1' })}
           >
             <option value="">All statuses</option>
             <option value="open">Open</option>
@@ -217,11 +223,9 @@ const RegisterTab = ({
             <option value="closed">Closed</option>
           </Select>
           <Select
-            value={scoreBand}
-            onChange={(e) => {
-              setScoreBand(e.target.value as typeof scoreBand);
-              setPage(1);
-            }}
+            value={values.scoreBand}
+            aria-label="Filter by score band"
+            onChange={(e) => set({ scoreBand: e.target.value, page: '1' })}
           >
             <option value="">All score bands</option>
             <option value="critical">Critical (20-25)</option>
@@ -240,6 +244,9 @@ const RegisterTab = ({
         isError={query.isError}
         onRetry={() => query.refetch()}
         onRowClick={(r) => router.push(`/risk/${r.id}`)}
+        sortBy={values.sortBy}
+        sortOrder={values.sortOrder as 'asc' | 'desc'}
+        onSortChange={(key, order) => set({ sortBy: key, sortOrder: order, page: '1' })}
         emptyState={
           <EmptyState
             icon={<ShieldAlert className="h-4 w-4" />}
@@ -260,7 +267,7 @@ const RegisterTab = ({
                 page: query.data.meta.page,
                 pageSize: query.data.meta.pageSize,
                 total: query.data.meta.total,
-                onPageChange: setPage,
+                onPageChange: (p) => set({ page: String(p) }),
               }
             : undefined
         }

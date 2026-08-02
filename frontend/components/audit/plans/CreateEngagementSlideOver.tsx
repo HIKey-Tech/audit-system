@@ -58,7 +58,7 @@ export const CreateEngagementSlideOver = ({
     setValue,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: {
@@ -116,6 +116,7 @@ export const CreateEngagementSlideOver = ({
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="Create engagement from plan item"
       description="The engagement inherits audit type and priority from the plan item."

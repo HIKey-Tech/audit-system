@@ -44,7 +44,7 @@ export const WhatsNextPanel = ({
         <Info className="h-3.5 w-3.5 text-primary" /> What&apos;s next
       </h4>
       {blockers.length === 0 ? (
-        <p className="flex items-center gap-2 text-sm text-emerald-700 dark:text-emerald-400">
+        <p className="flex items-center gap-2 text-sm text-emerald-700">
           <Check className="h-4 w-4" /> Nothing is blocking this engagement — it advances automatically as work completes.
         </p>
       ) : (

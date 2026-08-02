@@ -182,6 +182,7 @@ export const AssetsTab = ({ engagement }: { engagement: AuditEngagementDetail })
 
       <SlideOver
         open={open}
+        dirty={Boolean(assetId) || scopeReason.trim().length > 0}
         onClose={() => setOpen(false)}
         title="Link asset to engagement"
         description="Add an asset to the audit scope and describe how it is used."

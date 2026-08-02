@@ -2,48 +2,28 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname } from 'next/navigation';
+import { usePathname, useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Menu } from 'lucide-react';
+import { Bell, Menu, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils/cn';
 import { formatRelative } from '@/lib/utils/format';
 import { notificationsApi } from '@/lib/api/notifications';
+import { notificationHref } from '@/lib/notification-links';
+import { titleForPath } from '@/lib/navigation';
 import { useSession } from '@/components/providers/AuthProvider';
 import { useLayout } from '@/components/providers/LayoutProvider';
 
-const TITLE_MAP: { match: RegExp; title: string }[] = [
-  { match: /^\/dashboard/, title: 'Dashboard' },
-  { match: /^\/audit\/universe/, title: 'Audit Universe' },
-  { match: /^\/audit\/plans/, title: 'Audit Plans' },
-  { match: /^\/audit\/engagements/, title: 'Engagements' },
-  { match: /^\/audit\/findings/, title: 'Findings' },
-  { match: /^\/audit\/reports/, title: 'Audit Reports' },
-  { match: /^\/risk/, title: 'Risk Register' },
-  { match: /^\/workflow/, title: 'Workflow' },
-  { match: /^\/documents/, title: 'Documents' },
-  { match: /^\/notifications/, title: 'Notifications' },
-  { match: /^\/logs/, title: 'Audit Logs' },
-  { match: /^\/integrations/, title: 'Integrations' },
-  { match: /^\/predictive/, title: 'Predictive' },
-  { match: /^\/settings/, title: 'Settings' },
-  { match: /^\/users/, title: 'Users' },
-  { match: /^\/profile/, title: 'Profile' },
-];
-
-const titleFor = (pathname: string | null): string => {
-  if (!pathname) return 'IAMS';
-  return TITLE_MAP.find((t) => t.match.test(pathname))?.title ?? 'IAMS';
-};
-
 export const Header = (): JSX.Element => {
   const pathname = usePathname();
+  const router = useRouter();
   const session = useSession();
   const qc = useQueryClient();
-  const { toggleSidebar } = useLayout();
+  const { toggleSidebar, setCommandPaletteOpen } = useLayout();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const title = titleForPath(pathname);
 
 
   const { data: unread } = useQuery({
@@ -88,13 +68,26 @@ export const Header = (): JSX.Element => {
         >
           <Menu className="h-5 w-5" />
         </button>
-        <h1 className="text-base font-semibold text-text-primary truncate">
-          {titleFor(pathname)}
-        </h1>
+        {title && (
+          <h1 className="text-base font-semibold text-text-primary truncate">{title}</h1>
+        )}
       </div>
 
+      <div className="flex items-center gap-2 sm:gap-4">
+        {/* Global search — the fastest path to any engagement, finding, or page. */}
+        <button
+          type="button"
+          onClick={() => setCommandPaletteOpen(true)}
+          aria-label="Search IAMS"
+          className="inline-flex h-9 items-center gap-2 rounded-md border border-border bg-surface-alt px-2.5 text-text-secondary transition-colors hover:border-border-strong hover:text-text-primary sm:px-3"
+        >
+          <Search className="h-4 w-4 shrink-0" aria-hidden />
+          <span className="hidden text-xs md:inline">Search…</span>
+          <kbd className="hidden rounded border border-border bg-white px-1.5 py-0.5 text-[10px] font-medium text-text-muted md:inline">
+            Ctrl K
+          </kbd>
+        </button>
 
-      <div className="flex items-center gap-4">
         <div className="relative" ref={ref}>
           <button
             type="button"
@@ -133,13 +126,18 @@ export const Header = (): JSX.Element => {
                   <p className="px-4 py-8 text-center text-xs text-text-secondary">No notifications.</p>
                 ) : (
                   <ul className="divide-y divide-border">
-                    {latestList.items.map((n) => (
+                    {latestList.items.map((n) => {
+                      const href = notificationHref(n.referenceType, n.referenceId);
+                      return (
                       <li key={n.id}>
                         <button
                           type="button"
                           onClick={() => {
                             if (!n.isRead) markRead.mutate(n.id);
                             setOpen(false);
+                            // Land on the record the alert is about, same as the
+                            // notifications page.
+                            if (href) router.push(href);
                           }}
                           className={cn(
                             'w-full px-4 py-3 text-left transition-colors hover:bg-surface-alt',
@@ -157,7 +155,8 @@ export const Header = (): JSX.Element => {
                           </p>
                         </button>
                       </li>
-                    ))}
+                      );
+                    })}
                   </ul>
                 )}
               </div>

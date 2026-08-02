@@ -52,6 +52,11 @@ export const EditPermissionsSlideOver = ({ open, onClose, role }: Props): JSX.El
       toast.error(err instanceof Error ? err.message : 'Failed to update permissions'),
   });
 
+  // Permission changes are batched into one save, so closing early loses them.
+  const isDirty =
+    selected.size !== role.permissions.length ||
+    role.permissions.some((p) => !selected.has(p.id));
+
   const togglePerm = (id: string) => {
     setSelected((prev) => {
       const next = new Set(prev);
@@ -85,6 +90,7 @@ export const EditPermissionsSlideOver = ({ open, onClose, role }: Props): JSX.El
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title={`Edit permissions — ${role.name}`}
       description="Check permissions to grant them. Uncheck to revoke. Changes apply on save."

@@ -302,10 +302,15 @@ export const StartAuditWizard = ({
 
   const stepLabels = ['Scope', 'Team & schedule', 'Review', 'Launch'];
 
+  // Past the first step, or with anything typed, closing would lose the wizard's
+  // progress. Once the engagement exists (step 4) there is nothing left to lose.
+  const isDirty = !created && (step > 1 || Boolean(title.trim()) || Boolean(planItemId) || Boolean(universeId));
+
   return (
     <SlideOver
       open={open}
       onClose={onClose}
+      dirty={isDirty}
       title="Start an audit"
       description={`Step ${step} of 4 · ${stepLabels[step - 1]}`}
       width="xl"
@@ -410,7 +415,7 @@ export const StartAuditWizard = ({
                 </FormField>
               </div>
               {planId && !planDetail.isLoading && (planDetail.data?.items ?? []).filter((i) => !i.engagementCreated).length === 0 && (
-                <p className="text-xs text-amber-600 dark:text-amber-400 mt-1">
+                <p className="text-xs text-amber-600 mt-1">
                   No available items on this plan.{' '}
                   <Link
                     href={`/audit/plans/${planId}`}
@@ -673,7 +678,7 @@ export const StartAuditWizard = ({
       {/* Step 4 — Launch */}
       {step === 4 && (
         <div className="space-y-4">
-          <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 dark:border-emerald-900/40 dark:bg-emerald-950/20">
+          <div className="flex items-center gap-3 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3">
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-emerald-500 text-white">
               <Check className="h-4 w-4 stroke-[3]" />
             </span>

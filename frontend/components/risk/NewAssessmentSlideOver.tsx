@@ -35,7 +35,7 @@ export const NewAssessmentSlideOver = ({ open, onClose, riskId }: Props): JSX.El
     handleSubmit,
     watch,
     reset,
-    formState: { errors },
+    formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { likelihood: 3, impact: 3, notes: '' },
@@ -72,6 +72,7 @@ export const NewAssessmentSlideOver = ({ open, onClose, riskId }: Props): JSX.El
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="New assessment"
       description="Assessment snapshots are immutable."

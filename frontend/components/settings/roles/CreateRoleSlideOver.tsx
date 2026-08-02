@@ -33,7 +33,7 @@ export const CreateRoleSlideOver = ({ open, onClose }: Props): JSX.Element => {
     register,
     handleSubmit,
     reset,
-    formState: { errors, isSubmitting },
+    formState: { errors, isSubmitting, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
     defaultValues: { name: '', description: '' },
@@ -63,6 +63,7 @@ export const CreateRoleSlideOver = ({ open, onClose }: Props): JSX.Element => {
   return (
     <SlideOver
       open={open}
+      dirty={isDirty}
       onClose={onClose}
       title="Create role"
       description="Define a new role and assign permissions to it after creation."

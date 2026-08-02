@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Database, Plus, Search, Server, Trash2 } from 'lucide-react';
@@ -18,6 +18,8 @@ import { AssetFormSlideOver } from '@/components/assets/AssetFormSlideOver';
 import { assetsApi } from '@/lib/api/assets';
 import type { Asset } from '@/lib/types/domain';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
+import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { formatDate } from '@/lib/utils/format';
 import {
   ASSET_RATINGS,
@@ -34,32 +36,46 @@ export default function AssetsPage(): JSX.Element {
   const router = useRouter();
   const qc = useQueryClient();
   const perms = usePermissions();
-  const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
-  const [assetType, setAssetType] = useState('');
-  const [status, setStatus] = useState('');
-  const [criticality, setCriticality] = useState('');
-  const [dataClassification, setDataClassification] = useState('');
-  const [sourceSystem, setSourceSystem] = useState('');
-  const [freshness, setFreshness] = useState('');
   const [formOpen, setFormOpen] = useState(false);
   const [deleteTarget, setDeleteTarget] = useState<Asset | null>(null);
 
+  const { values, set } = useQueryFilters({
+    page: '1',
+    search: '',
+    assetType: '',
+    status: '',
+    criticality: '',
+    dataClassification: '',
+    sourceSystem: '',
+    freshness: '',
+    sortBy: 'created_at',
+    sortOrder: 'desc',
+  });
+  const page = Math.max(1, Number(values.page) || 1);
+
+  const [searchInput, setSearchInput] = useSearchInput(
+    values.search,
+    useCallback((next: string) => set({ search: next, page: '1' }), [set]),
+  );
+
+  const queryFilters = {
+    page,
+    pageSize: 20,
+    search: values.search || undefined,
+    assetType: values.assetType || undefined,
+    status: values.status || undefined,
+    criticality: values.criticality || undefined,
+    dataClassification: values.dataClassification || undefined,
+    sourceSystem: values.sourceSystem || undefined,
+    stale: values.freshness === 'stale' ? true : undefined,
+    unattested: values.freshness === 'unattested' ? true : undefined,
+    sortBy: values.sortBy,
+    sortOrder: values.sortOrder as 'asc' | 'desc',
+  };
+
   const query = useQuery({
-    queryKey: ['assets', 'list', { page, search, assetType, status, criticality, dataClassification, sourceSystem, freshness }],
-    queryFn: () =>
-      assetsApi.list({
-        page,
-        pageSize: 20,
-        search: search || undefined,
-        assetType: assetType || undefined,
-        status: status || undefined,
-        criticality: criticality || undefined,
-        dataClassification: dataClassification || undefined,
-        sourceSystem: sourceSystem || undefined,
-        stale: freshness === 'stale' ? true : undefined,
-        unattested: freshness === 'unattested' ? true : undefined,
-      }),
+    queryKey: ['assets', 'list', queryFilters],
+    queryFn: () => assetsApi.list(queryFilters),
     enabled: perms.canReadAssets,
   });
 
@@ -73,12 +89,12 @@ export default function AssetsPage(): JSX.Element {
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Failed to delete asset'),
   });
 
-  const resetPage = (): void => setPage(1);
-
   const columns: Column<Asset>[] = [
     {
-      key: 'asset',
+      // Keys of sortable columns are the backend sort field names.
+      key: 'name',
       header: 'Asset',
+      sortable: true,
       render: (asset) => (
         <div className="min-w-0">
           <p className="font-medium text-text-primary">{asset.name}</p>
@@ -87,15 +103,17 @@ export default function AssetsPage(): JSX.Element {
       ),
     },
     {
-      key: 'type',
+      key: 'asset_type',
       header: 'Type',
       width: '150px',
+      sortable: true,
       render: (asset) => <Badge tone="gray">{assetLabel(asset.assetType)}</Badge>,
     },
     {
       key: 'criticality',
       header: 'Criticality',
       width: '130px',
+      sortable: true,
       render: (asset) => <Badge tone={assetRatingTone(asset.criticality)}>{assetLabel(asset.criticality)}</Badge>,
     },
     {
@@ -127,9 +145,10 @@ export default function AssetsPage(): JSX.Element {
       render: (asset) => <span className="text-xs text-text-secondary">{assetLabel(asset.sourceSystem)}</span>,
     },
     {
-      key: 'freshness',
+      key: 'last_seen_at',
       header: 'Freshness',
       width: '160px',
+      sortable: true,
       render: (asset) => (
         <div className="text-xs text-text-secondary">
           <p>Seen: {asset.lastSeenAt ? formatDate(asset.lastSeenAt) : 'Never'}</p>
@@ -193,34 +212,32 @@ export default function AssetsPage(): JSX.Element {
           <Input
             className="xl:col-span-2"
             placeholder="Search tag, name, hostname, serial, source…"
+            aria-label="Search assets"
             leftIcon={<Search className="h-4 w-4" />}
-            value={search}
-            onChange={(event) => {
-              setSearch(event.target.value);
-              resetPage();
-            }}
+            value={searchInput}
+            onChange={(event) => setSearchInput(event.target.value)}
           />
-          <Select value={assetType} onChange={(event) => { setAssetType(event.target.value); resetPage(); }}>
+          <Select value={values.assetType} aria-label="Filter by type" onChange={(event) => set({ assetType: event.target.value, page: '1' })}>
             <option value="">All types</option>
             {ASSET_TYPES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select value={status} onChange={(event) => { setStatus(event.target.value); resetPage(); }}>
+          <Select value={values.status} aria-label="Filter by status" onChange={(event) => set({ status: event.target.value, page: '1' })}>
             <option value="">All statuses</option>
             {ASSET_STATUSES.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select value={criticality} onChange={(event) => { setCriticality(event.target.value); resetPage(); }}>
+          <Select value={values.criticality} aria-label="Filter by criticality" onChange={(event) => set({ criticality: event.target.value, page: '1' })}>
             <option value="">All criticalities</option>
             {ASSET_RATINGS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select value={dataClassification} onChange={(event) => { setDataClassification(event.target.value); resetPage(); }}>
+          <Select value={values.dataClassification} aria-label="Filter by classification" onChange={(event) => set({ dataClassification: event.target.value, page: '1' })}>
             <option value="">All classifications</option>
             {DATA_CLASSIFICATIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select value={sourceSystem} onChange={(event) => { setSourceSystem(event.target.value); resetPage(); }}>
+          <Select value={values.sourceSystem} aria-label="Filter by source system" onChange={(event) => set({ sourceSystem: event.target.value, page: '1' })}>
             <option value="">All sources</option>
             {ASSET_SOURCE_SYSTEMS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
           </Select>
-          <Select value={freshness} onChange={(event) => { setFreshness(event.target.value); resetPage(); }}>
+          <Select value={values.freshness} aria-label="Filter by freshness" onChange={(event) => set({ freshness: event.target.value, page: '1' })}>
             <option value="">All freshness</option>
             <option value="stale">Stale / never seen</option>
             <option value="unattested">Unattested / overdue</option>
@@ -236,6 +253,9 @@ export default function AssetsPage(): JSX.Element {
         isError={query.isError}
         onRetry={() => query.refetch()}
         onRowClick={(asset) => router.push(`/assets/${asset.id}`)}
+        sortBy={values.sortBy}
+        sortOrder={values.sortOrder as 'asc' | 'desc'}
+        onSortChange={(key, order) => set({ sortBy: key, sortOrder: order, page: '1' })}
         emptyState={
           <EmptyState
             icon={<Database className="h-4 w-4" />}
@@ -256,7 +276,7 @@ export default function AssetsPage(): JSX.Element {
                 page: query.data.meta.page,
                 pageSize: query.data.meta.pageSize,
                 total: query.data.meta.total,
-                onPageChange: setPage,
+                onPageChange: (p) => set({ page: String(p) }),
               }
             : undefined
         }

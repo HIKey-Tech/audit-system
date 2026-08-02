@@ -13,6 +13,7 @@ import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { notificationsApi } from '@/lib/api/notifications';
+import { notificationHref } from '@/lib/notification-links';
 import { formatRelative } from '@/lib/utils/format';
 import { cn } from '@/lib/utils/cn';
 
@@ -20,18 +21,6 @@ const TABS: TabItem[] = [
   { key: 'all', label: 'All' },
   { key: 'unread', label: 'Unread' },
 ];
-
-const REFERENCE_HREF: Record<string, (id: string) => string> = {
-  audit_engagement: (id) => `/audit/engagements/${id}`,
-  audit_finding: (id) => `/audit/findings/${id}`,
-  audit_plan: (id) => `/audit/plans/${id}`,
-  // Legacy audit_report rows carry the *report* id, which has no page of its
-  // own — land on the reports register. New report notifications reference the
-  // engagement directly.
-  audit_report: () => `/audit/reports`,
-  risk_register: (id) => `/risk/${id}`,
-  workflow_approval: () => `/workflow/approvals`,
-};
 
 export default function NotificationsPage(): JSX.Element {
   const router = useRouter();
@@ -108,8 +97,7 @@ export default function NotificationsPage(): JSX.Element {
         ) : (
           <ul className="divide-y divide-border">
             {list.data.items.map((n) => {
-              const hrefFn = n.referenceType ? REFERENCE_HREF[n.referenceType] : undefined;
-              const href = hrefFn && n.referenceId ? hrefFn(n.referenceId) : null;
+              const href = notificationHref(n.referenceType, n.referenceId);
               return (
                 <li key={n.id}>
                   <button
