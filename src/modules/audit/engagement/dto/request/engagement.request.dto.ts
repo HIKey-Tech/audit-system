@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AuditPriority, AuditType, EngagementStatus } from '../../../domain/enum/audit.enum';
+import { AuditPriority, AuditType, EngagementStatus, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
 /**
  * A single checklist control the engagement creator can customise before the
@@ -26,7 +26,7 @@ const EngagementBaseSchema = z.object({
 
 const EngagementScopeSchema = z.object({
   universeId: z.string().uuid(),
-  auditType: z.nativeEnum(AuditType),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES),
   priority: z.nativeEnum(AuditPriority),
 });
 
@@ -59,7 +59,7 @@ export const EngagementQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   status: z.nativeEnum(EngagementStatus).optional(),
-  auditType: z.nativeEnum(AuditType).optional(),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
   leadAuditorId: z.string().uuid().optional(),
   auditManagerId: z.string().uuid().optional(),
   sortBy: z.enum(['created_at', 'planned_start_date', 'sla_deadline', 'reference_number']).default('created_at'),
@@ -68,7 +68,7 @@ export const EngagementQuerySchema = z.object({
 
 export const EligibleUsersQuerySchema = z.object({
   role: z.enum(['lead_auditor', 'audit_manager']),
-  auditType: z.nativeEnum(AuditType).optional(),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
   priority: z.nativeEnum(AuditPriority).optional(),
 });
 

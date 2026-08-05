@@ -2,8 +2,19 @@ export enum AuditType {
   It = 'it',
   Financial = 'financial',
   Compliance = 'compliance',
+  /** @deprecated Merged into `It` as the System/IT domain. Kept so records
+   *  created before the merge still resolve; never offer it as a choice. */
   Systems = 'systems',
 }
+
+/** The audit types a user may actually pick. Request DTOs validate against this
+ *  rather than the enum, so the retired `systems` value can never enter on a
+ *  new record while existing rows still read correctly. */
+export const SELECTABLE_AUDIT_TYPES = [
+  AuditType.It,
+  AuditType.Financial,
+  AuditType.Compliance,
+] as const;
 
 export enum AuditPriority {
   Critical = 'critical',
@@ -58,9 +69,18 @@ export enum FindingCategory {
   It = 'it',
   Financial = 'financial',
   Compliance = 'compliance',
+  /** @deprecated Merged into `It`. See AuditType.Systems. */
   Systems = 'systems',
   Operational = 'operational',
 }
+
+/** Finding categories a user may pick — `systems` is retired, see AuditType. */
+export const SELECTABLE_FINDING_CATEGORIES = [
+  FindingCategory.It,
+  FindingCategory.Financial,
+  FindingCategory.Compliance,
+  FindingCategory.Operational,
+] as const;
 
 export enum FindingSeverity {
   Critical = 'critical',

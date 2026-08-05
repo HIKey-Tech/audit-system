@@ -9,7 +9,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, PlanStatus, UniverseStatus } from '../../../domain/enum/audit.enum';
-import { assertHasPermission, decimalToNumber } from '../../../utility/audit.utility';
+import { assertHasPermission, auditTypeLabel, decimalToNumber } from '../../../utility/audit.utility';
 import { getPlanningPriorityWeights } from '../../../utility/audit-config.utility';
 import {
   AddPlanItemRequestDto,
@@ -161,13 +161,14 @@ export class PlanningService implements IPlanningService {
     assertHasPermission(actor.permissions, 'plan:create');
 
     const existingCount = await prisma.audit_Plan.count({
-      where: { year: dto.year, deleted_at: null },
+      where: { year: dto.year, audit_type: dto.auditType, deleted_at: null },
     });
 
     const plan = await prisma.audit_Plan.create({
       data: {
         title: dto.title,
         year: dto.year,
+        audit_type: dto.auditType,
         description: dto.description ?? null,
         created_by_id: actor.id,
       },
@@ -185,7 +186,9 @@ export class PlanningService implements IPlanningService {
 
     return mapPlanToResponse(
       plan,
-      existingCount > 0 ? [`A plan for ${dto.year} already exists`] : undefined,
+      existingCount > 0
+        ? [`A ${auditTypeLabel(dto.auditType)} programme for ${dto.year} already exists`]
+        : undefined,
     );
   }
 
@@ -260,7 +263,6 @@ export class PlanningService implements IPlanningService {
       data: {
         plan_id: planId,
         universe_id: dto.universeId,
-        audit_type: dto.auditType,
         planned_start_date: new Date(dto.plannedStartDate),
         planned_end_date: new Date(dto.plannedEndDate),
         priority: dto.priority,
@@ -374,6 +376,10 @@ export class PlanningService implements IPlanningService {
       deleted_at: null,
       ...(query.status && { status: query.status }),
       ...(query.year !== undefined && { year: query.year }),
+      ...(query.auditType && { audit_type: query.auditType }),
+      // SQL Server's default collation is case-insensitive, so `contains`
+      // already behaves the way users expect from a search box.
+      ...(query.search && { title: { contains: query.search } }),
     };
 
     const [total, plans] = await prisma.$transaction([

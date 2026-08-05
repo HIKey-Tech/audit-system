@@ -21,6 +21,7 @@ export interface PlanResponseDto {
   id: string;
   title: string;
   year: number;
+  auditType: string;
   description: string | null;
   status: string;
   createdById: string;
@@ -35,11 +36,11 @@ export interface PlanResponseDto {
   warnings?: string[];
 }
 
-export const mapPlanItemToResponse = (item: {
+export const mapPlanItemToResponse = (
+  item: {
   id: string;
   plan_id: string;
   universe_id: string;
-  audit_type: string;
   planned_start_date: Date;
   planned_end_date: Date;
   priority: string;
@@ -49,12 +50,15 @@ export const mapPlanItemToResponse = (item: {
   updated_at: Date;
   universe?: Parameters<typeof mapUniverseToResponse>[0];
   engagements?: Array<{ id: string }>;
-}): PlanItemResponseDto => ({
+  },
+  /** The parent programme's audit type — every plan under it shares it. */
+  auditType: string,
+): PlanItemResponseDto => ({
   id: item.id,
   planId: item.plan_id,
   universeId: item.universe_id,
   universeName: item.universe?.name ?? null,
-  auditType: item.audit_type,
+  auditType,
   plannedStartDate: item.planned_start_date.toISOString(),
   plannedEndDate: item.planned_end_date.toISOString(),
   priority: item.priority,
@@ -71,6 +75,7 @@ export const mapPlanToResponse = (
     id: string;
     title: string;
     year: number;
+    audit_type: string;
     description: string | null;
     status: string;
     created_by_id: string;
@@ -88,6 +93,7 @@ export const mapPlanToResponse = (
   id: plan.id,
   title: plan.title,
   year: plan.year,
+  auditType: plan.audit_type,
   description: plan.description,
   status: plan.status,
   createdById: plan.created_by_id,
@@ -100,6 +106,6 @@ export const mapPlanToResponse = (
   itemsCount: plan.items?.length ?? plan._count?.items ?? 0,
   createdAt: plan.created_at.toISOString(),
   updatedAt: plan.updated_at.toISOString(),
-  items: plan.items?.map(mapPlanItemToResponse),
+  items: plan.items?.map((item) => mapPlanItemToResponse(item, plan.audit_type)),
   warnings,
 });

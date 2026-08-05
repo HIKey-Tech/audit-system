@@ -64,17 +64,20 @@ export interface PlansListQuery {
   pageSize?: number;
   year?: number;
   status?: string;
+  auditType?: string;
+  search?: string;
 }
 
 export interface CreatePlanDto {
   title: string;
   year: number;
+  /** A programme covers one audit type; its plans all inherit it. */
+  auditType: string;
   description?: string;
 }
 
 export interface AddPlanItemDto {
   universeId: string;
-  auditType: string;
   priority: string;
   plannedStartDate: string;
   plannedEndDate: string;

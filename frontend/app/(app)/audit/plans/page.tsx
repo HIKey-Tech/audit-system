@@ -9,14 +9,16 @@ import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
 import { Card } from '@/components/ui/Card';
 import { Table, type Column } from '@/components/ui/Table';
-import { Select } from '@/components/ui/Input';
+import { Input, Select } from '@/components/ui/Input';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
-import { StatusBadge } from '@/components/ui/Badge';
+import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { plansApi } from '@/lib/api/audit';
 import { formatDate, formatNumber } from '@/lib/utils/format';
 import { PlanFormSlideOver } from '@/components/audit/plans/PlanFormSlideOver';
+import { AUDIT_DOMAINS, auditTypeLabel } from '@/lib/audit-domains';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import type { AuditPlan } from '@/lib/types/domain';
 
 const STATUS_TABS: TabItem[] = [
@@ -35,16 +37,23 @@ export default function PlansListPage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [year, setYear] = useState<number | ''>('');
   const [status, setStatus] = useState('');
+  const [auditType, setAuditType] = useState('');
+  const [searchInput, setSearchInput] = useState('');
   const [open, setOpen] = useState(false);
 
+  // Typing stays local; only the settled term reaches the API.
+  const search = useDebouncedValue(searchInput, 300);
+
   const query = useQuery({
-    queryKey: ['plans', { page, year, status }],
+    queryKey: ['plans', { page, year, status, auditType, search }],
     queryFn: () =>
       plansApi.list({
         page,
         pageSize: 20,
         year: year || undefined,
         status: status || undefined,
+        auditType: auditType || undefined,
+        search: search || undefined,
       }),
   });
 
@@ -61,6 +70,12 @@ export default function PlansListPage(): JSX.Element {
       render: (p) => <span className="font-medium text-text-primary">{p.title}</span>,
     },
     {
+      key: 'auditType',
+      header: 'Type',
+      render: (p) => <Badge tone="gray">{auditTypeLabel(p.auditType, 'short')}</Badge>,
+      width: '130px',
+    },
+    {
       key: 'year',
       header: 'Year',
       render: (p) => <span className="font-mono text-xs">{p.year}</span>,
@@ -74,7 +89,7 @@ export default function PlansListPage(): JSX.Element {
     },
     {
       key: 'items',
-      header: 'Items',
+      header: 'Plans',
       render: (p) => <span className="tabular-nums">{formatNumber(p.itemsCount)}</span>,
       width: '90px',
       align: 'right',
@@ -109,6 +124,33 @@ export default function PlansListPage(): JSX.Element {
 
       <Card padded className="mb-4">
         <div className="flex flex-wrap items-center gap-3">
+          <div className="min-w-[220px] flex-1 sm:flex-none sm:w-64">
+            <Input
+              type="search"
+              placeholder="Search programmes…"
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                setPage(1);
+              }}
+            />
+          </div>
+          <div className="w-48">
+            <Select
+              value={auditType}
+              onChange={(e) => {
+                setAuditType(e.target.value);
+                setPage(1);
+              }}
+            >
+              <option value="">All audit types</option>
+              {AUDIT_DOMAINS.map((d) => (
+                <option key={d.key} value={d.key}>
+                  {d.label}
+                </option>
+              ))}
+            </Select>
+          </div>
           <div className="w-40">
             <Select
               value={String(year)}

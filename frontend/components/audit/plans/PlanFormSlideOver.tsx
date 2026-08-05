@@ -11,12 +11,14 @@ import { toastOnInvalid } from '@/lib/utils/form';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
-import { Input, Textarea } from '@/components/ui/Input';
+import { Input, Textarea, Select } from '@/components/ui/Input';
 import { plansApi } from '@/lib/api/audit';
+import { AUDIT_DOMAINS } from '@/lib/audit-domains';
 
 const Schema = z.object({
   title: z.string().min(2).max(200),
   year: z.coerce.number().int().min(2000).max(2100),
+  auditType: z.enum(['it', 'financial', 'compliance']),
   description: z.string().max(2000).optional().or(z.literal('')),
 });
 
@@ -36,22 +38,27 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
     formState: { errors, isDirty },
   } = useForm<FormValues>({
     resolver: zodResolver(Schema),
-    defaultValues: { title: '', year: new Date().getFullYear(), description: '' },
+    defaultValues: { title: '', year: new Date().getFullYear(), auditType: 'it', description: '' },
   });
 
   useEffect(() => {
-    if (open) reset({ title: '', year: new Date().getFullYear(), description: '' });
+    if (open) reset({ title: '', year: new Date().getFullYear(), auditType: 'it', description: '' });
   }, [open, reset]);
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>
-      plansApi.create({ title: v.title, year: v.year, description: v.description || undefined }),
+      plansApi.create({
+        title: v.title,
+        year: v.year,
+        auditType: v.auditType,
+        description: v.description || undefined,
+      }),
     onSuccess: () => {
-      toast.success('Plan created');
+      toast.success('Programme created');
       qc.invalidateQueries({ queryKey: ['plans'] });
       onClose();
     },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to create plan'),
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to create programme'),
   });
 
   const onSubmit = handleSubmit((v) => create.mutate(v), toastOnInvalid);
@@ -62,14 +69,14 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
       dirty={isDirty}
       onClose={onClose}
       title="New Audit Programme"
-      description="Annual plan headers organise the engagements scheduled for a fiscal year."
+      description="A programme covers one audit type for a year. Every plan you add under it inherits that type."
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
           <Button onClick={onSubmit} isLoading={create.isPending} size="sm">
-            Create plan
+            Create programme
           </Button>
         </div>
       }
@@ -81,8 +88,22 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
         <FormField label="Year" required error={errors.year?.message}>
           <Input type="number" min={2000} max={2100} error={errors.year?.message} {...register('year')} />
         </FormField>
+        <FormField
+          label="Audit type"
+          required
+          error={errors.auditType?.message}
+          tooltip="Fixed for the life of the programme — every plan under it is of this type."
+        >
+          <Select error={errors.auditType?.message} {...register('auditType')}>
+            {AUDIT_DOMAINS.map((d) => (
+              <option key={d.key} value={d.key}>
+                {d.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
         <FormField label="Description" error={errors.description?.message}>
-          <Textarea rows={4} placeholder="Optional plan summary" {...register('description')} />
+          <Textarea rows={4} placeholder="Optional programme summary" {...register('description')} />
         </FormField>
       </form>
     </SlideOver>

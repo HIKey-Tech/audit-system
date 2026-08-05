@@ -1,9 +1,11 @@
 import { z } from 'zod';
-import { AuditPriority, AuditType, PlanStatus } from '../../../domain/enum/audit.enum';
+import { AuditPriority, AuditType, PlanStatus, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
 export const CreatePlanRequestSchema = z.object({
   title: z.string().min(1).max(200),
   year: z.coerce.number().int().min(2000).max(2100),
+  // A programme is scoped to one audit type; every plan under it inherits it.
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES),
   description: z.string().max(2000).optional(),
 });
 
@@ -15,7 +17,6 @@ export const UpdatePlanRequestSchema = z.object({
 
 export const AddPlanItemRequestSchema = z.object({
   universeId: z.string().uuid(),
-  auditType: z.nativeEnum(AuditType),
   plannedStartDate: z.string().datetime(),
   plannedEndDate: z.string().datetime(),
   priority: z.nativeEnum(AuditPriority),
@@ -31,6 +32,8 @@ export const PlanQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   status: z.nativeEnum(PlanStatus).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
+  search: z.string().trim().min(1).max(200).optional(),
   sortBy: z.enum(['year', 'created_at', 'updated_at']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });

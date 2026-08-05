@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AuditType } from '../../../domain/enum/audit.enum';
+import { AuditType, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
 export const FrameworkCategory = z.enum(['it', 'financial', 'compliance', 'systems', 'governance']);
 
@@ -23,7 +23,7 @@ export const CreateControlRequestSchema = z.object({
   controlReference: z.string().trim().min(1).max(80),
   controlDescription: z.string().trim().min(1),
   testProcedure: z.string().trim().min(1),
-  auditType: z.nativeEnum(AuditType),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES),
   isActive: z.boolean().optional(),
 });
 
@@ -32,7 +32,7 @@ export const UpdateControlRequestSchema = z.object({
   controlReference: z.string().trim().min(1).max(80).optional(),
   controlDescription: z.string().trim().min(1).optional(),
   testProcedure: z.string().trim().min(1).optional(),
-  auditType: z.nativeEnum(AuditType).optional(),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
   isActive: z.boolean().optional(),
 });
 
@@ -41,7 +41,7 @@ export const ControlQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(200).default(50),
   search: z.string().trim().optional(),
   frameworkId: z.string().uuid().optional(),
-  auditType: z.nativeEnum(AuditType).optional(),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
   isActive: z.coerce.boolean().optional(),
 });
 

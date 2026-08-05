@@ -302,6 +302,8 @@ export interface AuditPlan {
   id: string;
   title: string;
   year: number;
+  /** The programme's audit type — every plan under it shares it. */
+  auditType: string;
   status: string;
   description: string | null;
   approvedById: string | null;

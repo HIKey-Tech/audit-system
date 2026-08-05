@@ -720,7 +720,8 @@ model Scheduled_Job_Run {
 // src/modules/audit/domain/enum/audit.enum.ts for compile-time
 // safety. Allowed values are listed inline next to each field.
 //
-//   audit_type        : it | financial | compliance | systems
+//   audit_type        : it | financial | compliance
+//                       (`systems` was merged into `it`; pre-merge rows only)
 //   priority          : critical | high | medium | low
 //   audit_frequency   : annual | biannual | quarterly | monthly
 //   universe_category : department | system | process | asset | project
@@ -769,6 +770,7 @@ model Audit_Plan {
   id               String    @id @default(uuid())
   title            String
   year             Int
+  audit_type       String // it | financial | compliance
   description      String?   @db.NVarChar(Max)
   status           String    @default("draft") // draft | submitted | approved | rejected
   created_by_id    String
@@ -785,6 +787,7 @@ model Audit_Plan {
 
   @@index([status])
   @@index([year])
+  @@index([audit_type])
   @@index([created_by_id])
   @@map("audit_plans")
 }
@@ -793,7 +796,8 @@ model Audit_Plan_Item {
   id                 String   @id @default(uuid())
   plan_id            String
   universe_id        String
-  audit_type         String // it | financial | compliance | systems
+  // audit_type lives on the parent programme — every plan under a programme
+  // shares its type. Read it via `plan.audit_type`.
   planned_start_date DateTime
   planned_end_date   DateTime
   priority           String // critical | high | medium | low
@@ -808,7 +812,6 @@ model Audit_Plan_Item {
 
   @@index([plan_id])
   @@index([universe_id])
-  @@index([audit_type])
   @@index([priority])
   @@map("audit_plan_items")
 }
@@ -819,7 +822,7 @@ model Audit_Engagement {
   title              String
   universe_id        String
   plan_item_id       String?
-  audit_type         String // it | financial | compliance | systems
+  audit_type         String // it | financial | compliance (denormalized from the programme at creation)
   status             String    @default("planned") // planned | in_progress | under_review | reported | closed
   priority           String // critical | high | medium | low
   lead_auditor_id    String

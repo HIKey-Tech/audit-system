@@ -108,12 +108,6 @@ export default function PlanDetailPage(): JSX.Element {
       ),
     },
     {
-      key: 'type',
-      header: 'Type',
-      render: (i) => <Badge tone="gray">{auditTypeLabel(i.auditType, 'short')}</Badge>,
-      width: '120px',
-    },
-    {
       key: 'priority',
       header: 'Priority',
       render: (i) => <StatusBadge status={i.priority} />,
@@ -173,7 +167,7 @@ export default function PlanDetailPage(): JSX.Element {
     <div>
       <PageHeader
         title={data.title}
-        subtitle={`Year ${data.year}`}
+        subtitle={`${auditTypeLabel(data.auditType)} · Year ${data.year}`}
         breadcrumbs={[
           { label: 'Audit Programme', href: '/audit/plans' },
           { label: data.title },
@@ -245,6 +239,10 @@ export default function PlanDetailPage(): JSX.Element {
               <dd className="mt-1"><StatusBadge status={data.status} /></dd>
             </div>
             <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Audit type</dt>
+              <dd className="mt-1"><Badge tone="gray">{auditTypeLabel(data.auditType)}</Badge></dd>
+            </div>
+            <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Year</dt>
               <dd className="mt-1 text-sm text-text-primary">{data.year}</dd>
             </div>
@@ -278,7 +276,7 @@ export default function PlanDetailPage(): JSX.Element {
 
       <Card className="mt-6" padded={false}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <CardHeader title="Plans" subtitle="Audits scheduled within this programme" className="mb-0" />
+          <CardHeader title="Plans" subtitle="Audits scheduled within this programme — all of its audit type" className="mb-0" />
           {data.status === 'draft' && canWrite && (
             <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddItemOpen(true)}>
               Add plan

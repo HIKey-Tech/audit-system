@@ -1,9 +1,9 @@
 import { z } from 'zod';
-import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
+import { AuditType, ChecklistResult, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
 export const CreateChecklistItemRequestSchema = z.object({
   // Optional — defaults to the engagement's own audit type when omitted.
-  auditType: z.nativeEnum(AuditType).optional(),
+  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
   controlReference: z.string().min(1).max(200),
   controlDescription: z.string().min(1),
   testProcedure: z.string().min(1),

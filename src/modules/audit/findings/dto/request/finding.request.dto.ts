@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { FindingCategory, FindingSeverity, FindingStatus } from '../../../domain/enum/audit.enum';
+import { FindingCategory, FindingSeverity, FindingStatus, SELECTABLE_FINDING_CATEGORIES } from '../../../domain/enum/audit.enum';
 
 export const CreateFindingRequestSchema = z.object({
   workingPaperId: z.string().uuid().optional(),
@@ -7,7 +7,7 @@ export const CreateFindingRequestSchema = z.object({
   riskId: z.string().uuid().optional(),
   title: z.string().min(1).max(200),
   description: z.string().min(1),
-  category: z.nativeEnum(FindingCategory),
+  category: z.enum(SELECTABLE_FINDING_CATEGORIES),
   severity: z.nativeEnum(FindingSeverity),
   rootCause: z.string().min(1),
   riskImplication: z.string().min(1),
@@ -24,7 +24,7 @@ export const UpdateFindingRequestSchema = z.object({
   riskId: z.string().uuid().nullable().optional(),
   title: z.string().min(1).max(200).optional(),
   description: z.string().min(1).optional(),
-  category: z.nativeEnum(FindingCategory).optional(),
+  category: z.enum(SELECTABLE_FINDING_CATEGORIES).optional(),
   severity: z.nativeEnum(FindingSeverity).optional(),
   rootCause: z.string().min(1).optional(),
   riskImplication: z.string().min(1).optional(),
@@ -45,7 +45,7 @@ export const FindingQuerySchema = z.object({
   search: z.string().trim().optional(),
   severity: z.nativeEnum(FindingSeverity).optional(),
   status: z.nativeEnum(FindingStatus).optional(),
-  category: z.nativeEnum(FindingCategory).optional(),
+  category: z.enum(SELECTABLE_FINDING_CATEGORIES).optional(),
   controlReference: z.string().trim().optional(),
   auditeeId: z.string().uuid().optional(),
   riskId: z.string().uuid().optional(),

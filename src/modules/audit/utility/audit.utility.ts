@@ -10,6 +10,18 @@ import {
   WorkingPaperStatus,
 } from '../domain/enum/audit.enum';
 
+/** Human-readable audit-type names, for messages shown back to the user.
+ *  `systems` was merged into `it` and only appears on pre-merge records. */
+const AUDIT_TYPE_LABELS: Record<string, string> = {
+  it: 'System/IT',
+  systems: 'System/IT',
+  financial: 'Financial',
+  compliance: 'Compliance',
+};
+
+export const auditTypeLabel = (auditType: string): string =>
+  AUDIT_TYPE_LABELS[auditType] ?? auditType;
+
 export const assertHasPermission = (
   permissions: string[],
   required: string,
