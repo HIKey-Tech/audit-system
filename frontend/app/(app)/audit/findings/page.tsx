@@ -16,9 +16,9 @@ import { findingsApi } from '@/lib/api/audit';
 import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
 import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { formatDate } from '@/lib/utils/format';
-import { humanizeStatus } from '@/lib/utils/status';
 import type { AuditFinding } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
+import { auditTypeLabel } from '@/lib/audit-domains';
 
 export default function FindingsListPage(): JSX.Element {
   const router = useRouter();
@@ -85,7 +85,7 @@ export default function FindingsListPage(): JSX.Element {
     {
       key: 'category',
       header: 'Category',
-      render: (f) => <Badge tone="gray">{humanizeStatus(f.category)}</Badge>,
+      render: (f) => <Badge tone="gray">{auditTypeLabel(f.category, 'short')}</Badge>,
       width: '160px',
     },
     {
@@ -171,10 +171,9 @@ export default function FindingsListPage(): JSX.Element {
             onChange={(e) => set({ category: e.target.value, page: '1' })}
           >
             <option value="">All categories</option>
-            <option value="it">IT</option>
+            <option value="it">System/IT</option>
             <option value="financial">Financial</option>
             <option value="compliance">Compliance</option>
-            <option value="systems">Systems</option>
             <option value="operational">Operational</option>
           </Select>
         </div>

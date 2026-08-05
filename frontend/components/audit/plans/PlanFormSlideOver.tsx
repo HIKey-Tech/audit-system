@@ -61,7 +61,7 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
       open={open}
       dirty={isDirty}
       onClose={onClose}
-      title="New Audit Plan"
+      title="New Audit Programme"
       description="Annual plan headers organise the engagements scheduled for a fiscal year."
       footer={
         <div className="flex justify-end gap-2">
@@ -76,7 +76,7 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
     >
       <form onSubmit={onSubmit} className="space-y-4" noValidate>
         <FormField label="Title" required error={errors.title?.message}>
-          <Input placeholder="e.g. FY 2026 Annual Audit Plan" error={errors.title?.message} {...register('title')} />
+          <Input placeholder="e.g. FY 2026 Annual Audit Programme" error={errors.title?.message} {...register('title')} />
         </FormField>
         <FormField label="Year" required error={errors.year?.message}>
           <Input type="number" min={2000} max={2100} error={errors.year?.message} {...register('year')} />

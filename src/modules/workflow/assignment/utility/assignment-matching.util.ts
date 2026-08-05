@@ -21,11 +21,14 @@ export const HEAVY_WORKLOAD_THRESHOLD = 3;
  *  single words match a whole token so short keys like "ap"/"dr"/"it" don't
  *  produce false positives (e.g. "ap" inside "capacity"). */
 const AUDIT_TYPE_KEYWORDS: Record<string, string[]> = {
-  it: ['it', 'cyber', 'security', 'iso 27001', 'iso27001', 'network', 'system', 'vulnerability', 'firewall', 'cloud', 'itgc', 'sast'],
+  // `it` is the merged System/IT domain, so its keywords are the union of the
+  // former IT and Systems domains. `systems` is kept as an alias so engagements
+  // created before the merge still match the same auditors.
+  it: ['it', 'cyber', 'security', 'iso 27001', 'iso27001', 'network', 'system', 'vulnerability', 'firewall', 'cloud', 'itgc', 'sast', 'systems', 'infrastructure', 'configuration', 'change', 'cab', 'disaster', 'dr', 'replication', 'capacity', 'performance'],
   financial: ['financial', 'finance', 'ap', 'ledger', 'reconciliation', 'maker', 'checker', 'asset', 'audit', 'tax'],
   compliance: ['compliance', 'regulation', 'standard', 'iso 9001', 'iso9001', 'iso 22301', 'iso22301', 'ndpr', 'privacy', 'dpo', 'policy', 'gdpr'],
-  systems: ['systems', 'infrastructure', 'configuration', 'change', 'cab', 'disaster', 'dr', 'replication', 'capacity', 'performance'],
 };
+AUDIT_TYPE_KEYWORDS.systems = AUDIT_TYPE_KEYWORDS.it;
 
 const PRIORITY_WEIGHT: Record<string, number> = { critical: 4, high: 3, medium: 2, low: 1 };
 

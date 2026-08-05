@@ -19,9 +19,10 @@ import { complianceApi, type ComplianceControl, type CreateControlDto } from '@/
 import { riskApi } from '@/lib/api/risk';
 import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
+import { auditTypeLabel } from '@/lib/audit-domains';
 
-const AUDIT_TYPES = ['it', 'financial', 'compliance', 'systems'] as const;
-const CATEGORIES = ['it', 'financial', 'compliance', 'systems', 'governance'] as const;
+const AUDIT_TYPES = ['it', 'financial', 'compliance'] as const;
+const CATEGORIES = ['it', 'financial', 'compliance', 'governance'] as const;
 
 export default function CompliancePage(): JSX.Element {
   const qc = useQueryClient();
@@ -80,7 +81,7 @@ export default function CompliancePage(): JSX.Element {
     {
       key: 'type',
       header: 'Audit type',
-      render: (c) => <Badge tone="gray">{humanizeStatus(c.auditType)}</Badge>,
+      render: (c) => <Badge tone="gray">{auditTypeLabel(c.auditType, 'short')}</Badge>,
       width: '120px',
     },
     {
@@ -100,7 +101,7 @@ export default function CompliancePage(): JSX.Element {
     <div>
       <PageHeader
         title="Control Library"
-        subtitle="Control library and per-framework coverage across IT, financial, systems, and compliance audits."
+        subtitle="Control library and per-framework coverage across System/IT, financial, and compliance audits."
         actions={
           canManage ? (
             <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openCreate}>
@@ -153,7 +154,7 @@ export default function CompliancePage(): JSX.Element {
                 <Badge tone="gray">{f.activeControls}/{f.totalControls}</Badge>
               </div>
               <p className="mt-1 line-clamp-1 text-sm text-text-primary">{f.name}</p>
-              <p className="mt-0.5 text-[11px] text-text-muted">{humanizeStatus(f.category)}</p>
+              <p className="mt-0.5 text-[11px] text-text-muted">{auditTypeLabel(f.category, 'short')}</p>
             </button>
           ))}
           {coverage.isLoading && <p className="text-sm text-text-muted">Loading coverage…</p>}

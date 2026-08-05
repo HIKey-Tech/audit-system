@@ -42,14 +42,14 @@ const STAGES: StageConfig[] = [
   },
   {
     key: 'under_review',
-    label: 'Quality Review',
-    description: 'Review fieldwork and obtain report sign-offs.',
+    label: 'Quality Assurance',
+    description: 'Check fieldwork and obtain review sign-offs.',
     icon: ClipboardCheck
   },
   {
     key: 'reported',
-    label: 'Reporting & Findings',
-    description: 'Issue report to auditee and track remediation action plans.',
+    label: 'Review & Findings',
+    description: 'Issue the review to the auditee and track remediation action plans.',
     icon: FileText
   },
   {
@@ -152,7 +152,7 @@ export const StatusStepper = ({ engagement, onNavigateTab }: StatusStepperProps)
               <Check className="h-5 w-5 stroke-[2.5] shrink-0" />
               <div className="text-xs">
                 <h4 className="font-semibold">Engagement Completed</h4>
-                <p className="mt-0.5 opacity-90">All audit checklists have been verified, working papers approved, report issued, and findings remediated. This engagement file is fully closed.</p>
+                <p className="mt-0.5 opacity-90">All audit checklists have been verified, working papers approved, review issued, and findings remediated. This engagement file is fully closed.</p>
               </div>
             </div>
           ) : (

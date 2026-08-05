@@ -76,7 +76,7 @@ export default function DashboardPage(): JSX.Element {
                 <Link href="/notifications" className="text-primary hover:underline">
                   notifications
                 </Link>{' '}
-                for issued reports and deadlines.
+                for issued reviews and deadlines.
               </li>
             </ol>
             <p className="mt-2 text-xs text-text-muted">

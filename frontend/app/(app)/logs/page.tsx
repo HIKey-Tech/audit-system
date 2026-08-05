@@ -37,8 +37,8 @@ const ACTION_LABELS: Record<string, string> = {
   'audit.report.generate': 'Generated audit report',
   'audit.report.issue': 'Issued audit report',
   // Audit plan
-  'audit.plan.submit': 'Submitted audit plan',
-  'audit.plan.approve': 'Approved audit plan',
+  'audit.plan.submit': 'Submitted audit programme',
+  'audit.plan.approve': 'Approved audit programme',
   // Audit findings
   'audit.finding.create': 'Logged finding',
   'audit.finding.close': 'Closed finding',
@@ -97,11 +97,11 @@ const moduleLabel = (mod: string): string => MODULE_LABELS[mod.toLowerCase()] ??
 
 /** Entity type labels. */
 const ENTITY_LABELS: Record<string, string> = {
-  audit_report: 'Audit Report',
+  audit_report: 'Audit Review',
   audit_engagement: 'Engagement',
   audit_working_paper: 'Working Paper',
   audit_finding: 'Finding',
-  audit_plan: 'Audit Plan',
+  audit_plan: 'Audit Programme',
   audit_universe: 'Universe Entity',
   workflow_approval: 'Approval',
   escalation_policy: 'Escalation Policy',

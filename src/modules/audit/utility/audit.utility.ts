@@ -297,6 +297,15 @@ export const CONTROL_SETS: Record<AuditType, Array<{
   ],
 };
 
+// GBB merged the separate IT and Systems audit modules into one System/IT
+// domain, so the merged domain tests the union of both control sets. The
+// Systems key is left in place so engagements created before the merge still
+// resolve their checklist controls.
+CONTROL_SETS[AuditType.It] = [
+  ...CONTROL_SETS[AuditType.It],
+  ...CONTROL_SETS[AuditType.Systems],
+];
+
 export const emptyChecklistProgress = (): Record<ChecklistResult, number> => ({
   [ChecklistResult.Passed]: 0,
   [ChecklistResult.Failed]: 0,

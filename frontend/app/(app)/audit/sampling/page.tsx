@@ -12,6 +12,7 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { engagementsApi } from '@/lib/api/audit';
 import { usePermission } from '@/hooks/usePermission';
 import { humanizeStatus } from '@/lib/utils/status';
+import { auditTypeLabel } from '@/lib/audit-domains';
 import { SamplingPanel } from '@/components/audit/engagements/SamplingPanel';
 import { SampleSizeCalculator } from '@/components/audit/engagements/SampleSizeCalculator';
 
@@ -109,7 +110,7 @@ export default function SamplingPage(): JSX.Element | null {
         {selected && (
           <p className="mt-2 text-xs text-text-secondary">
             Auditable entity: <span className="font-medium text-text-primary">{selected.universeName ?? '—'}</span> ·
-            Type: <span className="font-medium text-text-primary">{humanizeStatus(selected.auditType)}</span>
+            Type: <span className="font-medium text-text-primary">{auditTypeLabel(selected.auditType)}</span>
           </p>
         )}
       </Card>

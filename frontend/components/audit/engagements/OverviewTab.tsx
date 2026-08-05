@@ -16,6 +16,7 @@ import { statusMeaning } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
+import { auditTypeLabel } from '@/lib/audit-domains';
 import { ManageAssignmentsSlideOver } from './ManageAssignmentsSlideOver';
 import { TimeTrackingCard } from './TimeTrackingCard';
 
@@ -111,7 +112,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
           )}
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Type</dt>
-            <dd className="mt-1"><Badge tone="gray">{humanizeStatus(engagement.auditType)}</Badge></dd>
+            <dd className="mt-1"><Badge tone="gray">{auditTypeLabel(engagement.auditType)}</Badge></dd>
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Priority</dt>

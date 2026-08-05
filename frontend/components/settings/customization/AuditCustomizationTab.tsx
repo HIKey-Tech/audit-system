@@ -38,7 +38,7 @@ const CUSTOMIZATION_KEYS = [
   {
     key: 'dashboard_kpi_visibility',
     title: 'Analytics Visibility',
-    description: 'Controls KPI groups shown in analytics and management reporting.',
+    description: 'Controls KPI groups shown in analytics and management reviews.',
   },
   {
     key: 'planning_priority_weights',

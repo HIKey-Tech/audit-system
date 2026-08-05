@@ -48,7 +48,7 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'evidence', label: 'Evidence' },
   { key: 'requests', label: 'Evidence Requests' },
   { key: 'findings', label: 'Findings' },
-  { key: 'report', label: 'Report' },
+  { key: 'report', label: 'Review' },
   { key: 'follow-up', label: 'Follow-up' },
   { key: 'assets', label: 'Assets' },
 ];

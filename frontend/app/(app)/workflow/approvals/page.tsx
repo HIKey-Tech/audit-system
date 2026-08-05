@@ -65,8 +65,8 @@ export default function ApprovalsPage(): JSX.Element {
   return (
     <div>
       <PageHeader
-        title="Audit Approvals"
-        subtitle="Audit records (plans, engagements, reports) awaiting your sign-off."
+        title="Review/Approval"
+        subtitle="Audit records (programmes, engagements, reviews) awaiting your sign-off."
         actions={
           <Link href="/requests">
             <Button variant="secondary" size="sm" leftIcon={<Send className="h-4 w-4" />}>

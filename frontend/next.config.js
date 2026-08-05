@@ -8,6 +8,12 @@ const nextConfig = {
   experimental: {
     typedRoutes: false,
   },
+  // The Systems audit module was merged into System/IT. Keep old links working.
+  async redirects() {
+    return [
+      { source: '/audit/domains/systems', destination: '/audit/domains/it', permanent: false },
+    ];
+  },
 };
 
 module.exports = nextConfig;

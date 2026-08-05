@@ -211,8 +211,8 @@ export default function AuditDomainPage(): JSX.Element {
             <option value="">All statuses</option>
             <option value="planned">Planned</option>
             <option value="in_progress">In progress</option>
-            <option value="under_review">Under review</option>
-            <option value="reported">Reported</option>
+            <option value="under_review">Quality assurance</option>
+            <option value="reported">Review issued</option>
             <option value="closed">Closed</option>
           </Select>
           <Select

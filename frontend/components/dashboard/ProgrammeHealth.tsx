@@ -94,7 +94,7 @@ export const ProgrammeHealth = (): JSX.Element => {
                 hint="plan → close"
               />
               <MetricTile
-                label="Avg Report Issue"
+                label="Avg Review Issue"
                 value={days(a.reporting.averageDaysToIssue)}
                 hint="draft → issued"
               />

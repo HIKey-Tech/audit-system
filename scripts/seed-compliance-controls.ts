@@ -17,7 +17,7 @@ const prisma = new PrismaClient();
 interface FrameworkDef {
   code: string;
   name: string;
-  category: 'it' | 'financial' | 'compliance' | 'systems' | 'governance';
+  category: 'it' | 'financial' | 'compliance' | 'governance';
 }
 
 // Catalogue of frameworks the seeded controls belong to.
@@ -30,10 +30,10 @@ const FRAMEWORKS: FrameworkDef[] = [
   { code: 'NDPR', name: 'NDPR — Nigeria Data Protection Regulation', category: 'compliance' },
   { code: 'NITDA', name: 'NITDA — Data Protection Compliance', category: 'governance' },
   { code: 'ISO31000', name: 'ISO 31000 — Risk Management', category: 'compliance' },
-  { code: 'ISO20000', name: 'ISO/IEC 20000 — IT Service Management', category: 'systems' },
+  { code: 'ISO20000', name: 'ISO/IEC 20000 — IT Service Management', category: 'it' },
   { code: 'COBIT', name: 'COBIT — IT Governance', category: 'governance' },
   { code: 'GBB-FIN', name: 'GBB Financial Controls', category: 'financial' },
-  { code: 'GBB-SYS', name: 'GBB Systems Controls', category: 'systems' },
+  { code: 'GBB-SYS', name: 'GBB Systems Controls', category: 'it' },
 ];
 
 /** Derive the framework code from a control reference prefix. Order matters. */
@@ -69,6 +69,10 @@ async function main(): Promise<void> {
 
   let controlCount = 0;
   for (const auditType of Object.values(AuditType)) {
+    // `systems` was merged into `it`; CONTROL_SETS[it] already carries its
+    // controls. Seeding it separately would re-tag them back to `systems`,
+    // since both passes share the (framework, control_reference) unique key.
+    if (auditType === AuditType.Systems) continue;
     const controls = CONTROL_SETS[auditType] ?? [];
     for (const control of controls) {
       const code = frameworkCodeFor(control.controlReference);

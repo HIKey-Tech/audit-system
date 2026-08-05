@@ -1008,7 +1008,7 @@ export interface DocumentTemplateDto {
 // ============================================================
 // Settings
 // ============================================================
-export type SettingsAuditType = 'it' | 'financial' | 'compliance' | 'systems' | 'all';
+export type SettingsAuditType = 'it' | 'financial' | 'compliance' | 'all';
 
 export interface WorkingPaperTemplateSection {
   title: string;

@@ -14,7 +14,7 @@ import { workflowApi } from '@/lib/api/workflow';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import type { EscalationPolicy } from '@/lib/types/domain';
 
-const AUDIT_TYPES = ['it', 'financial', 'compliance', 'systems', 'all'];
+const AUDIT_TYPES = ['it', 'financial', 'compliance', 'all'];
 
 export default function EscalationPoliciesPage(): JSX.Element | null {
   const router = useRouter();

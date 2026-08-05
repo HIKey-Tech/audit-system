@@ -12,9 +12,9 @@ const ENGAGEMENT_MANAGER = 'engagement_manager';
 
 /** The entity chains the approval matrix configures, in display order. */
 const ENTITIES: { key: string; label: string; hint: string }[] = [
-  { key: 'auditPlan', label: 'Audit Plan', hint: 'Sign-off chain when an audit plan is submitted.' },
+  { key: 'auditPlan', label: 'Audit Programme', hint: 'Sign-off chain when an audit programme is submitted.' },
   { key: 'workingPaper', label: 'Working Paper', hint: 'Sign-off chain when a working paper is submitted.' },
-  { key: 'auditReport', label: 'Audit Report', hint: 'Sign-off chain when an audit report is submitted.' },
+  { key: 'auditReport', label: 'Audit Review', hint: 'Sign-off chain when an audit review is submitted.' },
   { key: 'findingClosure', label: 'Finding Closure', hint: 'Sign-off chain before a verified finding is closed.' },
 ];
 

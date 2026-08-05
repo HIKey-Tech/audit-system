@@ -30,7 +30,7 @@ export const ReportTemplatesTab = (): JSX.Element => {
   const setDefaultMut = useMutation({
     mutationFn: (id: string) => reportTemplatesApi.setDefault(id),
     onSuccess: () => {
-      toast.success('Default report template updated');
+      toast.success('Default review template updated');
       qc.invalidateQueries({ queryKey: ['settings', 'report-templates'] });
     },
     onError: (err) =>
@@ -180,8 +180,8 @@ export const ReportTemplatesTab = (): JSX.Element => {
         emptyState={
           <EmptyState
             icon={<BookOpen className="h-4 w-4" />}
-            title="No report templates"
-            description="Create a report template to standardise audit report structure."
+            title="No review templates"
+            description="Create a review template to standardise audit review structure."
             action={
               <Button
                 size="sm"

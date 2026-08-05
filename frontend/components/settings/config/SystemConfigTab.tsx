@@ -45,16 +45,16 @@ interface GroupDef {
 const GROUPS: GroupDef[] = [
   {
     title: 'Organisation',
-    subtitle: 'Details shown across the app and printed on audit reports.',
+    subtitle: 'Details shown across the app and printed on audit reviews.',
     icon: <Building2 className="h-4 w-4" />,
     fields: [
-      { key: 'org_name', label: 'Organisation name', type: 'text', help: 'Full legal name shown on reports.' },
+      { key: 'org_name', label: 'Organisation name', type: 'text', help: 'Full legal name shown on reviews.' },
       { key: 'org_short_name', label: 'Short name', type: 'text', help: 'Abbreviation used in compact places.' },
       { key: 'audit_dept_name', label: 'Audit department name', type: 'text' },
       { key: 'org_email', label: 'Contact email', type: 'email', placeholder: 'name@example.com' },
       { key: 'org_phone', label: 'Contact phone', type: 'tel', placeholder: '+234 ...' },
       { key: 'org_website', label: 'Website', type: 'url', placeholder: 'https://...' },
-      { key: 'org_address', label: 'Address', type: 'textarea', help: 'Appears in report headers.' },
+      { key: 'org_address', label: 'Address', type: 'textarea', help: 'Appears in review headers.' },
     ],
   },
   {
@@ -67,11 +67,11 @@ const GROUPS: GroupDef[] = [
     ],
   },
   {
-    title: 'Reporting',
-    subtitle: 'Wording printed on generated audit reports.',
+    title: 'Reviews',
+    subtitle: 'Wording printed on generated audit reviews.',
     icon: <FileText className="h-4 w-4" />,
     fields: [
-      { key: 'report_footer_notice', label: 'Report footer notice', type: 'textarea', help: 'Confidentiality line printed at the foot of every report.' },
+      { key: 'report_footer_notice', label: 'Review footer notice', type: 'textarea', help: 'Confidentiality line printed at the foot of every review.' },
     ],
   },
 ];

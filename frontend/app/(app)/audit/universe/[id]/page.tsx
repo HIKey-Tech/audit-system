@@ -18,6 +18,7 @@ import { usePermissions } from '@/lib/hooks/usePermissions';
 import { universeApi } from '@/lib/api/audit';
 import { formatDate, formatNumber } from '@/lib/utils/format';
 import { humanizeStatus, riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
+import { auditTypeLabel } from '@/lib/audit-domains';
 import { UniverseFormSlideOver } from '@/components/audit/universe/UniverseFormSlideOver';
 import type {
   UniverseLinkedRisk,
@@ -132,7 +133,7 @@ export default function UniverseDetailPage(): JSX.Element {
     {
       key: 'type',
       header: 'Type',
-      render: (e) => <Badge tone="gray">{humanizeStatus(e.auditType)}</Badge>,
+      render: (e) => <Badge tone="gray">{auditTypeLabel(e.auditType, 'short')}</Badge>,
       width: '120px',
     },
     {

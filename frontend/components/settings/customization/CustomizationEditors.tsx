@@ -84,8 +84,8 @@ const LIFECYCLE_LABELS: Record<string, FieldMeta> = {
     description: 'An approved working paper is needed before an engagement reaches Under Review.',
   },
   requireReportIssuedBeforeReported: {
-    label: 'Require issued report',
-    description: 'The audit report must be issued before an engagement is marked Reported.',
+    label: 'Require issued review',
+    description: 'The audit review must be issued before an engagement is marked Review Issued.',
   },
   requireClosedFindingsBeforeClose: {
     label: 'Require closed findings',
@@ -98,7 +98,7 @@ const KPI_LABELS: Record<string, FieldMeta> = {
   findings: { label: 'Findings', description: 'Findings by severity, status, and ageing.' },
   riskCoverage: { label: 'Risk coverage', description: 'How much of the risk universe is audited.' },
   auditorWorkload: { label: 'Auditor workload', description: 'Assignments and capacity per auditor.' },
-  reporting: { label: 'Reporting', description: 'Report turnaround and issuance metrics.' },
+  reporting: { label: 'Reviews', description: 'Review turnaround and issuance metrics.' },
   followUp: { label: 'Follow-up', description: 'Remediation and verification progress.' },
 };
 
@@ -267,7 +267,6 @@ const AUDIT_TYPE_LABELS: Record<string, string> = {
   it: 'IT',
   financial: 'Financial',
   compliance: 'Compliance',
-  systems: 'Systems',
   operational: 'Operational',
 };
 

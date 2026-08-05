@@ -98,7 +98,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
         availableVariables: values.availableVariables,
       }),
     onSuccess: () => {
-      toast.success('Report template created');
+      toast.success('Review template created');
       qc.invalidateQueries({ queryKey: ['settings', 'report-templates'] });
       onClose();
     },
@@ -115,7 +115,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
         availableVariables: values.availableVariables,
       }),
     onSuccess: () => {
-      toast.success('Report template updated');
+      toast.success('Review template updated');
       qc.invalidateQueries({ queryKey: ['settings', 'report-templates'] });
       onClose();
     },
@@ -135,8 +135,8 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
       open={open}
       dirty={isDirty}
       onClose={onClose}
-      title={isEdit ? 'Edit report template' : 'New report template'}
-      description="Define the structure and available variables for generated audit reports."
+      title={isEdit ? 'Edit review template' : 'New review template'}
+      description="Define the structure and available variables for generated audit reviews."
       width="xl"
       footer={
         <div className="flex justify-end gap-2">
@@ -152,7 +152,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
       <form onSubmit={onSubmit} className="space-y-6" noValidate>
         <FormField label="Template name" required error={errors.name?.message}>
           <Input
-            placeholder="e.g. Standard Audit Report"
+            placeholder="e.g. Standard Audit Review"
             error={errors.name?.message}
             {...register('name')}
           />
@@ -344,7 +344,7 @@ export const ReportTemplateFormSlideOver = ({ open, onClose, template }: Props):
 
             {variables.fields.length === 0 && (
               <p className="text-center text-xs text-text-muted py-4">
-                No variables defined. Variables enable dynamic content in generated reports.
+                No variables defined. Variables enable dynamic content in generated reviews.
               </p>
             )}
           </div>

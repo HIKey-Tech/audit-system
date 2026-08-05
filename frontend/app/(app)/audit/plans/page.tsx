@@ -96,12 +96,12 @@ export default function PlansListPage(): JSX.Element {
   return (
     <div>
       <PageHeader
-        title="Audit Plans"
-        subtitle="Annual plans drive engagement scheduling and approval routing."
+        title="Audit Programme"
+        subtitle="The annual programme holds the plans that drive engagement scheduling and approval routing."
         actions={
           canWrite ? (
             <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
-              New Plan
+              New Programme
             </Button>
           ) : null
         }
@@ -149,12 +149,12 @@ export default function PlansListPage(): JSX.Element {
         emptyState={
           <EmptyState
             icon={<ClipboardList className="h-4 w-4" />}
-            title="No plans yet"
-            description="Create your first audit plan to begin scheduling engagements."
+            title="No programmes yet"
+            description="Create your first audit programme to begin scheduling engagements."
             action={
               canWrite ? (
                 <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setOpen(true)}>
-                  New Plan
+                  New Programme
                 </Button>
               ) : undefined
             }

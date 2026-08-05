@@ -22,6 +22,7 @@ import { formatDate } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { cn } from '@/lib/utils/cn';
+import { auditTypeLabel } from '@/lib/audit-domains';
 
 // Manual, auditor-settable statuses. `verified` is deliberately excluded — it is
 // only reachable through the Verify action below, which captures verification
@@ -208,7 +209,7 @@ export default function FindingDetailPage(): JSX.Element {
             </div>
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Category</dt>
-              <dd className="mt-1"><Badge tone="gray">{humanizeStatus(data.category)}</Badge></dd>
+              <dd className="mt-1"><Badge tone="gray">{auditTypeLabel(data.category, 'short')}</Badge></dd>
             </div>
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Engagement</dt>

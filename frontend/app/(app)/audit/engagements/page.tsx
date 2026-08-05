@@ -18,10 +18,10 @@ import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
 import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { engagementsApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
-import { humanizeStatus } from '@/lib/utils/status';
 import { StartAuditWizard } from '@/components/audit/engagements/StartAuditWizard';
 import type { AuditEngagement } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
+import { auditTypeLabel } from '@/lib/audit-domains';
 
 type TabKey = 'all' | 'mine' | 'overdue';
 
@@ -103,7 +103,7 @@ export default function EngagementsListPage(): JSX.Element {
     {
       key: 'type',
       header: 'Type',
-      render: (e) => <Badge tone="gray">{humanizeStatus(e.auditType)}</Badge>,
+      render: (e) => <Badge tone="gray">{auditTypeLabel(e.auditType, 'short')}</Badge>,
       width: '120px',
     },
     {
@@ -183,8 +183,8 @@ export default function EngagementsListPage(): JSX.Element {
             <option value="">All statuses</option>
             <option value="planned">Planned</option>
             <option value="in_progress">In progress</option>
-            <option value="under_review">Under review</option>
-            <option value="reported">Reported</option>
+            <option value="under_review">Quality assurance</option>
+            <option value="reported">Review issued</option>
             <option value="closed">Closed</option>
           </Select>
           <Select
@@ -193,10 +193,9 @@ export default function EngagementsListPage(): JSX.Element {
             onChange={(e) => set({ auditType: e.target.value, page: '1' })}
           >
             <option value="">All types</option>
-            <option value="it">IT</option>
+            <option value="it">System/IT</option>
             <option value="financial">Financial</option>
             <option value="compliance">Compliance</option>
-            <option value="systems">Systems</option>
           </Select>
           <Select
             value={values.priority}

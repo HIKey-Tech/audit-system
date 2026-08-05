@@ -27,7 +27,7 @@ const SectionSchema = z.object({
 const Schema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(1000).optional().or(z.literal('')),
-  auditType: z.enum(['it', 'financial', 'compliance', 'systems', 'all'] as const),
+  auditType: z.enum(['it', 'financial', 'compliance', 'all'] as const),
   sections: z.array(SectionSchema).min(1, 'At least one section required'),
 });
 
@@ -163,10 +163,9 @@ export const WPTemplateSlideOver = ({ open, onClose, template }: Props): JSX.Ele
         <FormField label="Audit type" required error={errors.auditType?.message}>
           <Select error={errors.auditType?.message} {...register('auditType')}>
             <option value="all">All types</option>
-            <option value="it">IT</option>
+            <option value="it">System/IT</option>
             <option value="financial">Financial</option>
             <option value="compliance">Compliance</option>
-            <option value="systems">Systems</option>
           </Select>
         </FormField>
 

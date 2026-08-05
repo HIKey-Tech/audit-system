@@ -18,7 +18,7 @@ import type { WorkflowAssignment } from '@/lib/types/domain';
 const ENTITY_LABEL: Record<string, string> = {
   audit_plan: 'Plan',
   audit_working_paper: 'Working Paper',
-  audit_report: 'Report',
+  audit_report: 'Review',
 };
 
 export const MyWorkPanel = (): JSX.Element => {

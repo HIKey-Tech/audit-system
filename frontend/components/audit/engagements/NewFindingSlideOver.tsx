@@ -28,7 +28,7 @@ function toISODatetime(dateStr: string): string {
 const Schema = z.object({
   title: z.string().min(2).max(200),
   description: z.string().min(1),
-  category: z.enum(['it', 'financial', 'compliance', 'systems', 'operational']),
+  category: z.enum(['it', 'financial', 'compliance', 'operational']),
   severity: z.enum(['critical', 'high', 'medium', 'low', 'informational']),
   rootCause: z.string().min(1, 'Root cause is required'),
   riskImplication: z.string().min(1, 'Risk implication is required'),
@@ -208,10 +208,9 @@ export const NewFindingSlideOver = ({
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Category" required error={errors.category?.message}>
             <Select error={errors.category?.message} {...register('category')}>
-              <option value="it">IT</option>
+              <option value="it">System/IT</option>
               <option value="financial">Financial</option>
               <option value="compliance">Compliance</option>
-              <option value="systems">Systems</option>
               <option value="operational">Operational</option>
             </Select>
           </FormField>

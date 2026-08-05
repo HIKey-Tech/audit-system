@@ -1,12 +1,16 @@
-import { Cpu, Banknote, ServerCog, ShieldCheck, type LucideIcon } from 'lucide-react';
+import { Cpu, Banknote, ShieldCheck, type LucideIcon } from 'lucide-react';
 
 /**
- * The four audit domains GBB commissioned as "dedicated modules" (IT, Financial,
- * Systems, Compliance). These map 1:1 to the backend `AuditType` enum — each
- * domain shares the single audit engine but presents a dedicated workspace with
- * its own control framework, templates, and SLAs.
+ * The audit domains GBB commissioned as "dedicated modules". Each shares the
+ * single audit engine but presents a dedicated workspace with its own control
+ * framework, templates, and SLAs.
+ *
+ * GBB merged the former separate "IT" and "Systems" modules into one
+ * System/IT Audit domain, so `systems` is retired as a selectable type. The
+ * backend still accepts the value for records created before the merge — see
+ * `auditTypeLabel` and the 20260805120000_merge_systems_into_it migration.
  */
-export type AuditDomainKey = 'it' | 'financial' | 'systems' | 'compliance';
+export type AuditDomainKey = 'it' | 'financial' | 'compliance';
 
 export interface AuditDomainMeta {
   /** Matches the backend AuditType enum value. */
@@ -26,18 +30,20 @@ export interface AuditDomainMeta {
   description: string;
 }
 
-// Ordered exactly as the requirement lists them: IT, Financial, Systems, Compliance.
+// Ordered as the requirement lists them: System/IT, Financial, Compliance.
 export const AUDIT_DOMAINS: AuditDomainMeta[] = [
   {
     key: 'it',
-    label: 'IT Audit',
-    short: 'IT',
+    // Merged domain — covers what were previously the separate IT and Systems
+    // modules, so its framework and focus are the union of both.
+    label: 'System/IT Audit',
+    short: 'System/IT',
     href: '/audit/domains/it',
     icon: Cpu,
-    framework: 'ISO 27001 · ISO 22301',
-    focus: 'Infrastructure, access & cybersecurity controls',
+    framework: 'ISO 27001 · ISO 22301 · Baselines · CAB change · DR & capacity',
+    focus: 'Infrastructure, access, cybersecurity, configuration & continuity',
     description:
-      'Infrastructure, access management, and cybersecurity controls assessed against ISO 27001 and ISO 22301.',
+      'Infrastructure, access management, and cybersecurity controls assessed against ISO 27001 and ISO 22301, together with configuration and continuity — baseline drift, CAB change control, disaster recovery, and capacity.',
   },
   {
     key: 'financial',
@@ -49,17 +55,6 @@ export const AUDIT_DOMAINS: AuditDomainMeta[] = [
     focus: 'Transactions & financial controls',
     description:
       'Transaction integrity and financial controls — maker-checker segregation, reconciliations, and fixed-asset verification.',
-  },
-  {
-    key: 'systems',
-    label: 'Systems Audit',
-    short: 'Systems',
-    href: '/audit/domains/systems',
-    icon: ServerCog,
-    framework: 'Baselines · CAB change · DR & capacity',
-    focus: 'Configuration, change & continuity',
-    description:
-      'Configuration, change, and continuity — baseline drift, CAB change control, disaster recovery, and capacity.',
   },
   {
     key: 'compliance',
@@ -80,3 +75,20 @@ export const AUDIT_DOMAIN_MAP: Record<AuditDomainKey, AuditDomainMeta> = Object.
 
 export const isAuditDomain = (value: string): value is AuditDomainKey =>
   value in AUDIT_DOMAIN_MAP;
+
+/**
+ * Display label for any stored `audit_type`. Handles `systems`, which pre-merge
+ * records still carry, and the `all` sentinel used by templates and policies.
+ */
+export const auditTypeLabel = (
+  value: string | null | undefined,
+  form: 'long' | 'short' = 'long',
+): string => {
+  if (!value) return '—';
+  const key = value === 'systems' ? 'it' : value; // pre-merge records
+  if (key === 'all') return form === 'short' ? 'All' : 'All audit types';
+  const meta = AUDIT_DOMAIN_MAP[key as AuditDomainKey];
+  if (meta) return form === 'short' ? meta.short : meta.label;
+  // Values that are not domains at all — e.g. the `operational` finding category.
+  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+};

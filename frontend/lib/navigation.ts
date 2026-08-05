@@ -67,7 +67,7 @@ export const NAV: NavItem[] = [
     defaultOpen: true,
     children: [
       // Each is its own route under /workflow; all are sub-features of the backend workflow module.
-      { type: 'link', label: 'Audit Approvals', href: '/workflow/approvals', icon: Inbox, matchPrefix: '/workflow/approvals', visKey: 'workflow', description: 'Approve audit records — plans, engagements, and reports — awaiting your sign-off.' },
+      { type: 'link', label: 'Review/Approval', href: '/workflow/approvals', icon: Inbox, matchPrefix: '/workflow/approvals', visKey: 'workflow', description: 'Review and approve audit records — programmes, engagements, and reviews — awaiting your sign-off.' },
       { type: 'link', label: 'Assignments', href: '/workflow/assignments', icon: Users, matchPrefix: '/workflow/assignments', visKey: 'workflow', description: 'Staff assigned to engagements.' },
       { type: 'link', label: 'Escalations', href: '/workflow/escalations', icon: AlertOctagon, matchPrefix: '/workflow/escalations', visKey: 'workflow', description: 'Overdue items that have been escalated.' },
       { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests', description: 'Ad-hoc approval & sign-off requests you send to or receive from colleagues.' },
@@ -79,17 +79,17 @@ export const NAV: NavItem[] = [
     type: 'group',
     label: 'Audit Lifecycle',
     icon: Briefcase,
-    description: 'The end-to-end flow: universe → plans → engagements → findings → reports.',
+    description: 'The end-to-end flow: universe → programme → engagements → findings → reviews.',
     defaultOpen: true,
     children: [
-      // Ordered to follow the audit lifecycle: scope the universe → plan → execute
-      // engagements → raise findings → issue reports.
+      // Ordered to follow the audit lifecycle: scope the universe → programme →
+      // execute engagements → raise findings → issue reviews.
       { type: 'link', label: 'Audit Universe', href: '/audit/universe', icon: Globe, matchPrefix: '/audit/universe', visKey: 'auditUniverse', description: 'Registry of auditable entities and their risk scores.' },
-      { type: 'link', label: 'Audit Plans', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit plans and their approval status.' },
+      { type: 'link', label: 'Audit Programme', href: '/audit/plans', icon: ClipboardList, matchPrefix: '/audit/plans', visKey: 'auditPlans', description: 'Annual risk-based audit programmes, the plans within them, and their approval status.' },
       { type: 'link', label: 'Engagements', href: '/audit/engagements', icon: Briefcase, matchPrefix: '/audit/engagements', visKey: 'engagements', description: 'Active and past audit engagements you can run end to end.' },
       { type: 'link', label: 'Sampling', href: '/audit/sampling', icon: FlaskConical, matchPrefix: '/audit/sampling', visKey: 'engagements', description: 'Draw a defensible, reproducible sample from a population CSV, stored as engagement evidence.' },
       { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
-      { type: 'link', label: 'Reports', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reports.' },
+      { type: 'link', label: 'Reviews', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reviews.' },
       { type: 'link', label: 'Control Library', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR).' },
       { type: 'link', label: 'Evidence Repository', href: '/audit/repository', icon: Archive, matchPrefix: '/audit/repository', visKey: 'engagements', description: 'Central, searchable store of all audit records, supporting documents, and evidence.' },
     ],
@@ -99,7 +99,7 @@ export const NAV: NavItem[] = [
     type: 'group',
     label: 'Audit Modules',
     icon: LayoutGrid,
-    description: 'Dedicated workspaces for IT, Financial, Systems, and Compliance audits — the same engagements as Audit Lifecycle, scoped to one audit type.',
+    description: 'Dedicated workspaces for System/IT, Financial, and Compliance audits — the same engagements as Audit Lifecycle, scoped to one audit type.',
     children: AUDIT_DOMAINS.map((d): NavLink => ({
       type: 'link',
       label: d.label,

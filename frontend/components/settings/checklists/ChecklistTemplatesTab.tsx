@@ -16,7 +16,6 @@ const AUDIT_TYPES: { key: string; label: string }[] = [
   { key: 'it', label: 'IT' },
   { key: 'financial', label: 'Financial' },
   { key: 'compliance', label: 'Compliance' },
-  { key: 'systems', label: 'Systems' },
 ];
 
 const emptyControl = (): ChecklistTemplateControl => ({

@@ -127,7 +127,7 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
       dirty={isDirty}
       onClose={onClose}
       title={isEdit ? 'Edit auditable entity' : 'New auditable entity'}
-      description="Auditable entities form the universe scoped under the GBB audit plan."
+      description="Auditable entities form the universe scoped under the GBB audit programme."
       footer={
         <div className="flex justify-end gap-2">
           <Button variant="secondary" onClick={onClose} size="sm">

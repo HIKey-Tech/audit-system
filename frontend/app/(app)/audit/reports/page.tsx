@@ -62,7 +62,7 @@ export default function ReportsListPage(): JSX.Element {
 
   return (
     <div>
-      <PageHeader title="Audit Reports" subtitle="Reports generated and issued from engagements." />
+      <PageHeader title="Audit Reviews" subtitle="Reviews generated and issued from engagements." />
 
       <Table<AuditReport>
         columns={columns}
@@ -75,8 +75,8 @@ export default function ReportsListPage(): JSX.Element {
         emptyState={
           <EmptyState
             icon={<FileText className="h-4 w-4" />}
-            title="No reports yet"
-            description="Generated audit reports will appear here."
+            title="No reviews yet"
+            description="Generated audit reviews will appear here."
           />
         }
       />

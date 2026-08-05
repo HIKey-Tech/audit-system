@@ -22,7 +22,7 @@ import { getMatchScore, isRelevantSkill } from './assignment-matching';
 import type { AuditEngagement, ChecklistTemplateControl } from '@/lib/types/domain';
 
 type Mode = 'plan' | 'ad_hoc';
-type AuditType = 'it' | 'financial' | 'compliance' | 'systems';
+type AuditType = 'it' | 'financial' | 'compliance';
 type Priority = 'low' | 'medium' | 'high' | 'critical';
 
 const toISO = (d: string): string => (d ? `${d}T00:00:00.000Z` : d);
@@ -452,10 +452,9 @@ export const StartAuditWizard = ({
                   tooltip="IT: infrastructure & cybersecurity (ISO 27001/22301). Financial: transactions & controls. Compliance: ISO/NDPR adherence. Systems: configuration, change & continuity."
                 >
                   <Select value={auditType} onChange={(e) => setAuditType(e.target.value as AuditType)}>
-                    <option value="it">IT</option>
+                    <option value="it">System/IT</option>
                     <option value="financial">Financial</option>
                     <option value="compliance">Compliance</option>
-                    <option value="systems">Systems</option>
                   </Select>
                 </FormField>
                 <FormField

@@ -17,7 +17,7 @@ type TabKey = 'roles' | 'wp-templates' | 'report-templates' | 'checklist-templat
 const TABS: TabItem[] = [
   { key: 'roles', label: <span className="flex items-center gap-1.5"><Shield className="h-3.5 w-3.5" />Role Management</span> },
   { key: 'wp-templates', label: <span className="flex items-center gap-1.5"><FileText className="h-3.5 w-3.5" />Working Paper Templates</span> },
-  { key: 'report-templates', label: <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Report Templates</span> },
+  { key: 'report-templates', label: <span className="flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5" />Review Templates</span> },
   { key: 'checklist-templates', label: <span className="flex items-center gap-1.5"><ListChecks className="h-3.5 w-3.5" />Checklist Templates</span> },
   { key: 'customization', label: <span className="flex items-center gap-1.5"><Workflow className="h-3.5 w-3.5" />Audit Customization</span> },
   { key: 'directory', label: <span className="flex items-center gap-1.5"><Network className="h-3.5 w-3.5" />Directory</span> },

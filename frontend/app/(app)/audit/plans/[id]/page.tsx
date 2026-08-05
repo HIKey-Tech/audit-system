@@ -21,7 +21,6 @@ import { FormField } from '@/components/ui/FormField';
 
 import { plansApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
-import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { AddPlanItemSlideOver } from '@/components/audit/plans/AddPlanItemSlideOver';
 import { CreateEngagementSlideOver } from '@/components/audit/plans/CreateEngagementSlideOver';
@@ -29,6 +28,7 @@ import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { ApprovalChain } from '@/components/audit/engagements/ApprovalChain';
 import type { AuditPlanItem } from '@/lib/types/domain';
+import { auditTypeLabel } from '@/lib/audit-domains';
 
 export default function PlanDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
@@ -52,7 +52,7 @@ export default function PlanDetailPage(): JSX.Element {
   const submitMut = useMutation({
     mutationFn: () => plansApi.submit(id),
     onSuccess: () => {
-      toast.success('Plan submitted for approval');
+      toast.success('Programme submitted for approval');
       qc.invalidateQueries({ queryKey: ['plans', id] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
@@ -61,7 +61,7 @@ export default function PlanDetailPage(): JSX.Element {
   const rejectMut = useMutation({
     mutationFn: (reason: string) => plansApi.reject(id, reason),
     onSuccess: () => {
-      toast.success('Plan rejected');
+      toast.success('Programme rejected');
       qc.invalidateQueries({ queryKey: ['plans', id] });
       setRejectOpen(false);
       setRejectReason('');
@@ -72,7 +72,7 @@ export default function PlanDetailPage(): JSX.Element {
   if (isError) {
     return (
       <div>
-        <PageHeader title="Plan" breadcrumbs={[{ label: 'Audit Plans', href: '/audit/plans' }]} />
+        <PageHeader title="Programme" breadcrumbs={[{ label: 'Audit Programme', href: '/audit/plans' }]} />
         <Card>
           <ErrorState onRetry={() => refetch()} />
         </Card>
@@ -83,7 +83,7 @@ export default function PlanDetailPage(): JSX.Element {
   if (isLoading || !data) {
     return (
       <div>
-        <PageHeader title="Loading…" breadcrumbs={[{ label: 'Audit Plans', href: '/audit/plans' }]} />
+        <PageHeader title="Loading…" breadcrumbs={[{ label: 'Audit Programme', href: '/audit/plans' }]} />
         <div className="space-y-6">
           <Card>
             <Skeleton className="h-4 w-1/3 mb-3" />
@@ -110,7 +110,7 @@ export default function PlanDetailPage(): JSX.Element {
     {
       key: 'type',
       header: 'Type',
-      render: (i) => <Badge tone="gray">{humanizeStatus(i.auditType)}</Badge>,
+      render: (i) => <Badge tone="gray">{auditTypeLabel(i.auditType, 'short')}</Badge>,
       width: '120px',
     },
     {
@@ -158,10 +158,10 @@ export default function PlanDetailPage(): JSX.Element {
           );
         }
         // Approved but the viewer can't create engagements — say so instead of
-        // wrongly implying the plan is still awaiting approval.
+        // wrongly implying the programme is still awaiting approval.
         return (
           <span className="text-text-muted text-xs">
-            {data.status === 'approved' ? 'No engagement yet' : 'Pending plan approval'}
+            {data.status === 'approved' ? 'No engagement yet' : 'Pending programme approval'}
           </span>
         );
       },
@@ -175,7 +175,7 @@ export default function PlanDetailPage(): JSX.Element {
         title={data.title}
         subtitle={`Year ${data.year}`}
         breadcrumbs={[
-          { label: 'Audit Plans', href: '/audit/plans' },
+          { label: 'Audit Programme', href: '/audit/plans' },
           { label: data.title },
         ]}
         actions={
@@ -238,7 +238,7 @@ export default function PlanDetailPage(): JSX.Element {
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card className="lg:col-span-2">
-          <CardHeader title="Plan summary" />
+          <CardHeader title="Programme summary" />
           <dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Status</dt>
@@ -249,7 +249,7 @@ export default function PlanDetailPage(): JSX.Element {
               <dd className="mt-1 text-sm text-text-primary">{data.year}</dd>
             </div>
             <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Items</dt>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Plans</dt>
               <dd className="mt-1 text-sm text-text-primary">{data.itemsCount}</dd>
             </div>
             <div>
@@ -278,10 +278,10 @@ export default function PlanDetailPage(): JSX.Element {
 
       <Card className="mt-6" padded={false}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <CardHeader title="Plan items" subtitle="Engagements scheduled within this plan" className="mb-0" />
+          <CardHeader title="Plans" subtitle="Audits scheduled within this programme" className="mb-0" />
           {data.status === 'draft' && canWrite && (
             <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddItemOpen(true)}>
-              Add item
+              Add plan
             </Button>
           )}
         </div>
@@ -290,7 +290,7 @@ export default function PlanDetailPage(): JSX.Element {
           data={data.items ?? []}
           rowKey={(r) => r.id}
           density="compact"
-          emptyState={<EmptyState compact title="No items yet" description="Add the first auditable entity to this plan." />}
+          emptyState={<EmptyState compact title="No plans yet" description="Add the first auditable entity to this programme." />}
           className="rounded-none border-0 border-t border-border"
         />
       </Card>
@@ -309,7 +309,7 @@ export default function PlanDetailPage(): JSX.Element {
       <SlideOver
         open={rejectOpen}
         onClose={() => setRejectOpen(false)}
-        title="Reject plan"
+        title="Reject programme"
         description="Provide a clear reason — the submitter will be notified."
         footer={
           <div className="flex justify-end gap-2">
@@ -328,7 +328,7 @@ export default function PlanDetailPage(): JSX.Element {
               }}
               isLoading={rejectMut.isPending}
             >
-              Reject plan
+              Reject programme
             </Button>
           </div>
         }
@@ -338,7 +338,7 @@ export default function PlanDetailPage(): JSX.Element {
             rows={6}
             value={rejectReason}
             onChange={(e) => setRejectReason(e.target.value)}
-            placeholder="Explain why the plan is being returned to the submitter…"
+            placeholder="Explain why the programme is being returned to the submitter…"
           />
         </FormField>
       </SlideOver>

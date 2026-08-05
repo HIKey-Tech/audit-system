@@ -38,7 +38,7 @@ function auditDueFlag(e: AuditUniverseEntity): string | null {
 
 const Schema = z.object({
   universeId: z.string().min(1, 'Select an entity'),
-  auditType: z.enum(['it', 'financial', 'compliance', 'systems']),
+  auditType: z.enum(['it', 'financial', 'compliance']),
   priority: z.enum(['low', 'medium', 'high', 'critical']),
   plannedStartDate: z.string().min(1, 'Start date is required'),
   plannedEndDate: z.string().min(1, 'End date is required'),
@@ -240,10 +240,9 @@ export const AddPlanItemSlideOver = ({ open, onClose, planId }: Props): JSX.Elem
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Audit type" required error={errors.auditType?.message}>
             <Select error={errors.auditType?.message} value={watch('auditType')} {...register('auditType')}>
-              <option value="it">IT</option>
+              <option value="it">System/IT</option>
               <option value="financial">Financial</option>
               <option value="compliance">Compliance</option>
-              <option value="systems">Systems</option>
             </Select>
           </FormField>
           <FormField label="Priority" required error={errors.priority?.message}>

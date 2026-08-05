@@ -120,27 +120,27 @@ function buildBlockers(
           out.push({ text: `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).` });
         }
       }
-      if (out.length === 0) out.push({ text: 'Fieldwork complete — moving to Quality Review.' });
+      if (out.length === 0) out.push({ text: 'Fieldwork complete — moving to Quality Assurance.' });
       return out;
     }
     case 'under_review': {
       const rs = e.reportStatus ?? null;
-      if (!rs) return [{ text: `${lead} to draft the audit report.` }];
-      if (rs === 'draft' || rs === 'rejected') return [{ text: `${lead} to submit the report for sign-off.` }];
-      if (rs === 'submitted') return [{ text: `Report awaiting sign-off — see the approval chain on the Report tab.` }];
+      if (!rs) return [{ text: `${lead} to draft the audit review.` }];
+      if (rs === 'draft' || rs === 'rejected') return [{ text: `${lead} to submit the review for sign-off.` }];
+      if (rs === 'submitted') return [{ text: `Review awaiting sign-off — see the approval chain on the Review tab.` }];
       if (rs === 'approved') {
         return [
           {
-            text: 'Report approved and ready to issue to the auditee.',
+            text: 'Review approved and ready to issue to the auditee.',
             action: (
               <Button size="sm" variant="secondary" onClick={() => ctx.onNavigateTab?.('report')}>
-                Go to report
+                Go to review
               </Button>
             ),
           },
         ];
       }
-      return [{ text: 'Report issued — moving to Reporting.' }];
+      return [{ text: 'Review issued.' }];
     }
     case 'reported': {
       const fs = e.findingStats;

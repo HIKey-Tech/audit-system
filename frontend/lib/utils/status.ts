@@ -142,8 +142,20 @@ export const statusTone = (status: string | null | undefined): ToneStyle => {
   return tone ? TONES[tone] : FALLBACK;
 };
 
+/**
+ * Statuses whose humanized form would read wrong. The engagement report is now
+ * called a "review", so the two engagement stages that used to say "Under
+ * Review" / "Reported" are relabelled to keep them distinct from it.
+ */
+const STATUS_LABELS: Record<string, string> = {
+  under_review: 'Quality Assurance',
+  reported: 'Review Issued',
+};
+
 export const humanizeStatus = (status: string | null | undefined): string => {
   if (!status) return '—';
+  const key = status.toLowerCase().replace(/\s+/g, '_');
+  if (STATUS_LABELS[key]) return STATUS_LABELS[key];
   return status
     .replace(/_/g, ' ')
     .replace(/\b\w/g, (c) => c.toUpperCase());
@@ -227,9 +239,9 @@ export interface StatusMeaning {
 const STATUS_MEANINGS: Record<StatusEntity, Record<string, Omit<StatusMeaning, 'label'>>> = {
   engagement: {
     planned: { meaning: 'Scheduled but fieldwork has not started.', next: 'Assign the team and mark it in progress to begin.' },
-    in_progress: { meaning: 'Fieldwork is underway; working papers and evidence are being captured.', next: 'Complete checklists and get working papers approved to move to review.' },
-    under_review: { meaning: 'Fieldwork is done and the work is being reviewed.', next: 'Generate and issue the report to move to reported.' },
-    reported: { meaning: 'The audit report has been issued to stakeholders.', next: 'Verify and close all findings to close the engagement.' },
+    in_progress: { meaning: 'Fieldwork is underway; working papers and evidence are being captured.', next: 'Complete checklists and get working papers approved to move to quality assurance.' },
+    under_review: { meaning: 'Fieldwork is done and the work is undergoing quality assurance.', next: 'Generate and issue the review to move it on.' },
+    reported: { meaning: 'The audit review has been issued to stakeholders.', next: 'Verify and close all findings to close the engagement.' },
     closed: { meaning: 'The engagement is complete and all findings are resolved.' },
   },
   finding: {
@@ -242,14 +254,14 @@ const STATUS_MEANINGS: Record<StatusEntity, Record<string, Omit<StatusMeaning, '
   report: {
     draft: { meaning: 'Being prepared; not yet submitted.', next: 'Submit for approval.' },
     submitted: { meaning: 'Submitted and awaiting approval.', next: 'Approver acts on the current level.' },
-    approved: { meaning: 'Approved through all levels but not yet issued.', next: 'Issue the report.' },
+    approved: { meaning: 'Approved through all levels but not yet issued.', next: 'Issue the review.' },
     rejected: { meaning: 'Sent back by an approver with a reason.', next: 'Address the reason and resubmit.' },
     issued: { meaning: 'Finalised and distributed to stakeholders.' },
   },
   plan: {
-    draft: { meaning: 'Being assembled; items can still be added.', next: 'Submit for approval.' },
-    submitted: { meaning: 'Submitted and awaiting approval.', next: 'Approver reviews the plan.' },
-    approved: { meaning: 'Approved; engagements can be created from its items.', next: 'Create engagements from plan items.' },
+    draft: { meaning: 'Being assembled; plans can still be added.', next: 'Submit for approval.' },
+    submitted: { meaning: 'Submitted and awaiting approval.', next: 'Approver reviews the programme.' },
+    approved: { meaning: 'Approved; engagements can be created from its plans.', next: 'Create engagements from the programme’s plans.' },
     rejected: { meaning: 'Returned by an approver with a reason.', next: 'Revise and resubmit.' },
   },
   working_paper: {

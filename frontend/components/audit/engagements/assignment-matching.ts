@@ -1,10 +1,10 @@
 // Skill-matching helpers shared by ManageAssignmentsSlideOver and StartAuditWizard.
 
 export const AUDIT_TYPE_KEYWORDS: Record<string, string[]> = {
-  it: ['it', 'cyber', 'security', 'iso 27001', 'iso27001', 'network', 'system', 'vulnerability', 'firewall', 'cloud', 'itgc', 'sast'],
+  // Merged System/IT domain — keywords are the union of the former IT and Systems domains.
+  it: ['it', 'cyber', 'security', 'iso 27001', 'iso27001', 'network', 'system', 'vulnerability', 'firewall', 'cloud', 'itgc', 'sast', 'systems', 'infrastructure', 'configuration', 'change', 'cab', 'disaster', 'dr', 'replication', 'capacity', 'performance'],
   financial: ['financial', 'finance', 'ap', 'ledger', 'reconciliation', 'maker', 'checker', 'asset', 'audit', 'tax'],
   compliance: ['compliance', 'regulation', 'standard', 'iso 9001', 'iso9001', 'iso 22301', 'iso22301', 'ndpr', 'privacy', 'dpo', 'policy', 'gdpr'],
-  systems: ['systems', 'infrastructure', 'configuration', 'change', 'cab', 'disaster', 'dr', 'replication', 'capacity', 'performance'],
 };
 
 /** Total skill-match score for a candidate against an audit type. */

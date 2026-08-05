@@ -63,7 +63,7 @@ export default function AnalyticsPage(): JSX.Element {
   if (query.isLoading) {
     return (
       <div className="space-y-6">
-        <PageHeader title="Analytics" subtitle="Audit lifecycle, findings, reporting, follow-up, and risk coverage." />
+        <PageHeader title="Analytics" subtitle="Audit lifecycle, findings, reviews, follow-up, and risk coverage." />
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-4">
           {Array.from({ length: 4 }).map((_, index) => (
             <Skeleton key={index} className="h-36 rounded-xl" />
@@ -141,9 +141,9 @@ export default function AnalyticsPage(): JSX.Element {
           />
           <MetricCard
             icon={<FileText className="h-5 w-5" />}
-            label="Report Issue Time"
+            label="Review Issue Time"
             value={formatDays(data.reporting.averageDaysToIssue)}
-            detail={`${formatNumber(data.reporting.total)} reports generated`}
+            detail={`${formatNumber(data.reporting.total)} reviews generated`}
             gradient="from-emerald-500/10 to-teal-500/5"
             borderGlow="group-hover:border-emerald-500/30"
           />
@@ -251,7 +251,7 @@ export default function AnalyticsPage(): JSX.Element {
               title={
                 <span className="flex items-center gap-2 text-lg font-semibold text-text-primary">
                   <BarChart3 className="h-5 w-5 text-blue-500" />
-                  Reports Status
+                  Reviews Status
                 </span>
               }
             />

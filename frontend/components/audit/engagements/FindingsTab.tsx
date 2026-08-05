@@ -12,10 +12,10 @@ import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { findingsApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
-import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
+import { auditTypeLabel } from '@/lib/audit-domains';
 import { NewFindingSlideOver } from './NewFindingSlideOver';
 
 export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
@@ -84,7 +84,7 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
                         )}
                       </p>
                     </div>
-                    <Badge tone="gray">{humanizeStatus(f.category)}</Badge>
+                    <Badge tone="gray">{auditTypeLabel(f.category, 'short')}</Badge>
                     <StatusBadge status={f.severity} />
                     <StatusBadge status={f.status} />
                     <span

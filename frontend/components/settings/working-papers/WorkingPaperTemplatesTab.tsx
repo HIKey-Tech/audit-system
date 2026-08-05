@@ -18,7 +18,6 @@ const AUDIT_TYPE_TONE: Record<string, 'blue' | 'green' | 'amber' | 'purple' | 'g
   it: 'blue',
   financial: 'green',
   compliance: 'amber',
-  systems: 'purple',
   all: 'gray',
 };
 

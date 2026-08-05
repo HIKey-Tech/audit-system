@@ -53,7 +53,7 @@ export default function RequestsPage(): JSX.Element {
 
   const tabs: TabItem[] = [
     { key: 'inbox', label: 'To action', count: inbox.data?.items.length ?? 0, countTone: 'danger' },
-    { key: 'mine', label: 'My requests' },
+    { key: 'mine', label: 'Requests' },
   ];
 
   const active = tab === 'inbox' ? inbox : mine;
