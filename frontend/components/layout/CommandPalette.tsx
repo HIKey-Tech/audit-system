@@ -3,15 +3,29 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Search, CornerDownLeft, Briefcase, AlertTriangle, Loader2 } from 'lucide-react';
+import {
+  Search,
+  CornerDownLeft,
+  Briefcase,
+  AlertTriangle,
+  Loader2,
+  ClipboardList,
+  ShieldAlert,
+  Server,
+  Users,
+} from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
-import { NAV_LINKS, type NavLink } from '@/lib/navigation';
+import { EXTRA_DESTINATIONS, NAV_LINKS, type NavLink } from '@/lib/navigation';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { useScrollLock } from '@/lib/hooks/useScrollLock';
 import { useLayout } from '@/components/providers/LayoutProvider';
-import { engagementsApi, findingsApi } from '@/lib/api/audit';
+import { engagementsApi, findingsApi, plansApi } from '@/lib/api/audit';
+import { riskApi } from '@/lib/api/risk';
+import { assetsApi } from '@/lib/api/assets';
+import { usersApi } from '@/lib/api/users';
+import { auditTypeLabel } from '@/lib/audit-domains';
 
 interface Command {
   id: string;
@@ -19,7 +33,7 @@ interface Command {
   hint?: string;
   href: string;
   icon: NavLink['icon'];
-  group: 'Go to' | 'Engagements' | 'Findings';
+  group: 'Go to' | 'Programmes' | 'Engagements' | 'Findings' | 'Risks' | 'Assets' | 'People';
 }
 
 /** Minimum characters before we hit the API for records. */
@@ -80,12 +94,39 @@ export const CommandPalette = (): JSX.Element | null => {
     staleTime: 30_000,
   });
 
+  const plans = useQuery({
+    queryKey: ['command-palette', 'plans', debouncedQuery],
+    queryFn: () => plansApi.list({ pageSize: 5, search: debouncedQuery }),
+    enabled: searchRecords && nav.auditPlans,
+    staleTime: 30_000,
+  });
+
+  const risks = useQuery({
+    queryKey: ['command-palette', 'risks', debouncedQuery],
+    queryFn: () => riskApi.list({ pageSize: 5, search: debouncedQuery }),
+    enabled: searchRecords && nav.riskRegister,
+    staleTime: 30_000,
+  });
+
+  const assets = useQuery({
+    queryKey: ['command-palette', 'assets', debouncedQuery],
+    queryFn: () => assetsApi.list({ pageSize: 5, search: debouncedQuery }),
+    enabled: searchRecords && nav.assets,
+    staleTime: 30_000,
+  });
+
+  const people = useQuery({
+    queryKey: ['command-palette', 'users', debouncedQuery],
+    queryFn: () => usersApi.list({ pageSize: 5, search: debouncedQuery }),
+    enabled: searchRecords && nav.users,
+    staleTime: 30_000,
+  });
+
   const commands: Command[] = useMemo(() => {
     const needle = query.trim().toLowerCase();
 
-    const destinations: Command[] = NAV_LINKS.filter(
-      (l) => !l.comingSoon && (!l.visKey || nav[l.visKey]),
-    )
+    const destinations: Command[] = [...NAV_LINKS, ...EXTRA_DESTINATIONS]
+      .filter((l) => !l.comingSoon && (!l.visKey || nav[l.visKey]))
       .filter(
         (l) =>
           !needle ||
@@ -119,10 +160,63 @@ export const CommandPalette = (): JSX.Element | null => {
       group: 'Findings' as const,
     }));
 
+    const planCommands: Command[] = (plans.data?.items ?? []).map((p) => ({
+      id: `plan:${p.id}`,
+      label: p.title,
+      hint: `${auditTypeLabel(p.auditType)} · ${p.year}`,
+      href: `/audit/plans/${p.id}`,
+      icon: ClipboardList,
+      group: 'Programmes' as const,
+    }));
+
+    const riskCommands: Command[] = (risks.data?.items ?? []).map((r) => ({
+      id: `risk:${r.id}`,
+      label: r.title,
+      hint: `${r.categoryName} · owner ${r.ownerName}`,
+      href: `/risk/${r.id}`,
+      icon: ShieldAlert,
+      group: 'Risks' as const,
+    }));
+
+    const assetCommands: Command[] = (assets.data?.items ?? []).map((a) => ({
+      id: `asset:${a.id}`,
+      label: a.name,
+      hint: `${a.assetTag} · ${a.assetType}`,
+      href: `/assets/${a.id}`,
+      icon: Server,
+      group: 'Assets' as const,
+    }));
+
+    const peopleCommands: Command[] = (people.data?.items ?? []).map((u) => ({
+      id: `user:${u.id}`,
+      label: u.displayName ?? `${u.firstName} ${u.lastName}`.trim(),
+      hint: [u.jobTitle, u.email].filter(Boolean).join(' · '),
+      href: `/users?search=${encodeURIComponent(u.email)}`,
+      icon: Users,
+      group: 'People' as const,
+    }));
+
     // Records first once the user has typed enough — they're the specific thing
     // being looked for; destinations are always available as a fallback.
-    return [...engagementCommands, ...findingCommands, ...destinations.slice(0, 8)];
-  }, [query, nav, engagements.data, findings.data]);
+    return [
+      ...planCommands,
+      ...engagementCommands,
+      ...findingCommands,
+      ...riskCommands,
+      ...assetCommands,
+      ...peopleCommands,
+      ...destinations.slice(0, 8),
+    ];
+  }, [
+    query,
+    nav,
+    plans.data,
+    engagements.data,
+    findings.data,
+    risks.data,
+    assets.data,
+    people.data,
+  ]);
 
   // Keep the highlight in range as results stream in.
   useEffect(() => {
@@ -168,7 +262,13 @@ export const CommandPalette = (): JSX.Element | null => {
   if (!open) return null;
 
   const isSearching =
-    searchRecords && (engagements.isFetching || findings.isFetching);
+    searchRecords &&
+    (plans.isFetching ||
+      engagements.isFetching ||
+      findings.isFetching ||
+      risks.isFetching ||
+      assets.isFetching ||
+      people.isFetching);
   let lastGroup = '';
 
   return (
@@ -197,7 +297,7 @@ export const CommandPalette = (): JSX.Element | null => {
               setQuery(e.target.value);
               setActiveIndex(0);
             }}
-            placeholder="Search engagements, findings, or jump to a page…"
+            placeholder="Search programmes, engagements, findings, risks, assets, people, or jump to a page…"
             aria-label="Search"
             aria-autocomplete="list"
             className="h-12 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"

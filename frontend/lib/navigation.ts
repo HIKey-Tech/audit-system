@@ -22,6 +22,7 @@ import {
   LayoutGrid,
   Library,
   CircleHelp,
+  CircleUser,
   FlaskConical,
   Plug,
   Sparkles,
@@ -144,10 +145,24 @@ export const DEFAULT_OPEN_GROUPS: string[] = NAV.filter(
   (item): item is NavGroup => item.type === 'group' && Boolean(item.defaultOpen),
 ).map((g) => g.label);
 
-/** Routes that are reachable but deliberately absent from the sidebar. */
-const EXTRA_TITLES: Record<string, string> = {
-  '/profile': 'Profile',
-};
+/**
+ * Routes that are reachable but deliberately absent from the sidebar. They are
+ * still searchable from the command palette, so they live here as full links
+ * and the title lookup below is derived from them.
+ */
+export const EXTRA_DESTINATIONS: NavLink[] = [
+  {
+    type: 'link',
+    label: 'Profile',
+    href: '/profile',
+    icon: CircleUser,
+    description: 'Your account details, signature, and security settings.',
+  },
+];
+
+const EXTRA_TITLES: Record<string, string> = Object.fromEntries(
+  EXTRA_DESTINATIONS.map((d) => [d.href, d.label]),
+);
 
 /**
  * Page title for a pathname, resolved from the nav config so it can never drift

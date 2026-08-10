@@ -314,6 +314,10 @@ export interface AuditPlan {
   createdAt: string;
   updatedAt: string;
   items?: AuditPlanItem[];
+  /** Non-blocking notices from the API — e.g. another programme of this type
+   *  already exists for the year. GBB does run more than one, so these inform
+   *  rather than prevent. */
+  warnings?: string[];
 }
 
 export interface AuditEngagement {

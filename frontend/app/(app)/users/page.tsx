@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { Plus, Search, UserCog } from 'lucide-react';
@@ -27,8 +28,10 @@ export default function UsersPage(): JSX.Element {
   const { user: currentUser, canManageUsers, canDeactivateUsers, canDeleteUsers } = usePermissions();
   const qc = useQueryClient();
 
+  // Seeded from the URL so the command palette can deep-link to a person.
+  const searchParams = useSearchParams();
   const [page, setPage] = useState(1);
-  const [search, setSearch] = useState('');
+  const [search, setSearch] = useState(searchParams?.get('search') ?? '');
   const [roleId, setRoleId] = useState('');
   const [slideOpen, setSlideOpen] = useState(false);
   const [editTarget, setEditTarget] = useState<UserDto | null>(null);

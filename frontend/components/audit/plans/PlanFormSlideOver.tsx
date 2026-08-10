@@ -53,8 +53,13 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
         auditType: v.auditType,
         description: v.description || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (plan) => {
       toast.success('Programme created');
+      // Surfaced, not blocked: a second programme of the same type and year is
+      // legitimate, but the creator should know they are making one.
+      for (const warning of plan.warnings ?? []) {
+        toast.warning(warning);
+      }
       qc.invalidateQueries({ queryKey: ['plans'] });
       onClose();
     },
