@@ -19,10 +19,11 @@ import { MyWorkPanel } from '@/components/dashboard/MyWorkPanel';
 import { TopRisksTable } from '@/components/dashboard/TopRisksTable';
 import { RiskHeatMap } from '@/components/dashboard/RiskHeatMap';
 import { EscalationsCard } from '@/components/dashboard/EscalationsCard';
+import { AuditIntelligenceCard } from '@/components/dashboard/AuditIntelligenceCard';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 
 export default function DashboardPage(): JSX.Element {
-  const { dashboard, quickActions, isAuditee, canManageAuditProgramme } = usePermissions();
+  const { dashboard, quickActions, isAuditee, canManageAuditProgramme, hasPermission } = usePermissions();
   const [wizardOpen, setWizardOpen] = useState(false);
 
   // Outstanding documents the audit team is waiting on from this user.
@@ -142,6 +143,8 @@ export default function DashboardPage(): JSX.Element {
             </div>
           )}
         </div>
+
+        {hasPermission('predictive:read') && <AuditIntelligenceCard />}
 
         {/* Programme overview — oversight roles only */}
         {dashboard.statCards && <StatCards />}

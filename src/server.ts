@@ -37,6 +37,8 @@ import { createMessagingModule } from './modules/messaging';
 import { createDashboardModule } from './modules/dashboard';
 import { createSettingsModule } from './modules/settings';
 import { createIntegrationModule } from './modules/integration';
+import { createPredictiveModule, predictiveService } from './modules/predictive';
+import { warehouseService } from './modules/warehouse';
 import {
   createBackgroundModule,
   schedulerService,
@@ -183,6 +185,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createDashboardModule());
   app.use(apiPrefix, createSettingsModule());
   app.use(apiPrefix, createIntegrationModule());
+  app.use(apiPrefix, createPredictiveModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);
@@ -223,6 +226,18 @@ const startServer = async (): Promise<http.Server> => {
 
   registerAllJobs();
   await schedulerService.startAll();
+
+  // Seed today's idempotent learning snapshot and early warnings immediately;
+  // users should not have to wait for the next scheduled hour after deployment
+  // or restart. Failure is isolated so intelligence never blocks the audit app.
+  void (async () => {
+    try {
+      await warehouseService.capturePredictiveSnapshots();
+      await predictiveService.refreshInsights();
+    } catch (err) {
+      logger.warn('Initial predictive refresh failed; scheduled jobs will retry', { err });
+    }
+  })();
 
   void warnOnUnresolvableEscalationTargets();
 

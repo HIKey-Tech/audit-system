@@ -10,6 +10,8 @@ import { workflowEscalationService } from '../../../workflow/escalation/service/
 import { DocumentService } from '../../../document/service/implementation/document.service';
 import { directoryMappingService } from '../../../integration/service/implementation/directory-mapping.service';
 import { imocTicketService } from '../../../integration/imoc/service/implementation/imoc-ticket.service';
+import { warehouseService } from '../../../warehouse/service/implementation/warehouse.service';
+import { predictiveService } from '../../../predictive';
 
 /**
  * Job Key Naming Convention:
@@ -32,6 +34,8 @@ export const JOB_KEYS = {
   DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
   INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
   INTEGRATION_IMOC_SYNC_HOURLY: 'BG:INTEGRATION:IMOC:SYNC:HOURLY',
+  WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY: 'BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY',
+  PREDICTIVE_INSIGHTS_HOURLY: 'BG:PREDICTIVE:INSIGHTS:HOURLY',
   RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
 } as const;
 
@@ -219,6 +223,34 @@ export const schedulerService = new SchedulerService();
 // Register all background jobs here
 // ──────────────────────────────────────────────
 export const registerAllJobs = (): void => {
+  // BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY — retain safe, computed snapshots
+  // of current IAMS workflow state. This is the live learning foundation; no
+  // legacy import or raw evidence/document content is required.
+  schedulerService.register({
+    key: JOB_KEYS.WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY,
+    name: 'Predictive Warehouse Snapshot',
+    description: 'Captures daily, computed audit workflow snapshots and completed outcomes for the internal predictive store.',
+    cronExpression: '10 1 * * *',
+    handler: async () => {
+      const result = await warehouseService.capturePredictiveSnapshots();
+      logger.info('Predictive warehouse snapshot completed', result);
+    },
+  });
+
+  // BG:PREDICTIVE:INSIGHTS:HOURLY — refresh explainable early warnings from
+  // current operational data. It is deliberately separate from the daily
+  // snapshot, so users receive fresh signals throughout the working day.
+  schedulerService.register({
+    key: JOB_KEYS.PREDICTIVE_INSIGHTS_HOURLY,
+    name: 'Predictive Early-Warning Refresh',
+    description: 'Refreshes explainable engagement, remediation, and evidence-request early warnings from live IAMS data.',
+    cronExpression: '20 * * * *',
+    handler: async () => {
+      const result = await predictiveService.refreshInsights();
+      logger.info('Predictive early-warning refresh completed', result);
+    },
+  });
+
   // BG:INTEGRATION:DIRECTORY:SYNC:DAILY — reconcile Azure AD group→role + deprovision
   schedulerService.register({
     key: JOB_KEYS.INTEGRATION_DIRECTORY_SYNC_DAILY,

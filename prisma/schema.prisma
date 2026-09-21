@@ -110,6 +110,7 @@ model User {
   report_templates_updated        Report_Template[]        @relation("ReportTemplateUpdatedBy")
   system_configs_updated          System_Config[]          @relation("SystemConfigUpdatedBy")
   signatures                      User_Signature[]         @relation("UserSignatureOwner")
+  predictive_insight_feedback     Predictive_Insight_Feedback[] @relation("PredictiveInsightFeedbackUser")
 
   @@map("users")
 }
@@ -283,6 +284,93 @@ model Audit_Log {
   @@index([created_at])
   @@index([module, created_at])
   @@map("audit_logs")
+}
+
+// ============================================================
+// PREDICTIVE / ANALYTICS WAREHOUSE
+//
+// These tables form a small, internal analytical read store. They deliberately
+// contain computed operational signals rather than copied document content or
+// raw request bodies, so predictions can learn from live IAMS usage without
+// expanding the sensitive-data footprint.
+// ============================================================
+
+model Predictive_Snapshot {
+  id              String   @id @default(uuid())
+  entity_type     String   // audit_engagement | audit_finding | audit_evidence_request
+  entity_id       String
+  snapshot_date   DateTime // normalized to the UTC day; one idempotent snapshot per entity/day
+  feature_json    String   @db.NVarChar(Max)
+  feature_version String   @default("rules-v1")
+  created_at      DateTime @default(now())
+
+  @@unique([entity_type, entity_id, snapshot_date])
+  @@index([entity_type, snapshot_date])
+  @@index([entity_id])
+  @@map("predictive_snapshots")
+}
+
+model Predictive_Insight {
+  id             String   @id @default(uuid())
+  insight_type   String   // engagement_delivery_risk | finding_remediation_risk | evidence_request_delay
+  entity_type    String   // audit_engagement | audit_finding | audit_evidence_request
+  entity_id      String
+  severity       String   // low | medium | high | critical
+  score          Int      // explainable rules score (0–100), not an asserted ML probability
+  title          String   @db.NVarChar(500)
+  summary        String   @db.NVarChar(Max)
+  rationale_json String   @db.NVarChar(Max)
+  model_version  String   @default("rules-v1")
+  status         String   @default("active") // active | resolved
+  generated_at   DateTime @default(now())
+  resolved_at    DateTime?
+  created_at     DateTime @default(now())
+  updated_at     DateTime @updatedAt
+
+  feedback Predictive_Insight_Feedback[]
+
+  @@unique([insight_type, entity_type, entity_id, model_version])
+  @@index([status, severity])
+  @@index([entity_type, entity_id])
+  @@index([generated_at])
+  @@map("predictive_insights")
+}
+
+model Predictive_Insight_Feedback {
+  id         String   @id @default(uuid())
+  insight_id String
+  user_id    String
+  feedback   String   // useful | not_useful | dismissed
+  comment    String?  @db.NVarChar(500)
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  insight Predictive_Insight @relation(fields: [insight_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  user    User               @relation("PredictiveInsightFeedbackUser", fields: [user_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([insight_id, user_id])
+  @@index([user_id, feedback])
+  @@map("predictive_insight_feedback")
+}
+
+// Outcome labels are populated from completed live work. They let a later,
+// validated model learn from what actually happened without requiring a legacy
+// spreadsheet import.
+model Predictive_Outcome {
+  id           String   @id @default(uuid())
+  entity_type  String   // audit_engagement | audit_finding | audit_evidence_request
+  entity_id    String
+  outcome_type String   // sla_deadline | remediation_deadline | evidence_request_deadline
+  value        String   // met | missed
+  observed_at  DateTime
+  metadata_json String? @db.NVarChar(Max)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@unique([entity_type, entity_id, outcome_type])
+  @@index([outcome_type, value])
+  @@index([observed_at])
+  @@map("predictive_outcomes")
 }
 
 // ============================================================
