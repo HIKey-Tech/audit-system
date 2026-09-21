@@ -9,6 +9,7 @@ import { NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/noti
 import { workflowEscalationService } from '../../../workflow/escalation/service/implementation/escalation.service';
 import { DocumentService } from '../../../document/service/implementation/document.service';
 import { directoryMappingService } from '../../../integration/service/implementation/directory-mapping.service';
+import { imocTicketService } from '../../../integration/imoc/service/implementation/imoc-ticket.service';
 
 /**
  * Job Key Naming Convention:
@@ -30,6 +31,7 @@ export const JOB_KEYS = {
   REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
   DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
   INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
+  INTEGRATION_IMOC_SYNC_HOURLY: 'BG:INTEGRATION:IMOC:SYNC:HOURLY',
   RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
 } as const;
 
@@ -231,6 +233,24 @@ export const registerAllJobs = (): void => {
       }
       const result = await directoryMappingService.runFullDirectorySync();
       logger.info('Directory sync job finished', result);
+    },
+  });
+
+  // BG:INTEGRATION:IMOC:SYNC:HOURLY — optional read-only refresh of linked
+  // IMOC tickets. This never changes an IAMS engagement, finding, workflow, or
+  // IMOC ticket; it only updates last-known display metadata on existing links.
+  schedulerService.register({
+    key: JOB_KEYS.INTEGRATION_IMOC_SYNC_HOURLY,
+    name: 'IMOC Linked Ticket Refresh',
+    description: 'Refreshes the last-known status of linked IMOC tickets when IMOC_SYNC_ENABLED is true.',
+    cronExpression: '15 * * * *',
+    handler: async () => {
+      if (!config.imoc.enabled || !config.imoc.syncEnabled) {
+        logger.info('IMOC sync skipped (IMOC_ENABLED or IMOC_SYNC_ENABLED is false)');
+        return;
+      }
+      const result = await imocTicketService.syncActiveLinks(config.imoc.syncBatchSize);
+      logger.info('IMOC linked-ticket sync completed', result);
     },
   });
 

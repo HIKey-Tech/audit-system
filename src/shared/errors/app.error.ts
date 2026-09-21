@@ -80,4 +80,8 @@ export class AppError extends Error {
   static internal(message = 'Internal server error'): AppError {
     return new AppError(message, 500, ErrorCode.INTERNAL_ERROR, undefined, false);
   }
+
+  static serviceUnavailable(message = 'Service temporarily unavailable'): AppError {
+    return new AppError(message, 503, ErrorCode.SERVICE_UNAVAILABLE);
+  }
 }

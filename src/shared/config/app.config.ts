@@ -126,6 +126,30 @@ export const config = {
     defaultRoleName: optionalEnv('SSO_DEFAULT_ROLE', 'viewer'),
   },
 
+  // IMOC is an optional, read-only service-management data source. A configured
+  // machine-machine account obtains an imoc_token on demand and it is cached in
+  // process until shortly before its documented 30-minute expiry. IMOC_ENABLED
+  // remains false by default, keeping all existing audit workflows independent.
+  imoc: {
+    enabled: optionalEnv('IMOC_ENABLED', 'false') === 'true',
+    baseUrl: optionalEnv('IMOC_BASE_URL', 'https://service-imoc.gbb.com.ng:443').replace(/\/$/, ''),
+    tenantId: optionalEnv('IMOC_TENANT_ID'),
+    tenantAccount: optionalEnv('IMOC_TENANT_ACCOUNT'),
+    machineUserAccount: optionalEnv('IMOC_MACHINE_USER_ACCOUNT'),
+    accessKey: optionalEnv('IMOC_ACCESS_KEY'),
+    secretKey: optionalEnv('IMOC_SECRET_KEY'),
+    // Retained only as a controlled break-glass fallback. Machine credentials
+    // take precedence whenever they are complete.
+    token: optionalEnv('IMOC_TOKEN'),
+    tokenExpiresAt: optionalEnv('IMOC_TOKEN_EXPIRES_AT'),
+    timeoutMs: parseInt(optionalEnv('IMOC_TIMEOUT_MS', '10000'), 10),
+    tokenRefreshSkewMs: parseInt(optionalEnv('IMOC_TOKEN_REFRESH_SKEW_MS', '60000'), 10),
+    // Manual refresh is always available to permitted users. This switch only
+    // enables the low-volume, persisted background refresh job.
+    syncEnabled: optionalEnv('IMOC_SYNC_ENABLED', 'false') === 'true',
+    syncBatchSize: parseInt(optionalEnv('IMOC_SYNC_BATCH_SIZE', '25'), 10),
+  },
+
   redis: {
     url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
     password: optionalEnv('REDIS_PASSWORD'),
@@ -200,6 +224,22 @@ if (config.app.isProd) {
       'MFA_ENCRYPTION_KEY is required in production: it encrypts TOTP secrets at rest. ' +
         'Without it the system silently falls back to a key derived from JWT_SECRET, ' +
         'coupling two security domains. Generate one with: openssl rand -base64 32',
+    );
+  }
+}
+
+if (config.imoc.enabled) {
+  if (!config.imoc.baseUrl) {
+    throw new Error('IMOC_BASE_URL is required when IMOC_ENABLED=true.');
+  }
+  const hasMachineCredentials = Boolean(
+    config.imoc.accessKey
+      && config.imoc.secretKey
+      && (config.imoc.tenantId || config.imoc.tenantAccount),
+  );
+  if (!hasMachineCredentials && !config.imoc.token) {
+    throw new Error(
+      'Set IMOC_ACCESS_KEY, IMOC_SECRET_KEY, and IMOC_TENANT_ID or IMOC_TENANT_ACCOUNT when IMOC_ENABLED=true.',
     );
   }
 }

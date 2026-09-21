@@ -10,6 +10,7 @@ backups
 .env
 .env.*
 !.env.example
+Token Management/
 *.md
 Dockerfile
 docker-compose*.yml

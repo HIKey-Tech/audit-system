@@ -26,6 +26,8 @@ import { ChecklistsTab } from '@/components/audit/engagements/ChecklistsTab';
 import { ReportTab } from '@/components/audit/engagements/ReportTab';
 import { FollowUpTab } from '@/components/audit/engagements/FollowUpTab';
 import { StatusStepper } from '@/components/audit/engagements/StatusStepper';
+import { ImocTicketsTab } from '@/components/audit/engagements/ImocTicketsTab';
+import { useSession, hasPermission } from '@/components/providers/AuthProvider';
 
 type TabKey =
   | 'overview'
@@ -36,7 +38,8 @@ type TabKey =
   | 'findings'
   | 'checklists'
   | 'report'
-  | 'follow-up';
+  | 'follow-up'
+  | 'imoc';
 
 // Ordered to mirror the fieldwork lifecycle: test controls → document work →
 // attach evidence → raise findings → report → follow up. Assets is scope
@@ -51,6 +54,7 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'report', label: 'Review' },
   { key: 'follow-up', label: 'Follow-up' },
   { key: 'assets', label: 'Assets' },
+  { key: 'imoc', label: 'IMOC Tickets' },
 ];
 
 export default function EngagementDetailPage(): JSX.Element {
@@ -77,6 +81,8 @@ export default function EngagementDetailPage(): JSX.Element {
   });
 
   const { canReadAssets } = usePermissions();
+  const session = useSession();
+  const canReadImoc = hasPermission(session, 'imoc:read');
 
   if (isError) {
     return (
@@ -109,7 +115,7 @@ export default function EngagementDetailPage(): JSX.Element {
   // instead of the feature appearing to not exist.
   const RESTRICTED_TAB_REASON = "Internal audit material — not visible to your role on this engagement.";
   const tabs: TabItem[] = TAB_DEFS
-    .filter((t) => t.key !== 'assets' || canReadAssets)
+    .filter((t) => (t.key !== 'assets' || canReadAssets) && (t.key !== 'imoc' || canReadImoc))
     .map((t) => {
       const restricted =
         !!vc &&
@@ -187,6 +193,7 @@ export default function EngagementDetailPage(): JSX.Element {
       {tab === 'evidence' && vc?.canViewInternalEvidence !== false && <EvidenceTab engagement={data} />}
       {tab === 'requests' && <EvidenceRequestsTab engagement={data} />}
       {tab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
+      {tab === 'imoc' && canReadImoc && <ImocTicketsTab engagement={data} />}
       {tab === 'findings' && <FindingsTab engagement={data} />}
       {tab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}
       {tab === 'report' && <ReportTab engagement={data} />}

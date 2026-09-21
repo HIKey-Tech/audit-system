@@ -69,6 +69,8 @@ model User {
   wp_comments_authored            Audit_Working_Paper_Comment[] @relation("WPCommentAuthor")
   wp_comments_resolved            Audit_Working_Paper_Comment[] @relation("WPCommentResolvedBy")
   time_entries                    Audit_Time_Entry[]       @relation("TimeEntryUser")
+  imoc_ticket_links_created       Imoc_Ticket_Link[]       @relation("ImocTicketLinkCreatedBy")
+  imoc_ticket_snapshots_captured  Imoc_Ticket_Snapshot[]   @relation("ImocTicketSnapshotCapturedBy")
   findings_as_auditee             Audit_Finding[]          @relation("FindingAuditee")
   finding_responder_for           Audit_Finding_Responder[] @relation("FindingResponderUser")
   findings_created                Audit_Finding[]          @relation("FindingCreatedBy")
@@ -860,6 +862,7 @@ model Audit_Engagement {
   workflow_assignments Workflow_Assignment[]
   asset_links          Audit_Engagement_Asset[]
   time_entries         Audit_Time_Entry[]
+  imoc_ticket_links    Imoc_Ticket_Link[]
 
   @@index([status])
   @@index([audit_type])
@@ -897,6 +900,7 @@ model Audit_Working_Paper {
   evidence    Audit_Evidence[]
   findings    Audit_Finding[]
   comments    Audit_Working_Paper_Comment[]
+  imoc_ticket_links Imoc_Ticket_Link[]
 
   @@index([engagement_id])
   @@index([template_id])
@@ -950,6 +954,7 @@ model Audit_Evidence {
   remediations  Audit_Follow_Up[]    @relation("FollowUpRemediationEvidence")
   checklists    Audit_Checklist[]
   asset_links   Audit_Evidence_Asset[]
+  imoc_ticket_snapshots Imoc_Ticket_Snapshot[]
   request       Audit_Evidence_Request? @relation(fields: [request_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
   @@index([engagement_id])
@@ -958,6 +963,71 @@ model Audit_Evidence {
   @@index([uploaded_by_id])
   @@index([request_id])
   @@map("audit_evidence")
+}
+
+// A deliberate association between an IAMS engagement and an existing IMOC
+// ticket. IAMS never owns or mutates the IMOC ticket; this record only stores
+// the smallest safe, last-known summary required to make it useful in audit
+// fieldwork. The ticket may be linked to several engagements when justified.
+model Imoc_Ticket_Link {
+  id                 String    @id @default(uuid())
+  engagement_id      String
+  working_paper_id   String?
+  finding_id         String?
+  order_id           String
+  order_number       String
+  order_name         String?
+  model_id           String?
+  model_name         String?
+  model_type         String?
+  last_status        String?
+  last_sla_status    String?
+  last_step_name     String?
+  last_step_sequence Int?
+  last_synced_at     DateTime?
+  last_sync_error    String?   @db.NVarChar(1000)
+  is_active          Boolean   @default(true)
+  created_by_id      String
+  deleted_at         DateTime?
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+
+  engagement     Audit_Engagement    @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  working_paper  Audit_Working_Paper? @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  finding        Audit_Finding?       @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by     User                  @relation("ImocTicketLinkCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  snapshots      Imoc_Ticket_Snapshot[]
+
+  @@unique([engagement_id, order_id])
+  @@index([engagement_id, is_active])
+  @@index([order_number])
+  @@index([last_status])
+  @@map("imoc_ticket_links")
+}
+
+// Immutable, explicitly captured audit record. snapshot_json is a redacted
+// normalized summary, never the raw IMOC form payload (which can contain
+// privacy/secret fields). The accompanying IAMS evidence document preserves
+// exactly what the auditor elected to retain.
+model Imoc_Ticket_Snapshot {
+  id                 String   @id @default(uuid())
+  imoc_ticket_link_id String
+  audit_evidence_id  String?
+  status             String?
+  sla_status         String?
+  snapshot_json      String   @db.NVarChar(Max)
+  payload_sha256     String   @db.NVarChar(64)
+  source_retrieved_at DateTime
+  captured_by_id     String
+  created_at         DateTime @default(now())
+
+  ticket_link Imoc_Ticket_Link @relation(fields: [imoc_ticket_link_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  audit_evidence Audit_Evidence? @relation(fields: [audit_evidence_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  captured_by User @relation("ImocTicketSnapshotCapturedBy", fields: [captured_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([imoc_ticket_link_id, created_at])
+  @@index([audit_evidence_id])
+  @@map("imoc_ticket_snapshots")
 }
 
 // Evidence request (PBC — "provided by client" item): an auditor asks the
@@ -1041,6 +1111,7 @@ model Audit_Finding {
   follow_up     Audit_Follow_Up?
   asset_links   Audit_Finding_Asset[]
   responders    Audit_Finding_Responder[]
+  imoc_ticket_links Imoc_Ticket_Link[]
 
   @@index([engagement_id])
   @@index([severity])

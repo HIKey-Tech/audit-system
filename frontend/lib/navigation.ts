@@ -128,7 +128,7 @@ export const NAV: NavItem[] = [
       { type: 'link', label: 'Analytics', href: '/analytics', icon: BarChart3, matchPrefix: '/analytics', visKey: 'analytics', description: 'Dashboards and metrics on the audit programme.' },
       { type: 'link', label: 'Audit Logs', href: '/logs', icon: ScrollText, matchPrefix: '/logs', visKey: 'auditLogs', description: 'Tamper-evident trail of every action in the system.' },
       { type: 'link', label: 'Users', href: '/users', icon: Users, matchPrefix: '/users', visKey: 'users', description: 'User accounts, roles, and permissions.' },
-      { type: 'link', label: 'Integrations', href: '/integrations', icon: Plug, matchPrefix: '/integrations', visKey: 'integrations', comingSoon: true, description: 'Read-only links to Dynafin, IMOC, Active Directory, and Project Plus.' },
+      { type: 'link', label: 'Integrations', href: '/integrations', icon: Plug, matchPrefix: '/integrations', visKey: 'integrations', description: 'Read-only links to Dynafin, IMOC, Active Directory, and Project Plus.' },
       { type: 'link', label: 'Predictive', href: '/predictive', icon: Sparkles, matchPrefix: '/predictive', visKey: 'predictive', comingSoon: true, description: 'Risk forecasting and anomaly detection over the audit warehouse.' },
       { type: 'link', label: 'Settings', href: '/settings', icon: Settings, matchPrefix: '/settings', visKey: 'settings', description: 'Templates, roles, and system configuration.' },
     ],
