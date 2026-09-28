@@ -3,7 +3,8 @@
 import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, ShieldAlert, Clock } from 'lucide-react';
+import { Plus, Search, ShieldAlert, Clock, Download } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -35,6 +36,7 @@ type RiskTab = 'register' | 'monitoring' | 'categories';
 export default function RiskPage(): JSX.Element {
   const { hasPermission } = usePermissions();
   const canWrite = hasPermission('risk:create');
+  const canExport = hasPermission('risk:export');
   // The URL is the single source of truth for the tab — no local copy to drift.
   const { values, set } = useQueryFilters({ tab: 'register' });
   const tab: RiskTab =
@@ -47,10 +49,23 @@ export default function RiskPage(): JSX.Element {
         title="Risk Register"
         subtitle="Enterprise risk inventory, scored and monitored continuously."
         actions={
-          canWrite && tab === 'register' ? (
-            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
-              New Risk
-            </Button>
+          tab === 'register' && (canWrite || canExport) ? (
+            <div className="flex gap-2">
+              {canExport && (
+                <Button
+                  variant="secondary"
+                  leftIcon={<Download className="h-4 w-4" />}
+                  onClick={() => riskApi.export('xlsx').catch((e: Error) => toast.error(e.message))}
+                >
+                  Export
+                </Button>
+              )}
+              {canWrite && (
+                <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
+                  New Risk
+                </Button>
+              )}
+            </div>
           ) : null
         }
       />

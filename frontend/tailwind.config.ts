@@ -1,4 +1,5 @@
 import type { Config } from 'tailwindcss';
+import colors from 'tailwindcss/colors';
 
 const config: Config = {
   // Light-only theme. Explicitly opt into class-based dark mode so that
@@ -59,8 +60,10 @@ const config: Config = {
         success: '#16A34A',
         info: '#2563EB',
         purple: '#7C3AED',
-        orange: '#EA580C',
-        yellow: '#CA8A04',
+        // Keep the full scales (bg-orange-50 … text-orange-700) that badges and
+        // severity bars use; a bare hex here would replace the whole scale.
+        orange: { ...colors.orange, DEFAULT: '#EA580C' },
+        yellow: { ...colors.yellow, DEFAULT: '#CA8A04' },
       },
       fontFamily: {
         sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui'],

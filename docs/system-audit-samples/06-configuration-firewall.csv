@@ -1,0 +1,6 @@
+Device,Setting,Current Value,Expected Value
+FW-CORE-01,telnet,disabled,disabled
+FW-CORE-01,ssh_version,2,2
+FW-CORE-01,admin_session_timeout,60,15
+FW-CORE-01,tls_min_version,TLSv1.0,TLSv1.2
+FW-CORE-01,rule_42,permit any any,deny

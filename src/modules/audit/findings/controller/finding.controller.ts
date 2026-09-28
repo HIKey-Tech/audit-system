@@ -4,6 +4,8 @@ import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   CreateFindingRequestSchema,
+  FindingExportQueryDto,
+  FindingExportQuerySchema,
   FindingQuerySchema,
   UpdateFindingRequestSchema,
   UpdateFindingStatusRequestSchema,
@@ -41,6 +43,18 @@ export class FindingController {
      * @access Private - audit:read
      */
     this.router.get('/findings', requirePermission('finding:read'), validate(FindingQuerySchema, 'query'), this._listAllFindings.bind(this));
+
+    /**
+     * @route  GET /audit/findings/export
+     * @desc   Export the (filtered) findings register as CSV or Excel
+     * @access Private - finding:read + finding:export
+     */
+    this.router.get(
+      '/findings/export',
+      requirePermission('finding:read', 'finding:export'),
+      validate(FindingExportQuerySchema, 'query'),
+      this._exportFindings.bind(this),
+    );
 
     /**
      * @route  GET /audit/findings/:id
@@ -129,6 +143,22 @@ export class FindingController {
     try {
       const { findings, meta } = await this.findingService.listAllFindings(req.query as never, req.user!);
       res.status(200).json(buildResponse(findings, 'Findings retrieved', meta));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _exportFindings(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { format, ...query } = req.query as unknown as FindingExportQueryDto;
+      const file = await this.findingService.exportFindings(
+        { ...query, page: 1, pageSize: 1 },
+        format,
+        req.user!,
+      );
+      res.setHeader('Content-Type', file.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+      res.status(200).send(file.buffer);
     } catch (err) {
       next(err);
     }

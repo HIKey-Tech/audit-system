@@ -27,6 +27,7 @@ import { ReportTab } from '@/components/audit/engagements/ReportTab';
 import { FollowUpTab } from '@/components/audit/engagements/FollowUpTab';
 import { StatusStepper } from '@/components/audit/engagements/StatusStepper';
 import { ImocTicketsTab } from '@/components/audit/engagements/ImocTicketsTab';
+import { SystemAuditTab } from '@/components/audit/engagements/SystemAuditTab';
 import { useSession, hasPermission } from '@/components/providers/AuthProvider';
 
 type TabKey =
@@ -39,7 +40,8 @@ type TabKey =
   | 'checklists'
   | 'report'
   | 'follow-up'
-  | 'imoc';
+  | 'imoc'
+  | 'system-audit';
 
 // Ordered to mirror the fieldwork lifecycle: test controls → document work →
 // attach evidence → raise findings → report → follow up. Assets is scope
@@ -55,6 +57,7 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'follow-up', label: 'Follow-up' },
   { key: 'assets', label: 'Assets' },
   { key: 'imoc', label: 'IMOC Tickets' },
+  { key: 'system-audit', label: 'System audit' },
 ];
 
 export default function EngagementDetailPage(): JSX.Element {
@@ -83,6 +86,8 @@ export default function EngagementDetailPage(): JSX.Element {
   const { canReadAssets } = usePermissions();
   const session = useSession();
   const canReadImoc = hasPermission(session, 'imoc:read');
+  const canReadSystemAudit =
+    hasPermission(session, 'sysaudit:read') || hasPermission(session, 'sysdoc:read') || hasPermission(session, 'sectest:read');
 
   if (isError) {
     return (
@@ -115,7 +120,12 @@ export default function EngagementDetailPage(): JSX.Element {
   // instead of the feature appearing to not exist.
   const RESTRICTED_TAB_REASON = "Internal audit material — not visible to your role on this engagement.";
   const tabs: TabItem[] = TAB_DEFS
-    .filter((t) => (t.key !== 'assets' || canReadAssets) && (t.key !== 'imoc' || canReadImoc))
+    .filter(
+      (t) =>
+        (t.key !== 'assets' || canReadAssets) &&
+        (t.key !== 'imoc' || canReadImoc) &&
+        (t.key !== 'system-audit' || canReadSystemAudit),
+    )
     .map((t) => {
       const restricted =
         !!vc &&
@@ -194,6 +204,7 @@ export default function EngagementDetailPage(): JSX.Element {
       {tab === 'requests' && <EvidenceRequestsTab engagement={data} />}
       {tab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
       {tab === 'imoc' && canReadImoc && <ImocTicketsTab engagement={data} />}
+      {tab === 'system-audit' && canReadSystemAudit && <SystemAuditTab engagement={data} />}
       {tab === 'findings' && <FindingsTab engagement={data} />}
       {tab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}
       {tab === 'report' && <ReportTab engagement={data} />}

@@ -1,4 +1,5 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
+import { ExportFormat, TabularExportFile } from '../../../../../shared/utils/tabular-export.util';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
 import {
   CreateRiskRequestDto,
@@ -15,5 +16,7 @@ export interface IRegisterService {
   deleteRisk(id: string, actor: RiskActorContext): Promise<void>;
   getRiskById(id: string, actor: RiskActorContext): Promise<RiskRegisterResponseDto>;
   listRisks(query: RiskRegisterQueryDto, actor: RiskActorContext): Promise<{ risks: RiskRegisterResponseDto[]; meta: PaginationMeta }>;
+  exportRisks(query: RiskRegisterQueryDto, format: ExportFormat, actor: RiskActorContext): Promise<TabularExportFile>;
+  listBusinessObjectives(): Promise<string[]>;
   getRisksByUniverseEntity(universeId: string, actor?: RiskActorContext): Promise<RiskRegisterResponseDto[]>;
 }

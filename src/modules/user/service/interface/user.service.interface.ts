@@ -13,6 +13,7 @@ import {
 import {
   UserResponseDto,
   UserDirectoryDto,
+  UserAccessEntitlementDto,
   RoleListResponseDto,
   PermissionListResponseDto,
   PermissionGroupResponseDto,
@@ -47,6 +48,9 @@ export interface IUserService {
 
   /** Minimal active-user directory for people-pickers (gated on `user:directory`). */
   listDirectory(): Promise<UserDirectoryDto[]>;
+
+  /** Every account's effective roles and permissions — read-only input to user access reviews. */
+  listAccessEntitlements(): Promise<UserAccessEntitlementDto[]>;
 
   listRoles(
     query: RoleQueryDto,

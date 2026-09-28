@@ -50,6 +50,7 @@ src/
 │   ├── workflow/         ← built
 │   ├── dashboard/        ← built (read-only HTTP)
 │   ├── settings/         ← built
+│   ├── system-audit/     ← built (read-only analytics, access reviews, monitoring, security tests, documentation)
 │   ├── integration/      ← not built
 │   └── predictive/       ← not built
 │

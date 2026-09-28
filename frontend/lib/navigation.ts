@@ -26,6 +26,13 @@ import {
   FlaskConical,
   Plug,
   Sparkles,
+  ShieldCheck,
+  FileSearch,
+  KeyRound,
+  Activity,
+  Gauge,
+  Bug,
+  BookOpen,
   type LucideIcon,
 } from 'lucide-react';
 
@@ -91,7 +98,7 @@ export const NAV: NavItem[] = [
       { type: 'link', label: 'Sampling', href: '/audit/sampling', icon: FlaskConical, matchPrefix: '/audit/sampling', visKey: 'engagements', description: 'Draw a defensible, reproducible sample from a population CSV, stored as engagement evidence.' },
       { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
       { type: 'link', label: 'Reviews', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reviews.' },
-      { type: 'link', label: 'Control Library', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR).' },
+      { type: 'link', label: 'Control Library', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR, GDPR, SOX).' },
       { type: 'link', label: 'Evidence Repository', href: '/audit/repository', icon: Archive, matchPrefix: '/audit/repository', visKey: 'engagements', description: 'Central, searchable store of all audit records, supporting documents, and evidence.' },
     ],
   },
@@ -110,6 +117,23 @@ export const NAV: NavItem[] = [
       visKey: 'engagements',
       description: `${d.focus} — ${d.framework}.`,
     })),
+  },
+
+  {
+    type: 'group',
+    label: 'System Audit',
+    icon: ShieldCheck,
+    description: 'Read-only tools for the System/IT audit activities — analytics over system data, access reviews, logs, monitoring, security testing, and documentation.',
+    defaultOpen: true,
+    children: [
+      { type: 'link', label: 'Toolkit overview', href: '/system-audit', icon: ShieldCheck, visKey: 'systemAudit', description: 'The seven system-audit activities and where IAMS covers each one.' },
+      { type: 'link', label: 'Data analytics', href: '/system-audit/analytics', icon: FileSearch, matchPrefix: '/system-audit/analytics', visKey: 'sysAnalytics', description: 'Analyse system exports: changes, backups, incidents, logs, configuration, vulnerabilities, data integrity.' },
+      { type: 'link', label: 'Access reviews', href: '/system-audit/access-reviews', icon: KeyRound, matchPrefix: '/system-audit/access-reviews', visKey: 'sysAnalytics', description: 'Verify user access rights and segregation of duties without modifying any system.' },
+      { type: 'link', label: 'Event monitoring', href: '/system-audit/events', icon: Activity, matchPrefix: '/system-audit/events', visKey: 'eventMonitoring', description: 'Security events, change history, and system exceptions.' },
+      { type: 'link', label: 'Continuous monitoring', href: '/system-audit/monitoring', icon: Gauge, matchPrefix: '/system-audit/monitoring', visKey: 'sysAnalytics', description: 'Automated daily checks, anomaly trends, and emerging risks.' },
+      { type: 'link', label: 'Security testing', href: '/system-audit/security-tests', icon: Bug, matchPrefix: '/system-audit/security-tests', visKey: 'securityTests', description: 'Vulnerability assessment and penetration test coordination.' },
+      { type: 'link', label: 'System documentation', href: '/system-audit/documentation', icon: BookOpen, matchPrefix: '/system-audit/documentation', visKey: 'systemDocs', description: 'Policies, architecture diagrams, process manuals, continuity plans, and IT contracts.' },
+    ],
   },
 
   { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },

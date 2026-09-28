@@ -40,7 +40,7 @@ export const AUDIT_DOMAINS: AuditDomainMeta[] = [
     short: 'System/IT',
     href: '/audit/domains/it',
     icon: Cpu,
-    framework: 'ISO 27001 · ISO 22301 · Baselines · CAB change · DR & capacity',
+    framework: 'ISO 27001 · ISO 22301 · SOX ITGC · Baselines · CAB change · DR & capacity',
     focus: 'Infrastructure, access, cybersecurity, configuration & continuity',
     description:
       'Infrastructure, access management, and cybersecurity controls assessed against ISO 27001 and ISO 22301, together with configuration and continuity — baseline drift, CAB change control, disaster recovery, and capacity.',
@@ -62,7 +62,7 @@ export const AUDIT_DOMAINS: AuditDomainMeta[] = [
     short: 'Compliance',
     href: '/audit/domains/compliance',
     icon: ShieldCheck,
-    framework: 'ISO 9001 · ISO 22301 · NDPR',
+    framework: 'ISO 9001 · ISO 22301 · NDPR · GDPR',
     focus: 'Standards & regulatory adherence',
     description:
       'Adherence to ISO 9001, ISO 22301, and NDPR — quality management, business continuity, and data protection.',

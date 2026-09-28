@@ -10,6 +10,7 @@ import {
 } from '../client/graph.client';
 import {
   IDirectoryMappingService,
+  DirectoryAccount,
   DirectoryGroupMapping,
   CreateMappingInput,
   UpdateMappingInput,
@@ -181,6 +182,24 @@ export class DirectoryMappingService implements IDirectoryMappingService {
       added: toAdd.length,
       removed: toRemove.length,
     });
+  }
+
+  async listDirectoryAccounts(): Promise<DirectoryAccount[]> {
+    if (!config.directorySync.enabled) {
+      throw AppError.badRequest('Entra ID directory sync is not enabled (DIRECTORY_SYNC_ENABLED=false)');
+    }
+    const [directoryUsers, mappings] = await Promise.all([
+      this.graph.listUsersWithGroups(),
+      prisma.directory_Group_Mapping.findMany({ select: { ad_group_id: true, ad_group_name: true } }),
+    ]);
+    const groupNames = new Map(mappings.map((m) => [m.ad_group_id, m.ad_group_name]));
+    return directoryUsers.map((u) => ({
+      oid: u.oid,
+      email: u.email,
+      displayName: u.displayName ?? null,
+      accountEnabled: u.accountEnabled,
+      groups: u.groupIds.map((id) => groupNames.get(id) ?? id),
+    }));
   }
 
   async runFullDirectorySync(): Promise<{ usersProcessed: number; deactivated: number }> {

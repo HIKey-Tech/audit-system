@@ -20,6 +20,8 @@ import {
   normaliseBackupCode,
 } from '../../utility/mfa.utility';
 import { revokeUserSessions } from '../../../../shared/security/session-guard';
+import { logSecurityEvent } from '../../../logging/utility/security-event.utility';
+import { SecurityEvent } from '../../../logging/domain/enum/logging.enum';
 
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => {
@@ -130,6 +132,7 @@ export class MfaService implements IMfaService {
     }
 
     logger.warn('MFA verification failed', { userId });
+    logSecurityEvent(SecurityEvent.MfaFailed, { userId, reason: 'invalid_code', method: user.mfa_method ?? undefined, status: 'failure' });
     throw AppError.unauthorized('Invalid verification code');
   }
 
@@ -164,6 +167,7 @@ export class MfaService implements IMfaService {
     // state (mfa_enabled) is reflected immediately without waiting for TTL.
     await revokeUserSessions(targetUserId);
     logger.info('MFA reset by admin', { targetUserId, actorId });
+    logSecurityEvent(SecurityEvent.MfaAdminReset, { userId: targetUserId, reason: `reset_by:${actorId}` });
   }
 
   // ── internals ───────────────────────────────────────────────

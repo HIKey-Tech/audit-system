@@ -111,6 +111,16 @@ model User {
   system_configs_updated          System_Config[]          @relation("SystemConfigUpdatedBy")
   signatures                      User_Signature[]         @relation("UserSignatureOwner")
   predictive_insight_feedback     Predictive_Insight_Feedback[] @relation("PredictiveInsightFeedbackUser")
+  system_audit_runs_created       System_Audit_Run[]       @relation("SystemAuditRunCreatedBy")
+  system_audit_runs_reviewed      System_Audit_Run[]       @relation("SystemAuditRunReviewedBy")
+  system_audit_exceptions_disposed System_Audit_Exception[] @relation("SystemAuditExceptionDisposedBy")
+  access_review_items_decided     Access_Review_Item[]     @relation("AccessReviewItemDecidedBy")
+  security_tests_coordinated      Security_Test[]          @relation("SecurityTestCoordinator")
+  security_tests_authorised       Security_Test[]          @relation("SecurityTestAuthorisedBy")
+  security_tests_created          Security_Test[]          @relation("SecurityTestCreatedBy")
+  security_test_assets_created    Security_Test_Asset[]    @relation("SecurityTestAssetCreatedBy")
+  system_documents_owned          System_Document[]        @relation("SystemDocumentOwner")
+  system_documents_created        System_Document[]        @relation("SystemDocumentCreatedBy")
 
   @@map("users")
 }
@@ -284,6 +294,28 @@ model Audit_Log {
   @@index([created_at])
   @@index([module, created_at])
   @@map("audit_logs")
+}
+
+// Application exceptions persisted for the Event Monitoring view (system
+// exceptions). Fed by the logging module's Winston transport at `error` level;
+// metadata is redacted of credentials before storage. Purged by the weekly
+// retention job (system_config.data_retention.systemLogDays).
+model System_Log {
+  id         String   @id @default(uuid())
+  level      String // error
+  message    String   @db.NVarChar(2000)
+  source     String? // http | job | app
+  error_name String?
+  path       String?  @db.NVarChar(500)
+  request_id String?
+  stack      String?  @db.NVarChar(Max)
+  context    String?  @db.NVarChar(Max) // redacted JSON of the log metadata
+  created_at DateTime @default(now())
+
+  @@index([created_at])
+  @@index([level, created_at])
+  @@index([source, created_at])
+  @@map("system_logs")
 }
 
 // ============================================================
@@ -486,6 +518,9 @@ model Document {
   signed_doc_sources Workflow_Request_Signed_Document[] @relation("SignedDocSource")
   signed_doc_outputs Workflow_Request_Signed_Document[] @relation("SignedDocOutput")
   approval_signed_outputs Workflow_Approval_Signed_Document[] @relation("ApprovalSignedDocOutput")
+  system_audit_runs       System_Audit_Run[]
+  security_test_reports   Security_Test[]                     @relation("SecurityTestReport")
+  system_documents        System_Document[]                   @relation("SystemDocumentFile")
 
   @@index([entity_type, entity_id])
   @@map("documents")
@@ -594,6 +629,8 @@ model Asset {
   finding_links      Audit_Finding_Asset[]
   risk_links         Risk_Asset_Link[]
   evidence_links     Audit_Evidence_Asset[]
+  security_test_links Security_Test_Asset[]
+  system_documents   System_Document[]
 
   @@index([asset_type])
   @@index([status])
@@ -848,6 +885,7 @@ model Audit_Universe {
   engagements Audit_Engagement[]
   risks       Risk_Register[]
   asset_links Audit_Universe_Asset[]
+  system_documents System_Document[]
 
   @@index([category])
   @@index([status])
@@ -951,6 +989,8 @@ model Audit_Engagement {
   asset_links          Audit_Engagement_Asset[]
   time_entries         Audit_Time_Entry[]
   imoc_ticket_links    Imoc_Ticket_Link[]
+  system_audit_runs    System_Audit_Run[]
+  security_tests       Security_Test[]
 
   @@index([status])
   @@index([audit_type])
@@ -1043,6 +1083,7 @@ model Audit_Evidence {
   checklists    Audit_Checklist[]
   asset_links   Audit_Evidence_Asset[]
   imoc_ticket_snapshots Imoc_Ticket_Snapshot[]
+  system_audit_runs System_Audit_Run[]
   request       Audit_Evidence_Request? @relation(fields: [request_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
 
   @@index([engagement_id])
@@ -1200,6 +1241,7 @@ model Audit_Finding {
   asset_links   Audit_Finding_Asset[]
   responders    Audit_Finding_Responder[]
   imoc_ticket_links Imoc_Ticket_Link[]
+  system_audit_exceptions System_Audit_Exception[]
 
   @@index([engagement_id])
   @@index([severity])
@@ -1345,6 +1387,9 @@ model Risk_Register {
   impact           Int
   current_score    Int
   status           String    @default("open") // open | mitigated | accepted | closed
+  // Organisational objective this risk threatens — keeps IT risk identification
+  // aligned to what GBB is trying to achieve (risk-based planning).
+  business_objective String?  @db.NVarChar(500)
   last_assessed_at DateTime?
   universe_id      String?
   created_by_id    String
@@ -1366,6 +1411,7 @@ model Risk_Register {
   @@index([status])
   @@index([current_score])
   @@index([universe_id])
+  @@index([business_objective])
   @@map("risk_register")
 }
 
@@ -1711,6 +1757,230 @@ model Report_Template {
 //   framework.category : it | financial | compliance | systems | governance
 //   control.audit_type : it | financial | compliance | systems
 // ============================================================
+// ============================================================
+// SYSTEM AUDIT TOOLKIT
+//
+// Read-only audit analytics over GBB system data (computer-assisted audit
+// techniques), user access reviews, security-test coordination, and the system
+// documentation library. IAMS never writes to the systems it analyses: data
+// arrives as exports uploaded by auditors or through the existing read-only
+// connectors (Entra ID, IMOC) and IAMS's own records.
+//
+//   analysis_type : access_listing | change_log | backup_log | incident_log |
+//                   security_event_log | configuration | vulnerability_scan |
+//                   data_integrity
+//   source        : upload | iams | entra_id | imoc
+//   review_status : open | completed
+//   disposition   : open | confirmed | false_positive | explained
+//   decision      : pending | appropriate | revoke | modify
+// ============================================================
+
+model System_Audit_Run {
+  id               String    @id @default(uuid())
+  reference        String    @unique
+  title            String
+  analysis_type    String
+  source           String
+  system_name      String
+  trigger          String    @default("manual") // manual | scheduled
+  engagement_id    String?
+  security_test_id String?
+  evidence_id      String? // stored extract, when the run belongs to an engagement
+  document_id      String? // stored extract otherwise
+  file_name        String?
+  content_sha256   String?   @db.NVarChar(64)
+  record_count     Int       @default(0)
+  exception_count  Int       @default(0)
+  parameters       String?   @db.NVarChar(Max) // JSON: thresholds, rules, column mapping
+  summary          String?   @db.NVarChar(Max) // JSON: computed metrics
+  snapshot         String?   @db.NVarChar(Max) // JSON: normalised settings of configuration runs, kept for baseline comparison
+  is_baseline      Boolean   @default(false)
+  baseline_run_id  String?
+  review_status    String    @default("open")
+  review_note      String?   @db.NVarChar(Max)
+  reviewed_by_id   String?
+  reviewed_at      DateTime?
+  created_by_id    String? // null for scheduled monitoring runs
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  engagement    Audit_Engagement?        @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  security_test Security_Test?           @relation(fields: [security_test_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  evidence      Audit_Evidence?          @relation(fields: [evidence_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  document      Document?                @relation(fields: [document_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  baseline_run  System_Audit_Run?        @relation("SystemAuditRunBaseline", fields: [baseline_run_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  compared_runs System_Audit_Run[]       @relation("SystemAuditRunBaseline")
+  reviewed_by   User?                    @relation("SystemAuditRunReviewedBy", fields: [reviewed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by    User?                    @relation("SystemAuditRunCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  exceptions    System_Audit_Exception[]
+  access_items  Access_Review_Item[]
+
+  @@index([analysis_type, created_at])
+  @@index([source])
+  @@index([system_name])
+  @@index([engagement_id])
+  @@index([security_test_id])
+  @@index([review_status])
+  @@index([trigger, created_at])
+  @@map("system_audit_runs")
+}
+
+// One rule hit produced by an analysis run. The auditor dispositions every
+// exception; confirmed exceptions can be raised as audit findings.
+model System_Audit_Exception {
+  id               String    @id @default(uuid())
+  run_id           String
+  rule_code        String
+  severity         String // critical | high | medium | low
+  title            String    @db.NVarChar(500)
+  record_ref       String?   @db.NVarChar(500)
+  details          String?   @db.NVarChar(Max) // JSON
+  disposition      String    @default("open")
+  disposition_note String?   @db.NVarChar(Max)
+  disposed_by_id   String?
+  disposed_at      DateTime?
+  finding_id       String?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  run         System_Audit_Run @relation(fields: [run_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  disposed_by User?            @relation("SystemAuditExceptionDisposedBy", fields: [disposed_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  finding     Audit_Finding?   @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([run_id, severity])
+  @@index([run_id, disposition])
+  @@index([rule_code])
+  @@index([finding_id])
+  @@map("system_audit_exceptions")
+}
+
+// One account in a user access review (access_listing run). The reviewer
+// records whether the access is appropriate; IAMS never changes the source
+// system — "revoke" is a recommendation carried into the findings.
+model Access_Review_Item {
+  id             String    @id @default(uuid())
+  run_id         String
+  account_id     String    @db.NVarChar(300)
+  display_name   String?
+  email          String?
+  department     String?
+  account_status String? // active | disabled
+  is_privileged  Boolean   @default(false)
+  last_login_at  DateTime?
+  entitlements   String    @db.NVarChar(Max) // JSON array of roles / groups / permissions
+  flags          String?   @db.NVarChar(Max) // JSON array of rule codes raised for this account
+  decision       String    @default("pending")
+  decision_note  String?   @db.NVarChar(Max)
+  decided_by_id  String?
+  decided_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  run        System_Audit_Run @relation(fields: [run_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  decided_by User?            @relation("AccessReviewItemDecidedBy", fields: [decided_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([run_id, decision])
+  @@index([run_id, is_privileged])
+  @@map("access_review_items")
+}
+
+// Vulnerability assessment / penetration test coordination: scope, schedule,
+// written authorisation, provider, report, and linked scan-result analyses.
+model Security_Test {
+  id                  String    @id @default(uuid())
+  reference           String    @unique
+  title               String
+  test_type           String // vulnerability_scan | penetration_test | web_application_test | red_team | social_engineering
+  status              String    @default("planned") // planned | authorised | in_progress | reporting | remediation | closed | cancelled
+  engagement_id       String?
+  provider            String
+  provider_type       String    @default("internal") // internal | external
+  scope               String    @db.NVarChar(Max)
+  rules_of_engagement String?   @db.NVarChar(Max)
+  planned_start       DateTime
+  planned_end         DateTime
+  actual_start        DateTime?
+  actual_end          DateTime?
+  coordinator_id      String
+  authorised_by_id    String?
+  authorised_at       DateTime?
+  report_document_id  String?
+  notes               String?   @db.NVarChar(Max)
+  created_by_id       String
+  deleted_at          DateTime?
+  created_at          DateTime  @default(now())
+  updated_at          DateTime  @updatedAt
+
+  engagement      Audit_Engagement?     @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  coordinator     User                  @relation("SecurityTestCoordinator", fields: [coordinator_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  authorised_by   User?                 @relation("SecurityTestAuthorisedBy", fields: [authorised_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by      User                  @relation("SecurityTestCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  report_document Document?             @relation("SecurityTestReport", fields: [report_document_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  assets          Security_Test_Asset[]
+  runs            System_Audit_Run[]
+
+  @@index([status])
+  @@index([test_type])
+  @@index([engagement_id])
+  @@index([planned_start])
+  @@map("security_tests")
+}
+
+model Security_Test_Asset {
+  id            String   @id @default(uuid())
+  test_id       String
+  asset_id      String
+  created_by_id String
+  created_at    DateTime @default(now())
+
+  test       Security_Test @relation(fields: [test_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset         @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User          @relation("SecurityTestAssetCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([test_id, asset_id])
+  @@index([asset_id])
+  @@map("security_test_assets")
+}
+
+// System documentation library: policies, procedures, architecture diagrams,
+// process manuals, continuity plans, and IT contracts, linked to the audit
+// universe / assets so auditors see what is relevant to an engagement's scope.
+model System_Document {
+  id              String    @id @default(uuid())
+  document_id     String
+  title           String
+  doc_type        String // policy | procedure | standard | architecture_diagram | network_diagram | process_manual | bcp | drp | incident_response_plan | contract | sla | other
+  description     String?   @db.NVarChar(Max)
+  version_label   String?
+  owner_id        String
+  universe_id     String?
+  asset_id        String?
+  vendor          String? // contracts and SLAs
+  effective_date  DateTime?
+  review_due_date DateTime?
+  expiry_date     DateTime? // contracts and SLAs
+  status          String    @default("active") // active | archived
+  created_by_id   String
+  deleted_at      DateTime?
+  created_at      DateTime  @default(now())
+  updated_at      DateTime  @updatedAt
+
+  document   Document        @relation("SystemDocumentFile", fields: [document_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  owner      User            @relation("SystemDocumentOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  universe   Audit_Universe? @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  asset      Asset?          @relation(fields: [asset_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User            @relation("SystemDocumentCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([doc_type])
+  @@index([universe_id])
+  @@index([asset_id])
+  @@index([owner_id])
+  @@index([review_due_date])
+  @@index([expiry_date])
+  @@index([status])
+  @@map("system_documents")
+}
+
 model Compliance_Framework {
   id          String    @id @default(uuid())
   code        String    @unique // ISO27001 | PCIDSS | NIST-CSF | NDPR | ...

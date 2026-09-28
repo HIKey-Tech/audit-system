@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { ExportFormatSchema } from '../../../../../shared/utils/tabular-export.util';
 import { FindingCategory, FindingSeverity, FindingStatus, SELECTABLE_FINDING_CATEGORIES } from '../../../domain/enum/audit.enum';
 
 export const CreateFindingRequestSchema = z.object({
@@ -54,7 +55,12 @@ export const FindingQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
+export const FindingExportQuerySchema = FindingQuerySchema.omit({ page: true, pageSize: true }).extend({
+  format: ExportFormatSchema,
+});
+
 export type CreateFindingRequestDto = z.infer<typeof CreateFindingRequestSchema>;
 export type UpdateFindingRequestDto = z.infer<typeof UpdateFindingRequestSchema>;
 export type UpdateFindingStatusRequestDto = z.infer<typeof UpdateFindingStatusRequestSchema>;
 export type FindingQueryDto = z.infer<typeof FindingQuerySchema>;
+export type FindingExportQueryDto = z.infer<typeof FindingExportQuerySchema>;

@@ -34,6 +34,8 @@ const FRAMEWORKS: FrameworkDef[] = [
   { code: 'COBIT', name: 'COBIT — IT Governance', category: 'governance' },
   { code: 'GBB-FIN', name: 'GBB Financial Controls', category: 'financial' },
   { code: 'GBB-SYS', name: 'GBB Systems Controls', category: 'it' },
+  { code: 'GDPR', name: 'GDPR — EU General Data Protection Regulation', category: 'compliance' },
+  { code: 'SOX-ITGC', name: 'SOX — IT General Controls (Sarbanes-Oxley §404)', category: 'it' },
 ];
 
 /** Derive the framework code from a control reference prefix. Order matters. */
@@ -49,6 +51,8 @@ function frameworkCodeFor(controlReference: string): string {
   if (ref.startsWith('ISO20000')) return 'ISO20000';
   if (ref.startsWith('PCIDSS')) return 'PCIDSS';
   if (ref.startsWith('COBIT')) return 'COBIT';
+  if (ref.startsWith('GDPR')) return 'GDPR';
+  if (ref.startsWith('SOX')) return 'SOX-ITGC';
   if (ref.startsWith('FIN')) return 'GBB-FIN';
   if (ref.startsWith('SYS')) return 'GBB-SYS';
   return 'GBB-SYS';

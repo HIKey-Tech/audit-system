@@ -27,6 +27,7 @@ const Schema = z.object({
   impact: z.coerce.number().int().min(1).max(5),
   status: z.enum(['open', 'mitigated', 'accepted', 'closed']),
   universeId: z.string().optional().or(z.literal('')),
+  businessObjective: z.string().trim().max(500, 'Keep the objective under 500 characters').optional(),
 });
 
 type FormValues = z.infer<typeof Schema>;
@@ -71,7 +72,15 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
       impact: 3,
       status: 'open',
       universeId: '',
+      businessObjective: '',
     },
+  });
+
+  const objectives = useQuery({
+    queryKey: ['risk', 'objectives'],
+    queryFn: () => riskApi.listObjectives(),
+    enabled: open,
+    staleTime: 60_000,
   });
 
   useEffect(() => {
@@ -86,6 +95,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
           impact: risk.currentImpact,
           status: risk.status as FormValues['status'],
           universeId: risk.universeId ?? '',
+          businessObjective: risk.businessObjective ?? '',
         });
       } else {
         reset({
@@ -97,6 +107,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
           impact: 3,
           status: 'open',
           universeId: '',
+          businessObjective: '',
         });
       }
     }
@@ -113,6 +124,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
         impact: v.impact,
         status: v.status,
         universeId: v.universeId || undefined,
+        businessObjective: v.businessObjective?.trim() || null,
       }),
     onSuccess: () => {
       toast.success('Risk added to register');
@@ -133,6 +145,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
         impact: v.impact,
         status: v.status,
         universeId: v.universeId || null,
+        businessObjective: v.businessObjective?.trim() || null,
       }),
     onSuccess: () => {
       toast.success('Risk updated successfully');
@@ -198,6 +211,23 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
           <Textarea rows={3} {...register('description')} />
         </FormField>
         
+        <FormField
+          label="Business objective at risk"
+          optional
+          tooltip="The organisational objective this risk threatens — keeps IT risk assessment aligned to what GBB is trying to achieve."
+          error={errors.businessObjective?.message}
+        >
+          <Input
+            list="risk-objective-options"
+            placeholder="e.g. Secure, always-available shared government services"
+            error={errors.businessObjective?.message}
+            {...register('businessObjective')}
+          />
+          <datalist id="risk-objective-options">
+            {objectives.data?.map((o) => <option key={o} value={o} />)}
+          </datalist>
+        </FormField>
+
         <FormField label="Linked Universe Entity" error={errors.universeId?.message}>
           <Select
             error={errors.universeId?.message}

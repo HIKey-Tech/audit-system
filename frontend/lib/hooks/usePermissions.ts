@@ -135,6 +135,11 @@ export interface NavVisibility {
   predictive: boolean;
   settings: boolean;
   users: boolean;
+  systemAudit: boolean;
+  sysAnalytics: boolean;
+  eventMonitoring: boolean;
+  securityTests: boolean;
+  systemDocs: boolean;
 }
 
 export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
@@ -159,6 +164,11 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
       predictive: false,
       settings: false,
       users: false,
+      systemAudit: false,
+      sysAnalytics: false,
+      eventMonitoring: false,
+      securityTests: false,
+      systemDocs: false,
     };
   }
 
@@ -182,6 +192,14 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
     predictive: userHasPermission(user, 'predictive:read'),
     settings: userHasPermission(user, 'settings:read'),
     users: userHasPermission(user, 'user:read'),
+    systemAudit:
+      userHasPermission(user, 'sysaudit:read') ||
+      userHasPermission(user, 'sectest:read') ||
+      userHasPermission(user, 'sysdoc:read'),
+    sysAnalytics: userHasPermission(user, 'sysaudit:read'),
+    eventMonitoring: userHasPermission(user, 'log:read'),
+    securityTests: userHasPermission(user, 'sectest:read'),
+    systemDocs: userHasPermission(user, 'sysdoc:read'),
   };
 };
 

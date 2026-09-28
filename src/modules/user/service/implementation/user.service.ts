@@ -28,6 +28,8 @@ import {
 import {
   UserResponseDto,
   UserDirectoryDto,
+  UserAccessEntitlementDto,
+  mapUserToAccessEntitlement,
   RoleListResponseDto,
   PermissionListResponseDto,
   PermissionGroupResponseDto,
@@ -181,6 +183,18 @@ export class UserService implements IUserService {
       users: (users as UserWithRoles[]).map(mapUserToResponse),
       meta: buildPaginationMeta(total, page, pageSize),
     };
+  }
+
+  async listAccessEntitlements(): Promise<UserAccessEntitlementDto[]> {
+    // System and service accounts are included on purpose: they are often the
+    // most privileged identities and must be reviewed like any other.
+    const users = (await prisma.user.findMany({
+      where: { deleted_at: null },
+      include: userWithRolesInclude,
+      orderBy: { email: 'asc' },
+    })) as UserWithRoles[];
+    const now = new Date();
+    return users.map((u) => mapUserToAccessEntitlement(u, now));
   }
 
   async listDirectory(): Promise<UserDirectoryDto[]> {

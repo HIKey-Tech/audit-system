@@ -766,6 +766,8 @@ export interface Risk {
   currentLikelihood: number;
   currentImpact: number;
   currentScore: number;
+  /** Organisational objective the risk threatens. */
+  businessObjective: string | null;
   universeId: string | null;
   universeName: string | null;
   lastAssessedAt: string | null;

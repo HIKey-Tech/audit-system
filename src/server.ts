@@ -26,7 +26,7 @@ import {
   notFoundMiddleware,
 } from './shared/middleware/error-handler.middleware';
 import { requestAuditLogger } from './modules/logging/utility/request-logger.middleware';
-import { createLoggingModule } from './modules/logging';
+import { createLoggingModule, SystemLogTransport } from './modules/logging';
 import { createUserModule } from './modules/user';
 import { createDocumentModule } from './modules/document';
 import { createAssetModule } from './modules/asset';
@@ -38,6 +38,7 @@ import { createDashboardModule } from './modules/dashboard';
 import { createSettingsModule } from './modules/settings';
 import { createIntegrationModule } from './modules/integration';
 import { createPredictiveModule, predictiveService } from './modules/predictive';
+import { createSystemAuditModule } from './modules/system-audit';
 import { warehouseService } from './modules/warehouse';
 import {
   createBackgroundModule,
@@ -186,6 +187,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createSettingsModule());
   app.use(apiPrefix, createIntegrationModule());
   app.use(apiPrefix, createPredictiveModule());
+  app.use(apiPrefix, createSystemAuditModule());
 
   app.use(notFoundMiddleware);
   app.use(errorHandlerMiddleware);
@@ -196,6 +198,9 @@ const buildApp = (): Application => {
 const startServer = async (): Promise<http.Server> => {
   await verifyStorageReady();
   await connectDatabase();
+  // Persist application exceptions for the Event Monitoring view once the
+  // database is reachable (errors before this point stay console-only).
+  logger.add(new SystemLogTransport());
   await cache.connect();
 
   const app = buildApp();

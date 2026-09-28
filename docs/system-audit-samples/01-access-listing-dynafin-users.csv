@@ -1,0 +1,6 @@
+Username,Full Name,Email,Roles,Status,Last Logon,Department
+adaeze,Adaeze Okonkwo,adaeze@gbb.gov.ng,Finance Viewer,Active,20/09/2026,Internal Audit
+chisom,Chisom Okafor,chisom@gbb.gov.ng,Payment Creator;Payment Approver,Active,25/09/2026,Finance
+emeka,Emeka Nwosu,emeka@gbb.gov.ng,GL Poster,Active,02/03/2026,Finance
+test01,Test Account,,System Administrator,Active,26/09/2026,IT
+jdoe,John Doe,jdoe@gbb.gov.ng,Vendor Master Maintenance;Payment Run,Active,21/09/2026,Procurement

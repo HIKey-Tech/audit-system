@@ -3,6 +3,12 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
+import {
+  EXPORT_MAX_ROWS,
+  ExportFormat,
+  TabularExportFile,
+  buildTabularExport,
+} from '../../../../../shared/utils/tabular-export.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
@@ -295,6 +301,48 @@ export class FindingService implements IFindingService {
       findings: findings.map(mapFindingToResponse),
       meta: buildPaginationMeta(total, page, pageSize),
     };
+  }
+
+  async exportFindings(query: FindingQueryDto, format: ExportFormat, actor: ActorContext): Promise<TabularExportFile> {
+    const findings = await prisma.audit_Finding.findMany({
+      where: this._buildFindingWhere(query, actor),
+      include: findingInclude,
+      orderBy: { [query.sortBy]: query.sortOrder },
+      take: EXPORT_MAX_ROWS,
+    });
+    const rows = findings.map(mapFindingToResponse);
+
+    logger.info('Findings register exported', { actorId: actor.id, format, count: rows.length });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.finding.export',
+      module: 'audit',
+      entityType: 'audit_finding',
+      newValues: { format, count: rows.length, filters: query },
+    });
+
+    return buildTabularExport(
+      rows,
+      [
+        { header: 'Engagement', value: (f) => f.engagementReference },
+        { header: 'Title', value: (f) => f.title },
+        { header: 'Severity', value: (f) => f.severity },
+        { header: 'Status', value: (f) => f.status },
+        { header: 'Category', value: (f) => f.category },
+        { header: 'Control reference', value: (f) => f.controlReference },
+        { header: 'Linked risk', value: (f) => f.riskTitle },
+        { header: 'Description', value: (f) => f.description },
+        { header: 'Root cause', value: (f) => f.rootCause },
+        { header: 'Risk implication', value: (f) => f.riskImplication },
+        { header: 'Recommendation', value: (f) => f.recommendation },
+        { header: 'Auditee', value: (f) => f.auditeeName },
+        { header: 'Due date', value: (f) => f.dueDate },
+        { header: 'Raised by', value: (f) => f.createdByName },
+        { header: 'Raised on', value: (f) => f.createdAt },
+        { header: 'Closed on', value: (f) => f.closedAt },
+      ],
+      { baseName: 'findings-register', format, sheetName: 'Findings' },
+    );
   }
 
   async listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]> {

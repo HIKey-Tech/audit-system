@@ -4,7 +4,7 @@ import { useState, useCallback } from 'react';
 import Link from 'next/link';
 import { useParams, useRouter, notFound } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, Briefcase, AlertTriangle, Activity } from 'lucide-react';
+import { Plus, Search, Briefcase, AlertTriangle, Activity, ArrowRight, ShieldCheck } from 'lucide-react';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -26,7 +26,7 @@ import { cn } from '@/lib/utils/cn';
 export default function AuditDomainPage(): JSX.Element {
   const router = useRouter();
   const params = useParams<{ domain: string }>();
-  const { canManageAuditProgramme: canWrite } = usePermissions();
+  const { canManageAuditProgramme: canWrite, nav } = usePermissions();
 
   const [open, setOpen] = useState(false);
 
@@ -177,6 +177,24 @@ export default function AuditDomainPage(): JSX.Element {
           </div>
         </div>
       </Card>
+
+      {meta.key === 'it' && nav.systemAudit && (
+        <Link href="/system-audit" className="mb-4 block">
+          <Card padded className="flex items-center gap-3 border-primary/30 transition-colors hover:border-primary">
+            <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-primary text-white">
+              <ShieldCheck className="h-5 w-5" />
+            </span>
+            <div className="min-w-0 flex-1">
+              <p className="font-semibold text-text-primary">System audit toolkit</p>
+              <p className="text-sm text-text-secondary">
+                Access reviews, change / backup / incident / log analytics, configuration baselines, event and continuous
+                monitoring, security testing, and system documentation — mapped to the seven system-audit activities.
+              </p>
+            </div>
+            <ArrowRight className="h-5 w-5 shrink-0 text-primary" />
+          </Card>
+        </Link>
+      )}
 
       {/* Stats */}
       <div className="mb-4 grid grid-cols-1 gap-3 sm:grid-cols-3">

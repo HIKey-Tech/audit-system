@@ -12,6 +12,7 @@ const REFERENCE_HREF: Record<string, (id: string) => string> = {
   audit_report: () => `/audit/reports`,
   risk_register: (id) => `/risk/${id}`,
   workflow_approval: () => `/workflow/approvals`,
+  system_audit_run: (id) => `/system-audit/analytics/${id}`,
 };
 
 export const notificationHref = (

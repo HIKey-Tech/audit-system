@@ -4,7 +4,11 @@ import { useCallback } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
-import { Search, AlertTriangle } from 'lucide-react';
+import { Search, AlertTriangle, Download } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/Button';
+import { usePermission } from '@/hooks/usePermission';
+import { downloadFile } from '@/lib/api/download';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -54,6 +58,8 @@ export default function FindingsListPage(): JSX.Element {
     sortOrder: values.sortOrder as 'asc' | 'desc',
     universeId,
   };
+
+  const canExport = usePermission('finding:export');
 
   const query = useQuery({
     queryKey: ['findings', queryFilters],
@@ -130,6 +136,30 @@ export default function FindingsListPage(): JSX.Element {
       <PageHeader
         title="Findings"
         subtitle="Issues raised across all engagements."
+        actions={
+          canExport ? (
+            <Button
+              variant="secondary"
+              leftIcon={<Download className="h-4 w-4" />}
+              onClick={() =>
+                downloadFile(
+                  '/audit/findings/export',
+                  {
+                    format: 'xlsx',
+                    search: queryFilters.search,
+                    severity: queryFilters.severity,
+                    status: queryFilters.status,
+                    category: queryFilters.category,
+                    universeId: queryFilters.universeId,
+                  },
+                  'findings-register.xlsx',
+                ).catch((e: Error) => toast.error(e.message))
+              }
+            >
+              Export register
+            </Button>
+          ) : null
+        }
       />
 
       <Card padded className="mb-4">

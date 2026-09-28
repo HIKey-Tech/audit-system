@@ -3,7 +3,9 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useQuery } from '@tanstack/react-query';
-import { ScrollText, Search } from 'lucide-react';
+import { Download, ScrollText, Search } from 'lucide-react';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/Button';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
@@ -53,6 +55,23 @@ const ACTION_LABELS: Record<string, string> = {
   // Risk
   'risk.register.create': 'Created risk',
   'risk.assessment.create': 'Assessed risk',
+  // Security events
+  'auth.login.succeeded': 'Signed in',
+  'auth.login.failed': 'Sign-in failed',
+  'auth.mfa.failed': 'Two-factor code rejected',
+  'auth.mfa.admin_reset': 'Two-factor reset by administrator',
+  'auth.token.reuse_detected': 'Stolen session token detected',
+  'auth.logout': 'Signed out',
+  'auth.password_reset.requested': 'Password reset requested',
+  'auth.password_reset.completed': 'Password reset completed',
+  'access.denied': 'Access denied',
+  // System audit toolkit
+  'system_audit.analysis.run': 'Ran system audit analysis',
+  'system_audit.exceptions.disposition': 'Dispositioned analysis exceptions',
+  'system_audit.finding.raise': 'Raised finding from analysis',
+  'system_audit.review.complete': 'Signed off analysis review',
+  'system_audit.access_review.decide': 'Recorded access review decisions',
+  'system_audit.security_test.authorise': 'Authorised security test',
 };
 
 /** Title-cases an arbitrary token, leaving short noise words lowercased. */
@@ -91,6 +110,8 @@ const MODULE_LABELS: Record<string, string> = {
   logging: 'Logging',
   background: 'Background',
   messaging: 'Notifications',
+  security: 'Security events',
+  'system-audit': 'System audit',
 };
 
 const moduleLabel = (mod: string): string => MODULE_LABELS[mod.toLowerCase()] ?? mod;
@@ -135,6 +156,8 @@ export default function LogsPage(): JSX.Element | null {
   const router = useRouter();
   const canRead = usePermission('log:read');
   const canSummary = usePermission('log:summary');
+  const canExport = usePermission('log:export');
+  const [changesOnly, setChangesOnly] = useState(false);
 
   const [page, setPage] = useState(1);
   const [module, setModule] = useState('');
@@ -155,7 +178,7 @@ export default function LogsPage(): JSX.Element | null {
   });
 
   const list = useQuery({
-    queryKey: ['logs', { page, module, status, dateFrom, dateTo, search }],
+    queryKey: ['logs', { page, module, status, dateFrom, dateTo, search, changesOnly }],
     queryFn: () =>
       logsApi.list({
         page,
@@ -165,11 +188,28 @@ export default function LogsPage(): JSX.Element | null {
         dateFrom: dateFrom || undefined,
         dateTo: dateTo || undefined,
         action: search || undefined,
+        hasChanges: changesOnly || undefined,
         sortBy: 'createdAt',
         sortOrder: 'desc',
       }),
     enabled: canRead,
   });
+
+  const exportLogs = (): void => {
+    logsApi
+      .export(
+        {
+          module: module || undefined,
+          status: status || undefined,
+          dateFrom: dateFrom || undefined,
+          dateTo: dateTo || undefined,
+          action: search || undefined,
+          hasChanges: changesOnly || undefined,
+        },
+        'xlsx',
+      )
+      .catch((e: Error) => toast.error(e.message));
+  };
 
   const summary = useQuery({
     queryKey: ['logs', 'summary', { dateFrom, dateTo }],
@@ -252,12 +292,19 @@ export default function LogsPage(): JSX.Element | null {
         title="Audit Logs"
         subtitle="Complete record of all actions performed in the system"
         actions={
-          list.data ? (
-            <div className="text-right">
-              <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Total entries</p>
-              <p className="text-lg font-semibold tabular-nums text-text-primary">{formatNumber(list.data.meta.total)}</p>
-            </div>
-          ) : null
+          <div className="flex items-center gap-4">
+            {canExport && (
+              <Button variant="secondary" size="sm" leftIcon={<Download className="h-3.5 w-3.5" />} onClick={exportLogs}>
+                Export
+              </Button>
+            )}
+            {list.data ? (
+              <div className="text-right">
+                <p className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Total entries</p>
+                <p className="text-lg font-semibold tabular-nums text-text-primary">{formatNumber(list.data.meta.total)}</p>
+              </div>
+            ) : null}
+          </div>
         }
       />
 
@@ -322,6 +369,18 @@ export default function LogsPage(): JSX.Element | null {
             }}
           />
         </div>
+        <label className="mt-3 flex items-center gap-2 text-sm text-text-secondary">
+          <input
+            type="checkbox"
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
+            checked={changesOnly}
+            onChange={(e) => {
+              setChangesOnly(e.target.checked);
+              setPage(1);
+            }}
+          />
+          Only entries that changed data (change history, with before and after values)
+        </label>
       </Card>
 
       <Table<AuditLogEntry>

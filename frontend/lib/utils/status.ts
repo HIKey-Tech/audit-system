@@ -30,7 +30,25 @@ export type StatusToneKey =
   | 'not_tested'
   | 'passed'
   | 'failed'
-  | 'not_applicable';
+  | 'not_applicable'
+  // System audit toolkit
+  | 'confirmed'
+  | 'false_positive'
+  | 'explained'
+  | 'appropriate'
+  | 'revoke'
+  | 'modify'
+  | 'authorised'
+  | 'reporting'
+  | 'remediation'
+  | 'cancelled'
+  | 'completed'
+  | 'overdue'
+  | 'due_soon'
+  | 'expired'
+  | 'expiring'
+  | 'archived'
+  | 'disabled';
 
 interface ToneStyle {
   bg: string;
@@ -131,6 +149,23 @@ const STATUS_TONE: Record<StatusToneKey, keyof typeof TONES> = {
   passed: 'green',
   failed: 'red',
   not_applicable: 'gray',
+  confirmed: 'red',
+  false_positive: 'gray',
+  explained: 'blue',
+  appropriate: 'green',
+  revoke: 'red',
+  modify: 'amber',
+  authorised: 'purple',
+  reporting: 'amber',
+  remediation: 'orange',
+  cancelled: 'gray',
+  completed: 'green',
+  overdue: 'red',
+  due_soon: 'amber',
+  expired: 'red',
+  expiring: 'amber',
+  archived: 'gray',
+  disabled: 'gray',
 };
 
 const FALLBACK = TONES.gray;

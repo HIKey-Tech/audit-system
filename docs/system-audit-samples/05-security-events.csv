@@ -1,0 +1,14 @@
+Time,User,Event,Result,Source IP,Host
+28/09/2026 10:00,jdoe,4625 An account failed to log on,Failure,10.20.1.45,DC01
+28/09/2026 10:01,jdoe,4625 An account failed to log on,Failure,10.20.1.45,DC01
+28/09/2026 10:02,jdoe,4625 An account failed to log on,Failure,10.20.1.45,DC01
+28/09/2026 10:03,jdoe,4625 An account failed to log on,Failure,10.20.1.45,DC01
+28/09/2026 10:04,jdoe,4625 An account failed to log on,Failure,10.20.1.45,DC01
+28/09/2026 10:05,jdoe,4624 An account was successfully logged on,Success,10.20.1.45,DC01
+28/09/2026 11:00,aokafor,4625 An account failed to log on,Failure,41.184.2.9,VPN01
+28/09/2026 11:01,bmusa,4625 An account failed to log on,Failure,41.184.2.9,VPN01
+28/09/2026 11:02,cnwosu,4625 An account failed to log on,Failure,41.184.2.9,VPN01
+28/09/2026 11:03,dadeyemi,4625 An account failed to log on,Failure,41.184.2.9,VPN01
+28/09/2026 11:04,eeze,4625 An account failed to log on,Failure,41.184.2.9,VPN01
+27/09/2026 02:15,svc_admin,4728 A member was added to a security-enabled global group (Domain Admins),Success,10.20.1.9,DC01
+27/09/2026 02:40,svc_admin,1102 The audit log was cleared,Success,10.20.1.9,DC01

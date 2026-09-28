@@ -1,4 +1,5 @@
 // src/modules/user/dto/response/user.response.dto.ts
+import type { UserWithRoles } from '../../../../shared/prisma/prisma.types';
 
 export interface PermissionResponseDto {
   id: string;
@@ -64,6 +65,49 @@ export interface UserResponseDto {
  * co-responder, pick an owner). Excludes roles/permissions/MFA/tokens. Access is
  * still permission-gated — see the `user:directory` permission.
  */
+/**
+ * Effective access of one account — roles and the permissions they grant — for
+ * read-only user access reviews. Expired role assignments are excluded.
+ */
+export interface UserAccessEntitlementDto {
+  id: string;
+  email: string;
+  displayName: string;
+  department: string | null;
+  jobTitle: string | null;
+  isActive: boolean;
+  isSuperAdmin: boolean;
+  mfaEnabled: boolean;
+  lastLoginAt: string | null;
+  createdAt: string;
+  roles: string[];
+  roleSources: Record<string, string>;
+  permissions: string[];
+}
+
+export const mapUserToAccessEntitlement = (user: UserWithRoles, now = new Date()): UserAccessEntitlementDto => {
+  const liveRoles = user.user_roles.filter((ur) => !ur.expires_at || ur.expires_at > now);
+  const permissions = new Set<string>();
+  for (const ur of liveRoles) {
+    for (const rp of ur.role.role_permissions) permissions.add(rp.permission.slug);
+  }
+  return {
+    id: user.id,
+    email: user.email,
+    displayName: user.display_name ?? `${user.first_name} ${user.last_name}`.trim(),
+    department: user.department,
+    jobTitle: user.job_title,
+    isActive: user.is_active,
+    isSuperAdmin: user.is_super_admin,
+    mfaEnabled: user.mfa_enabled,
+    lastLoginAt: user.last_login_at?.toISOString() ?? null,
+    createdAt: user.created_at.toISOString(),
+    roles: liveRoles.map((ur) => ur.role.name),
+    roleSources: Object.fromEntries(liveRoles.map((ur) => [ur.role.name, ur.source])),
+    permissions: Array.from(permissions).sort(),
+  };
+};
+
 export interface UserDirectoryDto {
   id: string;
   displayName: string | null;

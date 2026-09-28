@@ -4,6 +4,8 @@ import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   CreateRiskRequestSchema,
+  RiskRegisterExportQueryDto,
+  RiskRegisterExportQuerySchema,
   RiskRegisterQuerySchema,
   UpdateRiskRequestSchema,
   UpdateRiskStatusRequestSchema,
@@ -34,6 +36,25 @@ export class RegisterController {
      * @access Private - audit:read
      */
     this.router.get('/', requirePermission('risk:read'), validate(RiskRegisterQuerySchema, 'query'), this._listRisks.bind(this));
+
+    /**
+     * @route  GET /risk/register/export
+     * @desc   Export the (filtered) risk register as CSV or Excel
+     * @access Private - risk:read + risk:export
+     */
+    this.router.get(
+      '/export',
+      requirePermission('risk:read', 'risk:export'),
+      validate(RiskRegisterExportQuerySchema, 'query'),
+      this._exportRisks.bind(this),
+    );
+
+    /**
+     * @route  GET /risk/register/objectives
+     * @desc   Distinct business objectives already linked to risks (form suggestions)
+     * @access Private - risk:read
+     */
+    this.router.get('/objectives', requirePermission('risk:read'), this._listBusinessObjectives.bind(this));
 
     /**
      * @route  GET /risk/register/universe/:universeId
@@ -120,6 +141,31 @@ export class RegisterController {
     try {
       const { risks, meta } = await this.registerService.listRisks(req.query as never, req.user!);
       res.status(200).json({ ...buildResponse(risks), meta });
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _exportRisks(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const { format, ...query } = req.query as unknown as RiskRegisterExportQueryDto;
+      const file = await this.registerService.exportRisks(
+        { ...query, page: 1, pageSize: 1 },
+        format,
+        req.user!,
+      );
+      res.setHeader('Content-Type', file.mimeType);
+      res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+      res.status(200).send(file.buffer);
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listBusinessObjectives(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const objectives = await this.registerService.listBusinessObjectives();
+      res.status(200).json(buildResponse(objectives));
     } catch (err) {
       next(err);
     }

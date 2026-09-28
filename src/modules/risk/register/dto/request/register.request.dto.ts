@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { RiskStatus } from '../../../domain/enum/risk.enum';
+import { ExportFormatSchema } from '../../../../../shared/utils/tabular-export.util';
 
 const RatingSchema = z.coerce.number().int().min(1).max(5);
 
@@ -12,6 +13,7 @@ export const CreateRiskRequestSchema = z.object({
   impact: RatingSchema,
   status: z.nativeEnum(RiskStatus).default(RiskStatus.Open),
   universeId: z.string().uuid().nullable().optional(),
+  businessObjective: z.string().trim().max(500).nullable().optional(),
 });
 
 export const UpdateRiskRequestSchema = z.object({
@@ -22,6 +24,7 @@ export const UpdateRiskRequestSchema = z.object({
   likelihood: RatingSchema.optional(),
   impact: RatingSchema.optional(),
   universeId: z.string().uuid().nullable().optional(),
+  businessObjective: z.string().trim().max(500).nullable().optional(),
 });
 
 export const UpdateRiskStatusRequestSchema = z.object({
@@ -34,11 +37,17 @@ export const RiskRegisterQuerySchema = z.object({
   categoryId: z.string().uuid().optional(),
   status: z.nativeEnum(RiskStatus).optional(),
   ownerId: z.string().uuid().optional(),
+  businessObjective: z.string().trim().max(500).optional(),
   sortBy: z.enum(['current_score', 'title', 'created_at', 'updated_at']).default('current_score'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
+});
+
+export const RiskRegisterExportQuerySchema = RiskRegisterQuerySchema.omit({ page: true, pageSize: true }).extend({
+  format: ExportFormatSchema,
 });
 
 export type CreateRiskRequestDto = z.infer<typeof CreateRiskRequestSchema>;
 export type UpdateRiskRequestDto = z.infer<typeof UpdateRiskRequestSchema>;
 export type UpdateRiskStatusRequestDto = z.infer<typeof UpdateRiskStatusRequestSchema>;
 export type RiskRegisterQueryDto = z.infer<typeof RiskRegisterQuerySchema>;
+export type RiskRegisterExportQueryDto = z.infer<typeof RiskRegisterExportQuerySchema>;

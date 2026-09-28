@@ -6,8 +6,9 @@ import { riskRegisterWithDetailsInclude, RiskRegisterWithDetails } from '../../.
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
 import { RiskStatus } from '../../../domain/enum/risk.enum';
 import { assertHasPermission, getRiskScoreBand } from '../../../utility/risk.utility';
-import { HighRiskQueryDto } from '../../dto/request/monitoring.request.dto';
+import { EmergingRiskQueryDto, HighRiskQueryDto } from '../../dto/request/monitoring.request.dto';
 import {
+  EmergingRiskResponseDto,
   OrganizationRiskSummaryResponseDto,
   RiskScoreTrendResponseDto,
 } from '../../dto/response/monitoring.response.dto';
@@ -15,6 +16,49 @@ import { RiskRegisterResponseDto, mapRiskRegisterToResponse } from '../../../reg
 import { IMonitoringService } from '../interface/monitoring.service.interface';
 
 export class RiskMonitoringService implements IMonitoringService {
+  async getEmergingRisks(query: EmergingRiskQueryDto, actor: RiskActorContext): Promise<EmergingRiskResponseDto[]> {
+    assertHasPermission(actor.permissions, 'risk_monitoring:read');
+    const since = new Date(Date.now() - query.days * 86_400_000);
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
+
+    const risks = await prisma.risk_Register.findMany({
+      where: {
+        deleted_at: null,
+        status: { in: [RiskStatus.Open, RiskStatus.Accepted] },
+        ...(restrictToOwner && { owner_id: actor.id }),
+        OR: [{ created_at: { gte: since } }, { assessments: { some: { assessed_at: { gte: since } } } }],
+      },
+      include: {
+        category: { select: { name: true } },
+        owner: { select: { display_name: true, first_name: true, last_name: true } },
+        assessments: { orderBy: { assessed_at: 'desc' }, select: { score: true, assessed_at: true } },
+      },
+    });
+
+    const emerging: EmergingRiskResponseDto[] = [];
+    for (const risk of risks) {
+      // The score the risk carried when the window opened, if it existed then.
+      const before = risk.assessments.find((a) => a.assessed_at < since);
+      const isNew = risk.created_at >= since;
+      if (!isNew && (!before || risk.current_score <= before.score)) continue;
+      emerging.push({
+        riskId: risk.id,
+        title: risk.title,
+        categoryName: risk.category?.name ?? null,
+        ownerName: risk.owner ? risk.owner.display_name ?? `${risk.owner.first_name} ${risk.owner.last_name}`.trim() : null,
+        trend: isNew ? 'new' : 'rising',
+        currentScore: risk.current_score,
+        previousScore: isNew ? null : before!.score,
+        change: isNew ? risk.current_score : risk.current_score - before!.score,
+        status: risk.status,
+        lastAssessedAt: risk.last_assessed_at?.toISOString() ?? null,
+      });
+    }
+    return emerging
+      .sort((a, b) => b.currentScore - a.currentScore || b.change - a.change)
+      .slice(0, query.limit);
+  }
+
   async getHighRiskItems(
     query: HighRiskQueryDto,
     actor: RiskActorContext,

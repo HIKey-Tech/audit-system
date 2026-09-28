@@ -11,6 +11,8 @@ import {
   hashPassword,
 } from '../../utility/token.utility';
 import { revokeUserSessions } from '../../../../shared/security/session-guard';
+import { logSecurityEvent } from '../../../logging/utility/security-event.utility';
+import { SecurityEvent } from '../../../logging/domain/enum/logging.enum';
 
 const escapeHtml = (value: string): string =>
   value.replace(/[&<>"']/g, (char) => {
@@ -83,12 +85,13 @@ export class PasswordResetService implements IPasswordResetService {
 
     await this._sendResetEmail(user, raw);
     logger.info('Password reset token issued', { userId: user.id });
+    logSecurityEvent(SecurityEvent.PasswordResetRequested, { userId: user.id, ipAddress });
   }
 
   async resetPassword(
     token: string,
     newPassword: string,
-    _ipAddress?: string,
+    ipAddress?: string,
   ): Promise<void> {
     const tokenHash = hashToken(token);
 
@@ -131,6 +134,7 @@ export class PasswordResetService implements IPasswordResetService {
     await revokeUserSessions(stored.user_id);
 
     logger.info('Password reset completed', { userId: stored.user_id });
+    logSecurityEvent(SecurityEvent.PasswordResetCompleted, { userId: stored.user_id, ipAddress });
   }
 
   private async _sendResetEmail(

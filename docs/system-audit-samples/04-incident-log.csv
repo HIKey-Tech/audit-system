@@ -1,0 +1,6 @@
+Incident Number,Priority,Summary,Opened,Acknowledged,Resolved,State,Assigned To,Resolution Notes
+INC0010021,1 - Critical,Dynafin unavailable,01/09/2026 08:00,01/09/2026 08:10,01/09/2026 10:30,Resolved,DBA Team,Restarted database cluster
+INC0010022,1 - Critical,Suspected ransomware on FS01,02/09/2026 07:15,02/09/2026 08:30,02/09/2026 22:00,Resolved,Security Team,Host isolated and restored from backup
+INC0010023,2 - High,VPN gateway intermittent,05/09/2026 09:00,05/09/2026 09:20,,In Progress,Network Team,
+INC0010024,3 - Medium,Email delays,10/08/2026 11:00,10/08/2026 12:00,,On Hold,Messaging Team,
+INC0010025,4 - Low,Printer offline in HQ,12/09/2026 14:00,12/09/2026 14:30,12/09/2026 16:00,Closed,Service Desk,

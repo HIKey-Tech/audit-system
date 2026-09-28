@@ -2,7 +2,7 @@ import { Router, Request, Response, NextFunction } from 'express';
 import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
-import { HighRiskQuerySchema } from '../dto/request/monitoring.request.dto';
+import { EmergingRiskQueryDto, EmergingRiskQuerySchema, HighRiskQuerySchema } from '../dto/request/monitoring.request.dto';
 import { IMonitoringService } from '../service/interface/monitoring.service.interface';
 
 export class MonitoringController {
@@ -38,6 +38,13 @@ export class MonitoringController {
     this.router.get('/monitoring/summary', requirePermission('risk_monitoring:read'), this._getOrganizationRiskSummary.bind(this));
 
     /**
+     * @route  GET /risk/monitoring/emerging
+     * @desc   New and rising risks within the look-back window (emerging-risk watchlist)
+     * @access Private - risk_monitoring:read
+     */
+    this.router.get('/monitoring/emerging', requirePermission('risk_monitoring:read'), validate(EmergingRiskQuerySchema, 'query'), this._getEmergingRisks.bind(this));
+
+    /**
      * @route  GET /risk/register/:id/trend
      * @desc   Get risk score trend
      * @access Private - audit:read
@@ -67,6 +74,15 @@ export class MonitoringController {
     try {
       const trend = await this.monitoringService.getRiskScoreTrend(req.params.id, req.user!);
       res.status(200).json(buildResponse(trend));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getEmergingRisks(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const risks = await this.monitoringService.getEmergingRisks(req.query as unknown as EmergingRiskQueryDto, req.user!);
+      res.status(200).json(buildResponse(risks));
     } catch (err) {
       next(err);
     }

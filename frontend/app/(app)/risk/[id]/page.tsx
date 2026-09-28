@@ -189,6 +189,12 @@ export default function RiskDetailPage(): JSX.Element {
               <dd className="mt-1 text-sm text-text-primary">{r.currentLikelihood} × {r.currentImpact}</dd>
             </div>
             <div>
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Business objective</dt>
+              <dd className="mt-1 text-sm text-text-primary">
+                {r.businessObjective ?? <span className="text-text-secondary">Not linked</span>}
+              </dd>
+            </div>
+            <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Linked entity</dt>
               <dd className="mt-1 text-sm text-text-primary">
                 {r.universeName ? (

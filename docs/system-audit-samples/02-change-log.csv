@@ -1,0 +1,6 @@
+Change Number,Summary,Type,Requested By,Approved By,Approved On,Implemented By,Implemented On,Tested,Backout Plan,State
+CHG1001,Patch core DB,Normal,Ade,Bola,01/09/2026,Chidi,03/09/2026,Yes,Restore snapshot,Closed
+CHG1002,Open firewall port 8443,Normal,Ade,,,Chidi,04/09/2026,Yes,Remove rule,Closed
+CHG1003,Release Dynafin 5.2,Normal,Ade,Bola,10/09/2026,Chidi,05/09/2026,Yes,Rollback package,Closed
+CHG1004,Emergency hotfix,Emergency,Ade,Bola,20/09/2026,Chidi,06/09/2026,Yes,,Closed
+CHG1005,Config tweak,Normal,Chidi,Chidi,01/09/2026,Chidi,02/09/2026,No,,Closed

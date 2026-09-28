@@ -29,6 +29,8 @@ import { generateScopedToken } from '../../utility/mfa.utility';
 import { createOidcClient, IOidcClient } from '../client/oidc.client';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
 import { revokeUserSessions } from '../../../../shared/security/session-guard';
+import { logSecurityEvent } from '../../../logging/utility/security-event.utility';
+import { SecurityEvent } from '../../../logging/domain/enum/logging.enum';
 
 
 export class AuthService implements IAuthService {
@@ -51,18 +53,25 @@ export class AuthService implements IAuthService {
       include: userWithRolesInclude,
     }) as UserWithRoles | null;
 
-    if (!user || !user.password_hash) {
-      throw AppError.unauthorized('Invalid credentials');
-    }
+    const failLogin = (reason: string): never => {
+      logSecurityEvent(SecurityEvent.LoginFailed, {
+        userId: user?.id,
+        email: dto.email,
+        ipAddress,
+        userAgent,
+        reason,
+        method: 'password',
+        status: 'failure',
+      });
+      throw AppError.unauthorized(reason === 'account_deactivated' ? 'Account is deactivated' : 'Invalid credentials');
+    };
 
-    if (!user.is_active) {
-      throw AppError.unauthorized('Account is deactivated');
-    }
+    if (!user) return failLogin('unknown_account');
+    if (!user.password_hash) return failLogin('no_local_password');
+    if (!user.is_active) return failLogin('account_deactivated');
 
     const passwordValid = await comparePassword(dto.password, user.password_hash);
-    if (!passwordValid) {
-      throw AppError.unauthorized('Invalid credentials');
-    }
+    if (!passwordValid) return failLogin('invalid_password');
 
     // ── 2FA gate ──────────────────────────────────────────────
     if (user.mfa_enabled) {
@@ -118,6 +127,7 @@ export class AuthService implements IAuthService {
         return issued;
       });
       logger.info('User logged in via password (2FA grace active)', { userId: user.id });
+      logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
       return {
         status: 'OK',
         mfaSetupRequired: true,
@@ -135,6 +145,7 @@ export class AuthService implements IAuthService {
     });
 
     logger.info('User logged in via password', { userId: user.id });
+    logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
 
     return {
       status: 'OK',
@@ -171,6 +182,7 @@ export class AuthService implements IAuthService {
     });
 
     logger.info('User completed 2FA login', { userId: user.id });
+    logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password+mfa' });
 
     return {
       ...tokens,
@@ -202,6 +214,14 @@ export class AuthService implements IAuthService {
           oid: result.profile.oid,
           amr,
         });
+        logSecurityEvent(SecurityEvent.LoginFailed, {
+          email: result.profile.email,
+          ipAddress,
+          userAgent,
+          reason: 'idp_mfa_missing',
+          method: 'sso',
+          status: 'failure',
+        });
         throw AppError.unauthorized(
           'Multi-factor authentication is required. Please complete MFA with your identity provider.',
         );
@@ -220,6 +240,15 @@ export class AuthService implements IAuthService {
     }) as UserWithRoles;
 
     if (!user.is_active) {
+      logSecurityEvent(SecurityEvent.LoginFailed, {
+        userId: user.id,
+        email: user.email,
+        ipAddress,
+        userAgent,
+        reason: 'account_deactivated',
+        method: 'sso',
+        status: 'failure',
+      });
       throw AppError.unauthorized('Account is deactivated');
     }
 
@@ -231,6 +260,7 @@ export class AuthService implements IAuthService {
     });
 
     logger.info('User logged in via SSO', { userId: user.id, provider: config.oidc.provider });
+    logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'sso' });
 
     return {
       ...tokens,
@@ -309,6 +339,12 @@ export class AuthService implements IAuthService {
           data: { revoked_at: new Date() },
         });
         logger.warn('Refresh token reuse detected', { userId: storedToken.user_id });
+        logSecurityEvent(SecurityEvent.TokenReuseDetected, {
+          userId: storedToken.user_id,
+          ipAddress,
+          reason: 'revoked_token_replayed',
+          status: 'failure',
+        });
         throw AppError.unauthorized('Refresh token has been revoked');
       }
 
@@ -357,10 +393,15 @@ export class AuthService implements IAuthService {
 
   async logout(refreshToken: string): Promise<void> {
     const tokenHash = hashToken(refreshToken);
+    const token = await prisma.refresh_Token.findFirst({
+      where: { token_hash: tokenHash, revoked_at: null },
+      select: { user_id: true },
+    });
     await prisma.refresh_Token.updateMany({
       where: { token_hash: tokenHash, revoked_at: null },
       data: { revoked_at: new Date() },
     });
+    if (token) logSecurityEvent(SecurityEvent.Logout, { userId: token.user_id, reason: 'single_session' });
   }
 
   async logoutAll(userId: string): Promise<void> {
@@ -371,6 +412,7 @@ export class AuthService implements IAuthService {
     // Also invalidate outstanding access tokens, not just refresh tokens.
     await revokeUserSessions(userId);
     logger.info('All refresh tokens revoked', { userId });
+    logSecurityEvent(SecurityEvent.Logout, { userId, reason: 'all_sessions' });
   }
 
   private async _issueTokens(

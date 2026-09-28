@@ -1,4 +1,5 @@
 import { api } from '../api-client';
+import { downloadFile } from './download';
 import type { Risk, RiskCategory, RiskAssessment } from '../types/domain';
 
 export interface RisksListQuery {
@@ -19,6 +20,7 @@ export interface CreateRiskDto {
   impact: number;
   status?: string;
   universeId?: string | null;
+  businessObjective?: string | null;
 }
 
 export interface CreateAssessmentDto {
@@ -57,6 +59,11 @@ export const riskApi = {
   list: (q?: RisksListQuery) =>
     api.getPaginated<Risk>('/risk/register', q as Record<string, string | number | boolean | undefined>),
   get: (id: string) => api.get<Risk>(`/risk/register/${id}`),
+  /** Objectives already linked to risks — suggestions for the risk form. */
+  listObjectives: () => api.get<string[]>('/risk/register/objectives'),
+  /** Download the (filtered) register — requires risk:export. */
+  export: (format: 'csv' | 'xlsx', q: { categoryId?: string; status?: string } = {}) =>
+    downloadFile('/risk/register/export', { ...q, format }, `risk-register.${format}`),
   listByUniverse: (universeId: string) =>
     api.get<Risk[]>(`/risk/register/universe/${universeId}`),
   create: (dto: CreateRiskDto) => api.post<Risk>('/risk/register', dto),

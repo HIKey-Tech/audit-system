@@ -3,6 +3,12 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
+import {
+  EXPORT_MAX_ROWS,
+  ExportFormat,
+  TabularExportFile,
+  buildTabularExport,
+} from '../../../../../shared/utils/tabular-export.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { riskRegisterWithDetailsInclude, RiskRegisterWithDetails } from '../../../../../shared/prisma/prisma.types';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
@@ -18,6 +24,11 @@ import {
   mapRiskRegisterToResponse,
 } from '../../dto/response/register.response.dto';
 import { IRegisterService } from '../interface/register.service.interface';
+
+const normaliseObjective = (value: string | null | undefined): string | null => {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : null;
+};
 
 export class RiskRegisterService implements IRegisterService {
   async createRisk(
@@ -42,6 +53,7 @@ export class RiskRegisterService implements IRegisterService {
           current_score: score,
           status: dto.status,
           universe_id: dto.universeId ?? null,
+          business_objective: normaliseObjective(dto.businessObjective),
           created_by_id: actor.id,
         },
         include: riskRegisterWithDetailsInclude,
@@ -104,6 +116,9 @@ export class RiskRegisterService implements IRegisterService {
           ...(dto.impact !== undefined && { impact: dto.impact }),
           ...(scoreChanged && { current_score: score }),
           ...(dto.universeId !== undefined && { universe_id: dto.universeId }),
+          ...(dto.businessObjective !== undefined && {
+            business_objective: normaliseObjective(dto.businessObjective),
+          }),
         },
         include: riskRegisterWithDetailsInclude,
       });
@@ -199,14 +214,7 @@ export class RiskRegisterService implements IRegisterService {
     actor: RiskActorContext,
   ): Promise<{ risks: RiskRegisterResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
-    const restrictToOwner = !actor.permissions.includes('risk:read_all');
-    const where: Prisma.Risk_RegisterWhereInput = {
-      deleted_at: null,
-      ...(query.categoryId && { category_id: query.categoryId }),
-      ...(query.status && { status: query.status }),
-      ...(query.ownerId && { owner_id: query.ownerId }),
-      ...(restrictToOwner && { owner_id: actor.id }),
-    };
+    const where = this._listWhere(query, actor);
 
     const [total, risks] = await prisma.$transaction([
       prisma.risk_Register.count({ where }),
@@ -225,6 +233,58 @@ export class RiskRegisterService implements IRegisterService {
     };
   }
 
+  async exportRisks(
+    query: RiskRegisterQueryDto,
+    format: ExportFormat,
+    actor: RiskActorContext,
+  ): Promise<TabularExportFile> {
+    const risks = (await prisma.risk_Register.findMany({
+      where: this._listWhere(query, actor),
+      include: riskRegisterWithDetailsInclude,
+      orderBy: { [query.sortBy]: query.sortOrder },
+      take: EXPORT_MAX_ROWS,
+    })) as RiskRegisterWithDetails[];
+    const rows = risks.map(mapRiskRegisterToResponse);
+
+    logger.info('Risk register exported', { actorId: actor.id, format, count: rows.length });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'risk.register.export',
+      module: 'risk',
+      entityType: 'risk_register',
+      newValues: { format, count: rows.length, filters: query },
+    });
+
+    return buildTabularExport(
+      rows,
+      [
+        { header: 'Title', value: (r) => r.title },
+        { header: 'Description', value: (r) => r.description },
+        { header: 'Category', value: (r) => r.categoryName },
+        { header: 'Business objective', value: (r) => r.businessObjective },
+        { header: 'Owner', value: (r) => r.ownerName },
+        { header: 'Likelihood', value: (r) => r.likelihood },
+        { header: 'Impact', value: (r) => r.impact },
+        { header: 'Score', value: (r) => r.currentScore },
+        { header: 'Status', value: (r) => r.status },
+        { header: 'Audit universe entity', value: (r) => r.universeName },
+        { header: 'Last assessed', value: (r) => r.lastAssessedAt },
+        { header: 'Created', value: (r) => r.createdAt },
+      ],
+      { baseName: 'risk-register', format, sheetName: 'Risk register' },
+    );
+  }
+
+  async listBusinessObjectives(): Promise<string[]> {
+    const rows = await prisma.risk_Register.findMany({
+      where: { deleted_at: null, business_objective: { not: null } },
+      select: { business_objective: true },
+      distinct: ['business_objective'],
+      orderBy: { business_objective: 'asc' },
+    });
+    return rows.map((r) => r.business_objective).filter((v): v is string => Boolean(v));
+  }
+
   async getRisksByUniverseEntity(universeId: string, actor?: RiskActorContext): Promise<RiskRegisterResponseDto[]> {
     const restrictToOwner = actor ? !actor.permissions.includes('risk:read_all') : false;
     const risks = await prisma.risk_Register.findMany({
@@ -239,6 +299,18 @@ export class RiskRegisterService implements IRegisterService {
 
     return risks.map(mapRiskRegisterToResponse);
   }
+  private _listWhere(query: RiskRegisterQueryDto, actor: RiskActorContext): Prisma.Risk_RegisterWhereInput {
+    const restrictToOwner = !actor.permissions.includes('risk:read_all');
+    return {
+      deleted_at: null,
+      ...(query.categoryId && { category_id: query.categoryId }),
+      ...(query.status && { status: query.status }),
+      ...(query.ownerId && { owner_id: query.ownerId }),
+      ...(query.businessObjective && { business_objective: query.businessObjective }),
+      ...(restrictToOwner && { owner_id: actor.id }),
+    };
+  }
+
   private _assertCanAssignOwner(ownerId: string, actor: RiskActorContext): void {
     if (actor.permissions.includes('risk:read_all')) return;
     if (ownerId === actor.id) return;

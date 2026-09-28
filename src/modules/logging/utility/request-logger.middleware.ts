@@ -1,6 +1,8 @@
 // src/modules/logging/utility/request-logger.middleware.ts
 import { Request, Response, NextFunction } from 'express';
 import { auditLogService } from '../service/implementation/audit-log.service';
+import { SecurityEvent } from '../domain/enum/logging.enum';
+import { logSecurityEvent } from './security-event.utility';
 
 const MODULE_ALIASES: Record<string, string> = {
   users: 'user',
@@ -26,26 +28,37 @@ const getModuleFromPath = (path: string): string => {
   return MODULE_ALIASES[routeModule] ?? routeModule;
 };
 
+const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
+
 /**
  * Express middleware that automatically logs mutating requests (POST/PUT/PATCH/DELETE)
- * to the audit log after the response is sent.
+ * to the audit log after the response is sent. Any request refused with 403 —
+ * reads included — is additionally recorded as an `access.denied` security event.
  */
 export const requestAuditLogger = (
   req: Request,
   res: Response,
   next: NextFunction,
 ): void => {
-  const MUTATING = ['POST', 'PUT', 'PATCH', 'DELETE'];
-
-  if (!MUTATING.includes(req.method)) {
-    return next();
-  }
-
+  const isMutating = MUTATING.includes(req.method);
   const startAt = Date.now();
 
   res.on('finish', () => {
-    const durationMs = Date.now() - startAt;
     const requestPath = getRequestPath(req);
+
+    if (res.statusCode === 403) {
+      logSecurityEvent(SecurityEvent.AccessDenied, {
+        userId: req.user?.id,
+        ipAddress: req.ip,
+        userAgent: req.headers['user-agent'],
+        httpMethod: req.method,
+        path: requestPath,
+        status: 'failure',
+      });
+    }
+    if (!isMutating) return;
+
+    const durationMs = Date.now() - startAt;
     const module = getModuleFromPath(requestPath);
 
     auditLogService.logAsync({

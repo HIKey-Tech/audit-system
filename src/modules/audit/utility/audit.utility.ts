@@ -185,6 +185,121 @@ export const CONTROL_SETS: Record<AuditType, Array<{
       controlDescription: 'Networks and systems are continuously monitored to detect potential cybersecurity events (NIST CSF Detect).',
       testProcedure: 'Inspect monitoring and detection tooling coverage, review alerting thresholds, and verify evidence that detections are investigated within defined timeframes.',
     },
+    {
+      controlReference: 'ISO27001-A.5.1',
+      controlDescription: 'IT and information security policies, procedures, and standards are defined, approved by management, communicated, and reviewed at planned intervals.',
+      testProcedure: 'Inspect the policy set in the System Documentation library, verify approval and version history, confirm each policy is within its review date, and assess adequacy against current systems and regulations.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.37',
+      controlDescription: 'Operating procedures for information processing facilities are documented and made available to personnel who need them.',
+      testProcedure: 'Sample operational procedures and process manuals for in-scope systems, confirm they are current and accessible, and compare documented steps against observed practice.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.3',
+      controlDescription: 'Conflicting duties and areas of responsibility are segregated to reduce the risk of unauthorised or unintentional modification or misuse of assets.',
+      testProcedure: 'Run a User Access Review with segregation-of-duties rules over in-scope systems, investigate every conflict, and confirm that unavoidable conflicts have documented compensating controls.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.18',
+      controlDescription: 'Access rights to information and systems are provisioned, periodically reviewed, adjusted, and removed in line with the access control policy.',
+      testProcedure: 'Obtain a current user access listing, reconcile it against the HR/directory record, confirm leavers and disabled accounts hold no active access, and verify evidence of the latest periodic access review.',
+    },
+    {
+      controlReference: 'ISO27001-A.8.2',
+      controlDescription: 'Allocation and use of privileged access rights are restricted, managed, and monitored.',
+      testProcedure: 'Identify all privileged and administrator accounts, verify each has documented approval and business need, and review privileged activity logs for unusual use.',
+    },
+    {
+      controlReference: 'ISO27001-A.8.9',
+      controlDescription: 'Configurations, including security configurations, of hardware, software, services, and networks are established, documented, implemented, monitored, and reviewed.',
+      testProcedure: 'Compare current configuration exports of in-scope systems against the approved baseline, investigate every deviation, and confirm deviations were approved through change management.',
+    },
+    {
+      controlReference: 'ISO27001-A.8.7',
+      controlDescription: 'Protection against malware (anti-virus / endpoint protection) is implemented, kept up to date, and supported by user awareness.',
+      testProcedure: 'Review endpoint protection console coverage against the asset inventory, check signature and engine update status, and sample malware alerts for timely response.',
+    },
+    {
+      controlReference: 'ISO27001-A.8.15',
+      controlDescription: 'Logs recording user activities, exceptions, faults, and other relevant events are produced, stored, protected, and analysed.',
+      testProcedure: 'Confirm logging is enabled for in-scope systems, verify log retention and protection from alteration, and analyse a log extract for anomalies such as repeated failed logins or out-of-hours privileged activity.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.7',
+      controlDescription: 'Information relating to information security threats is collected and analysed to produce threat intelligence and to track emerging IT risks.',
+      testProcedure: 'Review threat-intelligence sources and advisories consumed, confirm relevant threats are assessed into the risk register, and verify emerging risks are reported to management.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.24',
+      controlDescription: 'Information security incident management is planned and prepared, with defined processes, roles, and responsibilities.',
+      testProcedure: 'Inspect the incident response plan, confirm roles and escalation contacts are current, and verify the plan was tested or exercised within the last year.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.26',
+      controlDescription: 'Information security incidents are responded to in accordance with documented procedures and resolved within agreed timelines.',
+      testProcedure: 'Analyse the incident log for response and resolution times against SLA, sample incidents for root-cause analysis and lessons learned, and confirm unresolved incidents are escalated.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.30',
+      controlDescription: 'ICT readiness is planned, implemented, maintained, and tested based on business continuity objectives and ICT continuity requirements.',
+      testProcedure: 'Review the ICT continuity and disaster recovery plans, compare achieved RTO/RPO in the latest recovery tests against targets, and confirm failed tests were remediated.',
+    },
+    {
+      controlReference: 'SYS-DR-002',
+      controlDescription: 'Backup restoration is tested at defined intervals, and recovery test results — including achieved recovery time — are recorded and reviewed.',
+      testProcedure: 'Analyse the backup job log for failed or missed jobs, review restore-test records for the last 12 months, and confirm every failed restore test has a documented corrective action.',
+    },
+    {
+      controlReference: 'SYS-DATA-001',
+      controlDescription: 'Input, processing, and output controls — validation, reconciliations, and error handling — ensure data in financial and operational systems is complete, accurate, and valid.',
+      testProcedure: 'Run data integrity analytics over a system extract (duplicates, missing mandatory fields, sequence gaps, control totals) and investigate every exception with the system owner.',
+    },
+    {
+      controlReference: 'ISO27001-A.8.24',
+      controlDescription: 'Cryptography, including encryption of sensitive data at rest and in transit, is used effectively and supported by key management.',
+      testProcedure: 'Review encryption configuration for systems holding confidential data, verify TLS versions for data in transit, and inspect key management and rotation records.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.19',
+      controlDescription: 'Processes are defined and implemented to manage the information security risks associated with suppliers and third-party service providers.',
+      testProcedure: 'Obtain the list of IT suppliers, confirm each critical supplier had a security risk assessment, and verify due diligence was completed before onboarding.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.20',
+      controlDescription: 'IT contracts and supplier agreements contain the relevant information security, confidentiality, service-level, and right-to-audit requirements.',
+      testProcedure: 'Sample IT contracts from the System Documentation library, check for security, confidentiality, SLA, and right-to-audit clauses, and flag expired or soon-to-expire contracts.',
+    },
+    {
+      controlReference: 'ISO27001-A.5.22',
+      controlDescription: 'Supplier service delivery and changes to supplier services are regularly monitored, reviewed, and evaluated.',
+      testProcedure: 'Review supplier performance reports against contracted SLAs, confirm service reviews took place, and verify changes to supplier services were risk-assessed.',
+    },
+    {
+      controlReference: 'PCIDSS-11.4',
+      controlDescription: 'External and internal penetration testing is performed at least annually and after significant change, and exploitable vulnerabilities are corrected and retested.',
+      testProcedure: 'Review the security testing schedule, confirm tests were authorised with agreed rules of engagement, and trace critical and high results to remediation and retest evidence.',
+    },
+    {
+      controlReference: 'SOX-ITGC-AC',
+      controlDescription: 'Access to programs and data is restricted to authorised users through provisioning, periodic review, privileged access control, and timely removal of leavers (SOX ITGC — Access).',
+      testProcedure: 'Perform a user access review over financially significant systems, test provisioning approvals for new users, and confirm leavers were removed within the policy timeline.',
+    },
+    {
+      controlReference: 'SOX-ITGC-PC',
+      controlDescription: 'Program changes are authorised, tested, approved, and migrated to production by personnel independent of development (SOX ITGC — Program Change).',
+      testProcedure: 'Analyse the change log for changes without approval, approvals after implementation, and implementers who also approved; sample changes for test and rollback evidence.',
+    },
+    {
+      controlReference: 'SOX-ITGC-PD',
+      controlDescription: 'New systems and major enhancements follow a controlled development and acquisition lifecycle, including validated data conversion (SOX ITGC — Program Development).',
+      testProcedure: 'Inspect project documentation for recent implementations, verify user acceptance testing sign-off, and confirm data conversion was reconciled and approved.',
+    },
+    {
+      controlReference: 'SOX-ITGC-CO',
+      controlDescription: 'Computer operations — job scheduling, backup and recovery, and incident management — are monitored so processing is complete and accurate (SOX ITGC — Computer Operations).',
+      testProcedure: 'Review batch job and backup logs for failures and their resolution, and trace a sample of operational incidents to timely closure.',
+    },
   ],
   [AuditType.Financial]: [
     {
@@ -263,6 +378,36 @@ export const CONTROL_SETS: Record<AuditType, Array<{
       controlReference: 'ISO31000-6.6',
       controlDescription: 'Risk management performance is monitored, reviewed, and reported to governance bodies at defined intervals (ISO 31000 Monitoring & Review).',
       testProcedure: 'Inspect risk reporting to management and the board, verify review frequency against policy, and confirm actions arising are tracked to closure.',
+    },
+    {
+      controlReference: 'GDPR-ART5',
+      controlDescription: 'Personal data is processed lawfully, fairly, and transparently, limited to its purpose, minimised, accurate, kept no longer than necessary, and the controller can demonstrate accountability (GDPR Art. 5).',
+      testProcedure: 'Review the data inventory against stated purposes, sample records for accuracy and retention compliance, and confirm accountability documentation is maintained.',
+    },
+    {
+      controlReference: 'GDPR-ART28',
+      controlDescription: 'Processors act only under a written contract that sets out processing instructions, confidentiality, security, and audit rights (GDPR Art. 28).',
+      testProcedure: 'Sample third-party contracts involving personal data and confirm each contains the mandatory processor clauses, including security obligations and audit rights.',
+    },
+    {
+      controlReference: 'GDPR-ART30',
+      controlDescription: 'A record of processing activities is maintained and kept current (GDPR Art. 30).',
+      testProcedure: 'Inspect the record of processing activities, confirm it covers in-scope systems, and verify it was reviewed after recent system or process changes.',
+    },
+    {
+      controlReference: 'GDPR-ART32',
+      controlDescription: 'Appropriate technical and organisational measures ensure the confidentiality, integrity, availability, and resilience of processing systems, with regular testing of their effectiveness (GDPR Art. 32).',
+      testProcedure: 'Review encryption, access control, backup, and restore-test evidence for systems processing personal data, and confirm security measures are tested periodically.',
+    },
+    {
+      controlReference: 'GDPR-ART33',
+      controlDescription: 'Personal data breaches are documented and notified to the supervisory authority within 72 hours where required (GDPR Art. 33).',
+      testProcedure: 'Review the incident log for personal data breaches, verify notification timelines against the 72-hour requirement, and confirm a breach register is maintained.',
+    },
+    {
+      controlReference: 'GDPR-ART35',
+      controlDescription: 'Data protection impact assessments are carried out before high-risk processing begins (GDPR Art. 35).',
+      testProcedure: 'Identify new or changed high-risk processing in the audit period, and confirm a DPIA was completed and approved before go-live.',
     },
   ],
   [AuditType.Systems]: [

@@ -2,7 +2,9 @@
 
 > Living snapshot of what has been built, what is stubbed, and what is next.
 > **Update this file every time a module gains or loses capability.**
-> Last updated: 2026-09-20 (rev 42)
+> Last updated: 2026-09-28 (rev 43)
+
+> **rev 43 changelog:** **System audit toolkit — GBB "System Audit Activities & Software Requirements" (7 activities).** New `system-audit` module (`src/modules/system-audit/`), mounted under `/api/v1/system-audit`, read-only toward every audited system. (1) **Data analytics (CAATs):** eight pure, unit-tested analyzers run over an uploaded CSV/XLSX export or a live read-only source — user access review (SoD rules, leavers via the IAMS staff directory, dormant/generic/orphan/privileged accounts, sign-in without MFA; live on IAMS users and Entra ID), change management (unapproved, approved-late, self-approved, untested, unratified emergency), backup & recovery (failed jobs, gaps, stale/no successful backup, failed/overdue/over-RTO restore tests), incident management (response/resolution SLA per priority, IMOC `BREAK` status, aged open; live on IMOC), security log anomalies (brute force, password spray, off-hours privileged activity, cleared logs, high-severity alerts; live on IAMS security events), configuration baseline (drift vs approved baseline or expected column, insecure values; runs can be approved as the system's baseline), vulnerability scans (Nessus/Qualys scales, grouped by vulnerability, remediation SLA), and data integrity (duplicates, mandatory values, sequence gaps, control total, record count, period cut-off). Headers are auto-mapped (synonyms) with a preview step; `dd/mm/yyyy` is day-first. Each run keeps its parameters, summary, and exceptions; uploads are stored as engagement evidence (or a `system_audit_run` document) with SHA-256. Auditors disposition every exception (confirmed / false positive / explained, notes required), raise findings from exceptions (description carries run reference + file hash), and sign off the run, which locks it. (2) **Access reviews:** per-account worklist (`access_review_items`) with appropriate / revoke / modify decisions — recommendations only, IAMS never changes the source system. (3) **Continuous monitoring:** job `BG:SYSAUDIT:MONITORING:DAILY` (06:30, idempotent per day, `system_config.continuous_monitoring`) re-runs the live checks and notifies `sysaudit:admin` holders of new exceptions at/above the configured severity; dashboard adds the 30-day exception trend, 7-day security and system-exception counts, latest posture per analysis type, and emerging risks (new `GET /risk/monitoring/emerging`: new or rising scores). (4) **Security testing:** VAPT coordination (`security_tests`, `security_test_assets`) — scope, rules of engagement, schedule, provider, written authorisation by someone other than the coordinator/creator (`sectest:authorise`), lifecycle planned → authorised → in progress → reporting → remediation → closed, versioned report, linked scan-result runs. (5) **System documentation library** (`system_documents`): policies, procedures, standards, architecture/network diagrams, process manuals, BCP/DRP/IR plans, contracts and SLAs, linked to universe entity/asset, with review-due and contract-expiry flags and an engagement-scope filter. **Logging:** security events (`module = security`: sign-in success/failure with reason and attempted account, MFA failure, admin MFA reset, refresh-token reuse, logout, password reset, and every 403 as `access.denied`), persisted application exceptions (`system_logs`, fed by `SystemLogTransport` at `error` level, credentials redacted, purged by `data_retention.systemLogDays`, default 180), `GET /logs/security/summary`, `GET /logs/system[/:id]`, `hasChanges` change-history filter, and `GET /logs/export`. **Exports** (CSV/XLSX, formula-injection safe, 10k-row cap) for findings, risks, logs, analysis exceptions, and access reviews behind new `finding:export`, `risk:export`, `log:export`. **Risk:** `business_objective` on the register (+ `GET /risk/register/objectives`). **Controls:** 26 new IT controls (policies, SoD, access rights, privileged access, configuration, malware, logging, threat intelligence, incident response, ICT continuity, restore testing, data integrity, cryptography, supplier/contract management, penetration testing, SOX ITGC ×4) and 6 GDPR controls; frameworks GDPR and SOX-ITGC added (14 frameworks / 64 controls). **Permissions (12 new):** `sysaudit:read|run|review|admin`, `sectest:read|manage|authorise`, `sysdoc:read|manage`, `finding:export`, `risk:export`, `log:export`; auditors additionally get read-only `log:read`, `user:read`, `role:read`, `permission:read`, `risk:read`, `risk_monitoring:read`, `report:export`; audit leads get `report:create`. Frontend: new **System Audit** nav group — toolkit overview (the seven activities mapped to features), Data analytics (list, New-analysis wizard, run detail with exceptions / accounts / parameters), Access reviews, Event monitoring, Continuous monitoring, Security testing (list + detail), System documentation; engagement **System audit** tab; business objective on the risk form/detail; export buttons on Risk Register, Findings, Audit Logs (plus change-history filter); toolkit card on the System/IT Audit workspace. Fixed `tailwind.config.ts` flattening the orange/yellow scales (high/medium badges and severity bars had no colour). Sample extracts for demos: `docs/system-audit-samples/`. Migrations `20260928104515_add_system_logs_and_risk_objective` and `20260928105111_add_system_audit_toolkit`; run `prisma migrate deploy`, `prisma db seed` (or `npm run seed:role-permissions`), and `scripts/seed-compliance-controls.ts`. 12 Jest suites / 73 tests pass; backend type-check and Next.js production build pass.
 
 > **rev 42 changelog:** **Predictive foundation + explainable early warnings (Phase 1–2).** New internal `warehouse` read-store service captures a daily, idempotent snapshot of live IAMS engagement progress, checklists, working-paper status, outstanding evidence requests, time/budget use, finding remediation state, and evidence-request status; it deliberately excludes document/evidence contents, raw request bodies, personal contact data, and external-system payloads. It also records outcome labels (`met` / `missed`) when engagements, findings, and evidence requests close, so future models can be evaluated and trained solely from live IAMS use—no legacy spreadsheet import is required. New `predictive` module provides permission-gated, role-scoped `GET /predictive/overview` and feedback capture. Its current `rules-v1` scores are explicitly **explainable early warnings, not ML probabilities**: engagement SLA delivery risk, finding remediation risk, evidence-request delay risk, and next-best workflow actions. Insights expose their factors and score, never change findings/risk/approvals automatically, and are only shown to users already allowed to see the underlying record. New persisted jobs: `BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY` (01:10) and `BG:PREDICTIVE:INSIGHTS:HOURLY` (hourly at :20). Frontend: `/predictive` is now the live **Audit intelligence** workspace with warning rationale, feedback, readiness state, and actions; a compact card is shown on Home to `predictive:read` users. Migration `20260920130000_add_predictive_foundation` is **created but not applied**; run `prisma migrate deploy`, then `prisma db seed` to grant `predictive:read` to audit leads, auditors, and auditees. Backend production compilation, all 9 Jest suites / 50 tests, and the Next.js production build pass with non-production placeholder configuration.
 
@@ -167,7 +169,7 @@ Folder: `src/modules/logging/`
 ```
 
 **Not yet built:**
-- System-log persistence (application errors / warnings → DB).
+- ~~System-log persistence~~ — done in rev 43 (`system_logs`, `error` level; warnings stay console-only by design).
 - External enterprise-data-warehouse export. The internal predictive warehouse is now live; a separate external/BI warehouse adapter is still needed only if GBB chooses to export data outside the IAMS operational database.
 
 ### 2.4 Messaging module — COMPLETE (services + HTTP routes)
@@ -529,6 +531,48 @@ Folder: `src/modules/settings/`
 /settings/config/:key                                PUT     settings:manage
 /settings/config/bulk-update                         POST    settings:manage
 ```
+
+### 2.12a System audit toolkit - COMPLETE (backend + frontend)
+
+Folder: `src/modules/system-audit/` — `analytics/`, `access-review/`, `monitoring/`, `security-testing/`, `documentation/`, shared `domain/` and `utility/` (extract parser + `utility/analyzers/*.analyzer.ts`, one pure analyzer per analysis type registered in `utility/analyzers/index.ts`). Module-level singletons `systemAuditAnalyticsService` and `continuousMonitoringService` are exported for the scheduler. Other modules are reached only through their services (user `listAccessEntitlements`, logging `listSecurityEvents` / `getSecuritySummary` / `countRecent`, integration `listDirectoryAccounts` + IMOC `searchTickets`, audit evidence / engagement / finding / universe, asset, document, risk monitoring `getEmergingRisks`, settings config, messaging queue).
+
+**Routes (all under `/api/v1/system-audit`):**
+
+```
+/analytics/types                          GET     sysaudit:read
+/analytics/preview                        POST    sysaudit:run       (multipart; nothing stored)
+/analytics/runs                           POST    sysaudit:run       (multipart upload)
+/analytics/runs/live                      POST    sysaudit:run       (iams | entra_id | imoc)
+/analytics/runs                           GET     sysaudit:read
+/analytics/runs/:id                       GET     sysaudit:read
+/analytics/runs/:id/exceptions            GET     sysaudit:read
+/analytics/runs/:id/exceptions/export     GET     sysaudit:read
+/analytics/runs/:id/extract               GET     sysaudit:read
+/analytics/runs/:id/findings              POST    sysaudit:review + finding:create
+/analytics/runs/:id/baseline              POST    sysaudit:admin
+/analytics/runs/:id/complete-review       POST    sysaudit:review
+/analytics/exceptions/disposition         POST    sysaudit:review
+/access-reviews/:runId/items              GET     sysaudit:read
+/access-reviews/:runId/items/export       GET     sysaudit:read
+/access-reviews/:runId/decisions          POST    sysaudit:review
+/monitoring/dashboard                     GET     sysaudit:read
+/monitoring/run                           POST    sysaudit:admin
+/security-tests                           GET/POST          sectest:read / sectest:manage
+/security-tests/:id                       GET/PUT/DELETE    sectest:read / sectest:manage
+/security-tests/:id/authorise             POST    sectest:authorise  (not the coordinator/creator)
+/security-tests/:id/status                PATCH   sectest:manage
+/security-tests/:id/assets[/:assetId]     POST/DELETE       sectest:manage
+/security-tests/:id/report                POST/GET          sectest:manage / sectest:read
+/documentation                            GET/POST          sysdoc:read / sysdoc:manage
+/documentation/summary                    GET     sysdoc:read
+/documentation/:id                        GET/PUT/DELETE    sysdoc:read / sysdoc:manage
+/documentation/:id/versions               POST    sysdoc:manage
+/documentation/:id/download               GET     sysdoc:read
+```
+
+**Visibility:** runs and security tests on an engagement follow the engagement team (lead, manager, assignees) and oversight (`engagement:read_all`); organisation-wide ones are visible to every holder of the read permission. Signed-off runs are locked. Exceptions are capped at 2,000 per run (most severe kept) and access items at 20,000; extracts at 100,000 rows / 50 MB.
+
+**Not yet built:** live connectors for backup, SIEM, firewall/configuration, and Dynafin data — those analyses run on uploaded exports until GBB supplies API access (an adapter only needs to return analysis records through `ILiveSourceService`).
 
 ### 2.13 Database schema
 

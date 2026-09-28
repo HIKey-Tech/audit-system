@@ -12,6 +12,7 @@ import { directoryMappingService } from '../../../integration/service/implementa
 import { imocTicketService } from '../../../integration/imoc/service/implementation/imoc-ticket.service';
 import { warehouseService } from '../../../warehouse/service/implementation/warehouse.service';
 import { predictiveService } from '../../../predictive';
+import { continuousMonitoringService } from '../../../system-audit';
 
 /**
  * Job Key Naming Convention:
@@ -37,6 +38,7 @@ export const JOB_KEYS = {
   WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY: 'BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY',
   PREDICTIVE_INSIGHTS_HOURLY: 'BG:PREDICTIVE:INSIGHTS:HOURLY',
   RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
+  SYSAUDIT_MONITORING_DAILY: 'BG:SYSAUDIT:MONITORING:DAILY',
 } as const;
 
 export type JobKey = (typeof JOB_KEYS)[keyof typeof JOB_KEYS];
@@ -252,6 +254,25 @@ export const registerAllJobs = (): void => {
   });
 
   // BG:INTEGRATION:DIRECTORY:SYNC:DAILY — reconcile Azure AD group→role + deprovision
+  // BG:SYSAUDIT:MONITORING:DAILY — continuous monitoring. Re-runs the live,
+  // read-only system-audit analyses (IAMS access and security events, plus
+  // Entra ID / IMOC when connected). Idempotent: checks already run today are
+  // skipped. Runs after the 02:00 directory sync so Entra data is fresh.
+  schedulerService.register({
+    key: JOB_KEYS.SYSAUDIT_MONITORING_DAILY,
+    name: 'System Audit Continuous Monitoring',
+    description: 'Runs the continuous-monitoring checks (access, security events, Entra ID, IMOC) and notifies system-audit administrators of serious exceptions.',
+    cronExpression: '30 6 * * *',
+    handler: async () => {
+      const result = await continuousMonitoringService.runScheduledChecks();
+      logger.info('Continuous monitoring job completed', {
+        ran: result.ran.map((r) => r.check),
+        skipped: result.skipped.map((s) => s.check),
+        failed: result.failed,
+      });
+    },
+  });
+
   schedulerService.register({
     key: JOB_KEYS.INTEGRATION_DIRECTORY_SYNC_DAILY,
     name: 'Azure AD Directory Sync',
@@ -677,10 +698,10 @@ export const registerAllJobs = (): void => {
   schedulerService.register({
     key: JOB_KEYS.RETENTION_PURGE_WEEKLY,
     name: 'Data Retention Purge',
-    description: 'Hard-deletes audit logs, notifications, email logs, and consumed auth tokens older than the configured NDPR retention periods (system_config: data_retention).',
+    description: 'Hard-deletes audit logs, notifications, email logs, consumed auth tokens, and persisted system exceptions older than the configured NDPR retention periods (system_config: data_retention).',
     cronExpression: '0 4 * * 0', // Every Sunday at 04:00
     handler: async () => {
-      const defaults = { auditLogDays: 2555, notificationDays: 365, emailLogDays: 365, authTokenDays: 90 };
+      const defaults = { auditLogDays: 2555, notificationDays: 365, emailLogDays: 365, authTokenDays: 90, systemLogDays: 180 };
       let retention = defaults;
       const cfg = await prisma.system_Config.findUnique({
         where: { key: 'data_retention' },
@@ -725,6 +746,12 @@ export const registerAllJobs = (): void => {
         })).count;
         purged.mfaEmailOtps = (await prisma.mfa_Email_Otp.deleteMany({
           where: { created_at: { lt: cutoff(retention.authTokenDays) } },
+        })).count;
+      }
+
+      if (retention.systemLogDays > 0) {
+        purged.systemLogs = (await prisma.system_Log.deleteMany({
+          where: { created_at: { lt: cutoff(retention.systemLogDays) } },
         })).count;
       }
 
