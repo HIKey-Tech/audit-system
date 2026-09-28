@@ -3,14 +3,17 @@ import { AuditPriority, AuditType, PlanStatus } from '../../../domain/enum/audit
 export declare const CreatePlanRequestSchema: z.ZodObject<{
     title: z.ZodString;
     year: z.ZodNumber;
+    auditType: z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>;
     description: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title: string;
     year: number;
+    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
     description?: string | undefined;
 }, {
     title: string;
     year: number;
+    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
     description?: string | undefined;
 }>;
 export declare const UpdatePlanRequestSchema: z.ZodObject<{
@@ -28,7 +31,6 @@ export declare const UpdatePlanRequestSchema: z.ZodObject<{
 }>;
 export declare const AddPlanItemRequestSchema: z.ZodObject<{
     universeId: z.ZodString;
-    auditType: z.ZodNativeEnum<typeof AuditType>;
     plannedStartDate: z.ZodString;
     plannedEndDate: z.ZodString;
     priority: z.ZodNativeEnum<typeof AuditPriority>;
@@ -36,14 +38,12 @@ export declare const AddPlanItemRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     priority: AuditPriority;
     universeId: string;
-    auditType: AuditType;
     plannedStartDate: string;
     plannedEndDate: string;
     notes?: string | null | undefined;
 }, {
     priority: AuditPriority;
     universeId: string;
-    auditType: AuditType;
     plannedStartDate: string;
     plannedEndDate: string;
     notes?: string | null | undefined;
@@ -60,6 +60,8 @@ export declare const PlanQuerySchema: z.ZodObject<{
     pageSize: z.ZodDefault<z.ZodNumber>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof PlanStatus>>;
     year: z.ZodOptional<z.ZodNumber>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
+    search: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodEnum<["year", "created_at", "updated_at"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "strip", z.ZodTypeAny, {
@@ -67,15 +69,19 @@ export declare const PlanQuerySchema: z.ZodObject<{
     pageSize: number;
     sortBy: "created_at" | "updated_at" | "year";
     sortOrder: "asc" | "desc";
+    search?: string | undefined;
     status?: PlanStatus | undefined;
     year?: number | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
 }, {
+    search?: string | undefined;
     status?: PlanStatus | undefined;
     year?: number | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
     sortBy?: "created_at" | "updated_at" | "year" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
 }>;
 export type CreatePlanRequestDto = z.infer<typeof CreatePlanRequestSchema>;
 export type UpdatePlanRequestDto = z.infer<typeof UpdatePlanRequestSchema>;

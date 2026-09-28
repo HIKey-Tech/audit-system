@@ -17,6 +17,7 @@ var ErrorCode;
     // Validation
     ErrorCode["VALIDATION_ERROR"] = "VALIDATION_ERROR";
     ErrorCode["BAD_REQUEST"] = "BAD_REQUEST";
+    ErrorCode["TOO_MANY_REQUESTS"] = "TOO_MANY_REQUESTS";
     // Server
     ErrorCode["INTERNAL_ERROR"] = "INTERNAL_ERROR";
     ErrorCode["SERVICE_UNAVAILABLE"] = "SERVICE_UNAVAILABLE";
@@ -54,11 +55,17 @@ class AppError extends Error {
     static badRequest(message, details) {
         return new AppError(message, 400, ErrorCode.BAD_REQUEST, details);
     }
+    static tooManyRequests(message = 'Too many requests') {
+        return new AppError(message, 429, ErrorCode.TOO_MANY_REQUESTS);
+    }
     static validationError(details) {
         return new AppError('Validation failed', 422, ErrorCode.VALIDATION_ERROR, details);
     }
     static internal(message = 'Internal server error') {
         return new AppError(message, 500, ErrorCode.INTERNAL_ERROR, undefined, false);
+    }
+    static serviceUnavailable(message = 'Service temporarily unavailable') {
+        return new AppError(message, 503, ErrorCode.SERVICE_UNAVAILABLE);
     }
 }
 exports.AppError = AppError;

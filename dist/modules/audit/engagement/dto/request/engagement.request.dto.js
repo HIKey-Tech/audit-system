@@ -26,7 +26,7 @@ const EngagementBaseSchema = zod_1.z.object({
 });
 const EngagementScopeSchema = zod_1.z.object({
     universeId: zod_1.z.string().uuid(),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES),
     priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority),
 });
 exports.CreateEngagementFromPlanRequestSchema = EngagementBaseSchema.extend({
@@ -54,7 +54,7 @@ exports.EngagementQuerySchema = zod_1.z.object({
     page: zod_1.z.coerce.number().int().positive().default(1),
     pageSize: zod_1.z.coerce.number().int().positive().max(100).default(20),
     status: zod_1.z.nativeEnum(audit_enum_1.EngagementStatus).optional(),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType).optional(),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES).optional(),
     leadAuditorId: zod_1.z.string().uuid().optional(),
     auditManagerId: zod_1.z.string().uuid().optional(),
     sortBy: zod_1.z.enum(['created_at', 'planned_start_date', 'sla_deadline', 'reference_number']).default('created_at'),
@@ -62,7 +62,7 @@ exports.EngagementQuerySchema = zod_1.z.object({
 });
 exports.EligibleUsersQuerySchema = zod_1.z.object({
     role: zod_1.z.enum(['lead_auditor', 'audit_manager']),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType).optional(),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES).optional(),
     priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority).optional(),
 });
 //# sourceMappingURL=engagement.request.dto.js.map

@@ -36,11 +36,30 @@ class LoggingController {
          */
         this.router.get('/', (0, auth_middleware_1.requirePermission)('log:read'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogListQuerySchema, 'query'), this._listLogs.bind(this));
         /**
+         * @route  GET /logs/verify-chain
+         * @desc   Verify the audit-log tamper-evidence chain; reports the first break
+         * @access Private - log:read
+         * @note   Registered before /:id so the literal path is not captured as an id.
+         */
+        this.router.get('/verify-chain', (0, auth_middleware_1.requirePermission)('log:read'), this._verifyChain.bind(this));
+        /**
          * @route  GET /logs/:id
          * @desc   Get a single audit log entry by ID
          * @access Private - log:read
          */
         this.router.get('/:id', (0, auth_middleware_1.requirePermission)('log:read'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogIdParamsSchema, 'params'), this._getLogById.bind(this));
+    }
+    async _verifyChain(_req, res, next) {
+        try {
+            const result = await this.auditLogService.verifyChain();
+            const message = result.ok
+                ? 'Audit log chain intact'
+                : `Audit log chain broken: ${result.reason ?? 'unknown'}`;
+            res.status(200).json((0, api_response_type_1.buildResponse)(result, message));
+        }
+        catch (err) {
+            next(err);
+        }
     }
     async _listLogs(req, res, next) {
         try {

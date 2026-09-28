@@ -276,8 +276,14 @@ class WorkingPaperService {
         const auditorName = paper.created_by.display_name || paper.created_by.email;
         const exportDate = new Date().toISOString().slice(0, 10);
         const slug = paper.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
-        const buffer = format === 'pdf'
-            ? await this._renderWorkingPaperPdf({
+        // Built once and used by both formats: the PDF embeds the drawn signature
+        // images, while the DOCX gets a typed sign-off block (docxtemplater here has
+        // no image support — the signature images live in the signed PDF copy).
+        const sections = (0, working_paper_utility_1.parseWorkingPaperSections)(paper.content);
+        const signOff = await this._buildSignOff(id);
+        let buffer;
+        if (format === 'pdf') {
+            buffer = await this._renderWorkingPaperPdf({
                 title: paper.title,
                 engagementReference: paper.engagement.reference_number,
                 engagementTitle: paper.engagement.title,
@@ -286,10 +292,26 @@ class WorkingPaperService {
                 status: paper.status,
                 version: String(paper.version_number),
                 date: exportDate,
-                sections: (0, working_paper_utility_1.parseWorkingPaperSections)(paper.content),
-                signOff: await this._buildSignOff(id),
+                sections,
+                signOff,
+            });
+        }
+        else {
+            // The {content} placeholder takes plain text with line breaks — parse the
+            // stored sections (never the raw JSON string) and render each section's
+            // Markdown down to readable text, then append the typed sign-off.
+            const body = sections
+                .map((section, idx) => {
+                const heading = (section.title || `Section ${idx + 1}`).toUpperCase();
+                return `${heading}\n${(0, markdown_utility_1.markdownToPlainText)(section.content)}`;
             })
-            : await this.documentService.renderDocxTemplate('working_paper', {
+                .join('\n\n');
+            const signOffText = signOff.length
+                ? `\n\nSIGN-OFF\n${signOff
+                    .map((s) => `Approved by: ${s.name}${s.role ? ` (${s.role})` : ''} — ${s.date}`)
+                    .join('\n')}\nDigitally signed in IAMS. Signature images appear in the signed PDF copy.`
+                : '';
+            buffer = await this.documentService.renderDocxTemplate('working_paper', {
                 title: paper.title,
                 engagementReference: paper.engagement.reference_number,
                 engagementTitle: paper.engagement.title,
@@ -297,16 +319,9 @@ class WorkingPaperService {
                 date: exportDate,
                 status: paper.status,
                 version: String(paper.version_number),
-                // The {content} placeholder takes plain text with line breaks —
-                // parse the stored sections (never the raw JSON string) and render
-                // each section's Markdown down to readable text.
-                content: (0, working_paper_utility_1.parseWorkingPaperSections)(paper.content)
-                    .map((section, idx) => {
-                    const heading = (section.title || `Section ${idx + 1}`).toUpperCase();
-                    return `${heading}\n${(0, markdown_utility_1.markdownToPlainText)(section.content)}`;
-                })
-                    .join('\n\n'),
+                content: body + signOffText,
             });
+        }
         logger_util_1.logger.info('Working paper exported', { workingPaperId: id, format });
         return {
             fileName: `${slug}-working-paper.${format}`,

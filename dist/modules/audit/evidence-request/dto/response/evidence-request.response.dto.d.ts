@@ -61,5 +61,15 @@ export interface EvidenceRequestResponseDto {
         uploadedAt: string;
     }[];
 }
+/** A person an evidence request can be assigned to (who will upload the document). */
+export interface AssignableUserDto {
+    id: string;
+    displayName: string;
+    email: string;
+    department: string | null;
+    jobTitle: string | null;
+    /** True for the engagement's default auditee. */
+    isAuditee: boolean;
+}
 export declare const mapEvidenceRequestToResponse: (r: EvidenceRequestWithDetails) => EvidenceRequestResponseDto;
 //# sourceMappingURL=evidence-request.response.dto.d.ts.map

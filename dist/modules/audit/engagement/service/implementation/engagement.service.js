@@ -141,7 +141,7 @@ class EngagementService {
                     title: dto.title,
                     universe_id: planItem.universe_id,
                     plan_item_id: planItemId,
-                    audit_type: planItem.audit_type,
+                    audit_type: planItem.plan.audit_type,
                     priority: planItem.priority,
                     lead_auditor_id: dto.leadAuditorId,
                     audit_manager_id: dto.auditManagerId,

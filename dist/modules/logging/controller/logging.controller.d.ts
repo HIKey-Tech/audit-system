@@ -5,6 +5,7 @@ export declare class LoggingController {
     readonly router: Router;
     constructor(auditLogService: IAuditLogService);
     private _registerRoutes;
+    private _verifyChain;
     private _listLogs;
     private _getLogById;
     private _getDistinctModules;

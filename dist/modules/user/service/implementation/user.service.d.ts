@@ -2,7 +2,7 @@ import { PaginationMeta } from '../../../../shared/types/api-response.type';
 import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { IUserService, AzureAdProfile, RoleManagementActor } from '../interface/user.service.interface';
 import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
-import { UserResponseDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
+import { UserResponseDto, UserDirectoryDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 export declare class UserService implements IUserService {
     private readonly notificationQueue;
     constructor(notificationQueue?: INotificationQueueService);
@@ -13,6 +13,7 @@ export declare class UserService implements IUserService {
         users: UserResponseDto[];
         meta: PaginationMeta;
     }>;
+    listDirectory(): Promise<UserDirectoryDto[]>;
     listRoles(query: RoleQueryDto): Promise<{
         roles: RoleListResponseDto[];
         meta: PaginationMeta;

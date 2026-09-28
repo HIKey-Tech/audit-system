@@ -6,6 +6,7 @@ export declare class EvidenceRequestController {
     constructor(evidenceRequestService: IEvidenceRequestService);
     private _registerRoutes;
     private _create;
+    private _listAssignableUsers;
     private _listForEngagement;
     private _listMine;
     private _respond;

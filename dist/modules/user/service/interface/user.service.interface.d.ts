@@ -1,5 +1,5 @@
 import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
-import { UserResponseDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
+import { UserResponseDto, UserDirectoryDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 /**
  * Actor context for privileged operations that can change a user's authority.
@@ -20,6 +20,8 @@ export interface IUserService {
         users: UserResponseDto[];
         meta: PaginationMeta;
     }>;
+    /** Minimal active-user directory for people-pickers (gated on `user:directory`). */
+    listDirectory(): Promise<UserDirectoryDto[]>;
     listRoles(query: RoleQueryDto): Promise<{
         roles: RoleListResponseDto[];
         meta: PaginationMeta;

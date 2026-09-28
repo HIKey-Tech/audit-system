@@ -3,14 +3,6 @@ export declare enum UserStatus {
     INACTIVE = "inactive",
     SUSPENDED = "suspended"
 }
-export declare enum SystemRole {
-    SUPER_ADMIN = "super_admin",
-    AUDIT_MANAGER = "audit_manager",
-    AUDIT_LEAD = "audit_lead",
-    AUDITOR = "auditor",
-    AUDITEE = "auditee",
-    VIEWER = "viewer"
-}
 export declare enum OidcProvider {
     AZURE_AD = "azure_ad",
     GENERIC = "generic"

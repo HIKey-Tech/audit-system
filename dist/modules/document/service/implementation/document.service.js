@@ -4,6 +4,8 @@ exports.DocumentService = void 0;
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
+const hash_util_1 = require("../../../../shared/utils/hash.util");
+const audit_log_service_1 = require("../../../logging/service/implementation/audit-log.service");
 const app_config_1 = require("../../../../shared/config/app.config");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const document_response_dto_1 = require("../../dto/response/document.response.dto");
@@ -33,6 +35,7 @@ class DocumentService {
                     file_size: dto.fileSize,
                     storage_path: storedName,
                     storage_provider: storageProvider,
+                    content_sha256: (0, hash_util_1.sha256Hex)(dto.buffer),
                     module: dto.module,
                     entity_type: dto.entityType,
                     entity_id: dto.entityId,
@@ -200,11 +203,13 @@ class DocumentService {
                 file_size: true,
                 storage_provider: true,
                 storage_path: true,
+                content_sha256: true,
             },
         });
         if (!doc)
             throw app_error_1.AppError.notFound('Document');
         const buffer = await this._storageClient(doc.storage_provider).read(doc.storage_path);
+        this._verifyIntegrity(doc.content_sha256, buffer, doc.storage_path);
         return {
             buffer,
             mimeType: doc.mime_type,
@@ -223,6 +228,7 @@ class DocumentService {
                 original_name: true,
                 file_size: true,
                 storage_provider: true,
+                content_sha256: true,
                 entity_type: true,
                 entity_id: true,
                 uploaded_by_id: true,
@@ -232,12 +238,16 @@ class DocumentService {
         let originalName;
         let fileSize;
         let storageProvider;
+        // Only the current file (Document row) is sealed; historical Document_Version
+        // rows carry no hash, so we verify only when serving from the Document branch.
+        let expectedHash = null;
         if (doc) {
             await this._assertCanAccess(doc, actor);
             mimeType = doc.mime_type;
             originalName = doc.original_name;
             fileSize = doc.file_size;
             storageProvider = doc.storage_provider;
+            expectedHash = doc.content_sha256;
         }
         else {
             const version = await prisma_client_1.prisma.document_Version.findFirst({
@@ -263,7 +273,34 @@ class DocumentService {
             storageProvider = version.storage_provider;
         }
         const buffer = await this._storageClient(storageProvider).read(storedName);
+        this._verifyIntegrity(expectedHash, buffer, storedName);
         return { buffer, mimeType, originalName, fileSize };
+    }
+    /**
+     * Chain-of-custody check: a sealed file whose bytes no longer match its stored
+     * SHA-256 has been altered in storage since upload. Fail closed and record the
+     * event on the audit trail. Legacy rows (null hash) are unsealed and skipped.
+     */
+    // ponytail: hashes the buffer on every byte-read; gate behind config if it ever gets hot.
+    _verifyIntegrity(expected, buffer, storagePath) {
+        if (!expected)
+            return;
+        const actual = (0, hash_util_1.sha256Hex)(buffer);
+        if (actual === expected)
+            return;
+        logger_util_1.logger.error('Document integrity check failed — stored file does not match its seal', {
+            storagePath,
+            expected,
+            actual,
+        });
+        audit_log_service_1.auditLogService.logAsync({
+            action: 'document.integrity.failed',
+            module: 'document',
+            entityType: 'document',
+            status: 'failure',
+            newValues: { storagePath, expected, actual },
+        });
+        throw app_error_1.AppError.internal('File integrity check failed: the stored file does not match its recorded hash');
     }
     // ────────────────────────────────────────────────────────────
     // Versioning
@@ -339,6 +376,7 @@ class DocumentService {
                         file_size: dto.fileSize,
                         storage_path: storedName,
                         storage_provider: storageProvider,
+                        content_sha256: (0, hash_util_1.sha256Hex)(dto.buffer),
                         version_number: newVersionNumber,
                     },
                 });

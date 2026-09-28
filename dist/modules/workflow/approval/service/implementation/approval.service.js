@@ -219,9 +219,7 @@ class ApprovalService {
         // Segregation of duties: whoever prepared/submitted the item for approval
         // may not also approve it. Rejecting your own submission is fine — only the
         // approval sign-off is gated. A different authorized user must sign.
-        if (approval.submitted_by_id === actor.id) {
-            throw app_error_1.AppError.forbidden('You submitted this item for approval and cannot also approve it (segregation of duties). It must be approved by a different authorized user.');
-        }
+        (0, workflow_utility_1.assertNotSelfApproval)(approval.submitted_by_id, actor.id);
         const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
         const now = new Date();
         const hasEdits = !!edits && Object.keys(edits).length > 0;
@@ -580,8 +578,11 @@ class ApprovalService {
                     });
                 }
                 else {
-                    // Open permission pool, not yet acted — show candidate holders.
-                    const candidates = step.required_permission ? await this._activeHoldersBrief(step.required_permission) : [];
+                    // Open permission pool, not yet acted — show candidate holders, minus the
+                    // submitter (SoD: they can't approve their own submission at any level).
+                    const candidates = step.required_permission
+                        ? await this._activeHoldersBrief(step.required_permission, approval.submitted_by_id)
+                        : [];
                     levels.push({
                         level: step.level, kind: 'permission', status,
                         requiredPermission: step.required_permission, resolvedApprover: null, candidates,
@@ -658,11 +659,12 @@ class ApprovalService {
                 specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
                 continue;
             }
-            // `level` is a permission slug: any active holder may act. Ensure at least
-            // one exists so the level can't dead-end.
-            const hasHolder = await this._hasActiveUserWithPermission(db, level);
+            // `level` is a permission slug: any active holder may act — except the
+            // submitter (SoD). Ensure at least one *other* holder exists so the level
+            // can't dead-end on a submitter who is barred from approving their own item.
+            const hasHolder = await this._hasActiveUserWithPermission(db, level, submittedById);
             if (!hasHolder) {
-                throw app_error_1.AppError.badRequest(`No active user holding permission '${level}' is available for ${entityType} approval`);
+                throw app_error_1.AppError.badRequest(`No active user (other than you) holding permission '${level}' is available for ${entityType} approval (segregation of duties).`);
             }
             specs.push({ approverId: null, requiredPermission: level });
         }
@@ -751,9 +753,14 @@ class ApprovalService {
         };
     }
     /** All active users who currently hold a permission, resolved to display-ready briefs. */
-    async _activeHoldersBrief(permissionSlug) {
+    async _activeHoldersBrief(permissionSlug, excludeUserId) {
         const users = await prisma_client_1.prisma.user.findMany({
-            where: this._activeHolderWhere(permissionSlug),
+            where: {
+                ...this._activeHolderWhere(permissionSlug),
+                // Segregation of duties: the submitter can never approve their own item at
+                // any level, so they're never a real candidate — don't list them.
+                ...(excludeUserId ? { id: { not: excludeUserId } } : {}),
+            },
             select: workflowUserSelect,
             orderBy: { display_name: 'asc' },
         });

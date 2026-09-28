@@ -1,7 +1,17 @@
 "use strict";
 // src/modules/user/dto/response/user.response.dto.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapUserToResponse = exports.mapRoleToResponse = exports.mapPermissionToResponse = void 0;
+exports.mapUserToResponse = exports.mapRoleToResponse = exports.mapPermissionToResponse = exports.mapUserToDirectory = void 0;
+const mapUserToDirectory = (u) => ({
+    id: u.id,
+    displayName: u.display_name,
+    firstName: u.first_name,
+    lastName: u.last_name,
+    department: u.department,
+    jobTitle: u.job_title,
+    isActive: u.is_active,
+});
+exports.mapUserToDirectory = mapUserToDirectory;
 const mapPermissionToResponse = (permission) => ({
     id: permission.id,
     slug: permission.slug,

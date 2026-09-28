@@ -41,17 +41,17 @@ export declare const CreateControlRequestSchema: z.ZodObject<{
     controlReference: z.ZodString;
     controlDescription: z.ZodString;
     testProcedure: z.ZodString;
-    auditType: z.ZodNativeEnum<typeof AuditType>;
+    auditType: z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>;
     isActive: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
-    auditType: AuditType;
+    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
     controlReference: string;
     controlDescription: string;
     testProcedure: string;
     frameworkId: string;
     isActive?: boolean | undefined;
 }, {
-    auditType: AuditType;
+    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
     controlReference: string;
     controlDescription: string;
     testProcedure: string;
@@ -63,18 +63,18 @@ export declare const UpdateControlRequestSchema: z.ZodObject<{
     controlReference: z.ZodOptional<z.ZodString>;
     controlDescription: z.ZodOptional<z.ZodString>;
     testProcedure: z.ZodOptional<z.ZodString>;
-    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     isActive?: boolean | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     controlReference?: string | undefined;
     controlDescription?: string | undefined;
     testProcedure?: string | undefined;
     frameworkId?: string | undefined;
 }, {
     isActive?: boolean | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     controlReference?: string | undefined;
     controlDescription?: string | undefined;
     testProcedure?: string | undefined;
@@ -85,21 +85,21 @@ export declare const ControlQuerySchema: z.ZodObject<{
     pageSize: z.ZodDefault<z.ZodNumber>;
     search: z.ZodOptional<z.ZodString>;
     frameworkId: z.ZodOptional<z.ZodString>;
-    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
 }, "strip", z.ZodTypeAny, {
     page: number;
     pageSize: number;
     search?: string | undefined;
     isActive?: boolean | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     frameworkId?: string | undefined;
 }, {
     search?: string | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
     isActive?: boolean | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     frameworkId?: string | undefined;
 }>;
 export declare const LinkRiskRequestSchema: z.ZodObject<{

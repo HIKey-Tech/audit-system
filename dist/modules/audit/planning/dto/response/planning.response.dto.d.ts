@@ -19,6 +19,7 @@ export interface PlanResponseDto {
     id: string;
     title: string;
     year: number;
+    auditType: string;
     description: string | null;
     status: string;
     createdById: string;
@@ -36,7 +37,6 @@ export declare const mapPlanItemToResponse: (item: {
     id: string;
     plan_id: string;
     universe_id: string;
-    audit_type: string;
     planned_start_date: Date;
     planned_end_date: Date;
     priority: string;
@@ -48,11 +48,14 @@ export declare const mapPlanItemToResponse: (item: {
     engagements?: Array<{
         id: string;
     }>;
-}) => PlanItemResponseDto;
+}, 
+/** The parent programme's audit type — every plan under it shares it. */
+auditType: string) => PlanItemResponseDto;
 export declare const mapPlanToResponse: (plan: {
     id: string;
     title: string;
     year: number;
+    audit_type: string;
     description: string | null;
     status: string;
     created_by_id: string;

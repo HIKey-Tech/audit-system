@@ -26,6 +26,12 @@ export declare class DocumentService implements IDocumentService {
     getEntityType(documentId: string): Promise<string | null>;
     getFileById(id: string): Promise<ServedFileDto>;
     serveFile(storedName: string, actor: DocumentAccessActor): Promise<ServedFileDto>;
+    /**
+     * Chain-of-custody check: a sealed file whose bytes no longer match its stored
+     * SHA-256 has been altered in storage since upload. Fail closed and record the
+     * event on the audit trail. Legacy rows (null hash) are unsealed and skipped.
+     */
+    private _verifyIntegrity;
     uploadNewVersion(documentId: string, dto: UploadVersionDto, actor?: DocumentAccessActor): Promise<DocumentVersionResponseDto>;
     listVersions(documentId: string, actor: DocumentAccessActor): Promise<DocumentVersionResponseDto[]>;
     getVersion(documentId: string, versionNumber: number, actor: DocumentAccessActor): Promise<DocumentVersionResponseDto>;

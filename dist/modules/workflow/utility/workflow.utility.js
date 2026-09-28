@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.hasElapsed = exports.hoursAgo = exports.warnOnUnresolvableEscalationTargets = exports.getEscalationMatrix = exports.DEFAULT_ESCALATION_MATRIX = exports.assertHasPermission = void 0;
+exports.hasElapsed = exports.hoursAgo = exports.warnOnUnresolvableEscalationTargets = exports.getEscalationMatrix = exports.DEFAULT_ESCALATION_MATRIX = exports.assertNotSelfApproval = exports.assertHasPermission = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const prisma_client_1 = require("../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../shared/utils/logger.util");
@@ -11,6 +11,16 @@ const assertHasPermission = (permissions, required, message = 'Insufficient perm
     }
 };
 exports.assertHasPermission = assertHasPermission;
+/**
+ * Segregation of duties: whoever submitted an item for approval may not also
+ * approve it. Rejecting your own submission is fine — only the sign-off is gated.
+ */
+const assertNotSelfApproval = (submittedById, actorId) => {
+    if (submittedById === actorId) {
+        throw app_error_1.AppError.forbidden('You submitted this item for approval and cannot also approve it (segregation of duties). It must be approved by a different authorized user.');
+    }
+};
+exports.assertNotSelfApproval = assertNotSelfApproval;
 exports.DEFAULT_ESCALATION_MATRIX = {
     auditEngagement: { level3: ['director'], beyond: ['cae'] },
     workflowApproval: { level3: ['director'], level4: ['cae'], otherwise: ['audit_manager'] },

@@ -60,6 +60,12 @@ class EvidenceController {
          */
         this.router.post('/evidence/:id/link/working-paper/:wpId', (0, auth_middleware_1.requirePermission)('evidence:upload'), this._linkToWorkingPaper.bind(this));
         /**
+         * @route  DELETE /audit/evidence/:id/link/working-paper
+         * @desc   Unlink evidence from its working paper
+         * @access Private - evidence:upload
+         */
+        this.router.delete('/evidence/:id/link/working-paper', (0, auth_middleware_1.requirePermission)('evidence:upload'), this._unlinkFromWorkingPaper.bind(this));
+        /**
          * @route  POST /audit/evidence/:id/link/finding/:findingId
          * @desc   Link evidence to finding
          * @access Private - audit:write
@@ -94,6 +100,15 @@ class EvidenceController {
         try {
             const evidence = await this.evidenceService.linkToWorkingPaper(req.params.id, req.params.wpId, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(evidence, 'Evidence linked to working paper'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _unlinkFromWorkingPaper(req, res, next) {
+        try {
+            const evidence = await this.evidenceService.unlinkFromWorkingPaper(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(evidence, 'Evidence unlinked from working paper'));
         }
         catch (err) {
             next(err);

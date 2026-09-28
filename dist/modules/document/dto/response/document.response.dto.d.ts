@@ -12,6 +12,7 @@ export interface DocumentResponseDto {
     uploadedById: string;
     uploadedByName: string;
     versionNumber: number;
+    contentSha256: string | null;
     createdAt: string;
     downloadUrl?: string;
 }
@@ -60,6 +61,7 @@ export declare const mapDocumentToResponse: (doc: {
     entity_id: string | null;
     uploaded_by_id: string;
     version_number: number;
+    content_sha256?: string | null;
     created_at: Date;
     uploaded_by?: {
         display_name: string | null;

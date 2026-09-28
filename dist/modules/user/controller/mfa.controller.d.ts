@@ -10,6 +10,7 @@ export declare class MfaController {
     private _setup;
     private _enroll;
     private _verify;
+    private _resend;
     private _regenerateBackupCodes;
     private _adminReset;
 }

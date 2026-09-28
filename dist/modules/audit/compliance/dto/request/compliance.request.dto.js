@@ -22,7 +22,7 @@ exports.CreateControlRequestSchema = zod_1.z.object({
     controlReference: zod_1.z.string().trim().min(1).max(80),
     controlDescription: zod_1.z.string().trim().min(1),
     testProcedure: zod_1.z.string().trim().min(1),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES),
     isActive: zod_1.z.boolean().optional(),
 });
 exports.UpdateControlRequestSchema = zod_1.z.object({
@@ -30,7 +30,7 @@ exports.UpdateControlRequestSchema = zod_1.z.object({
     controlReference: zod_1.z.string().trim().min(1).max(80).optional(),
     controlDescription: zod_1.z.string().trim().min(1).optional(),
     testProcedure: zod_1.z.string().trim().min(1).optional(),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType).optional(),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES).optional(),
     isActive: zod_1.z.boolean().optional(),
 });
 exports.ControlQuerySchema = zod_1.z.object({
@@ -38,7 +38,7 @@ exports.ControlQuerySchema = zod_1.z.object({
     pageSize: zod_1.z.coerce.number().int().positive().max(200).default(50),
     search: zod_1.z.string().trim().optional(),
     frameworkId: zod_1.z.string().uuid().optional(),
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType).optional(),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES).optional(),
     isActive: zod_1.z.coerce.boolean().optional(),
 });
 exports.LinkRiskRequestSchema = zod_1.z.object({

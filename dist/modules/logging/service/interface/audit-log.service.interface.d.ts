@@ -1,4 +1,5 @@
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
+import { ChainVerificationResult } from '../../utility/audit-log-hash.util';
 import { AuditLogListQueryDto, AuditLogSummaryQueryDto } from '../../dto/request/logging.request.dto';
 import { AuditLogResponseDto, AuditLogSummaryDto } from '../../dto/response/logging.response.dto';
 export interface CreateAuditLogDto {
@@ -25,5 +26,6 @@ export interface IAuditLogService {
     getLogById(id: string): Promise<AuditLogResponseDto>;
     getDistinctModules(): Promise<string[]>;
     getLogSummary(query: AuditLogSummaryQueryDto): Promise<AuditLogSummaryDto[]>;
+    verifyChain(): Promise<ChainVerificationResult>;
 }
 //# sourceMappingURL=audit-log.service.interface.d.ts.map

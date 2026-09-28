@@ -129,6 +129,14 @@ class SamplingService {
             previewColumns: columns,
         };
     }
+    calculateSampleSize(dto) {
+        try {
+            return (0, sampler_utility_1.attributeSampleSize)(dto);
+        }
+        catch (err) {
+            throw app_error_1.AppError.badRequest(err instanceof Error ? err.message : 'Sample-size calculation failed');
+        }
+    }
     _parsePopulation(buffer) {
         let rows;
         try {

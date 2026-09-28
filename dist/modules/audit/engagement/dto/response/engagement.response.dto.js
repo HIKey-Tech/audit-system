@@ -12,6 +12,7 @@ const mapEngagementToResponse = (engagement, extras) => ({
     referenceNumber: engagement.reference_number,
     title: engagement.title,
     universeId: engagement.universe_id,
+    universeName: engagement.universe?.name ?? null,
     planItemId: engagement.plan_item_id,
     planTitle: engagement.plan_item?.plan?.title ?? null,
     auditType: engagement.audit_type,

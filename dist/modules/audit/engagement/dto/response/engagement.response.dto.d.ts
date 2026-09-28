@@ -31,6 +31,8 @@ export interface EngagementResponseDto {
     referenceNumber: string;
     title: string;
     universeId: string;
+    /** Flattened auditable-entity name for list/detail/report views (from `universe.name`). */
+    universeName: string | null;
     planItemId: string | null;
     planTitle: string | null;
     auditType: string;

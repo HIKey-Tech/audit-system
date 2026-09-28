@@ -1,17 +1,33 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.directoryMappingService = exports.DirectoryMappingService = exports.createIntegrationModule = void 0;
+exports.ImocTicketService = exports.directoryMappingService = exports.DirectoryMappingService = exports.createIntegrationModule = void 0;
 const express_1 = require("express");
 const directory_mapping_controller_1 = require("./controller/directory-mapping.controller");
 const directory_mapping_service_1 = require("./service/implementation/directory-mapping.service");
+const imoc_ticket_controller_1 = require("./imoc/controller/imoc-ticket.controller");
+const imoc_ticket_service_1 = require("./imoc/service/implementation/imoc-ticket.service");
+const imoc_client_1 = require("./imoc/service/client/imoc.client");
+const evidence_service_1 = require("../audit/evidence/service/implementation/evidence.service");
+const engagement_service_1 = require("../audit/engagement/service/implementation/engagement.service");
+const checklist_service_1 = require("../audit/checklists/service/implementation/checklist.service");
+const document_service_1 = require("../document/service/implementation/document.service");
+const user_service_1 = require("../user/service/implementation/user.service");
+const assignment_service_1 = require("../workflow/assignment/service/implementation/assignment.service");
 const createIntegrationModule = () => {
     const router = (0, express_1.Router)();
     const controller = new directory_mapping_controller_1.DirectoryMappingController(directory_mapping_service_1.directoryMappingService);
+    const documentService = new document_service_1.DocumentService();
+    const evidenceService = new evidence_service_1.EvidenceService(documentService);
+    const engagementService = new engagement_service_1.EngagementService(new checklist_service_1.ChecklistService(), new user_service_1.UserService(), assignment_service_1.workflowAssignmentService);
+    const imocController = new imoc_ticket_controller_1.ImocTicketController(new imoc_ticket_service_1.ImocTicketService((0, imoc_client_1.createImocClient)(), evidenceService), engagementService);
     router.use('/integration/directory', controller.router);
+    router.use('/integration/imoc', imocController.router);
     return router;
 };
 exports.createIntegrationModule = createIntegrationModule;
 var directory_mapping_service_2 = require("./service/implementation/directory-mapping.service");
 Object.defineProperty(exports, "DirectoryMappingService", { enumerable: true, get: function () { return directory_mapping_service_2.DirectoryMappingService; } });
 Object.defineProperty(exports, "directoryMappingService", { enumerable: true, get: function () { return directory_mapping_service_2.directoryMappingService; } });
+var imoc_ticket_service_2 = require("./imoc/service/implementation/imoc-ticket.service");
+Object.defineProperty(exports, "ImocTicketService", { enumerable: true, get: function () { return imoc_ticket_service_2.ImocTicketService; } });
 //# sourceMappingURL=index.js.map

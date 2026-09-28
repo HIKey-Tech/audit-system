@@ -44,7 +44,7 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     planItemId: z.ZodString;
 } & {
     universeId: z.ZodOptional<z.ZodString>;
-    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
     priority: z.ZodOptional<z.ZodNativeEnum<typeof AuditPriority>>;
 }, "strip", z.ZodTypeAny, {
     title: string;
@@ -57,7 +57,7 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     planItemId: string;
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     plannedHours?: number | undefined;
     checklistControls?: {
         controlReference: string;
@@ -75,7 +75,7 @@ export declare const CreateEngagementFromPlanRequestSchema: z.ZodObject<{
     planItemId: string;
     priority?: AuditPriority | undefined;
     universeId?: string | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     plannedHours?: number | undefined;
     checklistControls?: {
         controlReference: string;
@@ -107,7 +107,7 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     }>, "many">>;
 } & {
     universeId: z.ZodString;
-    auditType: z.ZodNativeEnum<typeof AuditType>;
+    auditType: z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>;
     priority: z.ZodNativeEnum<typeof AuditPriority>;
 } & {
     adhocReason: z.ZodString;
@@ -115,7 +115,7 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     title: string;
     priority: AuditPriority;
     universeId: string;
-    auditType: AuditType;
+    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
     slaDeadline: string;
     plannedStartDate: string;
     plannedEndDate: string;
@@ -133,7 +133,7 @@ export declare const CreateAdhocEngagementRequestSchema: z.ZodObject<{
     title: string;
     priority: AuditPriority;
     universeId: string;
-    auditType: AuditType;
+    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
     slaDeadline: string;
     plannedStartDate: string;
     plannedEndDate: string;
@@ -193,7 +193,7 @@ export declare const EngagementQuerySchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;
     pageSize: z.ZodDefault<z.ZodNumber>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof EngagementStatus>>;
-    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
     leadAuditorId: z.ZodOptional<z.ZodString>;
     auditManagerId: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodEnum<["created_at", "planned_start_date", "sla_deadline", "reference_number"]>>;
@@ -204,7 +204,7 @@ export declare const EngagementQuerySchema: z.ZodObject<{
     sortBy: "created_at" | "reference_number" | "planned_start_date" | "sla_deadline";
     sortOrder: "asc" | "desc";
     status?: EngagementStatus | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
 }, {
@@ -213,22 +213,22 @@ export declare const EngagementQuerySchema: z.ZodObject<{
     pageSize?: number | undefined;
     sortBy?: "created_at" | "reference_number" | "planned_start_date" | "sla_deadline" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
     leadAuditorId?: string | undefined;
     auditManagerId?: string | undefined;
 }>;
 export declare const EligibleUsersQuerySchema: z.ZodObject<{
     role: z.ZodEnum<["lead_auditor", "audit_manager"]>;
-    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
     priority: z.ZodOptional<z.ZodNativeEnum<typeof AuditPriority>>;
 }, "strip", z.ZodTypeAny, {
     role: "lead_auditor" | "audit_manager";
     priority?: AuditPriority | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
 }, {
     role: "lead_auditor" | "audit_manager";
     priority?: AuditPriority | undefined;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
 }>;
 export type CreateEngagementFromPlanRequestDto = z.infer<typeof CreateEngagementFromPlanRequestSchema>;
 export type EligibleUsersQueryDto = z.infer<typeof EligibleUsersQuerySchema>;

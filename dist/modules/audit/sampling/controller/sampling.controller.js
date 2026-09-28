@@ -29,6 +29,21 @@ class SamplingController {
          * @access Private - evidence:upload (the run creates evidence records)
          */
         this.router.post('/engagements/:id/sampling', (0, auth_middleware_1.requirePermission)('evidence:upload'), upload.single('file'), (0, validate_middleware_1.validate)(sampling_request_dto_1.RunSamplingRequestSchema), this._runSampling.bind(this));
+        /**
+         * @route  POST /audit/sampling/sample-size
+         * @desc   Derive an attribute sample size from confidence + tolerable/expected rate
+         * @access Private - evidence:upload (planning a test the same auditors run)
+         */
+        this.router.post('/sampling/sample-size', (0, auth_middleware_1.requirePermission)('evidence:upload'), (0, validate_middleware_1.validate)(sampling_request_dto_1.SampleSizeRequestSchema), this._calculateSampleSize.bind(this));
+    }
+    async _calculateSampleSize(req, res, next) {
+        try {
+            const result = this.samplingService.calculateSampleSize(req.body);
+            res.status(200).json((0, api_response_type_1.buildResponse)(result, 'Sample size calculated'));
+        }
+        catch (err) {
+            next(err);
+        }
     }
     async _runSampling(req, res, next) {
         try {

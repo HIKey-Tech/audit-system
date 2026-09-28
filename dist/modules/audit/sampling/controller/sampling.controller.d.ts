@@ -5,6 +5,7 @@ export declare class SamplingController {
     readonly router: Router;
     constructor(samplingService: ISamplingService);
     private _registerRoutes;
+    private _calculateSampleSize;
     private _runSampling;
 }
 //# sourceMappingURL=sampling.controller.d.ts.map

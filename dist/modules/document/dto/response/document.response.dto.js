@@ -22,6 +22,7 @@ const mapDocumentToResponse = (doc, downloadUrl) => {
         uploadedById: doc.uploaded_by_id,
         uploadedByName,
         versionNumber: doc.version_number,
+        contentSha256: doc.content_sha256 ?? null,
         createdAt: doc.created_at.toISOString(),
         downloadUrl,
     };

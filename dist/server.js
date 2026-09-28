@@ -38,6 +38,8 @@ const messaging_1 = require("./modules/messaging");
 const dashboard_1 = require("./modules/dashboard");
 const settings_1 = require("./modules/settings");
 const integration_1 = require("./modules/integration");
+const predictive_1 = require("./modules/predictive");
+const warehouse_1 = require("./modules/warehouse");
 const background_1 = require("./modules/background");
 const openapi_util_1 = require("./shared/docs/openapi.util");
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -160,6 +162,7 @@ const buildApp = () => {
     app.use(apiPrefix, (0, dashboard_1.createDashboardModule)());
     app.use(apiPrefix, (0, settings_1.createSettingsModule)());
     app.use(apiPrefix, (0, integration_1.createIntegrationModule)());
+    app.use(apiPrefix, (0, predictive_1.createPredictiveModule)());
     app.use(error_handler_middleware_1.notFoundMiddleware);
     app.use(error_handler_middleware_1.errorHandlerMiddleware);
     return app;
@@ -190,6 +193,18 @@ const startServer = async () => {
     }
     (0, background_1.registerAllJobs)();
     await background_1.schedulerService.startAll();
+    // Seed today's idempotent learning snapshot and early warnings immediately;
+    // users should not have to wait for the next scheduled hour after deployment
+    // or restart. Failure is isolated so intelligence never blocks the audit app.
+    void (async () => {
+        try {
+            await warehouse_1.warehouseService.capturePredictiveSnapshots();
+            await predictive_1.predictiveService.refreshInsights();
+        }
+        catch (err) {
+            logger_util_1.logger.warn('Initial predictive refresh failed; scheduled jobs will retry', { err });
+        }
+    })();
     void (0, workflow_utility_1.warnOnUnresolvableEscalationTargets)();
     return server;
 };

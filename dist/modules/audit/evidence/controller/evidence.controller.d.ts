@@ -7,6 +7,7 @@ export declare class EvidenceController {
     private _registerRoutes;
     private _uploadEvidence;
     private _linkToWorkingPaper;
+    private _unlinkFromWorkingPaper;
     private _linkToFinding;
     private _disputeEvidence;
     private _listEvidence;

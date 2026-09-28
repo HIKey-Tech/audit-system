@@ -1,8 +1,18 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.isFindingAuditee = exports.isFindingOversight = exports.assertHasPermission = void 0;
+exports.emptyChecklistProgress = exports.CONTROL_SETS = exports.REPORT_EDITABLE_STATUSES = exports.WP_REVIEWABLE_STATUSES = exports.PLAN_TRANSITIONS = exports.FINDING_TRANSITIONS = exports.ENGAGEMENT_TRANSITIONS = exports.parseReferenceSequence = exports.buildReferenceNumber = exports.stringify = exports.parseJson = exports.decimalToNumber = exports.toIso = exports.assertTransition = exports.isFindingAuditee = exports.isFindingOversight = exports.assertHasPermission = exports.auditTypeLabel = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const audit_enum_1 = require("../domain/enum/audit.enum");
+/** Human-readable audit-type names, for messages shown back to the user.
+ *  `systems` was merged into `it` and only appears on pre-merge records. */
+const AUDIT_TYPE_LABELS = {
+    it: 'System/IT',
+    systems: 'System/IT',
+    financial: 'Financial',
+    compliance: 'Compliance',
+};
+const auditTypeLabel = (auditType) => AUDIT_TYPE_LABELS[auditType] ?? auditType;
+exports.auditTypeLabel = auditTypeLabel;
 const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
     if (!permissions.includes(required)) {
         throw app_error_1.AppError.forbidden(message);
@@ -265,6 +275,14 @@ exports.CONTROL_SETS = {
         },
     ],
 };
+// GBB merged the separate IT and Systems audit modules into one System/IT
+// domain, so the merged domain tests the union of both control sets. The
+// Systems key is left in place so engagements created before the merge still
+// resolve their checklist controls.
+exports.CONTROL_SETS[audit_enum_1.AuditType.It] = [
+    ...exports.CONTROL_SETS[audit_enum_1.AuditType.It],
+    ...exports.CONTROL_SETS[audit_enum_1.AuditType.Systems],
+];
 const emptyChecklistProgress = () => ({
     [audit_enum_1.ChecklistResult.Passed]: 0,
     [audit_enum_1.ChecklistResult.Failed]: 0,

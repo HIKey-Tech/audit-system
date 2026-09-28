@@ -29,6 +29,13 @@ class EvidenceRequestController {
          */
         this.router.post('/engagements/:id/evidence-requests', (0, auth_middleware_1.requirePermission)('evidence:request'), (0, validate_middleware_1.validate)(evidence_request_request_dto_1.CreateEvidenceRequestSchema), this._create.bind(this));
         /**
+         * @route  GET /audit/engagements/:id/evidence-requests/assignable-users
+         * @desc   Active users an evidence request can be assigned to (auditee flagged as default)
+         * @access Private - evidence:request
+         * @note   Registered before the bare list route so "assignable-users" is not read as data.
+         */
+        this.router.get('/engagements/:id/evidence-requests/assignable-users', (0, auth_middleware_1.requirePermission)('evidence:request'), this._listAssignableUsers.bind(this));
+        /**
          * @route  GET /audit/engagements/:id/evidence-requests
          * @desc   List evidence requests on an engagement (auditee sees only their own)
          * @access Private - authenticated; service scopes visibility
@@ -69,6 +76,15 @@ class EvidenceRequestController {
         try {
             const request = await this.evidenceRequestService.createRequest(req.params.id, req.body, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(request, 'Evidence request created'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listAssignableUsers(req, res, next) {
+        try {
+            const users = await this.evidenceRequestService.listAssignableUsers(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(users));
         }
         catch (err) {
             next(err);

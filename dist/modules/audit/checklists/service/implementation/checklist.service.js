@@ -95,8 +95,15 @@ class ChecklistService {
             entityId: id,
             newValues: (0, checklist_response_dto_1.mapChecklistToResponse)(item),
         });
-        // A tested control may complete the fieldwork gate — let the engagement advance itself.
-        await (0, engagement_status_reconciler_1.reconcileEngagementStatus)(item.engagement_id, actor.id);
+        // A tested control may complete the fieldwork gate — let the engagement advance
+        // itself. Reconcile is forward-only + idempotent with an hourly backstop job, so
+        // we don't block the test response on it (a full reconcile is several queries and,
+        // over a remote DB, was the bulk of the per-test latency).
+        // ponytail: fire-and-forget; BG:AUDIT:RECONCILE:STATUS:HOURLY backstops any miss.
+        void (0, engagement_status_reconciler_1.reconcileEngagementStatus)(item.engagement_id, actor.id).catch((err) => logger_util_1.logger.warn('Post-checklist reconcile failed (will retry hourly)', {
+            engagementId: item.engagement_id,
+            err,
+        }));
         return (0, checklist_response_dto_1.mapChecklistToResponse)(item);
     }
     async linkEvidenceToChecklistItem(checklistItemId, evidenceId, actor) {

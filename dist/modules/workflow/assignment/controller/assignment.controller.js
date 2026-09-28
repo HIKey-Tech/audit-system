@@ -116,7 +116,9 @@ class AssignmentController {
     }
     async _getCandidates(req, res, next) {
         try {
-            const candidates = await this.assignmentService.getCandidates(req.params.engagementId, req.user);
+            const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+            const limitRaw = typeof req.query.limit === 'string' ? parseInt(req.query.limit, 10) : NaN;
+            const candidates = await this.assignmentService.getCandidates(req.params.engagementId, req.user, { search, limit: Number.isFinite(limitRaw) ? limitRaw : undefined });
             res.json((0, api_response_type_1.buildResponse)(candidates, 'Candidates retrieved'));
         }
         catch (err) {

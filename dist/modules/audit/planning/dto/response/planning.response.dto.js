@@ -2,12 +2,14 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapPlanToResponse = exports.mapPlanItemToResponse = void 0;
 const universe_response_dto_1 = require("../../../universe/dto/response/universe.response.dto");
-const mapPlanItemToResponse = (item) => ({
+const mapPlanItemToResponse = (item, 
+/** The parent programme's audit type — every plan under it shares it. */
+auditType) => ({
     id: item.id,
     planId: item.plan_id,
     universeId: item.universe_id,
     universeName: item.universe?.name ?? null,
-    auditType: item.audit_type,
+    auditType,
     plannedStartDate: item.planned_start_date.toISOString(),
     plannedEndDate: item.planned_end_date.toISOString(),
     priority: item.priority,
@@ -23,6 +25,7 @@ const mapPlanToResponse = (plan, warnings) => ({
     id: plan.id,
     title: plan.title,
     year: plan.year,
+    auditType: plan.audit_type,
     description: plan.description,
     status: plan.status,
     createdById: plan.created_by_id,
@@ -35,7 +38,7 @@ const mapPlanToResponse = (plan, warnings) => ({
     itemsCount: plan.items?.length ?? plan._count?.items ?? 0,
     createdAt: plan.created_at.toISOString(),
     updatedAt: plan.updated_at.toISOString(),
-    items: plan.items?.map(exports.mapPlanItemToResponse),
+    items: plan.items?.map((item) => (0, exports.mapPlanItemToResponse)(item, plan.audit_type)),
     warnings,
 });
 exports.mapPlanToResponse = mapPlanToResponse;

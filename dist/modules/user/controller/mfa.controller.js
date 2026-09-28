@@ -37,6 +37,12 @@ class MfaController {
          */
         this.router.post('/verify', (0, auth_middleware_1.requireMfaToken)('mfa_challenge'), (0, validate_middleware_1.validate)(auth_request_dto_1.MfaVerifyRequestSchema), this._verify.bind(this));
         /**
+         * @route  POST /auth/2fa/resend
+         * @desc   Resend the login email OTP (server-enforced cooldown + cap)
+         * @access Challenge token
+         */
+        this.router.post('/resend', (0, auth_middleware_1.requireMfaToken)('mfa_challenge'), this._resend.bind(this));
+        /**
          * @route  POST /auth/2fa/backup-codes/regenerate
          * @desc   Regenerate backup codes for the authenticated user
          * @access Private
@@ -76,6 +82,16 @@ class MfaController {
             await this.mfaService.verifyChallenge(id, req.body.code);
             const auth = await this.authService.completeMfaLogin(id, req.ip, req.headers['user-agent']);
             res.status(200).json((0, api_response_type_1.buildResponse)(auth, 'Login successful'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _resend(req, res, next) {
+        try {
+            const { id, email } = req.mfaToken;
+            const result = await this.mfaService.resendEmailChallenge(id, email);
+            res.status(200).json((0, api_response_type_1.buildResponse)(result, 'A new verification code has been sent'));
         }
         catch (err) {
             next(err);

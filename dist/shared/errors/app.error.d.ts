@@ -9,6 +9,7 @@ export declare enum ErrorCode {
     CONFLICT = "CONFLICT",
     VALIDATION_ERROR = "VALIDATION_ERROR",
     BAD_REQUEST = "BAD_REQUEST",
+    TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS",
     INTERNAL_ERROR = "INTERNAL_ERROR",
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
     DATABASE_ERROR = "DATABASE_ERROR",
@@ -26,7 +27,9 @@ export declare class AppError extends Error {
     static notFound(resource: string): AppError;
     static conflict(message: string): AppError;
     static badRequest(message: string, details?: unknown): AppError;
+    static tooManyRequests(message?: string): AppError;
     static validationError(details: unknown): AppError;
     static internal(message?: string): AppError;
+    static serviceUnavailable(message?: string): AppError;
 }
 //# sourceMappingURL=app.error.d.ts.map

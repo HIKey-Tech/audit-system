@@ -200,6 +200,42 @@ class MfaService {
                 `<p>It expires in ${escapeHtml(app_config_1.config.mfa.emailOtpTtl)}. If you did not try to sign in, ignore this email.</p>`,
             ].join(''),
         }, { priority: notification_queue_service_interface_1.NOTIFICATION_PRIORITY.HIGH });
+        // Flush the queue now: OTPs are interactive and time-sensitive, so we can't
+        // wait for the ~1-minute queue cron tick. Fire-and-forget (processQueue has its
+        // own concurrency guard) — never block or fail the login/challenge on the send.
+        void this.notificationQueue.processQueue().catch((err) => logger_util_1.logger.warn('Immediate OTP queue flush failed (cron will retry)', { userId, err }));
+    }
+    async resendEmailChallenge(userId, email) {
+        const user = await prisma_client_1.prisma.user.findUniqueOrThrow({
+            where: { id: userId },
+            select: { mfa_method: true },
+        });
+        // Resend only applies to the email factor — TOTP/backup codes are never emailed.
+        if (user.mfa_method !== 'email') {
+            throw app_error_1.AppError.badRequest('Resend is only available for email verification codes');
+        }
+        const cooldownMs = app_config_1.config.mfa.emailOtpResendCooldown * 1000;
+        const windowMs = this._emailOtpTtlMs();
+        // Server-enforced cooldown + cap — never trust the client's timer. Counts all
+        // sends (initial + resends) within one code lifetime.
+        const recent = await prisma_client_1.prisma.mfa_Email_Otp.findMany({
+            where: { user_id: userId, created_at: { gte: new Date(Date.now() - windowMs) } },
+            orderBy: { created_at: 'desc' },
+            select: { created_at: true },
+        });
+        if (recent.length > 0) {
+            const sinceLastMs = Date.now() - recent[0].created_at.getTime();
+            if (sinceLastMs < cooldownMs) {
+                const retryAfter = Math.ceil((cooldownMs - sinceLastMs) / 1000);
+                throw app_error_1.AppError.tooManyRequests(`Please wait ${retryAfter}s before requesting another code.`);
+            }
+        }
+        if (recent.length >= app_config_1.config.mfa.emailOtpMaxSends) {
+            throw app_error_1.AppError.tooManyRequests('Too many codes requested. Wait a few minutes, or use an authenticator app / backup code.');
+        }
+        await this._issueEmailOtp(userId, email);
+        logger_util_1.logger.info('MFA email OTP resent', { userId });
+        return { cooldownSeconds: app_config_1.config.mfa.emailOtpResendCooldown };
     }
     /** Strict consume (enrolment): throws with a clear message on failure. */
     async _consumeEmailOtp(userId, code) {

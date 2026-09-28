@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.OidcProvider = exports.SystemRole = exports.UserStatus = void 0;
+exports.OidcProvider = exports.UserStatus = void 0;
 // src/modules/user/domain/enum/user.enum.ts
 var UserStatus;
 (function (UserStatus) {
@@ -8,15 +8,6 @@ var UserStatus;
     UserStatus["INACTIVE"] = "inactive";
     UserStatus["SUSPENDED"] = "suspended";
 })(UserStatus || (exports.UserStatus = UserStatus = {}));
-var SystemRole;
-(function (SystemRole) {
-    SystemRole["SUPER_ADMIN"] = "super_admin";
-    SystemRole["AUDIT_MANAGER"] = "audit_manager";
-    SystemRole["AUDIT_LEAD"] = "audit_lead";
-    SystemRole["AUDITOR"] = "auditor";
-    SystemRole["AUDITEE"] = "auditee";
-    SystemRole["VIEWER"] = "viewer";
-})(SystemRole || (exports.SystemRole = SystemRole = {}));
 var OidcProvider;
 (function (OidcProvider) {
     OidcProvider["AZURE_AD"] = "azure_ad";

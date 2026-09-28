@@ -48,6 +48,9 @@ const notification_queue_service_interface_1 = require("../../../messaging/servi
 const escalation_service_1 = require("../../../workflow/escalation/service/implementation/escalation.service");
 const document_service_1 = require("../../../document/service/implementation/document.service");
 const directory_mapping_service_1 = require("../../../integration/service/implementation/directory-mapping.service");
+const imoc_ticket_service_1 = require("../../../integration/imoc/service/implementation/imoc-ticket.service");
+const warehouse_service_1 = require("../../../warehouse/service/implementation/warehouse.service");
+const predictive_1 = require("../../../predictive");
 /**
  * Job Key Naming Convention:
  *   BG:<MODULE>:<ACTION>:<FREQUENCY>
@@ -68,6 +71,9 @@ exports.JOB_KEYS = {
     REPORT_GENERATE_MONTHLY: 'BG:REPORT:GENERATE:MONTHLY',
     DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
     INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
+    INTEGRATION_IMOC_SYNC_HOURLY: 'BG:INTEGRATION:IMOC:SYNC:HOURLY',
+    WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY: 'BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY',
+    PREDICTIVE_INSIGHTS_HOURLY: 'BG:PREDICTIVE:INSIGHTS:HOURLY',
     RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
 };
 class SchedulerService {
@@ -218,6 +224,32 @@ exports.schedulerService = new SchedulerService();
 // Register all background jobs here
 // ──────────────────────────────────────────────
 const registerAllJobs = () => {
+    // BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY — retain safe, computed snapshots
+    // of current IAMS workflow state. This is the live learning foundation; no
+    // legacy import or raw evidence/document content is required.
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY,
+        name: 'Predictive Warehouse Snapshot',
+        description: 'Captures daily, computed audit workflow snapshots and completed outcomes for the internal predictive store.',
+        cronExpression: '10 1 * * *',
+        handler: async () => {
+            const result = await warehouse_service_1.warehouseService.capturePredictiveSnapshots();
+            logger_util_1.logger.info('Predictive warehouse snapshot completed', result);
+        },
+    });
+    // BG:PREDICTIVE:INSIGHTS:HOURLY — refresh explainable early warnings from
+    // current operational data. It is deliberately separate from the daily
+    // snapshot, so users receive fresh signals throughout the working day.
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.PREDICTIVE_INSIGHTS_HOURLY,
+        name: 'Predictive Early-Warning Refresh',
+        description: 'Refreshes explainable engagement, remediation, and evidence-request early warnings from live IAMS data.',
+        cronExpression: '20 * * * *',
+        handler: async () => {
+            const result = await predictive_1.predictiveService.refreshInsights();
+            logger_util_1.logger.info('Predictive early-warning refresh completed', result);
+        },
+    });
     // BG:INTEGRATION:DIRECTORY:SYNC:DAILY — reconcile Azure AD group→role + deprovision
     exports.schedulerService.register({
         key: exports.JOB_KEYS.INTEGRATION_DIRECTORY_SYNC_DAILY,
@@ -231,6 +263,23 @@ const registerAllJobs = () => {
             }
             const result = await directory_mapping_service_1.directoryMappingService.runFullDirectorySync();
             logger_util_1.logger.info('Directory sync job finished', result);
+        },
+    });
+    // BG:INTEGRATION:IMOC:SYNC:HOURLY — optional read-only refresh of linked
+    // IMOC tickets. This never changes an IAMS engagement, finding, workflow, or
+    // IMOC ticket; it only updates last-known display metadata on existing links.
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.INTEGRATION_IMOC_SYNC_HOURLY,
+        name: 'IMOC Linked Ticket Refresh',
+        description: 'Refreshes the last-known status of linked IMOC tickets when IMOC_SYNC_ENABLED is true.',
+        cronExpression: '15 * * * *',
+        handler: async () => {
+            if (!app_config_1.config.imoc.enabled || !app_config_1.config.imoc.syncEnabled) {
+                logger_util_1.logger.info('IMOC sync skipped (IMOC_ENABLED or IMOC_SYNC_ENABLED is false)');
+                return;
+            }
+            const result = await imoc_ticket_service_1.imocTicketService.syncActiveLinks(app_config_1.config.imoc.syncBatchSize);
+            logger_util_1.logger.info('IMOC linked-ticket sync completed', result);
         },
     });
     // BG:TOKEN:CLEANUP:HOURLY — purge expired refresh tokens

@@ -14,6 +14,9 @@ export declare class MfaService implements IMfaService {
     private _replaceBackupCodes;
     private _tryConsumeBackupCode;
     private _issueEmailOtp;
+    resendEmailChallenge(userId: string, email: string): Promise<{
+        cooldownSeconds: number;
+    }>;
     /** Strict consume (enrolment): throws with a clear message on failure. */
     private _consumeEmailOtp;
     private _tryConsumeEmailOtp;

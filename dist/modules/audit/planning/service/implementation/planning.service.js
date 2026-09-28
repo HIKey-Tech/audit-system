@@ -27,6 +27,13 @@ const FREQUENCY_MONTHS = {
     annual: 12,
 };
 const monthsSince = (date, now) => (now.getTime() - date.getTime()) / (30.44 * 24 * 60 * 60 * 1000);
+// ponytail: 60s org-wide cache for the recommendations ranking. The Add-plan-item
+// picker reopens constantly, and each recompute is a full-universe scan + open-finding
+// scan + per-entity scoring. Recommendations are the same for everyone (no per-user
+// input), so one cached list serves all callers; 60s staleness is fine for a planning
+// aid. Upgrade path: invalidate on universe/finding writes if fresher ranking is needed.
+let recommendationsCache = null;
+const RECOMMENDATIONS_TTL_MS = 60_000;
 class PlanningService {
     approvalService;
     constructor(approvalService = approval_service_1.workflowApprovalService) {
@@ -41,6 +48,9 @@ class PlanningService {
      * are returned so the ranking is explainable, not a black box.
      */
     async getRecommendations() {
+        if (recommendationsCache && Date.now() - recommendationsCache.at < RECOMMENDATIONS_TTL_MS) {
+            return recommendationsCache.data;
+        }
         const [weights, entities, openFindings] = await Promise.all([
             (0, audit_config_utility_1.getPlanningPriorityWeights)(),
             prisma_client_1.prisma.audit_Universe.findMany({
@@ -122,17 +132,20 @@ class PlanningService {
                 reasons,
             };
         });
-        return recommendations.sort((a, b) => b.score - a.score);
+        const sorted = recommendations.sort((a, b) => b.score - a.score);
+        recommendationsCache = { at: Date.now(), data: sorted };
+        return sorted;
     }
     async createPlan(dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:create');
         const existingCount = await prisma_client_1.prisma.audit_Plan.count({
-            where: { year: dto.year, deleted_at: null },
+            where: { year: dto.year, audit_type: dto.auditType, deleted_at: null },
         });
         const plan = await prisma_client_1.prisma.audit_Plan.create({
             data: {
                 title: dto.title,
                 year: dto.year,
+                audit_type: dto.auditType,
                 description: dto.description ?? null,
                 created_by_id: actor.id,
             },
@@ -146,7 +159,9 @@ class PlanningService {
             entityType: 'audit_plan',
             entityId: plan.id,
         });
-        return (0, planning_response_dto_1.mapPlanToResponse)(plan, existingCount > 0 ? [`A plan for ${dto.year} already exists`] : undefined);
+        return (0, planning_response_dto_1.mapPlanToResponse)(plan, existingCount > 0
+            ? [`A ${(0, audit_utility_1.auditTypeLabel)(dto.auditType)} programme for ${dto.year} already exists`]
+            : undefined);
     }
     async updatePlan(planId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:update');
@@ -210,7 +225,6 @@ class PlanningService {
             data: {
                 plan_id: planId,
                 universe_id: dto.universeId,
-                audit_type: dto.auditType,
                 planned_start_date: new Date(dto.plannedStartDate),
                 planned_end_date: new Date(dto.plannedEndDate),
                 priority: dto.priority,
@@ -312,6 +326,10 @@ class PlanningService {
             deleted_at: null,
             ...(query.status && { status: query.status }),
             ...(query.year !== undefined && { year: query.year }),
+            ...(query.auditType && { audit_type: query.auditType }),
+            // SQL Server's default collation is case-insensitive, so `contains`
+            // already behaves the way users expect from a search box.
+            ...(query.search && { title: { contains: query.search } }),
         };
         const [total, plans] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Plan.count({ where }),

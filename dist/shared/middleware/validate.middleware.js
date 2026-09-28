@@ -3,7 +3,11 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.validate = void 0;
 const zod_1 = require("zod");
 const app_error_1 = require("../errors/app.error");
-const validate = (schema, source = 'body') => async (req, _res, next) => {
+const validate = 
+// Zod refinements (for example, "provide either ID or number") return a
+// ZodEffects wrapper rather than a bare ZodObject. Accept every Zod schema
+// so controllers can preserve that validation at the HTTP boundary.
+(schema, source = 'body') => async (req, _res, next) => {
     try {
         const parsed = await schema.parseAsync(req[source]);
         req[source] = parsed;

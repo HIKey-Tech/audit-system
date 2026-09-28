@@ -61,6 +61,14 @@ class UserController {
          */
         this.router.post('/', (0, auth_middleware_1.requirePermission)('user:create'), (0, validate_middleware_1.validate)(user_request_dto_1.CreateUserRequestSchema), this._createUser.bind(this));
         /**
+         * @route  GET /users/directory
+         * @desc   Minimal active-user directory for people-pickers (assign auditee,
+         *         add co-responder, pick an owner). Non-sensitive fields only.
+         * @access Private — user:directory OR user:read
+         * @note   Registered before /:id so "directory" is not read as an id.
+         */
+        this.router.get('/directory', (0, auth_middleware_1.requireAnyPermission)('user:directory', 'user:read'), this._listDirectory.bind(this));
+        /**
          * @route  GET /users/:id
          * @desc   Get user by ID
          * @access Private — user:read
@@ -134,6 +142,15 @@ class UserController {
         try {
             const { users, meta } = await this.userService.listUsers(req.query);
             res.status(200).json({ ...(0, api_response_type_1.buildResponse)(users), meta });
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listDirectory(_req, res, next) {
+        try {
+            const users = await this.userService.listDirectory();
+            res.status(200).json((0, api_response_type_1.buildResponse)(users));
         }
         catch (err) {
             next(err);

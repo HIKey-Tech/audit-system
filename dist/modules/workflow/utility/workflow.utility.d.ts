@@ -1,6 +1,11 @@
 /** Permission-based authorization gate (see audit.utility for rationale). */
 export declare const assertHasPermission: (permissions: string[], required: string, message?: string) => void;
 /**
+ * Segregation of duties: whoever submitted an item for approval may not also
+ * approve it. Rejecting your own submission is fine — only the sign-off is gated.
+ */
+export declare const assertNotSelfApproval: (submittedById: string, actorId: string) => void;
+/**
  * Admin-configurable escalation matrix. Maps escalation tiers to the role names
  * whose holders are notified once an escalation passes the entity's own
  * assignees (lead auditor / engagement manager / current approver). Stored in

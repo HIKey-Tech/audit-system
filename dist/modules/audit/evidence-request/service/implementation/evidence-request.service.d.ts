@@ -1,12 +1,13 @@
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { CreateEvidenceRequestDto } from '../../dto/request/evidence-request.request.dto';
-import { EvidenceRequestResponseDto } from '../../dto/response/evidence-request.response.dto';
+import { AssignableUserDto, EvidenceRequestResponseDto } from '../../dto/response/evidence-request.response.dto';
 import { IEvidenceRequestService, RespondFileDto } from '../interface/evidence-request.service.interface';
 export declare class EvidenceRequestService implements IEvidenceRequestService {
     private readonly documentService;
     constructor(documentService: IDocumentService);
     createRequest(engagementId: string, dto: CreateEvidenceRequestDto, actor: ActorContext): Promise<EvidenceRequestResponseDto>;
+    listAssignableUsers(engagementId: string, actor: ActorContext): Promise<AssignableUserDto[]>;
     listForEngagement(engagementId: string, actor: ActorContext): Promise<EvidenceRequestResponseDto[]>;
     listMine(actor: ActorContext): Promise<EvidenceRequestResponseDto[]>;
     respond(requestId: string, file: RespondFileDto, actor: ActorContext): Promise<EvidenceRequestResponseDto>;

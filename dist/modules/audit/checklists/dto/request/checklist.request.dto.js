@@ -5,7 +5,7 @@ const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 exports.CreateChecklistItemRequestSchema = zod_1.z.object({
     // Optional — defaults to the engagement's own audit type when omitted.
-    auditType: zod_1.z.nativeEnum(audit_enum_1.AuditType).optional(),
+    auditType: zod_1.z.enum(audit_enum_1.SELECTABLE_AUDIT_TYPES).optional(),
     controlReference: zod_1.z.string().min(1).max(200),
     controlDescription: zod_1.z.string().min(1),
     testProcedure: zod_1.z.string().min(1),

@@ -1,13 +1,23 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChecklistResult = exports.VerificationStatus = exports.ReportStatus = exports.FindingStatus = exports.FindingSeverity = exports.FindingCategory = exports.WorkingPaperStatus = exports.EngagementStatus = exports.PlanStatus = exports.UniverseStatus = exports.UniverseCategory = exports.AuditFrequency = exports.AuditPriority = exports.AuditType = void 0;
+exports.ChecklistResult = exports.VerificationStatus = exports.ReportStatus = exports.FindingStatus = exports.FindingSeverity = exports.SELECTABLE_FINDING_CATEGORIES = exports.FindingCategory = exports.WorkingPaperStatus = exports.EngagementStatus = exports.PlanStatus = exports.UniverseStatus = exports.UniverseCategory = exports.AuditFrequency = exports.AuditPriority = exports.SELECTABLE_AUDIT_TYPES = exports.AuditType = void 0;
 var AuditType;
 (function (AuditType) {
     AuditType["It"] = "it";
     AuditType["Financial"] = "financial";
     AuditType["Compliance"] = "compliance";
+    /** @deprecated Merged into `It` as the System/IT domain. Kept so records
+     *  created before the merge still resolve; never offer it as a choice. */
     AuditType["Systems"] = "systems";
 })(AuditType || (exports.AuditType = AuditType = {}));
+/** The audit types a user may actually pick. Request DTOs validate against this
+ *  rather than the enum, so the retired `systems` value can never enter on a
+ *  new record while existing rows still read correctly. */
+exports.SELECTABLE_AUDIT_TYPES = [
+    AuditType.It,
+    AuditType.Financial,
+    AuditType.Compliance,
+];
 var AuditPriority;
 (function (AuditPriority) {
     AuditPriority["Critical"] = "critical";
@@ -62,9 +72,17 @@ var FindingCategory;
     FindingCategory["It"] = "it";
     FindingCategory["Financial"] = "financial";
     FindingCategory["Compliance"] = "compliance";
+    /** @deprecated Merged into `It`. See AuditType.Systems. */
     FindingCategory["Systems"] = "systems";
     FindingCategory["Operational"] = "operational";
 })(FindingCategory || (exports.FindingCategory = FindingCategory = {}));
+/** Finding categories a user may pick — `systems` is retired, see AuditType. */
+exports.SELECTABLE_FINDING_CATEGORIES = [
+    FindingCategory.It,
+    FindingCategory.Financial,
+    FindingCategory.Compliance,
+    FindingCategory.Operational,
+];
 var FindingSeverity;
 (function (FindingSeverity) {
     FindingSeverity["Critical"] = "critical";

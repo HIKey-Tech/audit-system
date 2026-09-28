@@ -20,6 +20,8 @@ export declare const config: {
         readonly enrollTtl: string;
         readonly emailOtpTtl: string;
         readonly emailOtpMaxAttempts: number;
+        readonly emailOtpResendCooldown: number;
+        readonly emailOtpMaxSends: number;
         readonly backupCodeCount: number;
         readonly encryptionKey: string;
     };
@@ -59,6 +61,21 @@ export declare const config: {
         readonly clientSecret: string;
         readonly graphBaseUrl: string;
         readonly defaultRoleName: string;
+    };
+    readonly imoc: {
+        readonly enabled: boolean;
+        readonly baseUrl: string;
+        readonly tenantId: string;
+        readonly tenantAccount: string;
+        readonly machineUserAccount: string;
+        readonly accessKey: string;
+        readonly secretKey: string;
+        readonly token: string;
+        readonly tokenExpiresAt: string;
+        readonly timeoutMs: number;
+        readonly tokenRefreshSkewMs: number;
+        readonly syncEnabled: boolean;
+        readonly syncBatchSize: number;
     };
     readonly redis: {
         readonly url: string;

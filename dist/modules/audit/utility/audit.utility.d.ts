@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { AuditType, ChecklistResult, EngagementStatus, FindingStatus, PlanStatus, ReportStatus, WorkingPaperStatus } from '../domain/enum/audit.enum';
+export declare const auditTypeLabel: (auditType: string) => string;
 export declare const assertHasPermission: (permissions: string[], required: string, message?: string) => void;
 /**
  * How a viewer is scoped when reading findings. Mirrors the dashboard's

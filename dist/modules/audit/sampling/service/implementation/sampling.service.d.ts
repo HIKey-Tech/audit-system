@@ -1,6 +1,7 @@
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { IEvidenceService } from '../../../evidence/service/interface/evidence.service.interface';
-import { RunSamplingRequestDto } from '../../dto/request/sampling.request.dto';
+import { RunSamplingRequestDto, SampleSizeRequestDto } from '../../dto/request/sampling.request.dto';
+import { AttributeSampleSizeResult } from '../../utility/sampler.utility';
 import { ISamplingService, SamplingRunFile, SamplingRunResultDto } from '../interface/sampling.service.interface';
 /**
  * Audit sampling: parses an uploaded population CSV, draws a reproducible
@@ -13,6 +14,7 @@ export declare class SamplingService implements ISamplingService {
     private readonly evidenceService;
     constructor(evidenceService: IEvidenceService);
     runSampling(engagementId: string, file: SamplingRunFile, dto: RunSamplingRequestDto, actor: ActorContext): Promise<SamplingRunResultDto>;
+    calculateSampleSize(dto: SampleSizeRequestDto): AttributeSampleSizeResult;
     private _parsePopulation;
     private _buildMethodology;
 }

@@ -133,6 +133,23 @@ class UserService {
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
+    async listDirectory() {
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: { deleted_at: null, is_active: true },
+            select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                display_name: true,
+                department: true,
+                job_title: true,
+                is_active: true,
+            },
+            orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+            take: 500,
+        });
+        return users.map(user_response_dto_1.mapUserToDirectory);
+    }
     async listRoles(query) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
         const [total, roles] = await prisma_client_1.prisma.$transaction([

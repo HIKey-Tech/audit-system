@@ -19,4 +19,21 @@ export declare const RunSamplingRequestSchema: z.ZodObject<{
     threshold?: number | undefined;
 }>;
 export type RunSamplingRequestDto = z.infer<typeof RunSamplingRequestSchema>;
+export declare const SampleSizeRequestSchema: z.ZodObject<{
+    populationSize: z.ZodNumber;
+    confidenceLevel: z.ZodNumber;
+    tolerableRate: z.ZodNumber;
+    expectedRate: z.ZodOptional<z.ZodNumber>;
+}, "strip", z.ZodTypeAny, {
+    populationSize: number;
+    confidenceLevel: number;
+    tolerableRate: number;
+    expectedRate?: number | undefined;
+}, {
+    populationSize: number;
+    confidenceLevel: number;
+    tolerableRate: number;
+    expectedRate?: number | undefined;
+}>;
+export type SampleSizeRequestDto = z.infer<typeof SampleSizeRequestSchema>;
 //# sourceMappingURL=sampling.request.dto.d.ts.map

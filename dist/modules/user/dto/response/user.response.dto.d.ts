@@ -51,6 +51,29 @@ export interface UserResponseDto {
     roles: RoleResponseDto[];
     permissions: string[];
 }
+/**
+ * Minimal, non-sensitive user record for people-pickers (assign auditee, add
+ * co-responder, pick an owner). Excludes roles/permissions/MFA/tokens. Access is
+ * still permission-gated — see the `user:directory` permission.
+ */
+export interface UserDirectoryDto {
+    id: string;
+    displayName: string | null;
+    firstName: string;
+    lastName: string;
+    department: string | null;
+    jobTitle: string | null;
+    isActive: boolean;
+}
+export declare const mapUserToDirectory: (u: {
+    id: string;
+    first_name: string;
+    last_name: string;
+    display_name: string | null;
+    department: string | null;
+    job_title: string | null;
+    is_active: boolean;
+}) => UserDirectoryDto;
 export interface AuthResponseDto {
     accessToken: string;
     refreshToken: string;

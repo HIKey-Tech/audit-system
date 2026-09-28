@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
 export declare const CreateChecklistItemRequestSchema: z.ZodObject<{
-    auditType: z.ZodOptional<z.ZodNativeEnum<typeof AuditType>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
     controlReference: z.ZodString;
     controlDescription: z.ZodString;
     testProcedure: z.ZodString;
@@ -9,12 +9,12 @@ export declare const CreateChecklistItemRequestSchema: z.ZodObject<{
     controlReference: string;
     controlDescription: string;
     testProcedure: string;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
 }, {
     controlReference: string;
     controlDescription: string;
     testProcedure: string;
-    auditType?: AuditType | undefined;
+    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
 }>;
 export declare const UpdateChecklistItemRequestSchema: z.ZodObject<{
     result: z.ZodNativeEnum<typeof ChecklistResult>;

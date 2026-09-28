@@ -65,6 +65,14 @@ class EvidenceService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.link_working_paper', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId, newValues: { workingPaperId } });
         return (0, evidence_response_dto_1.mapEvidenceToResponse)(updated);
     }
+    async unlinkFromWorkingPaper(evidenceId, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:upload');
+        await this._getEvidence(evidenceId);
+        const updated = await prisma_client_1.prisma.audit_Evidence.update({ where: { id: evidenceId }, data: { working_paper_id: null } });
+        logger_util_1.logger.info('Evidence unlinked from working paper', { evidenceId, actorId: actor.id });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence.unlink_working_paper', module: 'audit', entityType: 'audit_evidence', entityId: evidenceId });
+        return (0, evidence_response_dto_1.mapEvidenceToResponse)(updated);
+    }
     async linkToFinding(evidenceId, findingId, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:upload');
         const evidence = await this._getEvidence(evidenceId);

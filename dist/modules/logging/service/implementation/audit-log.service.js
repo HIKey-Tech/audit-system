@@ -1,7 +1,10 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.auditLogService = exports.AuditLogService = void 0;
+// src/modules/logging/service/implementation/audit-log.service.ts
+const crypto_1 = require("crypto");
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
+const audit_log_hash_util_1 = require("../../utility/audit-log-hash.util");
 const auditLogUserInclude = {
     user: {
         select: {
@@ -17,29 +20,85 @@ const app_error_1 = require("../../../../shared/errors/app.error");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const logging_response_dto_1 = require("../../dto/response/logging.response.dto");
 class AuditLogService {
+    // Serializes sealed writes within this process so the hash chain stays linear:
+    // each append reads the previous tip, computes its hash, and inserts before the
+    // next one runs. `_lastRowHash` caches the tip (undefined = not yet loaded).
+    // ponytail: single-writer assumption (one backend process). If IAMS is ever run
+    // multi-instance, move tip resolution to a DB-level sequence lock.
+    _chainLock = Promise.resolve();
+    _lastRowHash = undefined;
     async log(dto) {
         try {
-            await prisma_client_1.prisma.audit_Log.create({
-                data: {
-                    user_id: dto.userId ?? null,
-                    action: dto.action,
-                    module: dto.module,
-                    entity_type: dto.entityType ?? null,
-                    entity_id: dto.entityId ?? null,
-                    old_values: dto.oldValues ? JSON.stringify(dto.oldValues) : null,
-                    new_values: dto.newValues ? JSON.stringify(dto.newValues) : null,
-                    ip_address: dto.ipAddress ?? null,
-                    user_agent: dto.userAgent ?? null,
-                    status: dto.status ?? 'success',
-                    error_message: dto.errorMessage ?? null,
-                    duration_ms: dto.durationMs ?? null,
-                },
-            });
+            const fields = {
+                id: (0, crypto_1.randomUUID)(),
+                user_id: dto.userId ?? null,
+                action: dto.action,
+                module: dto.module,
+                entity_type: dto.entityType ?? null,
+                entity_id: dto.entityId ?? null,
+                old_values: dto.oldValues ? JSON.stringify(dto.oldValues) : null,
+                new_values: dto.newValues ? JSON.stringify(dto.newValues) : null,
+                ip_address: dto.ipAddress ?? null,
+                user_agent: dto.userAgent ?? null,
+                status: dto.status ?? 'success',
+                error_message: dto.errorMessage ?? null,
+                duration_ms: dto.durationMs ?? null,
+                created_at: new Date(),
+            };
+            await this._appendSealed(fields);
         }
         catch (err) {
             // Logging must never crash the application
             logger_util_1.logger.error('Failed to persist audit log', { err, dto });
         }
+    }
+    /** Append one sealed row, serialized against every other append in this process. */
+    async _appendSealed(fields) {
+        const run = this._chainLock.then(async () => {
+            if (this._lastRowHash === undefined) {
+                const tip = await prisma_client_1.prisma.audit_Log.findFirst({
+                    where: { row_hash: { not: null } },
+                    orderBy: { created_at: 'desc' },
+                    select: { row_hash: true },
+                });
+                this._lastRowHash = tip?.row_hash ?? null;
+            }
+            const prevHash = this._lastRowHash;
+            const rowHash = (0, audit_log_hash_util_1.computeRowHash)(fields, prevHash);
+            await prisma_client_1.prisma.audit_Log.create({
+                data: { ...fields, prev_hash: prevHash, row_hash: rowHash },
+            });
+            this._lastRowHash = rowHash;
+        });
+        // Keep the lock chain alive even if this write throws, so the next append still
+        // runs; the error is surfaced to the caller (log()) via the await below.
+        this._chainLock = run.catch(() => undefined);
+        await run;
+    }
+    /** Walk the sealed chain and report the first break, if any. */
+    async verifyChain() {
+        const rows = await prisma_client_1.prisma.audit_Log.findMany({
+            where: { row_hash: { not: null } },
+            select: {
+                id: true,
+                user_id: true,
+                action: true,
+                module: true,
+                entity_type: true,
+                entity_id: true,
+                old_values: true,
+                new_values: true,
+                ip_address: true,
+                user_agent: true,
+                status: true,
+                error_message: true,
+                duration_ms: true,
+                created_at: true,
+                prev_hash: true,
+                row_hash: true,
+            },
+        });
+        return (0, audit_log_hash_util_1.verifyLogChain)(rows);
     }
     logAsync(dto) {
         // Fire-and-forget - do not await

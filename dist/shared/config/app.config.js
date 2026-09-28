@@ -60,6 +60,10 @@ exports.config = {
         enrollTtl: requireDurationEnv('MFA_ENROLL_TTL', '15m'),
         emailOtpTtl: requireDurationEnv('MFA_EMAIL_OTP_TTL', '10m'),
         emailOtpMaxAttempts: parseInt(optionalEnv('MFA_EMAIL_OTP_MAX_ATTEMPTS', '5'), 10),
+        // Seconds a user must wait between requesting email OTP resends (server-enforced).
+        emailOtpResendCooldown: parseInt(optionalEnv('MFA_EMAIL_OTP_RESEND_COOLDOWN', '30'), 10),
+        // Max OTP sends (initial + resends) allowed within one code lifetime — anti email-bomb.
+        emailOtpMaxSends: parseInt(optionalEnv('MFA_EMAIL_OTP_MAX_SENDS', '5'), 10),
         backupCodeCount: parseInt(optionalEnv('MFA_BACKUP_CODE_COUNT', '10'), 10),
         // 32-byte key (hex or base64) for AES-256-GCM at-rest encryption of TOTP
         // secrets. Falls back to a key derived from JWT_SECRET when unset (dev only).
@@ -113,6 +117,29 @@ exports.config = {
         // Baseline role granted to every SSO user on top of any group-mapped roles
         // (so all employees get at least read access). Empty disables it.
         defaultRoleName: optionalEnv('SSO_DEFAULT_ROLE', 'viewer'),
+    },
+    // IMOC is an optional, read-only service-management data source. A configured
+    // machine-machine account obtains an imoc_token on demand and it is cached in
+    // process until shortly before its documented 30-minute expiry. IMOC_ENABLED
+    // remains false by default, keeping all existing audit workflows independent.
+    imoc: {
+        enabled: optionalEnv('IMOC_ENABLED', 'false') === 'true',
+        baseUrl: optionalEnv('IMOC_BASE_URL', 'https://service-imoc.gbb.com.ng:443').replace(/\/$/, ''),
+        tenantId: optionalEnv('IMOC_TENANT_ID'),
+        tenantAccount: optionalEnv('IMOC_TENANT_ACCOUNT'),
+        machineUserAccount: optionalEnv('IMOC_MACHINE_USER_ACCOUNT'),
+        accessKey: optionalEnv('IMOC_ACCESS_KEY'),
+        secretKey: optionalEnv('IMOC_SECRET_KEY'),
+        // Retained only as a controlled break-glass fallback. Machine credentials
+        // take precedence whenever they are complete.
+        token: optionalEnv('IMOC_TOKEN'),
+        tokenExpiresAt: optionalEnv('IMOC_TOKEN_EXPIRES_AT'),
+        timeoutMs: parseInt(optionalEnv('IMOC_TIMEOUT_MS', '10000'), 10),
+        tokenRefreshSkewMs: parseInt(optionalEnv('IMOC_TOKEN_REFRESH_SKEW_MS', '60000'), 10),
+        // Manual refresh is always available to permitted users. This switch only
+        // enables the low-volume, persisted background refresh job.
+        syncEnabled: optionalEnv('IMOC_SYNC_ENABLED', 'false') === 'true',
+        syncBatchSize: parseInt(optionalEnv('IMOC_SYNC_BATCH_SIZE', '25'), 10),
     },
     redis: {
         url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
@@ -179,6 +206,17 @@ if (exports.config.app.isProd) {
         throw new Error('MFA_ENCRYPTION_KEY is required in production: it encrypts TOTP secrets at rest. ' +
             'Without it the system silently falls back to a key derived from JWT_SECRET, ' +
             'coupling two security domains. Generate one with: openssl rand -base64 32');
+    }
+}
+if (exports.config.imoc.enabled) {
+    if (!exports.config.imoc.baseUrl) {
+        throw new Error('IMOC_BASE_URL is required when IMOC_ENABLED=true.');
+    }
+    const hasMachineCredentials = Boolean(exports.config.imoc.accessKey
+        && exports.config.imoc.secretKey
+        && (exports.config.imoc.tenantId || exports.config.imoc.tenantAccount));
+    if (!hasMachineCredentials && !exports.config.imoc.token) {
+        throw new Error('Set IMOC_ACCESS_KEY, IMOC_SECRET_KEY, and IMOC_TENANT_ID or IMOC_TENANT_ACCOUNT when IMOC_ENABLED=true.');
     }
 }
 //# sourceMappingURL=app.config.js.map

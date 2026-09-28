@@ -44,6 +44,40 @@ class EvidenceRequestService {
         await this._notify(assignee.id, assignee.email, 'Evidence requested from you', `"${dto.title}" has been requested for audit ${engagement.reference_number} — ${engagement.title}.${due} Please log in to IAMS to upload the requested documents.`, engagementId);
         return (0, evidence_request_response_dto_1.mapEvidenceRequestToResponse)(request);
     }
+    async listAssignableUsers(engagementId, actor) {
+        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'evidence:request');
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { id: true, auditee_id: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        // ponytail: active users, capped at 200 for the picker. Evidence requests are
+        // low-frequency; add a search param like the assignment-candidates endpoint if
+        // GBB's directory ever outgrows a single dropdown.
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: { deleted_at: null, is_active: true },
+            select: {
+                id: true,
+                display_name: true,
+                first_name: true,
+                last_name: true,
+                email: true,
+                department: true,
+                job_title: true,
+            },
+            orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+            take: 200,
+        });
+        return users.map((u) => ({
+            id: u.id,
+            displayName: u.display_name || `${u.first_name} ${u.last_name}`.trim(),
+            email: u.email,
+            department: u.department,
+            jobTitle: u.job_title,
+            isAuditee: u.id === engagement.auditee_id,
+        }));
+    }
     async listForEngagement(engagementId, actor) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
