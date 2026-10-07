@@ -9,7 +9,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, PlanStatus, UniverseStatus } from '../../../domain/enum/audit.enum';
-import { assertHasPermission, auditTypeLabel, decimalToNumber } from '../../../utility/audit.utility';
+import { PLAN_EDITABLE_STATUSES, assertHasPermission, auditTypeLabel, decimalToNumber } from '../../../utility/audit.utility';
 import { getPlanningPriorityWeights } from '../../../utility/audit-config.utility';
 import {
   AddPlanItemRequestDto,
@@ -310,7 +310,9 @@ export class PlanningService implements IPlanningService {
   async submitPlanForApproval(planId: string, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:submit');
     const plan = await this._getPlanForMutation(planId);
-    if (plan.status !== PlanStatus.Draft) throw AppError.badRequest('Only draft plans can be submitted');
+    if (!PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) {
+      throw AppError.badRequest('Only draft or rejected plans can be submitted');
+    }
     if (plan.items.length === 0) throw AppError.badRequest('Plan must have at least one item before submission');
 
     const { submittedPlan, approval } = await prisma.$transaction(async (tx) => {
@@ -411,7 +413,9 @@ export class PlanningService implements IPlanningService {
       select: { status: true },
     });
     if (!plan) throw AppError.notFound('Audit plan');
-    if (plan.status !== PlanStatus.Draft) throw AppError.badRequest('Plan must be in draft status');
+    if (!PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) {
+      throw AppError.badRequest('Plan must be in draft or rejected status to be changed');
+    }
   }
 
   private async _assertUniverseExists(universeId: string): Promise<void> {

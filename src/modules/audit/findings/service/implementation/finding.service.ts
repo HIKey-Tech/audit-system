@@ -10,7 +10,6 @@ import {
   buildTabularExport,
 } from '../../../../../shared/utils/tabular-export.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
-import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
@@ -56,9 +55,8 @@ export class FindingService implements IFindingService {
       await this._assertRiskExists(dto.riskId);
     }
 
-    // Transactional outbox: the finding and the auditee's "new finding" alert
-    // commit together. Without this the auditee would only learn of the finding
-    // via the daily overdue sweep.
+    // Findings stay internal until the report is issued, so no auditee alert is sent here:
+    // ReportService.issueReport notifies every responder once the report goes out.
     const finding = await prisma.$transaction(async (tx) => {
       const created = await tx.audit_Finding.create({
         data: {
@@ -80,66 +78,12 @@ export class FindingService implements IFindingService {
         include: findingInclude,
       });
 
-      const dueDate = created.due_date.toISOString();
-      const auditeeName =
-        created.auditee.display_name ?? `${created.auditee.first_name} ${created.auditee.last_name}`.trim();
-      const findingVariables = {
-        auditeeName,
-        findingTitle: created.title,
-        engagementReference: created.engagement.reference_number,
-        severity: created.severity,
-        dueDate,
-      };
-
-      await notificationQueueService.enqueue('in_app', {
-        userId: created.auditee_id,
-        title: 'New audit finding assigned',
-        body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-        type: 'warning',
-        referenceType: 'audit_finding',
-        referenceId: created.id,
-        eventKey: 'audit.finding.assigned',
-        variables: findingVariables,
-      }, { tx });
-
-      await notificationQueueService.enqueue('email', {
-        to: created.auditee.email,
-        subject: `New Audit Finding: ${created.title}`,
-        text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-        eventKey: 'audit.finding.assigned',
-        variables: findingVariables,
-      }, { tx });
-
-      // Co-responders: persist the join rows and alert each one, same as the
-      // primary auditee, so a finding can be owned by several people.
+      // Co-responders: persist the join rows so a finding can be owned by several people.
       const extraIds = [...new Set(dto.additionalAuditeeIds ?? [])].filter((uid) => uid !== created.auditee_id);
-      for (const uid of extraIds) {
-        const responder = await tx.audit_Finding_Responder.create({
-          data: { finding_id: created.id, user_id: uid },
-          include: { user: { select: { display_name: true, first_name: true, last_name: true, email: true } } },
+      if (extraIds.length > 0) {
+        await tx.audit_Finding_Responder.createMany({
+          data: extraIds.map((uid) => ({ finding_id: created.id, user_id: uid })),
         });
-        const responderName =
-          responder.user.display_name ?? `${responder.user.first_name} ${responder.user.last_name}`.trim();
-        const responderVariables = { ...findingVariables, auditeeName: responderName };
-
-        await notificationQueueService.enqueue('in_app', {
-          userId: uid,
-          title: 'New audit finding assigned',
-          body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-          type: 'warning',
-          referenceType: 'audit_finding',
-          referenceId: created.id,
-          eventKey: 'audit.finding.assigned',
-          variables: responderVariables,
-        }, { tx });
-
-        await notificationQueueService.enqueue('email', {
-          to: responder.user.email,
-          subject: `New Audit Finding: ${created.title}`,
-          text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-          eventKey: 'audit.finding.assigned',
-          variables: responderVariables,
-        }, { tx });
       }
 
       return created;
@@ -254,7 +198,14 @@ export class FindingService implements IFindingService {
       where: {
         id,
         deleted_at: null,
-        ...(isAuditee && this._auditeeMatch(actor.id)),
+        // An auditee only sees findings once the report is issued (engagement reported/closed),
+        // matching the list endpoints.
+        ...(isAuditee && {
+          AND: [
+            this._auditeeMatch(actor.id),
+            { engagement: { status: { in: [EngagementStatus.Reported, EngagementStatus.Closed] } } },
+          ],
+        }),
       },
       include: {
         ...findingInclude,

@@ -530,6 +530,7 @@ export const registerAllJobs = (): void => {
           engagement: {
             select: {
               reference_number: true,
+              status: true,
               lead_auditor: {
                 select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
               },
@@ -550,7 +551,11 @@ export const registerAllJobs = (): void => {
           Math.ceil((finding.due_date.getTime() - now.getTime()) / 86_400_000),
         );
         const statusLabel = isOverdue ? `overdue by ${daysOverdue} day(s)` : `due in ${daysRemaining} day(s)`;
-        const recipients = [finding.auditee, finding.engagement.lead_auditor];
+        // Findings are internal until the report is issued, so the auditee isn't chased before then.
+        const reportIssued = ['reported', 'closed'].includes(finding.engagement.status);
+        const recipients = reportIssued
+          ? [finding.auditee, finding.engagement.lead_auditor]
+          : [finding.engagement.lead_auditor];
 
         for (const recipient of recipients) {
           const recipientName =

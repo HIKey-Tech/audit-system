@@ -117,15 +117,18 @@ export class ReportService implements IReportService {
 
     if (report.status === ReportStatus.Submitted) {
       await this._assertSubmittedReportHasNoApproval(id);
-    } else if (report.status !== ReportStatus.Draft) {
-      throw AppError.badRequest('Only draft reports can be submitted');
+    } else if (!REPORT_EDITABLE_STATUSES.includes(report.status as ReportStatus)) {
+      throw AppError.badRequest('Only draft or rejected reports can be submitted');
     }
 
+    // A rejected report may be re-submitted as-is or after edits; either way the
+    // approval chain restarts from level 1.
+    const needsStatusChange = report.status === ReportStatus.Draft || report.status === ReportStatus.Rejected;
     const { submittedReport, approval } = await prisma.$transaction(async (tx) => {
-      const submittedReport = report.status === ReportStatus.Draft
+      const submittedReport = needsStatusChange
         ? await tx.audit_Report.update({
             where: { id },
-            data: { status: ReportStatus.Submitted },
+            data: { status: ReportStatus.Submitted, rejection_reason: null },
             include: reportInclude,
           })
         : await tx.audit_Report.findFirstOrThrow({
@@ -256,6 +259,10 @@ export class ReportService implements IReportService {
         },
       );
     }
+
+    // Findings only become visible to auditees now, so this is where each responder
+    // (primary auditee or co-responder) learns what has been assigned to them.
+    await this._notifyFindingResponders(report.engagement_id, report.engagement.reference_number);
 
     logger.info('Audit report issued', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.issue', module: 'audit', entityType: 'audit_report', entityId: id });
@@ -393,6 +400,60 @@ export class ReportService implements IReportService {
       mimeType: file.mimeType,
       buffer: file.buffer,
     };
+  }
+
+  /** One in-app + email summary per responder of the findings assigned to them on this engagement. */
+  private async _notifyFindingResponders(engagementId: string, engagementReference: string): Promise<void> {
+    try {
+      const userSelect = { id: true, email: true };
+      const findings = await prisma.audit_Finding.findMany({
+        where: { engagement_id: engagementId, deleted_at: null },
+        select: {
+          id: true,
+          title: true,
+          due_date: true,
+          auditee: { select: userSelect },
+          responders: { select: { user: { select: userSelect } } },
+        },
+      });
+
+      const byUser = new Map<string, { email: string; findings: Array<{ id: string; title: string; dueDate: string }> }>();
+      for (const finding of findings) {
+        const users = [finding.auditee, ...finding.responders.map((r) => r.user)];
+        for (const user of users) {
+          const entry = byUser.get(user.id) ?? { email: user.email, findings: [] };
+          if (!entry.findings.some((f) => f.id === finding.id)) {
+            entry.findings.push({ id: finding.id, title: finding.title, dueDate: finding.due_date.toISOString().slice(0, 10) });
+          }
+          byUser.set(user.id, entry);
+        }
+      }
+
+      for (const [userId, entry] of byUser) {
+        const single = entry.findings.length === 1 ? entry.findings[0] : null;
+        const body = single
+          ? `Finding "${single.title}" (${engagementReference}) has been assigned to you. Due ${single.dueDate}.`
+          : `${entry.findings.length} findings from audit ${engagementReference} have been assigned to you. Please review them and submit your management responses.`;
+
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId,
+          title: 'Audit findings assigned',
+          body,
+          type: 'warning',
+          referenceType: single ? 'audit_finding' : 'audit_engagement',
+          referenceId: single ? single.id : engagementId,
+        });
+        if (entry.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: entry.email,
+            subject: `Audit findings assigned: ${engagementReference}`,
+            text: body,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn('Finding responder notification failed', { engagementId, err });
+    }
   }
 
   private async _getReport(id: string) {

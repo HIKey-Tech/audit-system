@@ -179,7 +179,7 @@ export default function PlanDetailPage(): JSX.Element {
                 Back
               </Button>
             </Link>
-            {data.status === 'draft' && canWrite && (
+            {(data.status === 'draft' || data.status === 'rejected') && canWrite && (
               <Button
                 leftIcon={<Send className="h-4 w-4" />}
                 onClick={() => submitMut.mutate()}
@@ -277,7 +277,7 @@ export default function PlanDetailPage(): JSX.Element {
       <Card className="mt-6" padded={false}>
         <div className="flex items-center justify-between px-5 pt-5 pb-3">
           <CardHeader title="Plans" subtitle="Audits scheduled within this programme — all of its audit type" className="mb-0" />
-          {data.status === 'draft' && canWrite && (
+          {(data.status === 'draft' || data.status === 'rejected') && canWrite && (
             <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddItemOpen(true)}>
               Add plan
             </Button>

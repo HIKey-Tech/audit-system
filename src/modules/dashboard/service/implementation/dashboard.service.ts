@@ -235,7 +235,8 @@ export class DashboardService {
     const restrictToAuditee = isRestrictedAuditee(actor.permissions);
     const findingWhereBase: Prisma.Audit_FindingWhereInput = {
       deleted_at: null,
-      ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
+      // Findings stay internal until the report is issued (engagement reported/closed).
+      ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } : {}),
     };
 
     const openWhere: Prisma.Audit_FindingWhereInput = {
@@ -668,7 +669,8 @@ export class DashboardService {
             // Auditee view: findings assigned to them that still need action.
             {
               status: { in: ['open', 'management_response_received', 'in_remediation'] },
-              engagement: { deleted_at: null },
+              // Not visible to the auditee until the report is issued.
+              engagement: { deleted_at: null, status: { in: ['reported', 'closed'] } },
               OR: [
                 { auditee_id: userId },
                 { responders: { some: { user_id: userId } } },
@@ -994,7 +996,9 @@ export class DashboardService {
   ): Promise<AuditAnalyticsResponseDto['followUp']> {
     const restrictToAuditee = isRestrictedAuditee(actor.permissions);
     const where: Prisma.Audit_Follow_UpWhereInput = {
-      ...(restrictToAuditee ? { finding: { auditee_id: actor.id } } : {}),
+      ...(restrictToAuditee
+        ? { finding: { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } }
+        : {}),
     };
     const now = new Date();
     const [total, pending, verified, rejected, overdueFindings] = await prisma.$transaction([
@@ -1007,7 +1011,7 @@ export class DashboardService {
           deleted_at: null,
           due_date: { lt: now },
           status: { notIn: FINDING_RESOLVED_STATUSES as unknown as string[] },
-          ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
+          ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } : {}),
         },
       }),
     ]);

@@ -158,6 +158,9 @@ export class MfaService implements IMfaService {
           mfa_method: null,
           mfa_totp_secret: null,
           mfa_enrolled_at: null,
+          // Clear the grace deadline too: the next password login starts a fresh grace window
+          // instead of hard-blocking a user whose original window already lapsed.
+          mfa_grace_until: null,
         },
       }),
       prisma.mfa_Backup_Code.deleteMany({ where: { user_id: targetUserId } }),

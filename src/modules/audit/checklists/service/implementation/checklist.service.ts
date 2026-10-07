@@ -5,7 +5,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { ActorContext, ChecklistProgress } from '../../../domain/entity/audit.entity';
 import { AuditType, ChecklistResult } from '../../../domain/enum/audit.enum';
 import { assertHasPermission, emptyChecklistProgress } from '../../../utility/audit.utility';
-import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
+import { assertCanViewInternalArtifacts, repositoryEngagementScope } from '../../../engagement/utility/engagement-visibility.util';
 import {
   ChecklistTemplateControl,
   getChecklistTemplateConfig,
@@ -58,6 +58,7 @@ export class ChecklistService implements IChecklistService {
 
   async createChecklistItem(engagementId: string, dto: CreateChecklistItemRequestDto, actor: ActorContext): Promise<ChecklistResponseDto> {
     assertHasPermission(actor.permissions, 'checklist:create');
+    await this._assertEngagementTeam(engagementId, actor);
 
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
@@ -89,7 +90,8 @@ export class ChecklistService implements IChecklistService {
 
   async updateChecklistItem(id: string, dto: UpdateChecklistItemRequestDto, actor: ActorContext): Promise<ChecklistResponseDto> {
     assertHasPermission(actor.permissions, 'checklist:update');
-    await this._assertChecklistExists(id);
+    const existing = await this._getChecklistEngagement(id);
+    await this._assertEngagementTeam(existing.engagement_id, actor);
 
     const item = await prisma.audit_Checklist.update({
       where: { id },
@@ -134,6 +136,7 @@ export class ChecklistService implements IChecklistService {
       select: { engagement_id: true },
     });
     if (!checklist) throw AppError.notFound('Audit checklist item');
+    await this._assertEngagementTeam(checklist.engagement_id, actor);
 
     const evidence = await prisma.audit_Evidence.findUnique({
       where: { id: evidenceId },
@@ -224,8 +227,23 @@ export class ChecklistService implements IChecklistService {
     return result;
   }
 
-  private async _assertChecklistExists(id: string): Promise<void> {
-    const item = await prisma.audit_Checklist.findUnique({ where: { id }, select: { id: true } });
+  private async _getChecklistEngagement(id: string): Promise<{ engagement_id: string }> {
+    const item = await prisma.audit_Checklist.findUnique({ where: { id }, select: { engagement_id: true } });
     if (!item) throw AppError.notFound('Audit checklist item');
+    return item;
+  }
+
+  /**
+   * Checklist writes are limited to the engagement's audit team (lead, manager, assignee)
+   * and oversight (`engagement:read_all`), so holding `checklist:*` alone can't touch
+   * another engagement's tests. Reported as not-found so existence isn't revealed.
+   */
+  private async _assertEngagementTeam(engagementId: string, actor: ActorContext): Promise<void> {
+    const scope = repositoryEngagementScope(actor);
+    if (!scope) return;
+    const allowed = await prisma.audit_Engagement.count({
+      where: { id: engagementId, deleted_at: null, ...scope },
+    });
+    if (allowed === 0) throw AppError.notFound('Audit engagement');
   }
 }

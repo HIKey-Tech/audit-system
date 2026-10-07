@@ -106,8 +106,15 @@ export const PLAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]> = {
   [PlanStatus.Draft]: [PlanStatus.Submitted],
   [PlanStatus.Submitted]: [PlanStatus.Approved, PlanStatus.Rejected],
   [PlanStatus.Approved]: [],
-  [PlanStatus.Rejected]: [],
+  // A rejected plan is revised and re-submitted (draft-equivalent), restarting the approval chain.
+  [PlanStatus.Rejected]: [PlanStatus.Submitted],
 };
+
+/** Plans whose content may be changed and which may be (re)submitted for approval. */
+export const PLAN_EDITABLE_STATUSES: readonly PlanStatus[] = [
+  PlanStatus.Draft,
+  PlanStatus.Rejected,
+] as const;
 
 export const WP_REVIEWABLE_STATUSES: readonly WorkingPaperStatus[] = [
   WorkingPaperStatus.Draft,

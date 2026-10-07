@@ -709,7 +709,9 @@ export const ROLES: Array<{
       'finding:read', 'finding:create', 'finding:update', 'finding:close',
       'followup:read', 'followup:verify',
       'user:directory',
-      'report:read', 'report:create', 'report:export', 'report:approve',
+      // The lead authors the report, so they submit it; the engagement manager then stays
+      // pinned at approval level 1 (a manager-submitted report would fall back to the pool).
+      'report:read', 'report:create', 'report:update', 'report:submit', 'report:export', 'report:approve',
       'control:read',
       'risk:read', 'risk:export',
       'risk_monitoring:read',

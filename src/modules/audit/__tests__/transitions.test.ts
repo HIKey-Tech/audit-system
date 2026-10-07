@@ -2,8 +2,10 @@ import {
   assertTransition,
   ENGAGEMENT_TRANSITIONS,
   FINDING_TRANSITIONS,
+  PLAN_EDITABLE_STATUSES,
+  PLAN_TRANSITIONS,
 } from '../utility/audit.utility';
-import { EngagementStatus, FindingStatus } from '../domain/enum/audit.enum';
+import { EngagementStatus, FindingStatus, PlanStatus } from '../domain/enum/audit.enum';
 
 describe('lifecycle state machines', () => {
   describe('finding transitions', () => {
@@ -35,6 +37,20 @@ describe('lifecycle state machines', () => {
       expect(() =>
         assertTransition(FindingStatus.Open, FindingStatus.InRemediation, FINDING_TRANSITIONS, 'finding'),
       ).toThrow('Invalid finding status transition');
+    });
+  });
+
+  describe('plan transitions', () => {
+    it('lets a rejected plan be re-submitted', () => {
+      expect(() =>
+        assertTransition(PlanStatus.Rejected, PlanStatus.Submitted, PLAN_TRANSITIONS, 'plan'),
+      ).not.toThrow();
+      expect(PLAN_EDITABLE_STATUSES).toContain(PlanStatus.Rejected);
+    });
+
+    it('keeps approved and submitted plans locked from editing', () => {
+      expect(PLAN_EDITABLE_STATUSES).not.toContain(PlanStatus.Approved);
+      expect(PLAN_EDITABLE_STATUSES).not.toContain(PlanStatus.Submitted);
     });
   });
 
