@@ -429,22 +429,30 @@ Then in a browser:
 
 ```bash
 cd /opt/iams/app
-git pull
+/opt/iams/backup.sh                                          # back up before migrating
+git pull origin dev
 source .env
-docker compose -f docker-compose.prod.yml build
+docker compose -f docker-compose.prod.yml --profile ops build   # --profile ops also rebuilds the db-migrate image
 docker compose -f docker-compose.prod.yml --profile ops run --rm db-migrate
 docker compose -f docker-compose.prod.yml up -d
-docker compose -f docker-compose.prod.yml logs -f iams-api
-```
-cd /opt/iams/app
-git pull
-source .env
-docker compose -f docker-compose.prod.yml build
-docker compose -f docker-compose.prod.yml --profile ops run --build --rm db-migrate
-docker compose -f docker-compose.prod.yml up -d
 docker compose -f docker-compose.prod.yml ps
+docker compose -f docker-compose.prod.yml logs --tail=150 iams-api
+```
 
-Run `db-seed` again only when a release note says to (new permissions/templates).
+Without `--profile ops` on the build, the `db-migrate` image keeps the old
+migration files and reports "no pending migrations" even when there are new ones.
+
+Check `docs/RELEASE_*.md` for release-specific steps before deploying.
+
+**Don't run `db-seed` on the live server to pick up new permissions** — the full
+seed resets the super-admin password to the default above and rebuilds the
+standard roles. Use the targeted script instead; it touches no users:
+
+```bash
+docker compose -f docker-compose.prod.yml --profile ops run --rm \
+  -v "$PWD/scripts:/app/scripts:ro" \
+  db-migrate npx ts-node scripts/seed-role-permissions.ts
+```
 
 ### Watch it
 
