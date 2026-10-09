@@ -261,7 +261,8 @@ export class SecurityTestService implements ISecurityTestService {
       module: 'system-audit',
       entityType: 'security_test',
       entityId: id,
-      newValues: { note: dto.note },
+      oldValues: { status: test.status },
+      newValues: { status: SecurityTestStatus.Authorised, note: dto.note },
     });
     return this.getTest(id, actor);
   }

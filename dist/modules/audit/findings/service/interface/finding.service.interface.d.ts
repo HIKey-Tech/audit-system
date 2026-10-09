@@ -1,4 +1,5 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
+import { ExportFormat, TabularExportFile } from '../../../../../shared/utils/tabular-export.util';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus } from '../../../domain/enum/audit.enum';
 import { CreateFindingRequestDto, FindingQueryDto, UpdateFindingRequestDto } from '../../dto/request/finding.request.dto';
@@ -14,5 +15,6 @@ export interface IFindingService {
         meta: PaginationMeta;
     }>;
     listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]>;
+    exportFindings(query: FindingQueryDto, format: ExportFormat, actor: ActorContext): Promise<TabularExportFile>;
 }
 //# sourceMappingURL=finding.service.interface.d.ts.map

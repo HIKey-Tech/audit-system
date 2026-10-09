@@ -158,6 +158,23 @@ class DirectoryMappingService {
             removed: toRemove.length,
         });
     }
+    async listDirectoryAccounts() {
+        if (!app_config_1.config.directorySync.enabled) {
+            throw app_error_1.AppError.badRequest('Entra ID directory sync is not enabled (DIRECTORY_SYNC_ENABLED=false)');
+        }
+        const [directoryUsers, mappings] = await Promise.all([
+            this.graph.listUsersWithGroups(),
+            prisma_client_1.prisma.directory_Group_Mapping.findMany({ select: { ad_group_id: true, ad_group_name: true } }),
+        ]);
+        const groupNames = new Map(mappings.map((m) => [m.ad_group_id, m.ad_group_name]));
+        return directoryUsers.map((u) => ({
+            oid: u.oid,
+            email: u.email,
+            displayName: u.displayName ?? null,
+            accountEnabled: u.accountEnabled,
+            groups: u.groupIds.map((id) => groupNames.get(id) ?? id),
+        }));
+    }
     async runFullDirectorySync() {
         const directoryUsers = await this.graph.listUsersWithGroups();
         let usersProcessed = 0;

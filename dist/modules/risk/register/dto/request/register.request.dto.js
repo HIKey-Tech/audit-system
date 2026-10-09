@@ -1,8 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RiskRegisterQuerySchema = exports.UpdateRiskStatusRequestSchema = exports.UpdateRiskRequestSchema = exports.CreateRiskRequestSchema = void 0;
+exports.RiskRegisterExportQuerySchema = exports.RiskRegisterQuerySchema = exports.UpdateRiskStatusRequestSchema = exports.UpdateRiskRequestSchema = exports.CreateRiskRequestSchema = void 0;
 const zod_1 = require("zod");
 const risk_enum_1 = require("../../../domain/enum/risk.enum");
+const tabular_export_util_1 = require("../../../../../shared/utils/tabular-export.util");
 const RatingSchema = zod_1.z.coerce.number().int().min(1).max(5);
 exports.CreateRiskRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200),
@@ -13,6 +14,7 @@ exports.CreateRiskRequestSchema = zod_1.z.object({
     impact: RatingSchema,
     status: zod_1.z.nativeEnum(risk_enum_1.RiskStatus).default(risk_enum_1.RiskStatus.Open),
     universeId: zod_1.z.string().uuid().nullable().optional(),
+    businessObjective: zod_1.z.string().trim().max(500).nullable().optional(),
 });
 exports.UpdateRiskRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
@@ -22,6 +24,7 @@ exports.UpdateRiskRequestSchema = zod_1.z.object({
     likelihood: RatingSchema.optional(),
     impact: RatingSchema.optional(),
     universeId: zod_1.z.string().uuid().nullable().optional(),
+    businessObjective: zod_1.z.string().trim().max(500).nullable().optional(),
 });
 exports.UpdateRiskStatusRequestSchema = zod_1.z.object({
     status: zod_1.z.nativeEnum(risk_enum_1.RiskStatus),
@@ -32,7 +35,11 @@ exports.RiskRegisterQuerySchema = zod_1.z.object({
     categoryId: zod_1.z.string().uuid().optional(),
     status: zod_1.z.nativeEnum(risk_enum_1.RiskStatus).optional(),
     ownerId: zod_1.z.string().uuid().optional(),
+    businessObjective: zod_1.z.string().trim().max(500).optional(),
     sortBy: zod_1.z.enum(['current_score', 'title', 'created_at', 'updated_at']).default('current_score'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
+});
+exports.RiskRegisterExportQuerySchema = exports.RiskRegisterQuerySchema.omit({ page: true, pageSize: true }).extend({
+    format: tabular_export_util_1.ExportFormatSchema,
 });
 //# sourceMappingURL=register.request.dto.js.map

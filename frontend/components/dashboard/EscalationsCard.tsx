@@ -18,7 +18,7 @@ const LEVEL_TONES = [
 ];
 
 export const EscalationsCard = (): JSX.Element => {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', 'escalations'],
     queryFn: () => dashboardApi.getEscalations(),
   });
@@ -33,7 +33,7 @@ export const EscalationsCard = (): JSX.Element => {
           <Skeleton className="h-3 w-2/3" />
         </div>
       ) : isError ? (
-        <ErrorState compact onRetry={() => refetch()} />
+        <ErrorState compact error={error} onRetry={() => refetch()} />
       ) : data!.totalActive === 0 ? (
         <EmptyState
           compact

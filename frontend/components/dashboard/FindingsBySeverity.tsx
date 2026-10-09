@@ -24,7 +24,7 @@ interface FindingBuckets {
 }
 
 export const FindingsBySeverity = (): JSX.Element => {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', 'findings'],
     queryFn: () => dashboardApi.getFindings(),
   });
@@ -42,7 +42,7 @@ export const FindingsBySeverity = (): JSX.Element => {
           ))}
         </div>
       ) : isError ? (
-        <ErrorState compact onRetry={() => refetch()} />
+        <ErrorState compact error={error} onRetry={() => refetch()} />
       ) : (
         (() => {
           const sev = data!.bySeverity;

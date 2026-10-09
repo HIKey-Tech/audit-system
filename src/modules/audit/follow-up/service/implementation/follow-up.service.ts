@@ -299,7 +299,7 @@ export class FollowUpService implements IFollowUpService {
     }
 
     logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
-    auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, oldValues: { findingStatus: finding.status }, newValues: dto });
     return mapFollowUpToResponse(followUp);
   }
 

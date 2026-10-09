@@ -11,6 +11,8 @@ export declare class RegisterController {
     private _deleteRisk;
     private _getRiskById;
     private _listRisks;
+    private _exportRisks;
+    private _listBusinessObjectives;
     private _getRisksByUniverseEntity;
 }
 //# sourceMappingURL=register.controller.d.ts.map

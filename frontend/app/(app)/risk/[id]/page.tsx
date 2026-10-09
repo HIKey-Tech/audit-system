@@ -62,7 +62,7 @@ export default function RiskDetailPage(): JSX.Element {
       <div>
         <PageHeader title="Risk" breadcrumbs={[{ label: 'Risk Register', href: '/risk' }]} />
         <Card>
-          <ErrorState onRetry={() => risk.refetch()} />
+          <ErrorState error={risk.error} onRetry={() => risk.refetch()} />
         </Card>
       </div>
     );

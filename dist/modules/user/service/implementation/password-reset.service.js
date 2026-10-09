@@ -9,6 +9,8 @@ const app_config_1 = require("../../../../shared/config/app.config");
 const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
 const token_utility_1 = require("../../utility/token.utility");
 const session_guard_1 = require("../../../../shared/security/session-guard");
+const security_event_utility_1 = require("../../../logging/utility/security-event.utility");
+const logging_enum_1 = require("../../../logging/domain/enum/logging.enum");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     switch (char) {
         case '&':
@@ -73,8 +75,9 @@ class PasswordResetService {
         });
         await this._sendResetEmail(user, raw);
         logger_util_1.logger.info('Password reset token issued', { userId: user.id });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.PasswordResetRequested, { userId: user.id, ipAddress });
     }
-    async resetPassword(token, newPassword, _ipAddress) {
+    async resetPassword(token, newPassword, ipAddress) {
         const tokenHash = (0, token_utility_1.hashToken)(token);
         const stored = await prisma_client_1.prisma.password_Reset_Token.findUnique({
             where: { token_hash: tokenHash },
@@ -107,6 +110,7 @@ class PasswordResetService {
         // Invalidate any outstanding access tokens too.
         await (0, session_guard_1.revokeUserSessions)(stored.user_id);
         logger_util_1.logger.info('Password reset completed', { userId: stored.user_id });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.PasswordResetCompleted, { userId: stored.user_id, ipAddress });
     }
     async _sendResetEmail(user, rawToken) {
         const displayName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();

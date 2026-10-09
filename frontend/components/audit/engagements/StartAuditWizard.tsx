@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
@@ -116,6 +116,27 @@ export const StartAuditWizard = ({
     queryFn: () => plansApi.get(planId),
     enabled: open && mode === 'plan' && Boolean(planId),
   });
+
+  // Picking a plan item prefills the title, priority and dates it already carries, so the
+  // user isn't retyping what the programme says. Everything stays editable.
+  const prefilledItemRef = useRef<string>('');
+  useEffect(() => {
+    if (mode !== 'plan' || !planItemId) {
+      prefilledItemRef.current = '';
+      return;
+    }
+    if (prefilledItemRef.current === planItemId) return; // once per selection, never overwrite edits
+    const item = (planDetail.data?.items ?? []).find((i) => i.id === planItemId);
+    if (!item) return;
+    prefilledItemRef.current = planItemId;
+    const typeLabel = item.auditType === 'it' ? 'IT' : item.auditType.charAt(0).toUpperCase() + item.auditType.slice(1);
+    setTitle(`${item.universeName} ${typeLabel} Audit${planDetail.data?.year ? ` ${planDetail.data.year}` : ''}`);
+    if (item.plannedStartDate) setStart(item.plannedStartDate.slice(0, 10));
+    if (item.plannedEndDate) setEnd(item.plannedEndDate.slice(0, 10));
+    if (['critical', 'high', 'medium', 'low'].includes(item.priority)) setPriority(item.priority as Priority);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planItemId, planDetail.data, mode]);
+
   const universe = useQuery({
     queryKey: ['universe', 'active', 'all'],
     queryFn: () => universeApi.list({ pageSize: 100, status: 'active' }),
@@ -151,6 +172,15 @@ export const StartAuditWizard = ({
     }
     return auditType;
   }, [mode, planDetail.data, planItemId, auditType]);
+
+  // Audit staff are the users whose role grants fieldwork permissions (same list the lead picker
+  // uses, so one cache entry) — never matched on role names, which admins can create freely.
+  const auditStaffQuery = useQuery({
+    queryKey: ['engagements', 'eligible-users', 'lead_auditor', effectiveAuditType ?? '', priority ?? ''],
+    queryFn: () => engagementsApi.eligibleUsers({ role: 'lead_auditor', auditType: effectiveAuditType, priority }),
+    staleTime: 60_000,
+    enabled: open,
+  });
 
   // Checklist controls that would populate this engagement — pulled once we reach
   // the Review step and the audit type is known, used to pre-fill the editor.
@@ -189,9 +219,12 @@ export const StartAuditWizard = ({
   // Supporting-auditor candidates: active users (excluding the core roles), ranked by skill match.
   const supportingCandidates = useMemo(() => {
     const coreIds = [leadAuditorId, auditManagerId, auditeeId];
+    const auditStaffIds = new Set((auditStaffQuery.data ?? []).map((u) => u.id));
     const q = candidateSearch.trim().toLowerCase();
     return (usersQuery.data?.items ?? [])
       .filter((u) => u.isActive && !coreIds.includes(u.id))
+      // Only audit staff can join the audit team (the server enforces the same rule).
+      .filter((u) => auditStaffIds.has(u.id))
       .filter((u) => {
         if (!q) return true;
         const name = (u.displayName || `${u.firstName} ${u.lastName}`).toLowerCase();
@@ -202,7 +235,7 @@ export const StartAuditWizard = ({
         if (diff !== 0) return diff;
         return (a.displayName || a.firstName).localeCompare(b.displayName || b.firstName);
       });
-  }, [usersQuery.data, leadAuditorId, auditManagerId, auditeeId, candidateSearch, effectiveAuditType]);
+  }, [usersQuery.data, auditStaffQuery.data, leadAuditorId, auditManagerId, auditeeId, candidateSearch, effectiveAuditType]);
 
   const create = useMutation({
     mutationFn: async (): Promise<AuditEngagement> => {
@@ -409,7 +442,7 @@ export const StartAuditWizard = ({
                   <Select value={planItemId} onChange={(e) => setPlanItemId(e.target.value)} disabled={!planId || planDetail.isLoading}>
                     <option value="">Select item…</option>
                     {(planDetail.data?.items ?? []).filter((i) => !i.engagementCreated).map((it) => (
-                      <option key={it.id} value={it.id}>{it.universeName} ({it.auditType})</option>
+                      <option key={it.id} value={it.id}>{it.universeName} ({it.auditType === 'it' ? 'IT' : it.auditType.charAt(0).toUpperCase() + it.auditType.slice(1)})</option>
                     ))}
                   </Select>
                 </FormField>
@@ -490,14 +523,14 @@ export const StartAuditWizard = ({
           </FormField>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             <FormField label="Lead auditor" required tooltip="Owns fieldwork and day-to-day execution of the engagement. Ranked by skill match, workload and capacity.">
-              <ScoredUserSelect role="lead_auditor" auditType={effectiveAuditType} priority={priority} value={leadAuditorId} onChange={setLeadAuditorId} />
+              <ScoredUserSelect role="lead_auditor" auditType={effectiveAuditType} priority={priority} value={leadAuditorId} onChange={setLeadAuditorId} excludeIds={[auditManagerId, auditeeId].filter(Boolean)} />
             </FormField>
             <FormField label="Audit manager" required tooltip="Reviews and signs off the lead auditor's work. Lists only users who can approve.">
-              <ScoredUserSelect role="audit_manager" auditType={effectiveAuditType} priority={priority} value={auditManagerId} onChange={setAuditManagerId} />
+              <ScoredUserSelect role="audit_manager" auditType={effectiveAuditType} priority={priority} value={auditManagerId} onChange={setAuditManagerId} excludeIds={[leadAuditorId, auditeeId].filter(Boolean)} />
             </FormField>
           </div>
           <FormField label="Auditee" required tooltip="Primary contact in the audited area who provides evidence and management responses.">
-            <UserSelect value={auditeeId} onChange={setAuditeeId} />
+            <UserSelect value={auditeeId} onChange={setAuditeeId} excludeIds={[leadAuditorId, auditManagerId].filter(Boolean)} />
           </FormField>
           <FormField
             label={`Supporting auditors${supportingIds.length > 0 ? ` (${supportingIds.length} selected)` : ''}`}
@@ -509,7 +542,7 @@ export const StartAuditWizard = ({
               placeholder="Search by name or skill…"
             />
             <div className="mt-2 max-h-64 space-y-1.5 overflow-y-auto pr-1">
-              {usersQuery.isLoading ? (
+              {usersQuery.isLoading || auditStaffQuery.isLoading ? (
                 <p className="text-xs text-text-muted">Loading users…</p>
               ) : supportingCandidates.length === 0 ? (
                 <p className="text-xs text-text-muted">No matching users.</p>

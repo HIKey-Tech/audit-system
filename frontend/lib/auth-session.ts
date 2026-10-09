@@ -44,7 +44,7 @@ export const setAuthCookies = (res: NextResponse, data: BackendAuthData): void =
     department: user.department,
     jobTitle: user.jobTitle,
   };
-  res.cookies.set(ACCESS_COOKIE, data.accessToken, accessCookieOptions(data.expiresIn || 60 * 60));
+  res.cookies.set(ACCESS_COOKIE, data.accessToken, accessCookieOptions());
   res.cookies.set(REFRESH_COOKIE, data.refreshToken, refreshCookieOptions());
   res.cookies.set(USER_COOKIE, encodeUserCookie(profile), userCookieOptions());
 };

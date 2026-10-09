@@ -116,6 +116,8 @@ function buildBlockers(
       if (workingPaperGateActive) {
         if ((wp?.total ?? 0) === 0) {
           out.push({ text: `${lead} to create at least one working paper.` });
+        } else if ((wp?.rejected ?? 0) > 0) {
+          out.push({ text: `${lead} to revise and resubmit ${wp?.rejected} rejected working paper${wp?.rejected === 1 ? '' : 's'}.`, });
         } else {
           out.push({ text: `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).` });
         }

@@ -8,9 +8,11 @@ const api_response_type_1 = require("../../../shared/types/api-response.type");
 const logging_request_dto_1 = require("../dto/request/logging.request.dto");
 class LoggingController {
     auditLogService;
+    systemLogService;
     router;
-    constructor(auditLogService) {
+    constructor(auditLogService, systemLogService) {
         this.auditLogService = auditLogService;
+        this.systemLogService = systemLogService;
         this.router = (0, express_1.Router)();
         this._registerRoutes();
     }
@@ -29,6 +31,30 @@ class LoggingController {
          * @access Private - log:admin
          */
         this.router.get('/summary', (0, auth_middleware_1.requirePermission)('log:summary'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogSummaryQuerySchema, 'query'), this._getLogSummary.bind(this));
+        /**
+         * @route  GET /logs/security/summary
+         * @desc   Security event monitoring — sign-ins, failures, denials, token reuse over a window
+         * @access Private - log:read
+         */
+        this.router.get('/security/summary', (0, auth_middleware_1.requirePermission)('log:read'), (0, validate_middleware_1.validate)(logging_request_dto_1.SecuritySummaryQuerySchema, 'query'), this._getSecuritySummary.bind(this));
+        /**
+         * @route  GET /logs/system
+         * @desc   List persisted application exceptions (system exceptions)
+         * @access Private - log:read
+         */
+        this.router.get('/system', (0, auth_middleware_1.requirePermission)('log:read'), (0, validate_middleware_1.validate)(logging_request_dto_1.SystemLogListQuerySchema, 'query'), this._listSystemLogs.bind(this));
+        /**
+         * @route  GET /logs/system/:id
+         * @desc   Get one system exception, including its stack trace
+         * @access Private - log:read
+         */
+        this.router.get('/system/:id', (0, auth_middleware_1.requirePermission)('log:read'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogIdParamsSchema, 'params'), this._getSystemLogById.bind(this));
+        /**
+         * @route  GET /logs/export
+         * @desc   Export the (filtered) audit trail as CSV or Excel
+         * @access Private - log:read + log:export
+         */
+        this.router.get('/export', (0, auth_middleware_1.requirePermission)('log:read', 'log:export'), (0, validate_middleware_1.validate)(logging_request_dto_1.AuditLogExportQuerySchema, 'query'), this._exportLogs.bind(this));
         /**
          * @route  GET /logs
          * @desc   List audit logs (paginated, filterable, sortable)
@@ -56,6 +82,45 @@ class LoggingController {
                 ? 'Audit log chain intact'
                 : `Audit log chain broken: ${result.reason ?? 'unknown'}`;
             res.status(200).json((0, api_response_type_1.buildResponse)(result, message));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getSecuritySummary(req, res, next) {
+        try {
+            const summary = await this.auditLogService.getSecuritySummary(req.query);
+            res.status(200).json((0, api_response_type_1.buildResponse)(summary));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listSystemLogs(req, res, next) {
+        try {
+            const { logs, meta } = await this.systemLogService.listSystemLogs(req.query);
+            res.status(200).json((0, api_response_type_1.buildResponse)(logs, 'Success', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getSystemLogById(req, res, next) {
+        try {
+            const log = await this.systemLogService.getSystemLogById(req.params.id);
+            res.status(200).json((0, api_response_type_1.buildResponse)(log));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _exportLogs(req, res, next) {
+        try {
+            const { format, ...query } = req.query;
+            const file = await this.auditLogService.exportLogs({ ...query, page: 1, pageSize: 1 }, format, req.user.id);
+            res.setHeader('Content-Type', file.mimeType);
+            res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+            res.status(200).send(file.buffer);
         }
         catch (err) {
             next(err);

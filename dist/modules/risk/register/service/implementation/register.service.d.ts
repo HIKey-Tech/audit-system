@@ -1,4 +1,5 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
+import { ExportFormat, TabularExportFile } from '../../../../../shared/utils/tabular-export.util';
 import { RiskActorContext } from '../../../domain/entity/risk.entity';
 import { CreateRiskRequestDto, RiskRegisterQueryDto, UpdateRiskRequestDto, UpdateRiskStatusRequestDto } from '../../dto/request/register.request.dto';
 import { RiskRegisterResponseDto } from '../../dto/response/register.response.dto';
@@ -13,7 +14,10 @@ export declare class RiskRegisterService implements IRegisterService {
         risks: RiskRegisterResponseDto[];
         meta: PaginationMeta;
     }>;
+    exportRisks(query: RiskRegisterQueryDto, format: ExportFormat, actor: RiskActorContext): Promise<TabularExportFile>;
+    listBusinessObjectives(): Promise<string[]>;
     getRisksByUniverseEntity(universeId: string, actor?: RiskActorContext): Promise<RiskRegisterResponseDto[]>;
+    private _listWhere;
     private _assertCanAssignOwner;
     private _syncAffectedUniverseRiskScores;
     private _syncUniverseRiskScore;

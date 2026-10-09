@@ -20,7 +20,7 @@ export const notificationsApi = {
     ),
   unreadCount: () => api.get<{ unread: number }>('/notifications/unread-count'),
   markRead: (id: string) => api.post<NotificationDto>(`/notifications/${id}/read`),
-  markAllRead: () => api.post<{ updated: number }>('/notifications/read-all'),
+  markAllRead: () => api.post<{ count: number }>('/notifications/read-all'),
   queueStats: () => api.get<NotificationQueueStats>('/notifications/queue/stats'),
   // templates
   listTemplates: () => api.get<NotificationTemplate[]>('/notifications/templates'),

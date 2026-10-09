@@ -1,7 +1,7 @@
 'use client';
 
 import { useQuery } from '@tanstack/react-query';
-import { Select } from '@/components/ui/Input';
+import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { usersApi } from '@/lib/api/users';
 
 interface UserSelectProps {
@@ -29,24 +29,30 @@ export const UserSelect = ({
     staleTime: 5 * 60_000,
   });
 
+  // Searchable so a long staff directory is not a scroll-and-hope list. When the field is
+  // optional the first entry clears the selection.
+  const options: ComboboxOption[] = [
+    ...(required ? [] : [{ value: '', label: placeholder }]),
+    ...(data ?? [])
+      .filter((u) => u.isActive && !excludeIds.includes(u.id))
+      .map((u) => ({
+        value: u.id,
+        label: u.displayName || `${u.firstName} ${u.lastName}`,
+        hint: u.department ?? undefined,
+      })),
+  ];
+
   return (
-    <Select
-      id={id}
-      value={value ?? ''}
-      onChange={(e) => onChange(e.target.value)}
-      required={required}
-      error={error}
-      disabled={isLoading}
-    >
-      <option value="">{isLoading ? 'Loading users…' : placeholder}</option>
-      {data
-        ?.filter((u) => u.isActive && !excludeIds.includes(u.id))
-        .map((u) => (
-          <option key={u.id} value={u.id}>
-            {u.displayName || `${u.firstName} ${u.lastName}`}
-            {u.department ? ` — ${u.department}` : ''}
-          </option>
-        ))}
-    </Select>
+    <div id={id}>
+      <Combobox
+        value={value ?? ''}
+        onChange={onChange}
+        options={options}
+        placeholder={isLoading ? 'Loading users…' : placeholder}
+        disabled={isLoading}
+        error={error}
+        emptyText="No matching users"
+      />
+    </div>
   );
 };

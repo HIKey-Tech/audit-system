@@ -150,7 +150,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
     message: 'Login successful',
     data: { status: 'OK', user, mfaSetupRequired: data.mfaSetupRequired ?? false },
   });
-  res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions(expiresIn || 60 * 60));
+  res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions());
   res.cookies.set(REFRESH_COOKIE, refreshToken, refreshCookieOptions());
   res.cookies.set(USER_COOKIE, encodeUserCookie(profile), userCookieOptions());
   return res;

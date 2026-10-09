@@ -9,6 +9,7 @@ export declare const CreateRiskRequestSchema: z.ZodObject<{
     impact: z.ZodNumber;
     status: z.ZodDefault<z.ZodNativeEnum<typeof RiskStatus>>;
     universeId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    businessObjective: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, "strip", z.ZodTypeAny, {
     status: RiskStatus;
     title: string;
@@ -18,6 +19,7 @@ export declare const CreateRiskRequestSchema: z.ZodObject<{
     ownerId: string;
     categoryId: string;
     universeId?: string | null | undefined;
+    businessObjective?: string | null | undefined;
 }, {
     title: string;
     description: string;
@@ -27,6 +29,7 @@ export declare const CreateRiskRequestSchema: z.ZodObject<{
     categoryId: string;
     status?: RiskStatus | undefined;
     universeId?: string | null | undefined;
+    businessObjective?: string | null | undefined;
 }>;
 export declare const UpdateRiskRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
@@ -36,6 +39,7 @@ export declare const UpdateRiskRequestSchema: z.ZodObject<{
     likelihood: z.ZodOptional<z.ZodNumber>;
     impact: z.ZodOptional<z.ZodNumber>;
     universeId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
+    businessObjective: z.ZodOptional<z.ZodNullable<z.ZodString>>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     description?: string | undefined;
@@ -44,6 +48,7 @@ export declare const UpdateRiskRequestSchema: z.ZodObject<{
     ownerId?: string | undefined;
     universeId?: string | null | undefined;
     categoryId?: string | undefined;
+    businessObjective?: string | null | undefined;
 }, {
     title?: string | undefined;
     description?: string | undefined;
@@ -52,6 +57,7 @@ export declare const UpdateRiskRequestSchema: z.ZodObject<{
     ownerId?: string | undefined;
     universeId?: string | null | undefined;
     categoryId?: string | undefined;
+    businessObjective?: string | null | undefined;
 }>;
 export declare const UpdateRiskStatusRequestSchema: z.ZodObject<{
     status: z.ZodNativeEnum<typeof RiskStatus>;
@@ -66,6 +72,7 @@ export declare const RiskRegisterQuerySchema: z.ZodObject<{
     categoryId: z.ZodOptional<z.ZodString>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof RiskStatus>>;
     ownerId: z.ZodOptional<z.ZodString>;
+    businessObjective: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodEnum<["current_score", "title", "created_at", "updated_at"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "strip", z.ZodTypeAny, {
@@ -76,6 +83,7 @@ export declare const RiskRegisterQuerySchema: z.ZodObject<{
     status?: RiskStatus | undefined;
     ownerId?: string | undefined;
     categoryId?: string | undefined;
+    businessObjective?: string | undefined;
 }, {
     status?: RiskStatus | undefined;
     page?: number | undefined;
@@ -84,9 +92,39 @@ export declare const RiskRegisterQuerySchema: z.ZodObject<{
     sortOrder?: "asc" | "desc" | undefined;
     ownerId?: string | undefined;
     categoryId?: string | undefined;
+    businessObjective?: string | undefined;
+}>;
+export declare const RiskRegisterExportQuerySchema: z.ZodObject<Omit<{
+    page: z.ZodDefault<z.ZodNumber>;
+    pageSize: z.ZodDefault<z.ZodNumber>;
+    categoryId: z.ZodOptional<z.ZodString>;
+    status: z.ZodOptional<z.ZodNativeEnum<typeof RiskStatus>>;
+    ownerId: z.ZodOptional<z.ZodString>;
+    businessObjective: z.ZodOptional<z.ZodString>;
+    sortBy: z.ZodDefault<z.ZodEnum<["current_score", "title", "created_at", "updated_at"]>>;
+    sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
+}, "page" | "pageSize"> & {
+    format: z.ZodDefault<z.ZodEnum<["csv", "xlsx"]>>;
+}, "strip", z.ZodTypeAny, {
+    format: "csv" | "xlsx";
+    sortBy: "created_at" | "updated_at" | "title" | "current_score";
+    sortOrder: "asc" | "desc";
+    status?: RiskStatus | undefined;
+    ownerId?: string | undefined;
+    categoryId?: string | undefined;
+    businessObjective?: string | undefined;
+}, {
+    format?: "csv" | "xlsx" | undefined;
+    status?: RiskStatus | undefined;
+    sortBy?: "created_at" | "updated_at" | "title" | "current_score" | undefined;
+    sortOrder?: "asc" | "desc" | undefined;
+    ownerId?: string | undefined;
+    categoryId?: string | undefined;
+    businessObjective?: string | undefined;
 }>;
 export type CreateRiskRequestDto = z.infer<typeof CreateRiskRequestSchema>;
 export type UpdateRiskRequestDto = z.infer<typeof UpdateRiskRequestSchema>;
 export type UpdateRiskStatusRequestDto = z.infer<typeof UpdateRiskStatusRequestSchema>;
 export type RiskRegisterQueryDto = z.infer<typeof RiskRegisterQuerySchema>;
+export type RiskRegisterExportQueryDto = z.infer<typeof RiskRegisterExportQuerySchema>;
 //# sourceMappingURL=register.request.dto.d.ts.map

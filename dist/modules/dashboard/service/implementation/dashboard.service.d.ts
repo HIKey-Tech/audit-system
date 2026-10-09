@@ -16,6 +16,7 @@ export declare class DashboardService {
     private _averageDaysToCloseRaw;
     private _activeEscalationCondition;
     private _pendingApprovalStepsForUserRaw;
+    private _memberEngagementScope;
     private _getLifecycleAnalytics;
     private _getWorkingPaperAnalytics;
     private _getReportingAnalytics;

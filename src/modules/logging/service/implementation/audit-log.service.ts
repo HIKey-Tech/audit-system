@@ -21,6 +21,7 @@ const auditLogUserInclude = {
   },
 } as const;
 import { logger } from '../../../../shared/utils/logger.util';
+import { getRequestContext } from '../../../../shared/utils/request-context.util';
 import { AppError } from '../../../../shared/errors/app.error';
 import {
   EXPORT_MAX_ROWS,
@@ -93,8 +94,8 @@ export class AuditLogService implements IAuditLogService {
         entity_id: dto.entityId ?? null,
         old_values: dto.oldValues ? JSON.stringify(dto.oldValues) : null,
         new_values: dto.newValues ? JSON.stringify(dto.newValues) : null,
-        ip_address: dto.ipAddress ?? null,
-        user_agent: dto.userAgent ?? null,
+        ip_address: dto.ipAddress ?? getRequestContext()?.ipAddress ?? null,
+        user_agent: dto.userAgent ?? getRequestContext()?.userAgent ?? null,
         status: dto.status ?? 'success',
         error_message: dto.errorMessage ?? null,
         duration_ms: dto.durationMs ?? null,
@@ -404,7 +405,12 @@ export class AuditLogService implements IAuditLogService {
       ...(query.action ? { action: { contains: query.action } } : {}),
       ...(query.status ? { status: query.status } : {}),
       ...(query.hasChanges
-        ? { entity_type: { not: null }, OR: [{ old_values: { not: null } }, { new_values: { not: null } }] }
+        ? {
+            entity_type: { not: null },
+            OR: [{ old_values: { not: null } }, { new_values: { not: null } }],
+            // Sign-in/out and other security events are not data changes.
+            AND: [{ module: { not: SECURITY_LOG_MODULE } }],
+          }
         : {}),
       ...this._buildDateWhere(query),
     };

@@ -1,3 +1,4 @@
+import type { UserWithRoles } from '../../../../shared/prisma/prisma.types';
 export interface PermissionResponseDto {
     id: string;
     slug: string;
@@ -56,6 +57,26 @@ export interface UserResponseDto {
  * co-responder, pick an owner). Excludes roles/permissions/MFA/tokens. Access is
  * still permission-gated — see the `user:directory` permission.
  */
+/**
+ * Effective access of one account — roles and the permissions they grant — for
+ * read-only user access reviews. Expired role assignments are excluded.
+ */
+export interface UserAccessEntitlementDto {
+    id: string;
+    email: string;
+    displayName: string;
+    department: string | null;
+    jobTitle: string | null;
+    isActive: boolean;
+    isSuperAdmin: boolean;
+    mfaEnabled: boolean;
+    lastLoginAt: string | null;
+    createdAt: string;
+    roles: string[];
+    roleSources: Record<string, string>;
+    permissions: string[];
+}
+export declare const mapUserToAccessEntitlement: (user: UserWithRoles, now?: Date) => UserAccessEntitlementDto;
 export interface UserDirectoryDto {
     id: string;
     displayName: string | null;

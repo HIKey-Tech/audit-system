@@ -52,7 +52,7 @@ export const ChecklistTemplatesTab = (): JSX.Element => {
     return <Skeleton className="h-96" />;
   }
   if (query.isError) {
-    return <ErrorState onRetry={() => query.refetch()} />;
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   }
 
   const controls = draft[activeType] ?? [];

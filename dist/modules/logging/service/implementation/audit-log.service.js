@@ -16,9 +16,32 @@ const auditLogUserInclude = {
     },
 };
 const logger_util_1 = require("../../../../shared/utils/logger.util");
+const request_context_util_1 = require("../../../../shared/utils/request-context.util");
 const app_error_1 = require("../../../../shared/errors/app.error");
+const tabular_export_util_1 = require("../../../../shared/utils/tabular-export.util");
+const logging_enum_1 = require("../../domain/enum/logging.enum");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const logging_response_dto_1 = require("../../dto/response/logging.response.dto");
+// Upper bound on events pulled into memory for the per-day and top-N views;
+// the headline totals are always exact (grouped in the database).
+const SECURITY_SUMMARY_MAX_EVENTS = 20_000;
+const SECURITY_TOP_N = 10;
+const readJsonObject = (value) => {
+    if (!value)
+        return {};
+    try {
+        const parsed = JSON.parse(value);
+        return parsed && typeof parsed === 'object' ? parsed : {};
+    }
+    catch {
+        return {};
+    }
+};
+const userLabel = (user) => {
+    if (!user)
+        return null;
+    return user.display_name?.trim() || `${user.first_name} ${user.last_name}`.trim() || user.email;
+};
 class AuditLogService {
     // Serializes sealed writes within this process so the hash chain stays linear:
     // each append reads the previous tip, computes its hash, and inserts before the
@@ -38,8 +61,8 @@ class AuditLogService {
                 entity_id: dto.entityId ?? null,
                 old_values: dto.oldValues ? JSON.stringify(dto.oldValues) : null,
                 new_values: dto.newValues ? JSON.stringify(dto.newValues) : null,
-                ip_address: dto.ipAddress ?? null,
-                user_agent: dto.userAgent ?? null,
+                ip_address: dto.ipAddress ?? (0, request_context_util_1.getRequestContext)()?.ipAddress ?? null,
+                user_agent: dto.userAgent ?? (0, request_context_util_1.getRequestContext)()?.userAgent ?? null,
                 status: dto.status ?? 'success',
                 error_message: dto.errorMessage ?? null,
                 duration_ms: dto.durationMs ?? null,
@@ -122,6 +145,146 @@ class AuditLogService {
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
+    async exportLogs(query, format, actorId) {
+        const logs = await prisma_client_1.prisma.audit_Log.findMany({
+            where: this._buildWhere(query),
+            include: auditLogUserInclude,
+            orderBy: { created_at: query.sortOrder },
+            take: tabular_export_util_1.EXPORT_MAX_ROWS,
+        });
+        const rows = logs.map(logging_response_dto_1.mapAuditLogToResponse);
+        logger_util_1.logger.info('Audit logs exported', { actorId, format, count: rows.length });
+        this.logAsync({
+            userId: actorId,
+            action: 'logging.export',
+            module: 'logging',
+            newValues: { format, count: rows.length, filters: query },
+        });
+        const json = (value) => (value === null || value === undefined ? '' : JSON.stringify(value));
+        return (0, tabular_export_util_1.buildTabularExport)(rows, [
+            { header: 'Timestamp', value: (r) => r.createdAt },
+            { header: 'User', value: (r) => r.userDisplayName },
+            { header: 'Module', value: (r) => r.module },
+            { header: 'Action', value: (r) => r.action },
+            { header: 'Status', value: (r) => r.status },
+            { header: 'Entity type', value: (r) => r.entityType },
+            { header: 'Entity id', value: (r) => r.entityId },
+            { header: 'IP address', value: (r) => r.ipAddress },
+            { header: 'Duration (ms)', value: (r) => r.durationMs },
+            { header: 'Error', value: (r) => r.errorMessage },
+            { header: 'Old values', value: (r) => json(r.oldValues) },
+            { header: 'New values', value: (r) => json(r.newValues) },
+        ], { baseName: 'audit-logs', format, sheetName: 'Audit logs' });
+    }
+    async getSecuritySummary(query) {
+        const to = new Date();
+        const from = new Date(to.getTime() - query.days * 86_400_000);
+        const where = {
+            module: logging_enum_1.SECURITY_LOG_MODULE,
+            created_at: { gte: from },
+        };
+        const [grouped, events] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Log.groupBy({
+                by: ['action'],
+                where,
+                _count: { _all: true },
+                orderBy: { action: 'asc' },
+            }),
+            prisma_client_1.prisma.audit_Log.findMany({
+                where: {
+                    ...where,
+                    action: { in: [logging_enum_1.SecurityEvent.LoginSucceeded, logging_enum_1.SecurityEvent.LoginFailed, logging_enum_1.SecurityEvent.AccessDenied] },
+                },
+                select: {
+                    action: true,
+                    user_id: true,
+                    new_values: true,
+                    ip_address: true,
+                    created_at: true,
+                    user: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+                },
+                orderBy: { created_at: 'desc' },
+                take: SECURITY_SUMMARY_MAX_EVENTS + 1,
+            }),
+        ]);
+        const count = (action) => {
+            const row = grouped.find((g) => g.action === action);
+            return row && typeof row._count === 'object' ? (row._count._all ?? 0) : 0;
+        };
+        const totals = {
+            loginSucceeded: count(logging_enum_1.SecurityEvent.LoginSucceeded),
+            loginFailed: count(logging_enum_1.SecurityEvent.LoginFailed),
+            mfaFailed: count(logging_enum_1.SecurityEvent.MfaFailed),
+            accessDenied: count(logging_enum_1.SecurityEvent.AccessDenied),
+            tokenReuseDetected: count(logging_enum_1.SecurityEvent.TokenReuseDetected),
+            passwordResets: count(logging_enum_1.SecurityEvent.PasswordResetRequested),
+            mfaResets: count(logging_enum_1.SecurityEvent.MfaAdminReset),
+        };
+        const truncated = events.length > SECURITY_SUMMARY_MAX_EVENTS;
+        const sample = events.slice(0, SECURITY_SUMMARY_MAX_EVENTS);
+        const byDay = new Map();
+        for (let i = query.days - 1; i >= 0; i -= 1) {
+            const date = new Date(to.getTime() - i * 86_400_000).toISOString().slice(0, 10);
+            byDay.set(date, { date, loginSucceeded: 0, loginFailed: 0, accessDenied: 0 });
+        }
+        const failed = new Map();
+        const denied = new Map();
+        for (const event of sample) {
+            const day = byDay.get(event.created_at.toISOString().slice(0, 10));
+            const values = readJsonObject(event.new_values);
+            if (event.action === logging_enum_1.SecurityEvent.LoginSucceeded) {
+                if (day)
+                    day.loginSucceeded += 1;
+            }
+            else if (event.action === logging_enum_1.SecurityEvent.LoginFailed) {
+                if (day)
+                    day.loginFailed += 1;
+                const account = String(values.email ?? event.user?.email ?? 'unknown').toLowerCase();
+                const entry = failed.get(account) ?? { account, count: 0, lastAt: event.created_at, ips: new Set() };
+                entry.count += 1;
+                if (event.ip_address)
+                    entry.ips.add(event.ip_address);
+                failed.set(account, entry);
+            }
+            else if (event.action === logging_enum_1.SecurityEvent.AccessDenied) {
+                if (day)
+                    day.accessDenied += 1;
+                const key = event.user_id ?? 'anonymous';
+                const entry = denied.get(key) ?? {
+                    userId: event.user_id,
+                    userName: userLabel(event.user),
+                    count: 0,
+                    lastPath: typeof values.path === 'string' ? values.path : null,
+                };
+                entry.count += 1;
+                denied.set(key, entry);
+            }
+        }
+        return {
+            windowDays: query.days,
+            from: from.toISOString(),
+            to: to.toISOString(),
+            totals,
+            byDay: Array.from(byDay.values()),
+            topFailedAccounts: Array.from(failed.values())
+                .sort((a, b) => b.count - a.count)
+                .slice(0, SECURITY_TOP_N)
+                .map((f) => ({ account: f.account, count: f.count, lastAt: f.lastAt.toISOString(), distinctIps: f.ips.size })),
+            topDeniedUsers: Array.from(denied.values())
+                .sort((a, b) => b.count - a.count)
+                .slice(0, SECURITY_TOP_N),
+            truncated,
+        };
+    }
+    async listSecurityEvents(since, limit) {
+        const logs = await prisma_client_1.prisma.audit_Log.findMany({
+            where: { module: logging_enum_1.SECURITY_LOG_MODULE, created_at: { gte: since } },
+            include: auditLogUserInclude,
+            orderBy: { created_at: 'desc' },
+            take: limit,
+        });
+        return logs.map(logging_response_dto_1.mapAuditLogToResponse);
+    }
     async getLogById(id) {
         const log = await prisma_client_1.prisma.audit_Log.findUnique({
             where: { id },
@@ -176,6 +339,14 @@ class AuditLogService {
             ...(query.entityId ? { entity_id: query.entityId } : {}),
             ...(query.action ? { action: { contains: query.action } } : {}),
             ...(query.status ? { status: query.status } : {}),
+            ...(query.hasChanges
+                ? {
+                    entity_type: { not: null },
+                    OR: [{ old_values: { not: null } }, { new_values: { not: null } }],
+                    // Sign-in/out and other security events are not data changes.
+                    AND: [{ module: { not: logging_enum_1.SECURITY_LOG_MODULE } }],
+                }
+                : {}),
             ...this._buildDateWhere(query),
         };
     }

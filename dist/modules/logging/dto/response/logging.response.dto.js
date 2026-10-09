@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapAuditLogToResponse = void 0;
+exports.mapSystemLogToResponse = exports.mapAuditLogToResponse = void 0;
 const parseJsonValue = (value) => {
     if (!value) {
         return null;
@@ -40,4 +40,17 @@ const mapAuditLogToResponse = (log) => ({
     createdAt: log.created_at.toISOString(),
 });
 exports.mapAuditLogToResponse = mapAuditLogToResponse;
+const mapSystemLogToResponse = (log) => ({
+    id: log.id,
+    level: log.level,
+    message: log.message,
+    source: log.source,
+    errorName: log.error_name,
+    path: log.path,
+    requestId: log.request_id,
+    stack: log.stack,
+    context: parseJsonValue(log.context),
+    createdAt: log.created_at.toISOString(),
+});
+exports.mapSystemLogToResponse = mapSystemLogToResponse;
 //# sourceMappingURL=logging.response.dto.js.map

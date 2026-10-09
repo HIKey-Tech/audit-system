@@ -110,6 +110,9 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
           return next;
         },
       );
+      // Refresh only the engagement summary (not the checklist or sub-tabs) so the
+      // "What's next" card and progress ring reflect the test just recorded.
+      qc.invalidateQueries({ queryKey: ['engagements', engagement.id], exact: true });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });

@@ -48,6 +48,7 @@ class ChecklistService {
     }
     async createChecklistItem(engagementId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:create');
+        await this._assertEngagementTeam(engagementId, actor);
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
             select: { id: true, audit_type: true },
@@ -76,7 +77,9 @@ class ChecklistService {
     }
     async updateChecklistItem(id, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:update');
-        await this._assertChecklistExists(id);
+        const existing = await this._getChecklistEngagement(id);
+        await this._assertEngagementTeam(existing.engagement_id, actor);
+        const before = await prisma_client_1.prisma.audit_Checklist.findUnique({ where: { id } });
         const item = await prisma_client_1.prisma.audit_Checklist.update({
             where: { id },
             data: {
@@ -93,7 +96,8 @@ class ChecklistService {
             module: 'audit',
             entityType: 'audit_checklist',
             entityId: id,
-            newValues: (0, checklist_response_dto_1.mapChecklistToResponse)(item),
+            oldValues: before ? { controlReference: before.control_reference, result: before.result, notes: before.notes } : undefined,
+            newValues: { controlReference: item.control_reference, result: item.result, notes: item.notes },
         });
         // A tested control may complete the fieldwork gate — let the engagement advance
         // itself. Reconcile is forward-only + idempotent with an hourly backstop job, so
@@ -114,6 +118,7 @@ class ChecklistService {
         });
         if (!checklist)
             throw app_error_1.AppError.notFound('Audit checklist item');
+        await this._assertEngagementTeam(checklist.engagement_id, actor);
         const evidence = await prisma_client_1.prisma.audit_Evidence.findUnique({
             where: { id: evidenceId },
             select: { engagement_id: true },
@@ -190,10 +195,26 @@ class ChecklistService {
         });
         return result;
     }
-    async _assertChecklistExists(id) {
-        const item = await prisma_client_1.prisma.audit_Checklist.findUnique({ where: { id }, select: { id: true } });
+    async _getChecklistEngagement(id) {
+        const item = await prisma_client_1.prisma.audit_Checklist.findUnique({ where: { id }, select: { engagement_id: true } });
         if (!item)
             throw app_error_1.AppError.notFound('Audit checklist item');
+        return item;
+    }
+    /**
+     * Checklist writes are limited to the engagement's audit team (lead, manager, assignee)
+     * and oversight (`engagement:read_all`), so holding `checklist:*` alone can't touch
+     * another engagement's tests. Reported as not-found so existence isn't revealed.
+     */
+    async _assertEngagementTeam(engagementId, actor) {
+        const scope = (0, engagement_visibility_util_1.repositoryEngagementScope)(actor);
+        if (!scope)
+            return;
+        const allowed = await prisma_client_1.prisma.audit_Engagement.count({
+            where: { id: engagementId, deleted_at: null, ...scope },
+        });
+        if (allowed === 0)
+            throw app_error_1.AppError.notFound('Audit engagement');
     }
 }
 exports.ChecklistService = ChecklistService;

@@ -133,6 +133,11 @@ export class RiskRegisterService implements IRegisterService {
       module: 'risk',
       entityType: 'risk_register',
       entityId: id,
+      oldValues: {
+        title: existing.title, likelihood: existing.likelihood, impact: existing.impact,
+        currentScore: existing.current_score, status: existing.status,
+        ownerId: existing.owner_id, categoryId: existing.category_id,
+      },
       newValues: mapRiskRegisterToResponse(risk),
     });
 
@@ -165,6 +170,7 @@ export class RiskRegisterService implements IRegisterService {
       module: 'risk',
       entityType: 'risk_register',
       entityId: id,
+      oldValues: { status: existing.status },
       newValues: { status: dto.status },
     });
 
@@ -409,10 +415,17 @@ export class RiskRegisterService implements IRegisterService {
     impact: number;
     owner_id: string;
     universe_id: string | null;
+    title: string;
+    current_score: number;
+    status: string;
+    category_id: string;
   }> {
     const risk = await prisma.risk_Register.findFirst({
       where: { id, deleted_at: null },
-      select: { id: true, likelihood: true, impact: true, owner_id: true, universe_id: true },
+      select: {
+        id: true, likelihood: true, impact: true, owner_id: true, universe_id: true,
+        title: true, current_score: true, status: true, category_id: true,
+      },
     });
     if (!risk) throw AppError.notFound('Risk');
     return risk;

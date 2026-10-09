@@ -6,10 +6,15 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
+const tabular_export_util_1 = require("../../../../../shared/utils/tabular-export.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const prisma_types_1 = require("../../../../../shared/prisma/prisma.types");
 const risk_utility_1 = require("../../../utility/risk.utility");
 const register_response_dto_1 = require("../../dto/response/register.response.dto");
+const normaliseObjective = (value) => {
+    const trimmed = value?.trim();
+    return trimmed ? trimmed : null;
+};
 class RiskRegisterService {
     async createRisk(dto, actor) {
         (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk:create');
@@ -28,6 +33,7 @@ class RiskRegisterService {
                     current_score: score,
                     status: dto.status,
                     universe_id: dto.universeId ?? null,
+                    business_objective: normaliseObjective(dto.businessObjective),
                     created_by_id: actor.id,
                 },
                 include: prisma_types_1.riskRegisterWithDetailsInclude,
@@ -83,6 +89,9 @@ class RiskRegisterService {
                     ...(dto.impact !== undefined && { impact: dto.impact }),
                     ...(scoreChanged && { current_score: score }),
                     ...(dto.universeId !== undefined && { universe_id: dto.universeId }),
+                    ...(dto.businessObjective !== undefined && {
+                        business_objective: normaliseObjective(dto.businessObjective),
+                    }),
                 },
                 include: prisma_types_1.riskRegisterWithDetailsInclude,
             });
@@ -96,6 +105,11 @@ class RiskRegisterService {
             module: 'risk',
             entityType: 'risk_register',
             entityId: id,
+            oldValues: {
+                title: existing.title, likelihood: existing.likelihood, impact: existing.impact,
+                currentScore: existing.current_score, status: existing.status,
+                ownerId: existing.owner_id, categoryId: existing.category_id,
+            },
             newValues: (0, register_response_dto_1.mapRiskRegisterToResponse)(risk),
         });
         return (0, register_response_dto_1.mapRiskRegisterToResponse)(risk);
@@ -120,6 +134,7 @@ class RiskRegisterService {
             module: 'risk',
             entityType: 'risk_register',
             entityId: id,
+            oldValues: { status: existing.status },
             newValues: { status: dto.status },
         });
         return (0, register_response_dto_1.mapRiskRegisterToResponse)(risk);
@@ -161,14 +176,7 @@ class RiskRegisterService {
     }
     async listRisks(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
-        const restrictToOwner = !actor.permissions.includes('risk:read_all');
-        const where = {
-            deleted_at: null,
-            ...(query.categoryId && { category_id: query.categoryId }),
-            ...(query.status && { status: query.status }),
-            ...(query.ownerId && { owner_id: query.ownerId }),
-            ...(restrictToOwner && { owner_id: actor.id }),
-        };
+        const where = this._listWhere(query, actor);
         const [total, risks] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.risk_Register.count({ where }),
             prisma_client_1.prisma.risk_Register.findMany({
@@ -184,6 +192,46 @@ class RiskRegisterService {
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
+    async exportRisks(query, format, actor) {
+        const risks = (await prisma_client_1.prisma.risk_Register.findMany({
+            where: this._listWhere(query, actor),
+            include: prisma_types_1.riskRegisterWithDetailsInclude,
+            orderBy: { [query.sortBy]: query.sortOrder },
+            take: tabular_export_util_1.EXPORT_MAX_ROWS,
+        }));
+        const rows = risks.map(register_response_dto_1.mapRiskRegisterToResponse);
+        logger_util_1.logger.info('Risk register exported', { actorId: actor.id, format, count: rows.length });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'risk.register.export',
+            module: 'risk',
+            entityType: 'risk_register',
+            newValues: { format, count: rows.length, filters: query },
+        });
+        return (0, tabular_export_util_1.buildTabularExport)(rows, [
+            { header: 'Title', value: (r) => r.title },
+            { header: 'Description', value: (r) => r.description },
+            { header: 'Category', value: (r) => r.categoryName },
+            { header: 'Business objective', value: (r) => r.businessObjective },
+            { header: 'Owner', value: (r) => r.ownerName },
+            { header: 'Likelihood', value: (r) => r.likelihood },
+            { header: 'Impact', value: (r) => r.impact },
+            { header: 'Score', value: (r) => r.currentScore },
+            { header: 'Status', value: (r) => r.status },
+            { header: 'Audit universe entity', value: (r) => r.universeName },
+            { header: 'Last assessed', value: (r) => r.lastAssessedAt },
+            { header: 'Created', value: (r) => r.createdAt },
+        ], { baseName: 'risk-register', format, sheetName: 'Risk register' });
+    }
+    async listBusinessObjectives() {
+        const rows = await prisma_client_1.prisma.risk_Register.findMany({
+            where: { deleted_at: null, business_objective: { not: null } },
+            select: { business_objective: true },
+            distinct: ['business_objective'],
+            orderBy: { business_objective: 'asc' },
+        });
+        return rows.map((r) => r.business_objective).filter((v) => Boolean(v));
+    }
     async getRisksByUniverseEntity(universeId, actor) {
         const restrictToOwner = actor ? !actor.permissions.includes('risk:read_all') : false;
         const risks = await prisma_client_1.prisma.risk_Register.findMany({
@@ -196,6 +244,17 @@ class RiskRegisterService {
             orderBy: { current_score: 'desc' },
         });
         return risks.map(register_response_dto_1.mapRiskRegisterToResponse);
+    }
+    _listWhere(query, actor) {
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
+        return {
+            deleted_at: null,
+            ...(query.categoryId && { category_id: query.categoryId }),
+            ...(query.status && { status: query.status }),
+            ...(query.ownerId && { owner_id: query.ownerId }),
+            ...(query.businessObjective && { business_objective: query.businessObjective }),
+            ...(restrictToOwner && { owner_id: actor.id }),
+        };
     }
     _assertCanAssignOwner(ownerId, actor) {
         if (actor.permissions.includes('risk:read_all'))
@@ -270,7 +329,10 @@ class RiskRegisterService {
     async _getExistingRisk(id) {
         const risk = await prisma_client_1.prisma.risk_Register.findFirst({
             where: { id, deleted_at: null },
-            select: { id: true, likelihood: true, impact: true, owner_id: true, universe_id: true },
+            select: {
+                id: true, likelihood: true, impact: true, owner_id: true, universe_id: true,
+                title: true, current_score: true, status: true, category_id: true,
+            },
         });
         if (!risk)
             throw app_error_1.AppError.notFound('Risk');

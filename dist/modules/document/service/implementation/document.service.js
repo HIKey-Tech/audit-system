@@ -194,6 +194,37 @@ class DocumentService {
             throw app_error_1.AppError.notFound('Document');
         return doc.entity_type;
     }
+    async canReadWithoutDocumentPermission(documentId, actor) {
+        const doc = await prisma_client_1.prisma.document.findUnique({
+            where: { id: documentId, deleted_at: null },
+            select: { entity_type: true, entity_id: true, uploaded_by_id: true },
+        });
+        if (!doc)
+            throw app_error_1.AppError.notFound('Document');
+        if (doc.entity_type === 'user_signature')
+            return true;
+        if (doc.uploaded_by_id === actor.id)
+            return true;
+        if (doc.entity_type === 'workflow_approval_signed' && doc.entity_id) {
+            // Signed copies are shown to everyone who took part in the approval chain.
+            if (this._isOversight(actor))
+                return true;
+            const approval = await prisma_client_1.prisma.workflow_Approval.findUnique({
+                where: { id: doc.entity_id },
+                select: {
+                    submitted_by_id: true,
+                    steps: { select: { approver_id: true, required_permission: true } },
+                },
+            });
+            if (!approval)
+                return false;
+            return (approval.submitted_by_id === actor.id ||
+                approval.steps.some((step) => step.approver_id === actor.id ||
+                    (step.required_permission !== null && actor.permissions.includes(step.required_permission))));
+        }
+        // Oversight roles (CAE / Director) may read all engagement material.
+        return this._isOversight(actor) && this._isEngagementScopedEntityType(doc.entity_type ?? '');
+    }
     async getFileById(id) {
         const doc = await prisma_client_1.prisma.document.findUnique({
             where: { id, deleted_at: null },

@@ -4,7 +4,7 @@ export declare class PasswordResetService implements IPasswordResetService {
     private readonly notificationQueue;
     constructor(notificationQueue: INotificationQueueService);
     requestReset(email: string, ipAddress?: string): Promise<void>;
-    resetPassword(token: string, newPassword: string, _ipAddress?: string): Promise<void>;
+    resetPassword(token: string, newPassword: string, ipAddress?: string): Promise<void>;
     private _sendResetEmail;
 }
 //# sourceMappingURL=password-reset.service.d.ts.map

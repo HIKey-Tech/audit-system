@@ -92,6 +92,7 @@ export class ChecklistService implements IChecklistService {
     assertHasPermission(actor.permissions, 'checklist:update');
     const existing = await this._getChecklistEngagement(id);
     await this._assertEngagementTeam(existing.engagement_id, actor);
+    const before = await prisma.audit_Checklist.findUnique({ where: { id } });
 
     const item = await prisma.audit_Checklist.update({
       where: { id },
@@ -110,7 +111,8 @@ export class ChecklistService implements IChecklistService {
       module: 'audit',
       entityType: 'audit_checklist',
       entityId: id,
-      newValues: mapChecklistToResponse(item),
+      oldValues: before ? { controlReference: before.control_reference, result: before.result, notes: before.notes } : undefined,
+      newValues: { controlReference: item.control_reference, result: item.result, notes: item.notes },
     });
 
     // A tested control may complete the fieldwork gate — let the engagement advance

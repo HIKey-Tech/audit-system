@@ -143,7 +143,25 @@ export class FindingService implements IFindingService {
     });
 
     logger.info('Audit finding updated', { findingId: id, actorId: actor.id });
-    auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.update', module: 'audit', entityType: 'audit_finding', entityId: id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.finding.update',
+      module: 'audit',
+      entityType: 'audit_finding',
+      entityId: id,
+      oldValues: {
+        title: finding.title, category: finding.category, severity: finding.severity,
+        rootCause: finding.root_cause, riskImplication: finding.risk_implication,
+        recommendation: finding.recommendation, auditeeId: finding.auditee_id,
+        dueDate: finding.due_date,
+      },
+      newValues: {
+        title: updated.title, category: updated.category, severity: updated.severity,
+        rootCause: updated.root_cause, riskImplication: updated.risk_implication,
+        recommendation: updated.recommendation, auditeeId: updated.auditee_id,
+        dueDate: updated.due_date,
+      },
+    });
     return mapFindingToResponse(updated);
   }
 
@@ -152,13 +170,29 @@ export class FindingService implements IFindingService {
     const finding = await this._getFinding(id);
     assertTransition(finding.status as FindingStatus, newStatus, FINDING_TRANSITIONS, 'finding');
 
+    // Each stage is normally reached by the work itself (response, evidence, verification), so a
+    // manual change may only record a stage whose proof already exists.
+    if (newStatus === FindingStatus.Verified) {
+      throw AppError.badRequest('A finding can only be verified through the Verify action, which records verification notes');
+    }
+    const followUp = await prisma.audit_Follow_Up.findUnique({
+      where: { finding_id: id },
+      select: { management_response: true, remediation_evidence_id: true },
+    });
+    if (newStatus === FindingStatus.ManagementResponseReceived && !followUp?.management_response) {
+      throw AppError.badRequest('A management response must be recorded before the finding can move to this stage');
+    }
+    if (newStatus === FindingStatus.InRemediation && !followUp?.remediation_evidence_id) {
+      throw AppError.badRequest('Remediation evidence must be submitted before the finding can move to this stage');
+    }
+
     const updated = await prisma.audit_Finding.update({
       where: { id },
       data: { status: newStatus },
     });
 
     logger.info('Audit finding status updated', { findingId: id, status: newStatus, actorId: actor.id });
-    auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.status.update', module: 'audit', entityType: 'audit_finding', entityId: id, newValues: { status: newStatus } });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.status.update', module: 'audit', entityType: 'audit_finding', entityId: id, oldValues: { status: finding.status }, newValues: { status: newStatus } });
     return mapFindingToResponse(updated);
   }
 

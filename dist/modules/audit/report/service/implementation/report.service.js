@@ -57,9 +57,35 @@ class ReportService {
             // Throws notFound (→ 404) if the template id is invalid.
             await this.reportTemplateService.getTemplateById(dto.templateId);
         }
-        const defaultExecutiveSummary = `Generated draft report for ${engagement.title}. Findings count: ${engagement.findings.length}.`;
-        const defaultScope = `Scope based on engagement ${engagement.reference_number}.`;
-        const defaultMethodology = 'Internal audit procedures performed using working papers, evidence, checklist testing, and finding validation.';
+        const [universe, checklistGroups, approvedPapers, evidenceCount] = await Promise.all([
+            prisma_client_1.prisma.audit_Universe.findUnique({ where: { id: engagement.universe_id }, select: { name: true, category: true } }),
+            prisma_client_1.prisma.audit_Checklist.groupBy({ by: ['result'], where: { engagement_id: engagementId }, _count: { _all: true } }),
+            prisma_client_1.prisma.audit_Working_Paper.count({ where: { engagement_id: engagementId, deleted_at: null, status: 'approved' } }),
+            prisma_client_1.prisma.audit_Evidence.count({ where: { engagement_id: engagementId } }),
+        ]);
+        const checklistCount = (result) => checklistGroups.find((g) => g.result === result)?._count._all ?? 0;
+        const controlsTested = checklistGroups
+            .filter((g) => g.result !== 'not_tested')
+            .reduce((sum, g) => sum + g._count._all, 0);
+        const bySeverity = ['critical', 'high', 'medium', 'low', 'informational']
+            .map((sev) => ({ sev, n: engagement.findings.filter((f) => f.severity === sev).length }))
+            .filter((x) => x.n > 0)
+            .map((x) => `${x.n} ${x.sev}`);
+        const dateOf = (d) => d.toISOString().slice(0, 10);
+        const entityName = universe?.name ?? engagement.title;
+        const auditType = engagement.audit_type.replace(/_/g, ' ');
+        const period = `${dateOf(engagement.actual_start_date ?? engagement.planned_start_date)} to ${dateOf(engagement.actual_end_date ?? engagement.planned_end_date)}`;
+        const findingsLine = engagement.findings.length === 0
+            ? 'No findings were raised.'
+            : `${engagement.findings.length} finding${engagement.findings.length === 1 ? ' was' : 's were'} raised (${bySeverity.join(', ')}).`;
+        const defaultExecutiveSummary = `Internal Audit performed a ${auditType} audit of ${entityName} (${engagement.reference_number}) covering ${period}. ` +
+            `${controlsTested} control${controlsTested === 1 ? ' was' : 's were'} tested: ${checklistCount('passed')} passed and ${checklistCount('failed')} failed. ` +
+            `${findingsLine} Management responses and remediation timelines are tracked in the follow-up register.`;
+        const defaultScope = `The audit covered ${entityName}${universe ? ` (${universe.category})` : ''} under engagement ${engagement.reference_number}, ` +
+            `for the period ${period}. It assessed the design and operating effectiveness of the controls listed in the engagement checklist.`;
+        const defaultMethodology = `Procedures comprised testing of ${controlsTested} control${controlsTested === 1 ? '' : 's'} against defined test procedures, ` +
+            `review of ${evidenceCount} item${evidenceCount === 1 ? '' : 's'} of evidence, and ${approvedPapers} approved working paper${approvedPapers === 1 ? '' : 's'}. ` +
+            `Failed control tests were recorded against the engagement and raised as findings where warranted.`;
         const report = await prisma_client_1.prisma.audit_Report.create({
             data: {
                 engagement_id: engagementId,
@@ -97,7 +123,7 @@ class ReportService {
             include: reportInclude,
         });
         logger_util_1.logger.info('Audit report updated', { reportId: id, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.update', module: 'audit', entityType: 'audit_report', entityId: id });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.update', module: 'audit', entityType: 'audit_report', entityId: id, oldValues: { title: report.title, status: report.status, versionNumber: report.version_number }, newValues: { title: updated.title, status: updated.status, versionNumber: updated.version_number } });
         return (0, report_response_dto_1.mapReportToResponse)(updated);
     }
     async submitReportForApproval(id, actor) {
@@ -108,14 +134,17 @@ class ReportService {
         if (report.status === audit_enum_1.ReportStatus.Submitted) {
             await this._assertSubmittedReportHasNoApproval(id);
         }
-        else if (report.status !== audit_enum_1.ReportStatus.Draft) {
-            throw app_error_1.AppError.badRequest('Only draft reports can be submitted');
+        else if (!audit_utility_1.REPORT_EDITABLE_STATUSES.includes(report.status)) {
+            throw app_error_1.AppError.badRequest('Only draft or rejected reports can be submitted');
         }
+        // A rejected report may be re-submitted as-is or after edits; either way the
+        // approval chain restarts from level 1.
+        const needsStatusChange = report.status === audit_enum_1.ReportStatus.Draft || report.status === audit_enum_1.ReportStatus.Rejected;
         const { submittedReport, approval } = await prisma_client_1.prisma.$transaction(async (tx) => {
-            const submittedReport = report.status === audit_enum_1.ReportStatus.Draft
+            const submittedReport = needsStatusChange
                 ? await tx.audit_Report.update({
                     where: { id },
-                    data: { status: audit_enum_1.ReportStatus.Submitted },
+                    data: { status: audit_enum_1.ReportStatus.Submitted, rejection_reason: null },
                     include: reportInclude,
                 })
                 : await tx.audit_Report.findFirstOrThrow({
@@ -231,6 +260,9 @@ class ReportService {
                 variables: reportVariables,
             });
         }
+        // Findings only become visible to auditees now, so this is where each responder
+        // (primary auditee or co-responder) learns what has been assigned to them.
+        await this._notifyFindingResponders(report.engagement_id, report.engagement.reference_number);
         logger_util_1.logger.info('Audit report issued', { reportId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.report.issue', module: 'audit', entityType: 'audit_report', entityId: id });
         // Fire-and-forget auto-generation of both formats after issue
@@ -358,6 +390,57 @@ class ReportService {
             mimeType: file.mimeType,
             buffer: file.buffer,
         };
+    }
+    /** One in-app + email summary per responder of the findings assigned to them on this engagement. */
+    async _notifyFindingResponders(engagementId, engagementReference) {
+        try {
+            const userSelect = { id: true, email: true };
+            const findings = await prisma_client_1.prisma.audit_Finding.findMany({
+                where: { engagement_id: engagementId, deleted_at: null },
+                select: {
+                    id: true,
+                    title: true,
+                    due_date: true,
+                    auditee: { select: userSelect },
+                    responders: { select: { user: { select: userSelect } } },
+                },
+            });
+            const byUser = new Map();
+            for (const finding of findings) {
+                const users = [finding.auditee, ...finding.responders.map((r) => r.user)];
+                for (const user of users) {
+                    const entry = byUser.get(user.id) ?? { email: user.email, findings: [] };
+                    if (!entry.findings.some((f) => f.id === finding.id)) {
+                        entry.findings.push({ id: finding.id, title: finding.title, dueDate: finding.due_date.toISOString().slice(0, 10) });
+                    }
+                    byUser.set(user.id, entry);
+                }
+            }
+            for (const [userId, entry] of byUser) {
+                const single = entry.findings.length === 1 ? entry.findings[0] : null;
+                const body = single
+                    ? `Finding "${single.title}" (${engagementReference}) has been assigned to you. Due ${single.dueDate}.`
+                    : `${entry.findings.length} findings from audit ${engagementReference} have been assigned to you. Please review them and submit your management responses.`;
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                    userId,
+                    title: 'Audit findings assigned',
+                    body,
+                    type: 'warning',
+                    referenceType: single ? 'audit_finding' : 'audit_engagement',
+                    referenceId: single ? single.id : engagementId,
+                });
+                if (entry.email) {
+                    await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+                        to: entry.email,
+                        subject: `Audit findings assigned: ${engagementReference}`,
+                        text: body,
+                    });
+                }
+            }
+        }
+        catch (err) {
+            logger_util_1.logger.warn('Finding responder notification failed', { engagementId, err });
+        }
     }
     async _getReport(id) {
         const report = await prisma_client_1.prisma.audit_Report.findFirst({ where: { id, deleted_at: null } });

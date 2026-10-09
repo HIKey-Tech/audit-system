@@ -27,7 +27,9 @@ import {
 
 export const AssetsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
-  const { canLinkAssets } = usePermissions();
+  const { canLinkAssets: hasLinkPermission } = usePermissions();
+  // Asset scope is frozen once the engagement is closed (the API refuses changes).
+  const canLinkAssets = hasLinkPermission && engagement.status !== 'closed';
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
   const [assetId, setAssetId] = useState('');

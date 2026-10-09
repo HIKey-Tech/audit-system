@@ -130,6 +130,7 @@ export function ApproveSignPanel({
     onSuccess: () => {
       toast.success('Approved & signed');
       qc.invalidateQueries({ queryKey: ['workflow'] });
+      qc.invalidateQueries({ queryKey: ['approval-chain'] });
       qc.invalidateQueries({ queryKey: ['notifications'] });
       onDone();
     },

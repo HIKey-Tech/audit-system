@@ -63,9 +63,40 @@ export class ReportService implements IReportService {
       await this.reportTemplateService.getTemplateById(dto.templateId);
     }
 
-    const defaultExecutiveSummary = `Generated draft report for ${engagement.title}. Findings count: ${engagement.findings.length}.`;
-    const defaultScope = `Scope based on engagement ${engagement.reference_number}.`;
-    const defaultMethodology = 'Internal audit procedures performed using working papers, evidence, checklist testing, and finding validation.';
+    const [universe, checklistGroups, approvedPapers, evidenceCount] = await Promise.all([
+      prisma.audit_Universe.findUnique({ where: { id: engagement.universe_id }, select: { name: true, category: true } }),
+      prisma.audit_Checklist.groupBy({ by: ['result'], where: { engagement_id: engagementId }, _count: { _all: true } }),
+      prisma.audit_Working_Paper.count({ where: { engagement_id: engagementId, deleted_at: null, status: 'approved' } }),
+      prisma.audit_Evidence.count({ where: { engagement_id: engagementId } }),
+    ]);
+    const checklistCount = (result: string): number =>
+      checklistGroups.find((g) => g.result === result)?._count._all ?? 0;
+    const controlsTested = checklistGroups
+      .filter((g) => g.result !== 'not_tested')
+      .reduce((sum, g) => sum + g._count._all, 0);
+    const bySeverity = ['critical', 'high', 'medium', 'low', 'informational']
+      .map((sev) => ({ sev, n: engagement.findings.filter((f) => f.severity === sev).length }))
+      .filter((x) => x.n > 0)
+      .map((x) => `${x.n} ${x.sev}`);
+    const dateOf = (d: Date): string => d.toISOString().slice(0, 10);
+    const entityName = universe?.name ?? engagement.title;
+    const auditType = engagement.audit_type.replace(/_/g, ' ');
+    const period = `${dateOf(engagement.actual_start_date ?? engagement.planned_start_date)} to ${dateOf(engagement.actual_end_date ?? engagement.planned_end_date)}`;
+
+    const findingsLine = engagement.findings.length === 0
+      ? 'No findings were raised.'
+      : `${engagement.findings.length} finding${engagement.findings.length === 1 ? ' was' : 's were'} raised (${bySeverity.join(', ')}).`;
+    const defaultExecutiveSummary =
+      `Internal Audit performed a ${auditType} audit of ${entityName} (${engagement.reference_number}) covering ${period}. ` +
+      `${controlsTested} control${controlsTested === 1 ? ' was' : 's were'} tested: ${checklistCount('passed')} passed and ${checklistCount('failed')} failed. ` +
+      `${findingsLine} Management responses and remediation timelines are tracked in the follow-up register.`;
+    const defaultScope =
+      `The audit covered ${entityName}${universe ? ` (${universe.category})` : ''} under engagement ${engagement.reference_number}, ` +
+      `for the period ${period}. It assessed the design and operating effectiveness of the controls listed in the engagement checklist.`;
+    const defaultMethodology =
+      `Procedures comprised testing of ${controlsTested} control${controlsTested === 1 ? '' : 's'} against defined test procedures, ` +
+      `review of ${evidenceCount} item${evidenceCount === 1 ? '' : 's'} of evidence, and ${approvedPapers} approved working paper${approvedPapers === 1 ? '' : 's'}. ` +
+      `Failed control tests were recorded against the engagement and raised as findings where warranted.`;
 
     const report = await prisma.audit_Report.create({
       data: {
@@ -106,7 +137,7 @@ export class ReportService implements IReportService {
     });
 
     logger.info('Audit report updated', { reportId: id, actorId: actor.id });
-    auditLogService.logAsync({ userId: actor.id, action: 'audit.report.update', module: 'audit', entityType: 'audit_report', entityId: id });
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.report.update', module: 'audit', entityType: 'audit_report', entityId: id, oldValues: { title: report.title, status: report.status, versionNumber: report.version_number }, newValues: { title: updated.title, status: updated.status, versionNumber: updated.version_number } });
     return mapReportToResponse(updated);
   }
 

@@ -77,7 +77,7 @@ export default function EngagementDetailPage(): JSX.Element {
     [router, id],
   );
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['engagements', id],
     queryFn: () => engagementsApi.get(id),
     enabled: Boolean(id),
@@ -94,7 +94,7 @@ export default function EngagementDetailPage(): JSX.Element {
       <div>
         <PageHeader title="Engagement" breadcrumbs={[{ label: 'Engagements', href: '/audit/engagements' }]} />
         <Card>
-          <ErrorState onRetry={() => refetch()} />
+          <ErrorState error={error} onRetry={() => refetch()} />
         </Card>
       </div>
     );
@@ -132,7 +132,12 @@ export default function EngagementDetailPage(): JSX.Element {
         ((t.key === 'working-papers' && !vc.canViewWorkingPapers) ||
           (t.key === 'evidence' && !vc.canViewInternalEvidence) ||
           (t.key === 'checklists' && !vc.canViewChecklists));
-      return { ...t, disabled: restricted, disabledReason: restricted ? RESTRICTED_TAB_REASON : undefined };
+      // The audit review itself is not shared with roles that lack report:read (e.g. the
+      // auditee, who works from Findings and Follow-up) — don't offer a tab that can only
+      // say "No review yet" while one has been issued.
+      const noReviewAccess = t.key === 'report' && !hasPermission(session, 'report:read');
+      const disabled = restricted || noReviewAccess;
+      return { ...t, disabled, disabledReason: disabled ? RESTRICTED_TAB_REASON : undefined };
     })
     .map((t) => ({
       key: t.key,

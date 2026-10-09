@@ -8,6 +8,7 @@ export declare class MonitoringController {
     private _getHighRiskItems;
     private _getRisksRequiringAttention;
     private _getRiskScoreTrend;
+    private _getEmergingRisks;
     private _getOrganizationRiskSummary;
 }
 //# sourceMappingURL=monitoring.controller.d.ts.map

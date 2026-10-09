@@ -237,7 +237,7 @@ export const RiskFormSlideOver = ({ open, onClose, risk }: Props): JSX.Element =
             <option value="">None (Generic / Unlinked)</option>
             {universeEntities.data?.items?.map((u) => (
               <option key={u.id} value={u.id}>
-                {u.name} ({u.category})
+                {u.name} ({u.category.charAt(0).toUpperCase() + u.category.slice(1)})
               </option>
             ))}
           </Select>

@@ -8,10 +8,16 @@ export interface WorkingPaperResponseDto {
     title: string;
     content: string;
     versionNumber: number;
+    /** Alias of versionNumber, read by the web client. */
+    version: number;
     status: string;
     createdById: string;
+    createdByName: string;
     reviewedById: string | null;
+    reviewerName: string | null;
     rejectionReason: string | null;
+    /** The reviewer's rejection reason, shown to the preparer while the paper is rejected. */
+    reviewComment: string | null;
     importMetadata: unknown | null;
     createdAt: string;
     updatedAt: string;

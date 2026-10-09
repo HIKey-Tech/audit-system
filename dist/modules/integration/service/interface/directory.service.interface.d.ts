@@ -17,6 +17,15 @@ export interface UpdateMappingInput {
     roleId?: string;
     isActive?: boolean;
 }
+/** A directory (Entra ID) account and its group memberships, for read-only access reviews. */
+export interface DirectoryAccount {
+    oid: string;
+    email: string;
+    displayName: string | null;
+    accountEnabled: boolean;
+    /** Group display names where a mapping names them; otherwise the group object id. */
+    groups: string[];
+}
 export interface IDirectoryMappingService {
     createMapping(dto: CreateMappingInput, actorId: string): Promise<DirectoryGroupMapping>;
     updateMapping(id: string, dto: UpdateMappingInput, actorId: string): Promise<DirectoryGroupMapping>;
@@ -28,5 +37,7 @@ export interface IDirectoryMappingService {
         usersProcessed: number;
         deactivated: number;
     }>;
+    /** Read-only snapshot of every directory account and its groups. Requires directory sync to be enabled. */
+    listDirectoryAccounts(): Promise<DirectoryAccount[]>;
 }
 //# sourceMappingURL=directory.service.interface.d.ts.map

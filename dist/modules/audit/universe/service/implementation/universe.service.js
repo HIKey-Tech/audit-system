@@ -43,6 +43,7 @@ class UniverseService {
     async updateEntity(id, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:update');
         await this._assertEntityExists(id);
+        const before = await prisma_client_1.prisma.audit_Universe.findUnique({ where: { id } });
         const entity = await prisma_client_1.prisma.audit_Universe.update({
             where: { id },
             data: {
@@ -67,6 +68,7 @@ class UniverseService {
             module: 'audit',
             entityType: 'audit_universe',
             entityId: id,
+            oldValues: before ? (0, universe_response_dto_1.mapUniverseToResponse)(before) : undefined,
             newValues: (0, universe_response_dto_1.mapUniverseToResponse)(entity),
         });
         return (0, universe_response_dto_1.mapUniverseToResponse)(entity);

@@ -14,6 +14,8 @@ const notification_queue_service_interface_1 = require("../../../messaging/servi
 const token_utility_1 = require("../../utility/token.utility");
 const mfa_utility_1 = require("../../utility/mfa.utility");
 const session_guard_1 = require("../../../../shared/security/session-guard");
+const security_event_utility_1 = require("../../../logging/utility/security-event.utility");
+const logging_enum_1 = require("../../../logging/domain/enum/logging.enum");
 const escapeHtml = (value) => value.replace(/[&<>"']/g, (char) => {
     switch (char) {
         case '&':
@@ -104,6 +106,7 @@ class MfaService {
             return;
         }
         logger_util_1.logger.warn('MFA verification failed', { userId });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.MfaFailed, { userId, reason: 'invalid_code', method: user.mfa_method ?? undefined, status: 'failure' });
         throw app_error_1.AppError.unauthorized('Invalid verification code');
     }
     async regenerateBackupCodes(userId) {
@@ -127,6 +130,9 @@ class MfaService {
                     mfa_method: null,
                     mfa_totp_secret: null,
                     mfa_enrolled_at: null,
+                    // Clear the grace deadline too: the next password login starts a fresh grace window
+                    // instead of hard-blocking a user whose original window already lapsed.
+                    mfa_grace_until: null,
                 },
             }),
             prisma_client_1.prisma.mfa_Backup_Code.deleteMany({ where: { user_id: targetUserId } }),
@@ -136,6 +142,7 @@ class MfaService {
         // state (mfa_enabled) is reflected immediately without waiting for TTL.
         await (0, session_guard_1.revokeUserSessions)(targetUserId);
         logger_util_1.logger.info('MFA reset by admin', { targetUserId, actorId });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.MfaAdminReset, { userId: targetUserId, reason: `reset_by:${actorId}` });
     }
     // ── internals ───────────────────────────────────────────────
     async _replaceBackupCodes(userId) {

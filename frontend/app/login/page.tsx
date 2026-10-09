@@ -3,6 +3,7 @@
 import { useState, Suspense } from 'react';
 import Link from 'next/link';
 import { useRouter, useSearchParams } from 'next/navigation';
+import { useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -37,6 +38,7 @@ const ssoErrorMessage = (code: string | null | undefined): string | null => {
 
 const LoginInner = (): JSX.Element => {
   const router = useRouter();
+  const queryClient = useQueryClient();
   const params = useSearchParams();
   const next = params?.get('next') ?? '/dashboard';
   const [showPassword, setShowPassword] = useState(false);
@@ -72,6 +74,8 @@ const LoginInner = (): JSX.Element => {
         return;
       }
 
+      // A new session starts with an empty cache (see logout).
+      queryClient.clear();
       const safeNext = next.startsWith('/') ? next : '/dashboard';
       const status = json.data?.status;
 

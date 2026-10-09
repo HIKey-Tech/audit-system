@@ -169,6 +169,10 @@ class PlanningService {
             throw app_error_1.AppError.badRequest('At least one field is required');
         }
         await this._assertDraftPlan(planId);
+        const before = await prisma_client_1.prisma.audit_Plan.findUnique({
+            where: { id: planId },
+            select: { title: true, year: true, description: true },
+        });
         const updated = await prisma_client_1.prisma.audit_Plan.update({
             where: { id: planId },
             data: {
@@ -185,6 +189,7 @@ class PlanningService {
             module: 'audit',
             entityType: 'audit_plan',
             entityId: planId,
+            oldValues: before ?? undefined,
             newValues: dto,
         });
         return (0, planning_response_dto_1.mapPlanToResponse)(updated);
@@ -266,8 +271,9 @@ class PlanningService {
     async submitPlanForApproval(planId, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'plan:submit');
         const plan = await this._getPlanForMutation(planId);
-        if (plan.status !== audit_enum_1.PlanStatus.Draft)
-            throw app_error_1.AppError.badRequest('Only draft plans can be submitted');
+        if (!audit_utility_1.PLAN_EDITABLE_STATUSES.includes(plan.status)) {
+            throw app_error_1.AppError.badRequest('Only draft or rejected plans can be submitted');
+        }
         if (plan.items.length === 0)
             throw app_error_1.AppError.badRequest('Plan must have at least one item before submission');
         const { submittedPlan, approval } = await prisma_client_1.prisma.$transaction(async (tx) => {
@@ -335,7 +341,10 @@ class PlanningService {
             prisma_client_1.prisma.audit_Plan.count({ where }),
             prisma_client_1.prisma.audit_Plan.findMany({
                 where,
-                include: { _count: { select: { items: true } } },
+                include: {
+                    _count: { select: { items: true } },
+                    approved_by: { select: { display_name: true, first_name: true, last_name: true } },
+                },
                 orderBy: { [query.sortBy]: query.sortOrder },
                 skip,
                 take,
@@ -359,8 +368,9 @@ class PlanningService {
         });
         if (!plan)
             throw app_error_1.AppError.notFound('Audit plan');
-        if (plan.status !== audit_enum_1.PlanStatus.Draft)
-            throw app_error_1.AppError.badRequest('Plan must be in draft status');
+        if (!audit_utility_1.PLAN_EDITABLE_STATUSES.includes(plan.status)) {
+            throw app_error_1.AppError.badRequest('Plan must be in draft or rejected status to be changed');
+        }
     }
     async _assertUniverseExists(universeId) {
         const universe = await prisma_client_1.prisma.audit_Universe.findFirst({

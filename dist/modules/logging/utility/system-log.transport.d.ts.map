@@ -1,0 +1,1 @@
+{"version":3,"file":"system-log.transport.d.ts","sourceRoot":"","sources":["../../../../src/modules/logging/utility/system-log.transport.ts"],"names":[],"mappings":"AAAA,OAAO,SAAS,MAAM,mBAAmB,CAAC;AA2C1C;;;;;GAKG;AACH,qBAAa,kBAAmB,SAAQ,SAAS;;IAKtC,GAAG,CAAC,IAAI,EAAE,MAAM,CAAC,MAAM,GAAG,MAAM,EAAE,OAAO,CAAC,EAAE,QAAQ,EAAE,MAAM,IAAI,GAAG,IAAI;CAiCjF"}

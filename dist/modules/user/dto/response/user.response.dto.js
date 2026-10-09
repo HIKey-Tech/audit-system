@@ -1,7 +1,30 @@
 "use strict";
-// src/modules/user/dto/response/user.response.dto.ts
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.mapUserToResponse = exports.mapRoleToResponse = exports.mapPermissionToResponse = exports.mapUserToDirectory = void 0;
+exports.mapUserToResponse = exports.mapRoleToResponse = exports.mapPermissionToResponse = exports.mapUserToDirectory = exports.mapUserToAccessEntitlement = void 0;
+const mapUserToAccessEntitlement = (user, now = new Date()) => {
+    const liveRoles = user.user_roles.filter((ur) => !ur.expires_at || ur.expires_at > now);
+    const permissions = new Set();
+    for (const ur of liveRoles) {
+        for (const rp of ur.role.role_permissions)
+            permissions.add(rp.permission.slug);
+    }
+    return {
+        id: user.id,
+        email: user.email,
+        displayName: user.display_name ?? `${user.first_name} ${user.last_name}`.trim(),
+        department: user.department,
+        jobTitle: user.job_title,
+        isActive: user.is_active,
+        isSuperAdmin: user.is_super_admin,
+        mfaEnabled: user.mfa_enabled,
+        lastLoginAt: user.last_login_at?.toISOString() ?? null,
+        createdAt: user.created_at.toISOString(),
+        roles: liveRoles.map((ur) => ur.role.name),
+        roleSources: Object.fromEntries(liveRoles.map((ur) => [ur.role.name, ur.source])),
+        permissions: Array.from(permissions).sort(),
+    };
+};
+exports.mapUserToAccessEntitlement = mapUserToAccessEntitlement;
 const mapUserToDirectory = (u) => ({
     id: u.id,
     displayName: u.display_name,

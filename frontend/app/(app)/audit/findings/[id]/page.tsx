@@ -13,32 +13,25 @@ import { Card, CardHeader } from '@/components/ui/Card';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
-import { Select, Textarea } from '@/components/ui/Input';
+import { Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { findingsApi, followUpApi } from '@/lib/api/audit';
+import { ApiError } from '@/lib/api-client';
 import { documentsApi } from '@/lib/api/documents';
 import { LinkedAssetsCard } from '@/components/common/LinkedAssetsCard';
 import { formatDate } from '@/lib/utils/format';
-import { humanizeStatus } from '@/lib/utils/status';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { cn } from '@/lib/utils/cn';
 import { auditTypeLabel } from '@/lib/audit-domains';
-
-// Manual, auditor-settable statuses. `verified` is deliberately excluded — it is
-// only reachable through the Verify action below, which captures verification
-// notes, so a finding can never be marked verified without a recorded rationale.
-const STATUSES = ['open', 'management_response_received', 'in_remediation'] as const;
-const MANUAL_STATUS_SET = new Set<string>(STATUSES);
 
 export default function FindingDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const qc = useQueryClient();
   const { hasPermission, user } = usePermissions();
-  const canChangeStatus = hasPermission('finding:update');
   const canClose = hasPermission('finding:close');
   const canVerify = hasPermission('followup:verify');
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['findings', params?.id],
     queryFn: () => findingsApi.get(params!.id),
     enabled: Boolean(params?.id),
@@ -46,7 +39,12 @@ export default function FindingDetailPage(): JSX.Element {
 
   const followUp = useQuery({
     queryKey: ['findings', params?.id, 'follow-up'],
-    queryFn: () => followUpApi.getByFinding(params!.id).catch(() => null),
+    queryFn: () =>
+      followUpApi.getByFinding(params!.id).catch((err: unknown) => {
+        // 404 just means nothing has been recorded yet; anything else (e.g. 403) is a real error.
+        if (err instanceof ApiError && err.status === 404) return null;
+        throw err;
+      }),
     enabled: Boolean(params?.id),
     retry: false,
   });
@@ -55,15 +53,6 @@ export default function FindingDetailPage(): JSX.Element {
     qc.invalidateQueries({ queryKey: ['findings', params!.id] });
     qc.invalidateQueries({ queryKey: ['findings', params!.id, 'follow-up'] });
   };
-
-  const updateStatus = useMutation({
-    mutationFn: (status: string) => findingsApi.updateStatus(params!.id, status),
-    onSuccess: () => {
-      toast.success('Status updated');
-      invalidate();
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
-  });
 
   const requestClosure = useMutation({
     mutationFn: () => findingsApi.close(params!.id),
@@ -120,7 +109,7 @@ export default function FindingDetailPage(): JSX.Element {
       <div>
         <PageHeader title="Finding" breadcrumbs={[{ label: 'Findings', href: '/audit/findings' }]} />
         <Card>
-          <ErrorState onRetry={() => refetch()} />
+          <ErrorState error={error} onRetry={() => refetch()} />
         </Card>
       </div>
     );
@@ -148,9 +137,6 @@ export default function FindingDetailPage(): JSX.Element {
   const canRespond = isResponder && hasPermission('followup:respond');
   const canSubmitEvidence = isResponder && hasPermission('followup:evidence');
   const isSettled = ['pending_closure', 'closed'].includes(data.status);
-  // The manual status dropdown only makes sense before verification. Afterwards
-  // the status is driven by the Verify action and the closure workflow.
-  const showStatusDropdown = canChangeStatus && MANUAL_STATUS_SET.has(data.status);
 
   return (
     <div>
@@ -167,21 +153,6 @@ export default function FindingDetailPage(): JSX.Element {
                 Back
               </Button>
             </Link>
-            {showStatusDropdown && (
-              <div className="w-48">
-                <Select
-                  value={data.status}
-                  onChange={(e) => updateStatus.mutate(e.target.value)}
-                  disabled={updateStatus.isPending}
-                >
-                  {STATUSES.map((s) => (
-                    <option key={s} value={s}>
-                      {humanizeStatus(s)}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-            )}
             {canClose && data.status === 'verified' && (
               <Button
                 size="sm"
@@ -416,7 +387,10 @@ export default function FindingDetailPage(): JSX.Element {
               </div>
             )}
 
-            {!followUp.data && !canRespond && !canSubmitEvidence && !canVerify && (
+            {followUp.isError && (
+              <p className="text-xs text-danger">Could not load the follow-up. {followUp.error instanceof Error ? followUp.error.message : ''}</p>
+            )}
+            {!followUp.data && !followUp.isError && !canRespond && !canSubmitEvidence && !canVerify && (
               <p className="text-xs text-text-muted">No follow-up recorded yet.</p>
             )}
           </div>

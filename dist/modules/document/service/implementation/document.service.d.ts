@@ -24,6 +24,7 @@ export declare class DocumentService implements IDocumentService {
      */
     assertCanUserAccess(documentId: string, actor: DocumentAccessActor): Promise<void>;
     getEntityType(documentId: string): Promise<string | null>;
+    canReadWithoutDocumentPermission(documentId: string, actor: DocumentAccessActor): Promise<boolean>;
     getFileById(id: string): Promise<ServedFileDto>;
     serveFile(storedName: string, actor: DocumentAccessActor): Promise<ServedFileDto>;
     /**

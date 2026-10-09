@@ -12,7 +12,7 @@ import { formatRelative } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 
 export const RecentActivity = (): JSX.Element => {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', 'activity'],
     queryFn: () => dashboardApi.getActivity(20),
   });
@@ -23,7 +23,7 @@ export const RecentActivity = (): JSX.Element => {
       {isLoading ? (
         <ListSkeleton rows={8} />
       ) : isError ? (
-        <ErrorState compact onRetry={() => refetch()} />
+        <ErrorState compact error={error} onRetry={() => refetch()} />
       ) : !data || data.length === 0 ? (
         <EmptyState
           compact

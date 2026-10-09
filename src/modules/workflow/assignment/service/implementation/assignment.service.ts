@@ -45,6 +45,16 @@ const assignmentInclude = Prisma.validator<Prisma.Workflow_AssignmentInclude>()(
   engagement: true,
 });
 
+/**
+ * Audit staff are identified by permission, never by role name: roles are admin-defined, so
+ * any role that can author working papers makes its holders assignable (same test as the
+ * lead-auditor picker in the engagement module).
+ */
+const AUDIT_STAFF_PERMISSIONS = ['working_paper:create'];
+const auditStaffRoleFilter: Prisma.RoleWhereInput = {
+  role_permissions: { some: { permission: { slug: { in: AUDIT_STAFF_PERMISSIONS } } } },
+};
+
 export class AssignmentService implements IAssignmentService {
   async assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto> {
     assertHasPermission(assignedBy.permissions, 'assignment:create');
@@ -55,6 +65,7 @@ export class AssignmentService implements IAssignmentService {
         select: {
           id: true,
           title: true,
+          status: true,
           reference_number: true,
           sla_deadline: true,
           planned_start_date: true,
@@ -76,7 +87,14 @@ export class AssignmentService implements IAssignmentService {
     ]);
 
     if (!engagement) throw AppError.notFound('Audit engagement');
+    if (engagement.status === 'closed') {
+      throw AppError.badRequest('Cannot change the team of a closed engagement');
+    }
     if (!user) throw AppError.notFound('User');
+    const isAuditStaff = await prisma.user_Role.count({
+      where: { user_id: dto.userId, role: auditStaffRoleFilter },
+    });
+    if (isAuditStaff === 0) throw AppError.badRequest('Only audit staff can be assigned to an engagement team');
     if (existing) throw AppError.conflict('User is already assigned to this engagement in that role');
 
     // Capacity + schedule guard: block over-allocating an auditor across
@@ -186,10 +204,13 @@ export class AssignmentService implements IAssignmentService {
       where: { id: assignmentId },
       include: {
         user: { select: { id: true, email: true } },
-        engagement: { select: { id: true, title: true } },
+        engagement: { select: { id: true, title: true, status: true } },
       },
     });
     if (!assignment) throw AppError.notFound('Workflow assignment');
+    if (assignment.engagement.status === 'closed') {
+      throw AppError.badRequest('Cannot change the team of a closed engagement');
+    }
 
     await prisma.$transaction(async (tx) => {
       await tx.workflow_Assignment.delete({ where: { id: assignmentId } });
@@ -373,6 +394,9 @@ export class AssignmentService implements IAssignmentService {
       deleted_at: null,
       is_active: true,
       id: { notIn: assignedIds },
+      // Only audit staff can be assigned to the audit team — the auditee, CAE,
+      // directors, committee and viewers participate in other ways.
+      user_roles: { some: { role: auditStaffRoleFilter } },
       ...(search
         ? {
             OR: [

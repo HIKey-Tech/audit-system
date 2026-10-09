@@ -71,6 +71,7 @@ class AssetService {
         (0, asset_utility_1.assertHasPermission)(actor, 'asset:update');
         (0, asset_utility_1.assertAdminForSensitiveAssetFields)(actor, dto);
         await this._assertAssetExists(id);
+        const before = await prisma_client_1.prisma.asset.findUnique({ where: { id }, include: prisma_types_1.assetWithDetailsInclude });
         if (dto.assetTag !== undefined) {
             const existing = await prisma_client_1.prisma.asset.findFirst({
                 where: { asset_tag: dto.assetTag, id: { not: id } },
@@ -123,6 +124,7 @@ class AssetService {
             module: 'asset',
             entityType: 'asset',
             entityId: id,
+            oldValues: before ? (0, asset_response_dto_1.mapAssetToResponse)(before) : undefined,
             newValues: response,
         });
         return response;
@@ -616,6 +618,9 @@ class AssetService {
             OR: [
                 { lead_auditor_id: actor.id },
                 { audit_manager_id: actor.id },
+                // The auditee can see which assets are in scope for their own engagement (read-only:
+                // linking needs asset:link, which auditees do not hold).
+                { auditee_id: actor.id },
                 { workflow_assignments: { some: { user_id: actor.id } } },
             ],
         };

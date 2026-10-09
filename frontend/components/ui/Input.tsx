@@ -244,6 +244,34 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
+    // react-hook-form's register() assigns defaults and reset() values straight onto the
+    // native <select> (`node.value = x`). Without this the visible control stayed on the
+    // first option while the form submitted the real default (e.g. showing "1 — Rare"
+    // but saving 3). Adopt such assignments into the displayed state.
+    const controlledRef = useRef(value !== undefined);
+    controlledRef.current = value !== undefined;
+    const adoptProgrammaticValues = (node: HTMLSelectElement | null): void => {
+      if (!node || Object.prototype.hasOwnProperty.call(node, 'value')) {
+        return;
+      }
+      const nativeValue = Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, 'value');
+      if (!nativeValue?.get || !nativeValue.set) {
+        return;
+      }
+      Object.defineProperty(node, 'value', {
+        configurable: true,
+        get() {
+          return nativeValue.get!.call(this) as string;
+        },
+        set(next: string) {
+          nativeValue.set!.call(this, next);
+          if (!controlledRef.current) {
+            setInternalValue(String(next ?? ''));
+          }
+        },
+      });
+    };
+
     const emitBlur = (): void => {
       if (!onBlur) {
         return;
@@ -350,6 +378,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         <select
           ref={(node) => {
             selectRef.current = node;
+            adoptProgrammaticValues(node);
             setForwardedRef(ref, node);
           }}
           id={selectId}

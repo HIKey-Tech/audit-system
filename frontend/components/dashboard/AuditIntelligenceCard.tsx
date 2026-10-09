@@ -37,7 +37,7 @@ export const AuditIntelligenceCard = (): JSX.Element => {
       {query.isLoading ? (
         <div className="space-y-3 px-5 pb-5"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-5/6" /></div>
       ) : query.isError || !query.data ? (
-        <div className="px-5 pb-5"><ErrorState compact onRetry={() => query.refetch()} /></div>
+        <div className="px-5 pb-5"><ErrorState compact error={query.error} onRetry={() => query.refetch()} /></div>
       ) : query.data.insights.length === 0 ? (
         <div className="px-5 pb-5"><EmptyState compact icon={<Sparkles className="h-4 w-4" />} title="No current early warnings" description="Open Audit intelligence to review next actions." /></div>
       ) : (

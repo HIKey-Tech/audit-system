@@ -69,6 +69,16 @@ const ENGAGEMENT_MANAGER_PERMISSION = {
     [workflow_enum_1.WorkflowEntityType.AuditReport]: 'report:approve',
     [workflow_enum_1.WorkflowEntityType.AuditFindingClosure]: 'finding:close',
 };
+/** Plain-English name of an approval's subject, used in notification text instead of the raw slug. */
+const APPROVAL_ENTITY_LABELS = {
+    audit_plan: 'Audit programme',
+    audit_working_paper: 'Working paper',
+    audit_report: 'Audit review',
+    audit_finding_closure: 'Finding closure',
+    audit_engagement: 'Engagement',
+};
+const approvalEntityLabel = (entityType) => APPROVAL_ENTITY_LABELS[entityType] ??
+    entityType.replace(/^audit_/, '').replace(/_/g, ' ').replace(/^./, (c) => c.toUpperCase());
 class ApprovalService {
     approvalStatusService;
     constructor(approvalStatusService = approval_status_service_1.approvalStatusService) {
@@ -152,14 +162,14 @@ class ApprovalService {
         for (const recipientId of recipientIds) {
             this._queueNotification(recipientId, {
                 title: 'Approval required',
-                body: `A ${approval.entityType} requires your approval.`,
+                body: `A ${approvalEntityLabel(approval.entityType).toLowerCase()} requires your approval.`,
                 type: 'info',
                 referenceType: 'workflow_approval',
                 referenceId: approval.id,
             }, {
                 eventKey: 'workflow.approval.created',
                 variables: {
-                    entityType: approval.entityType,
+                    entityType: approvalEntityLabel(approval.entityType),
                     entityReference,
                     submitterName,
                     submittedAt: approval.createdAt,
@@ -182,7 +192,7 @@ class ApprovalService {
         }, {
             eventKey: 'workflow.approval.approved',
             variables: {
-                entityType: approval.entity_type,
+                entityType: approvalEntityLabel(approval.entity_type),
                 entityReference,
                 submitterName,
                 approverName,
@@ -205,7 +215,7 @@ class ApprovalService {
         }, {
             eventKey: 'workflow.approval.rejected',
             variables: {
-                entityType: approval.entity_type,
+                entityType: approvalEntityLabel(approval.entity_type),
                 entityReference,
                 submitterName,
                 approverName,
@@ -840,7 +850,7 @@ class ApprovalService {
                 return;
             throw app_error_1.AppError.forbidden('You do not have access to this approval');
         }
-        if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan && actor.permissions.includes('audit_plan:approve'))
+        if (entityType === workflow_enum_1.WorkflowEntityType.AuditPlan && actor.permissions.includes('plan:approve'))
             return;
         throw app_error_1.AppError.forbidden('You do not have access to this approval');
     }

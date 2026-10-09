@@ -133,6 +133,17 @@ class UserService {
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
+    async listAccessEntitlements() {
+        // System and service accounts are included on purpose: they are often the
+        // most privileged identities and must be reviewed like any other.
+        const users = (await prisma_client_1.prisma.user.findMany({
+            where: { deleted_at: null },
+            include: prisma_types_1.userWithRolesInclude,
+            orderBy: { email: 'asc' },
+        }));
+        const now = new Date();
+        return users.map((u) => (0, user_response_dto_1.mapUserToAccessEntitlement)(u, now));
+    }
     async listDirectory() {
         const users = await prisma_client_1.prisma.user.findMany({
             where: { deleted_at: null, is_active: true },

@@ -51,6 +51,7 @@ const directory_mapping_service_1 = require("../../../integration/service/implem
 const imoc_ticket_service_1 = require("../../../integration/imoc/service/implementation/imoc-ticket.service");
 const warehouse_service_1 = require("../../../warehouse/service/implementation/warehouse.service");
 const predictive_1 = require("../../../predictive");
+const system_audit_1 = require("../../../system-audit");
 /**
  * Job Key Naming Convention:
  *   BG:<MODULE>:<ACTION>:<FREQUENCY>
@@ -75,6 +76,7 @@ exports.JOB_KEYS = {
     WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY: 'BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY',
     PREDICTIVE_INSIGHTS_HOURLY: 'BG:PREDICTIVE:INSIGHTS:HOURLY',
     RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
+    SYSAUDIT_MONITORING_DAILY: 'BG:SYSAUDIT:MONITORING:DAILY',
 };
 class SchedulerService {
     jobs = [];
@@ -251,6 +253,24 @@ const registerAllJobs = () => {
         },
     });
     // BG:INTEGRATION:DIRECTORY:SYNC:DAILY — reconcile Azure AD group→role + deprovision
+    // BG:SYSAUDIT:MONITORING:DAILY — continuous monitoring. Re-runs the live,
+    // read-only system-audit analyses (IAMS access and security events, plus
+    // Entra ID / IMOC when connected). Idempotent: checks already run today are
+    // skipped. Runs after the 02:00 directory sync so Entra data is fresh.
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.SYSAUDIT_MONITORING_DAILY,
+        name: 'System Audit Continuous Monitoring',
+        description: 'Runs the continuous-monitoring checks (access, security events, Entra ID, IMOC) and notifies system-audit administrators of serious exceptions.',
+        cronExpression: '30 6 * * *',
+        handler: async () => {
+            const result = await system_audit_1.continuousMonitoringService.runScheduledChecks();
+            logger_util_1.logger.info('Continuous monitoring job completed', {
+                ran: result.ran.map((r) => r.check),
+                skipped: result.skipped.map((s) => s.check),
+                failed: result.failed,
+            });
+        },
+    });
     exports.schedulerService.register({
         key: exports.JOB_KEYS.INTEGRATION_DIRECTORY_SYNC_DAILY,
         name: 'Azure AD Directory Sync',
@@ -473,6 +493,7 @@ const registerAllJobs = () => {
                     engagement: {
                         select: {
                             reference_number: true,
+                            status: true,
                             lead_auditor: {
                                 select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
                             },
@@ -488,7 +509,11 @@ const registerAllJobs = () => {
                 const daysOverdue = Math.ceil((now.getTime() - finding.due_date.getTime()) / 86_400_000);
                 const daysRemaining = Math.max(0, Math.ceil((finding.due_date.getTime() - now.getTime()) / 86_400_000));
                 const statusLabel = isOverdue ? `overdue by ${daysOverdue} day(s)` : `due in ${daysRemaining} day(s)`;
-                const recipients = [finding.auditee, finding.engagement.lead_auditor];
+                // Findings are internal until the report is issued, so the auditee isn't chased before then.
+                const reportIssued = ['reported', 'closed'].includes(finding.engagement.status);
+                const recipients = reportIssued
+                    ? [finding.auditee, finding.engagement.lead_auditor]
+                    : [finding.engagement.lead_auditor];
                 for (const recipient of recipients) {
                     const recipientName = recipient.display_name ?? `${recipient.first_name} ${recipient.last_name}`.trim();
                     const findingVariables = {
@@ -619,10 +644,10 @@ const registerAllJobs = () => {
     exports.schedulerService.register({
         key: exports.JOB_KEYS.RETENTION_PURGE_WEEKLY,
         name: 'Data Retention Purge',
-        description: 'Hard-deletes audit logs, notifications, email logs, and consumed auth tokens older than the configured NDPR retention periods (system_config: data_retention).',
+        description: 'Hard-deletes audit logs, notifications, email logs, consumed auth tokens, and persisted system exceptions older than the configured NDPR retention periods (system_config: data_retention).',
         cronExpression: '0 4 * * 0', // Every Sunday at 04:00
         handler: async () => {
-            const defaults = { auditLogDays: 2555, notificationDays: 365, emailLogDays: 365, authTokenDays: 90 };
+            const defaults = { auditLogDays: 2555, notificationDays: 365, emailLogDays: 365, authTokenDays: 90, systemLogDays: 180 };
             let retention = defaults;
             const cfg = await prisma_client_1.prisma.system_Config.findUnique({
                 where: { key: 'data_retention' },
@@ -666,6 +691,11 @@ const registerAllJobs = () => {
                 })).count;
                 purged.mfaEmailOtps = (await prisma_client_1.prisma.mfa_Email_Otp.deleteMany({
                     where: { created_at: { lt: cutoff(retention.authTokenDays) } },
+                })).count;
+            }
+            if (retention.systemLogDays > 0) {
+                purged.systemLogs = (await prisma_client_1.prisma.system_Log.deleteMany({
+                    where: { created_at: { lt: cutoff(retention.systemLogDays) } },
                 })).count;
             }
             logger_util_1.logger.info('Data retention purge completed', { retention, purged });

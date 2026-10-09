@@ -23,6 +23,7 @@ import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { formatRelative } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
+import { useSession } from '@/components/providers/AuthProvider';
 import type {
   AuditChecklistItem,
   AuditEngagementDetail,
@@ -167,6 +168,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
   const canApproveWP = usePermission('working_paper:approve');
   const canRejectWP = usePermission('working_paper:reject');
   const canSample = usePermission('evidence:upload');
+  const session = useSession();
 
   const [createOpen, setCreateOpen] = useState(false);
   const [importOpen, setImportOpen] = useState(false);
@@ -272,13 +274,19 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                         <> · Reviewer {wp.reviewerName}</>
                       )}
                     </p>
+                    {wp.status === 'rejected' && (wp.reviewComment ?? wp.rejectionReason) && (
+                      <p className="mt-2 rounded-md border border-red-200 bg-red-50 px-3 py-1.5 text-xs text-red-800">
+                        <span className="font-semibold">Rejected:</span>{' '}
+                        {wp.reviewComment ?? wp.rejectionReason}
+                      </p>
+                    )}
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setEditing(wp)}>
                       View
                     </Button>
                     <WorkingPaperExportButton paperId={wp.id} />
-                    {canSubmitWP && (wp.status === 'draft' || wp.status === 'rejected') && (
+                    {canSubmitWP && wp.createdById === session.id && (wp.status === 'draft' || wp.status === 'rejected') && (
                       <Button
                         size="sm"
                         variant="secondary"
@@ -288,7 +296,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                         Submit
                       </Button>
                     )}
-                    {wp.status === 'submitted' && (
+                    {wp.status === 'submitted' && wp.createdById !== session.id && (
                       <>
                         {canApproveWP && (
                           <Button
@@ -1046,7 +1054,7 @@ const ViewPaperSlideOver = ({
       onClose={onClose}
       dirty={isDirty}
       title={paper?.title ?? 'Working paper'}
-      description={paper ? `Version ${paper.version} · ${paper.status}` : undefined}
+      description={paper ? `Version ${paper.version ?? paper.versionNumber ?? 1} · ${paper.status}` : undefined}
       width="xl"
       footer={
         editable ? (

@@ -32,12 +32,12 @@ export const ApprovalChain = ({ entityType, entityId }: { entityType: string; en
   return (
     <ol className="space-y-1.5">
       {data.levels.map((lvl) => (
-        <li key={lvl.level} className="flex items-center gap-2 text-sm">
-          {statusIcon(lvl.status)}
-          <span className="font-medium text-text-primary">{peopleLabel(lvl)}</span>
-          {lvl.status === 'pending' && <span className="text-[11px] text-primary">· awaiting</span>}
-          {lvl.status === 'approved' && <span className="text-[11px] text-emerald-600">· signed</span>}
-          {lvl.status === 'rejected' && <span className="text-[11px] text-danger">· rejected</span>}
+        <li key={lvl.level} className="flex items-start gap-2 text-sm">
+          <span className="mt-0.5 shrink-0">{statusIcon(lvl.status)}</span>
+          <span className="min-w-0 font-medium text-text-primary">{peopleLabel(lvl)}</span>
+          {lvl.status === 'pending' && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[11px] text-primary">· awaiting</span>}
+          {lvl.status === 'approved' && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[11px] text-emerald-600">· signed</span>}
+          {lvl.status === 'rejected' && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[11px] text-danger">· rejected</span>}
         </li>
       ))}
     </ol>

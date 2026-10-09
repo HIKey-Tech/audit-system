@@ -90,7 +90,7 @@ export async function GET(req: NextRequest): Promise<NextResponse> {
   };
 
   const res = NextResponse.redirect(new URL('/dashboard', baseUrl()));
-  res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions(expiresIn || 60 * 60));
+  res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions());
   res.cookies.set(REFRESH_COOKIE, refreshToken, refreshCookieOptions());
   res.cookies.set(USER_COOKIE, encodeUserCookie(profile), userCookieOptions());
   return res;

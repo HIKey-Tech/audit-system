@@ -40,7 +40,7 @@ export default function AccessReviewsPage(): JSX.Element {
     onSuccess: (run) => {
       toast.success(`${run.reference}: ${run.recordCount} accounts reviewed, ${run.exceptionCount} exception(s)`);
       qc.invalidateQueries({ queryKey: ['system-audit'] });
-      router.push(`/system-audit/analytics/${run.id}`);
+      router.push(`/system-audit/analytics/${run.id}?from=access-reviews`);
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'The access review could not run'),
   });
@@ -130,7 +130,7 @@ export default function AccessReviewsPage(): JSX.Element {
         isLoading={runs.isLoading}
         isError={runs.isError}
         onRetry={() => runs.refetch()}
-        onRowClick={(r) => router.push(`/system-audit/analytics/${r.id}`)}
+        onRowClick={(r) => router.push(`/system-audit/analytics/${r.id}?from=access-reviews`)}
         emptyState={<EmptyState icon={<KeyRound className="h-4 w-4" />} title="No access reviews yet" description="Start one above." />}
         pagination={runs.data ? { page: runs.data.meta.page, pageSize: runs.data.meta.pageSize, total: runs.data.meta.total, onPageChange: setPage } : undefined}
       />

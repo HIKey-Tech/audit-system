@@ -72,6 +72,13 @@ class EngagementService {
         if (!universe)
             throw app_error_1.AppError.badRequest('Universe entity does not exist or has been deleted');
     }
+    // Segregation of duties: the people who run, review and are audited must differ.
+    _assertDistinctRoles(leadAuditorId, auditManagerId, auditeeId) {
+        const ids = [leadAuditorId, auditManagerId, auditeeId].filter((v) => Boolean(v));
+        if (new Set(ids).size !== ids.length) {
+            throw app_error_1.AppError.badRequest('Lead auditor, audit manager and auditee must be three different people');
+        }
+    }
     async _assertAuditeeActive(auditeeId) {
         if (!auditeeId)
             return;
@@ -130,6 +137,7 @@ class EngagementService {
             throw app_error_1.AppError.badRequest('Plan must be approved before creating an engagement');
         if (planItem.engagement_created)
             throw app_error_1.AppError.conflict('An engagement has already been created from this plan item');
+        this._assertDistinctRoles(dto.leadAuditorId, dto.auditManagerId, dto.auditeeId);
         await this._assertManagerCanApprove(dto.auditManagerId);
         await this._assertLeadAuditorEligible(dto.leadAuditorId);
         await this._assertAuditeeActive(dto.auditeeId);
@@ -170,6 +178,7 @@ class EngagementService {
         if (!dto.adhocReason)
             throw app_error_1.AppError.badRequest('Ad-hoc reason is required');
         await this._assertUniverseActive(dto.universeId);
+        this._assertDistinctRoles(dto.leadAuditorId, dto.auditManagerId, dto.auditeeId);
         await this._assertManagerCanApprove(dto.auditManagerId);
         await this._assertLeadAuditorEligible(dto.leadAuditorId);
         await this._assertAuditeeActive(dto.auditeeId);
@@ -203,10 +212,15 @@ class EngagementService {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'engagement:update');
         const existing = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id, deleted_at: null },
-            select: { audit_manager_id: true },
+            select: {
+                audit_manager_id: true, title: true, status: true, priority: true,
+                lead_auditor_id: true, auditee_id: true, planned_start_date: true,
+                planned_end_date: true, sla_deadline: true, planned_hours: true,
+            },
         });
         if (!existing)
             throw app_error_1.AppError.notFound('Audit engagement');
+        this._assertDistinctRoles(dto.leadAuditorId ?? existing.lead_auditor_id, dto.auditManagerId ?? existing.audit_manager_id, dto.auditeeId ?? existing.auditee_id);
         if (dto.auditManagerId !== undefined)
             await this._assertManagerCanApprove(dto.auditManagerId);
         if (dto.leadAuditorId !== undefined)
@@ -238,7 +252,7 @@ class EngagementService {
             return updated;
         });
         logger_util_1.logger.info('Audit engagement updated', { engagementId: id, actorId: actor.id, managerChanged });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.update', module: 'audit', entityType: 'audit_engagement', entityId: id, newValues: (0, engagement_response_dto_1.mapEngagementToResponse)(engagement) });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.update', module: 'audit', entityType: 'audit_engagement', entityId: id, oldValues: existing, newValues: (0, engagement_response_dto_1.mapEngagementToResponse)(engagement) });
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement);
     }
     async updateStatus(id, newStatus, actor) {
@@ -285,7 +299,7 @@ class EngagementService {
             await this.checklistService.populateChecklists(id, actor.id);
         }
         logger_util_1.logger.info('Audit engagement status updated', { engagementId: id, status: newStatus, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, newValues: { status: newStatus } });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, oldValues: { status: engagement.status }, newValues: { status: newStatus } });
         return this._withMetrics(updated, actor);
     }
     /**

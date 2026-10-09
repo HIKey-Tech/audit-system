@@ -32,7 +32,7 @@ export default function UniverseDetailPage(): JSX.Element {
   const { canManageAuditProgramme: canWrite } = usePermissions();
   const [editOpen, setEditOpen] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['universe', id],
     queryFn: () => universeApi.get(id),
     enabled: Boolean(id),
@@ -46,7 +46,7 @@ export default function UniverseDetailPage(): JSX.Element {
           breadcrumbs={[{ label: 'Audit Universe', href: '/audit/universe' }, { label: 'Details' }]}
         />
         <Card>
-          <ErrorState onRetry={() => refetch()} />
+          <ErrorState error={error} onRetry={() => refetch()} />
         </Card>
       </div>
     );

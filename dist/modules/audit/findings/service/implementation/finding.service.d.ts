@@ -1,4 +1,5 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
+import { ExportFormat, TabularExportFile } from '../../../../../shared/utils/tabular-export.util';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus } from '../../../domain/enum/audit.enum';
@@ -17,6 +18,7 @@ export declare class FindingService implements IFindingService {
         findings: FindingResponseDto[];
         meta: PaginationMeta;
     }>;
+    exportFindings(query: FindingQueryDto, format: ExportFormat, actor: ActorContext): Promise<TabularExportFile>;
     listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]>;
     private _buildFindingWhere;
     /** Matches findings where the given user is the primary auditee or a co-responder. */

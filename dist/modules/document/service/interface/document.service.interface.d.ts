@@ -29,6 +29,14 @@ export interface IDocumentService {
     /** Returns a document's entity_type (used to exempt signature images from the read gate). */
     getEntityType(documentId: string): Promise<string | null>;
     /**
+     * True when the actor may read this document's file even without the generic
+     * `document:read` permission: signature images, files they uploaded themselves,
+     * signed copies of approvals they take part in, and engagement material for
+     * oversight roles (CAE / Director). The per-document ACL (`assertCanUserAccess`)
+     * must still run afterwards.
+     */
+    canReadWithoutDocumentPermission(documentId: string, actor: DocumentAccessActor): Promise<boolean>;
+    /**
      * List documents owned by `ownerId` only. The standalone Documents page is
      * personal storage — a user must never see another user's uploads here.
      * Entity-attached documents are surfaced separately via {@link listByEntity}.

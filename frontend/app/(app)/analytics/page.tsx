@@ -86,7 +86,7 @@ export default function AnalyticsPage(): JSX.Element {
     return (
       <div>
         <PageHeader title="Analytics" subtitle="Audit lifecycle, findings, reporting, follow-up, and risk coverage." />
-        <ErrorState onRetry={() => query.refetch()} />
+        <ErrorState error={query.error} onRetry={() => query.refetch()} />
       </div>
     );
   }

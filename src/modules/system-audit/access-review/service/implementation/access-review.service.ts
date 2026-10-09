@@ -70,6 +70,26 @@ export class AccessReviewService implements IAccessReviewService {
     if (found !== ids.length) throw AppError.badRequest('Every account must belong to this access review');
 
     const resetting = dto.decision === AccessDecision.Pending;
+    if (dto.decision === AccessDecision.Appropriate && (dto.note?.trim().length ?? 0) < 5) {
+      // Accepting privileged or conflicting access is a judgement call and must be explained.
+      const needsJustification = await prisma.access_Review_Item.count({
+        where: {
+          id: { in: ids },
+          run_id: runId,
+          OR: [{ is_privileged: true }, { flags: { contains: 'SOD_CONFLICT' } }],
+        },
+      });
+      if (needsJustification > 0) {
+        throw AppError.badRequest(
+          `A justification is required to mark ${needsJustification} privileged or conflicting account(s) as appropriate`,
+        );
+      }
+    }
+    const previous = await prisma.access_Review_Item.groupBy({
+      by: ['decision'],
+      where: { id: { in: ids }, run_id: runId },
+      _count: { _all: true },
+    });
     const result = await prisma.access_Review_Item.updateMany({
       where: { id: { in: ids }, run_id: runId },
       data: {
@@ -87,7 +107,8 @@ export class AccessReviewService implements IAccessReviewService {
       module: 'system-audit',
       entityType: 'system_audit_run',
       entityId: runId,
-      newValues: { itemIds: ids, decision: dto.decision, note: dto.note },
+      oldValues: { decisions: Object.fromEntries(previous.map((row) => [row.decision, row._count._all])) },
+      newValues: { count: ids.length, decision: dto.decision, note: dto.note, itemIds: ids },
     });
     return { updated: result.count };
   }

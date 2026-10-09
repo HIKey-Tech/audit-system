@@ -198,6 +198,10 @@ export class PlanningService implements IPlanningService {
       throw AppError.badRequest('At least one field is required');
     }
     await this._assertDraftPlan(planId);
+    const before = await prisma.audit_Plan.findUnique({
+      where: { id: planId },
+      select: { title: true, year: true, description: true },
+    });
 
     const updated = await prisma.audit_Plan.update({
       where: { id: planId },
@@ -216,6 +220,7 @@ export class PlanningService implements IPlanningService {
       module: 'audit',
       entityType: 'audit_plan',
       entityId: planId,
+      oldValues: before ?? undefined,
       newValues: dto,
     });
 
@@ -388,7 +393,10 @@ export class PlanningService implements IPlanningService {
       prisma.audit_Plan.count({ where }),
       prisma.audit_Plan.findMany({
         where,
-        include: { _count: { select: { items: true } } },
+        include: {
+          _count: { select: { items: true } },
+          approved_by: { select: { display_name: true, first_name: true, last_name: true } },
+        },
         orderBy: { [query.sortBy]: query.sortOrder },
         skip,
         take,

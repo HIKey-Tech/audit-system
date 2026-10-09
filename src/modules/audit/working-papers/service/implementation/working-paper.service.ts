@@ -74,7 +74,7 @@ export class WorkingPaperService implements IWorkingPaperService {
 
     logger.info('Audit working paper created', { workingPaperId: paper.id, engagementId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.create', module: 'audit', entityType: 'audit_working_paper', entityId: paper.id });
-    return mapWorkingPaperToResponse(paper);
+    return this._decorate(mapWorkingPaperToResponse(paper));
   }
 
   async previewWorkingPaperImport(
@@ -176,8 +176,8 @@ export class WorkingPaperService implements IWorkingPaperService {
     });
 
     logger.info('Audit working paper updated', { workingPaperId: id, actorId: actor.id });
-    auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.update', module: 'audit', entityType: 'audit_working_paper', entityId: id });
-    return mapWorkingPaperToResponse(updated);
+    auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.update', module: 'audit', entityType: 'audit_working_paper', entityId: id, oldValues: { title: paper.title, status: paper.status, versionNumber: paper.version_number }, newValues: { title: updated.title, status: updated.status, versionNumber: updated.version_number } });
+    return this._decorate(mapWorkingPaperToResponse(updated));
   }
 
   async submitWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
@@ -204,7 +204,7 @@ export class WorkingPaperService implements IWorkingPaperService {
 
     logger.info('Audit working paper submitted', { workingPaperId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.submit', module: 'audit', entityType: 'audit_working_paper', entityId: id });
-    return mapWorkingPaperToResponse(updated);
+    return this._decorate(mapWorkingPaperToResponse(updated));
   }
 
   async approveWorkingPaper(id: string, actor: ActorContext, edits?: { content?: string }): Promise<WorkingPaperResponseDto> {
@@ -220,7 +220,7 @@ export class WorkingPaperService implements IWorkingPaperService {
 
     logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id, edited: !!edits?.content });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.approve', module: 'audit', entityType: 'audit_working_paper', entityId: id });
-    return mapWorkingPaperToResponse(updated);
+    return this._decorate(mapWorkingPaperToResponse(updated));
   }
 
   // ──────────── Review comments (reviewer ↔ preparer back-and-forth) ────────────
@@ -300,7 +300,32 @@ export class WorkingPaperService implements IWorkingPaperService {
 
     logger.info('Audit working paper rejected', { workingPaperId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.reject', module: 'audit', entityType: 'audit_working_paper', entityId: id, newValues: { reason } });
-    return mapWorkingPaperToResponse(updated);
+    return this._decorate(mapWorkingPaperToResponse(updated));
+  }
+
+  /** Fills in the display names of the preparer and reviewer (the mapper only has ids). */
+  private async _decorateMany(dtos: WorkingPaperResponseDto[]): Promise<WorkingPaperResponseDto[]> {
+    const ids = Array.from(
+      new Set(dtos.flatMap((d) => [d.createdById, d.reviewedById]).filter((v): v is string => !!v)),
+    );
+    if (ids.length === 0) return dtos;
+    const users = await prisma.user.findMany({
+      where: { id: { in: ids } },
+      select: { id: true, display_name: true, first_name: true, last_name: true, email: true },
+    });
+    const names = new Map(
+      users.map((u) => [u.id, u.display_name?.trim() || `${u.first_name} ${u.last_name}`.trim() || u.email]),
+    );
+    return dtos.map((d) => ({
+      ...d,
+      createdByName: names.get(d.createdById) ?? '',
+      reviewerName: d.reviewedById ? (names.get(d.reviewedById) ?? null) : null,
+    }));
+  }
+
+  private async _decorate(dto: WorkingPaperResponseDto): Promise<WorkingPaperResponseDto> {
+    const [decorated] = await this._decorateMany([dto]);
+    return decorated;
   }
 
   async getWorkingPaperById(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
@@ -310,7 +335,7 @@ export class WorkingPaperService implements IWorkingPaperService {
     });
     if (!paper) throw AppError.notFound('Audit working paper');
     await assertCanViewInternalArtifacts(paper.engagement_id, actor);
-    return mapWorkingPaperToResponse(paper);
+    return this._decorate(mapWorkingPaperToResponse(paper));
   }
 
   async listWorkingPapers(engagementId: string, actor: ActorContext): Promise<WorkingPaperResponseDto[]> {
@@ -319,7 +344,7 @@ export class WorkingPaperService implements IWorkingPaperService {
       where: { engagement_id: engagementId, deleted_at: null },
       orderBy: { updated_at: 'desc' },
     });
-    return papers.map(mapWorkingPaperToResponse);
+    return this._decorateMany(papers.map(mapWorkingPaperToResponse));
   }
 
   async exportWorkingPaper(id: string, format: WorkingPaperExportFormat): Promise<ExportedAuditFile> {

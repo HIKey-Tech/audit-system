@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/Button';
 import { Avatar } from '@/components/ui/Avatar';
 import { Badge } from '@/components/ui/Badge';
 import { Select, Input } from '@/components/ui/Input';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { workflowApi } from '@/lib/api/workflow';
 import { initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
@@ -26,6 +27,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
   const canCreate = usePermission('assignment:create');
   const canDelete = usePermission('assignment:delete');
 
+  const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [roleToAssign, setRoleToAssign] = useState<Record<string, 'lead_auditor' | 'supporting_auditor'>>({});
 
   // Server-side candidate search: the backend filters + caps the list, so we don't
@@ -78,6 +80,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
   const remove = useMutation({
     mutationFn: (id: string) => workflowApi.removeAssignment(id),
     onSuccess: () => {
+      setRemoveTarget(null);
       toast.success('Assignment removed');
       qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'assignments'] });
       qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'candidates'] });
@@ -133,8 +136,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                         size="sm"
                         className="text-danger hover:text-red-700 hover:bg-red-50 border border-red-100 hover:border-red-200"
                         leftIcon={<Trash2 className="h-3.5 w-3.5" />}
-                        onClick={() => remove.mutate(a.id)}
-                        isLoading={remove.isPending}
+                        onClick={() => setRemoveTarget({ id: a.id, name: a.userName })}
                       >
                         Remove
                       </Button>
@@ -199,6 +201,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                         <h4 className="text-xs font-bold text-text-primary truncate" title={c.displayName}>
                           {c.displayName}
                         </h4>
+                        <p className="text-[11px] text-text-muted truncate" title={c.email}>{c.email}</p>
                         {c.jobTitle && (
                           <p className="text-[11px] text-text-secondary flex items-center gap-1 mt-0.5">
                             <Briefcase className="h-3 w-3 shrink-0" />
@@ -301,6 +304,15 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
           )}
         </div>
       </div>
+      <ConfirmDialog
+        open={Boolean(removeTarget)}
+        title="Remove from team?"
+        description={`${removeTarget?.name ?? 'This person'} will lose access to this engagement and be notified.`}
+        confirmLabel="Remove"
+        isLoading={remove.isPending}
+        onConfirm={() => removeTarget && remove.mutate(removeTarget.id)}
+        onCancel={() => setRemoveTarget(null)}
+      />
     </SlideOver>
   );
 };

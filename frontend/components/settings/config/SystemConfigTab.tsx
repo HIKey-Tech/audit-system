@@ -4,7 +4,6 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Building2,
-  Timer,
   FileText,
   Check,
   RefreshCw,
@@ -58,15 +57,6 @@ const GROUPS: GroupDef[] = [
     ],
   },
   {
-    title: 'Service levels',
-    subtitle: 'Default timeframes applied to new audit work.',
-    icon: <Timer className="h-4 w-4" />,
-    fields: [
-      { key: 'default_sla_days', label: 'Default engagement turnaround', type: 'number', suffix: 'days', help: 'Target time to complete an engagement.' },
-      { key: 'finding_due_days', label: 'Default finding due window', type: 'number', suffix: 'days', help: 'Time given to remediate a finding.' },
-    ],
-  },
-  {
     title: 'Reviews',
     subtitle: 'Wording printed on generated audit reviews.',
     icon: <FileText className="h-4 w-4" />,
@@ -78,6 +68,9 @@ const GROUPS: GroupDef[] = [
 
 // Structured settings that live in the Audit Customization tab — never shown as raw JSON here.
 const STRUCTURED_KEYS = new Set([
+  // Legacy standalone SLA numbers — superseded by `audit_sla_rules` (Audit Customization).
+  'default_sla_days',
+  'finding_due_days',
   'audit_lifecycle_rules',
   'audit_sla_rules',
   'dashboard_kpi_visibility',
@@ -133,7 +126,7 @@ export const SystemConfigTab = (): JSX.Element => {
     );
   }
   if (query.isError) {
-    return <ErrorState onRetry={() => query.refetch()} />;
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   }
 
   // Any scalar key the backend exposes that we don't explicitly group — show it so

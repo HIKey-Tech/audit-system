@@ -9,10 +9,16 @@ export interface WorkingPaperResponseDto {
   title: string;
   content: string;
   versionNumber: number;
+  /** Alias of versionNumber, read by the web client. */
+  version: number;
   status: string;
   createdById: string;
+  createdByName: string;
   reviewedById: string | null;
+  reviewerName: string | null;
   rejectionReason: string | null;
+  /** The reviewer's rejection reason, shown to the preparer while the paper is rejected. */
+  reviewComment: string | null;
   importMetadata: unknown | null;
   createdAt: string;
   updatedAt: string;
@@ -68,10 +74,14 @@ export const mapWorkingPaperToResponse = (paper: {
   title: paper.title,
   content: paper.content,
   versionNumber: paper.version_number,
+  version: paper.version_number,
   status: paper.status,
   createdById: paper.created_by_id,
+  createdByName: '',
   reviewedById: paper.reviewed_by_id,
+  reviewerName: null,
   rejectionReason: paper.rejection_reason,
+  reviewComment: paper.rejection_reason,
   importMetadata: paper.import_metadata ? JSON.parse(paper.import_metadata) : null,
   createdAt: paper.created_at.toISOString(),
   updatedAt: paper.updated_at.toISOString(),

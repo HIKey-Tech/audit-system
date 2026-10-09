@@ -43,7 +43,7 @@ export default function PlanDetailPage(): JSX.Element {
   const [rejectReason, setRejectReason] = useState('');
   const [approveOpen, setApproveOpen] = useState(false);
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['plans', id],
     queryFn: () => plansApi.get(id),
     enabled: Boolean(id),
@@ -54,6 +54,7 @@ export default function PlanDetailPage(): JSX.Element {
     onSuccess: () => {
       toast.success('Programme submitted for approval');
       qc.invalidateQueries({ queryKey: ['plans', id] });
+      qc.invalidateQueries({ queryKey: ['approval-chain'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
@@ -63,6 +64,7 @@ export default function PlanDetailPage(): JSX.Element {
     onSuccess: () => {
       toast.success('Programme rejected');
       qc.invalidateQueries({ queryKey: ['plans', id] });
+      qc.invalidateQueries({ queryKey: ['approval-chain'] });
       setRejectOpen(false);
       setRejectReason('');
     },
@@ -74,7 +76,7 @@ export default function PlanDetailPage(): JSX.Element {
       <div>
         <PageHeader title="Programme" breadcrumbs={[{ label: 'Audit Programme', href: '/audit/plans' }]} />
         <Card>
-          <ErrorState onRetry={() => refetch()} />
+          <ErrorState error={error} onRetry={() => refetch()} />
         </Card>
       </div>
     );
@@ -219,6 +221,7 @@ export default function PlanDetailPage(): JSX.Element {
             onDone={() => {
               setApproveOpen(false);
               qc.invalidateQueries({ queryKey: ['plans', id] });
+      qc.invalidateQueries({ queryKey: ['approval-chain'] });
             }}
           />
         </div>

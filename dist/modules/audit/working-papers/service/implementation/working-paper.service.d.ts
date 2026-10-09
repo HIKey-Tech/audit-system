@@ -21,6 +21,9 @@ export declare class WorkingPaperService implements IWorkingPaperService {
     listComments(workingPaperId: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto[]>;
     resolveComment(commentId: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto>;
     rejectWorkingPaper(id: string, reason: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
+    /** Fills in the display names of the preparer and reviewer (the mapper only has ids). */
+    private _decorateMany;
+    private _decorate;
     getWorkingPaperById(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto>;
     listWorkingPapers(engagementId: string, actor: ActorContext): Promise<WorkingPaperResponseDto[]>;
     exportWorkingPaper(id: string, format: WorkingPaperExportFormat): Promise<ExportedAuditFile>;

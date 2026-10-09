@@ -408,13 +408,17 @@ export class DocumentController {
 
   private async _getFileById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      // Signature images are the one document class shown across the whole
-      // approval chain, so they are exempt from the generic document:read gate;
-      // everything else still requires it. The per-document ACL (assertCanUserAccess)
-      // runs for both.
-      const entityType = await this.documentService.getEntityType(req.params.id);
-      if (entityType !== 'user_signature' && !req.user!.isSuperAdmin && !req.user!.permissions.includes('document:read')) {
-        throw AppError.forbidden('Insufficient permissions');
+      // Holders of document:read may read any document they pass the per-document
+      // ACL for. Users without it (CAE, Director, Auditee…) may still read files
+      // that were created for them: signature images, their own uploads, signed
+      // copies of approvals they take part in, and (oversight roles) engagement
+      // material. The per-document ACL below runs for everyone.
+      if (!req.user!.isSuperAdmin && !req.user!.permissions.includes('document:read')) {
+        const allowed = await this.documentService.canReadWithoutDocumentPermission(
+          req.params.id,
+          req.user!,
+        );
+        if (!allowed) throw AppError.forbidden('Insufficient permissions');
       }
       await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       const file = await this.documentService.getFileById(req.params.id);

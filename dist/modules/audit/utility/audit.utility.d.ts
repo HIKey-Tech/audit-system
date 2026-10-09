@@ -27,6 +27,8 @@ export declare const parseReferenceSequence: (referenceNumber: string, year: num
 export declare const ENGAGEMENT_TRANSITIONS: Record<EngagementStatus, readonly EngagementStatus[]>;
 export declare const FINDING_TRANSITIONS: Record<FindingStatus, readonly FindingStatus[]>;
 export declare const PLAN_TRANSITIONS: Record<PlanStatus, readonly PlanStatus[]>;
+/** Plans whose content may be changed and which may be (re)submitted for approval. */
+export declare const PLAN_EDITABLE_STATUSES: readonly PlanStatus[];
 export declare const WP_REVIEWABLE_STATUSES: readonly WorkingPaperStatus[];
 export declare const REPORT_EDITABLE_STATUSES: readonly ReportStatus[];
 export declare const CONTROL_SETS: Record<AuditType, Array<{

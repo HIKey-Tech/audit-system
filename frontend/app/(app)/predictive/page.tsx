@@ -56,7 +56,7 @@ export default function PredictivePage(): JSX.Element | null {
     return (
       <div>
         <PageHeader title="Audit intelligence" subtitle="Explainable live-data early warnings and next best actions." />
-        <ErrorState onRetry={() => overview.refetch()} />
+        <ErrorState error={overview.error} onRetry={() => overview.refetch()} />
       </div>
     );
   }

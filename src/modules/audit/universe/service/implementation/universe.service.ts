@@ -51,6 +51,7 @@ export class UniverseService implements IUniverseService {
   async updateEntity(id: string, dto: UpdateUniverseRequestDto, actor: ActorContext): Promise<UniverseResponseDto> {
     assertHasPermission(actor.permissions, 'universe:update');
     await this._assertEntityExists(id);
+    const before = await prisma.audit_Universe.findUnique({ where: { id } });
 
     const entity = await prisma.audit_Universe.update({
       where: { id },
@@ -77,6 +78,7 @@ export class UniverseService implements IUniverseService {
       module: 'audit',
       entityType: 'audit_universe',
       entityId: id,
+      oldValues: before ? mapUniverseToResponse(before) : undefined,
       newValues: mapUniverseToResponse(entity),
     });
 

@@ -1,5 +1,5 @@
 import { IGraphDirectoryClient } from '../client/graph.client';
-import { IDirectoryMappingService, DirectoryGroupMapping, CreateMappingInput, UpdateMappingInput } from '../interface/directory.service.interface';
+import { IDirectoryMappingService, DirectoryAccount, DirectoryGroupMapping, CreateMappingInput, UpdateMappingInput } from '../interface/directory.service.interface';
 export declare class DirectoryMappingService implements IDirectoryMappingService {
     private readonly graph;
     constructor(graph?: IGraphDirectoryClient);
@@ -9,6 +9,7 @@ export declare class DirectoryMappingService implements IDirectoryMappingService
     listMappings(): Promise<DirectoryGroupMapping[]>;
     resolveRolesForGroups(groupIds: string[]): Promise<string[]>;
     applyAdRolesToUser(userId: string, groupIds: string[]): Promise<void>;
+    listDirectoryAccounts(): Promise<DirectoryAccount[]>;
     runFullDirectorySync(): Promise<{
         usersProcessed: number;
         deactivated: number;

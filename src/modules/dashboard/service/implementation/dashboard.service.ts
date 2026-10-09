@@ -138,12 +138,7 @@ export class DashboardService {
     const restrictToLead = isRestrictedAuditor(actor.permissions);
     const engagementWhereBase: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
-      ...(restrictToLead ? {
-        OR: [
-          { lead_auditor_id: actor.id },
-          { workflow_assignments: { some: { user_id: actor.id } } },
-        ],
-      } : {}),
+      ...(restrictToLead ? this._memberEngagementScope(actor.id) : {}),
     };
 
     const [
@@ -614,7 +609,9 @@ export class DashboardService {
         { auditee_id: userId },
         { workflow_assignments: { some: { user_id: userId } } },
       ],
-      status: { notIn: ENGAGEMENT_CLOSED_LIKE_STATUSES as unknown as string[] },
+      // A "reported" (review issued) engagement is still active work: the auditee
+      // has remediation to do and the audit team has follow-up to verify.
+      status: { not: 'closed' },
     };
 
     const [
@@ -639,6 +636,8 @@ export class DashboardService {
       prisma.audit_Engagement.findMany({
         where: {
           ...myActiveEngagementWhere,
+          // Overdue is about unfinished fieldwork/review, not engagements already reported.
+          status: { notIn: ENGAGEMENT_CLOSED_LIKE_STATUSES as unknown as string[] },
           sla_deadline: { lt: now },
         },
         orderBy: { sla_deadline: 'asc' },
@@ -889,6 +888,17 @@ export class DashboardService {
     );
   }
 
+  // Engagements a scoped user is part of: leading, assigned to, or the auditee on.
+  private _memberEngagementScope(userId: string): Prisma.Audit_EngagementWhereInput {
+    return {
+      OR: [
+        { lead_auditor_id: userId },
+        { auditee_id: userId },
+        { workflow_assignments: { some: { user_id: userId } } },
+      ],
+    };
+  }
+
   private async _getLifecycleAnalytics(
     actor: DashboardActorContext,
   ): Promise<AuditAnalyticsResponseDto['lifecycle']> {
@@ -896,7 +906,7 @@ export class DashboardService {
     const restrictToLead = isRestrictedAuditor(actor.permissions);
     const where: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
-      ...(restrictToLead ? { lead_auditor_id: actor.id } : {}),
+      ...(restrictToLead ? this._memberEngagementScope(actor.id) : {}),
     };
 
     const engagements = await prisma.audit_Engagement.findMany({

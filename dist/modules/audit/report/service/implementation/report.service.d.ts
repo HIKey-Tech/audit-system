@@ -30,6 +30,8 @@ export declare class ReportService implements IReportService {
         meta: PaginationMeta;
     }>;
     exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile>;
+    /** One in-app + email summary per responder of the findings assigned to them on this engagement. */
+    private _notifyFindingResponders;
     private _getReport;
     private _assertSubmittedReportHasNoApproval;
 }

@@ -15,6 +15,7 @@ import { Table, type Column } from '@/components/ui/Table';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { documentsApi } from '@/lib/api/documents';
 import { formatDate } from '@/lib/utils/format';
+import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
 import type { DocumentDto } from '@/lib/types/domain';
 
@@ -23,6 +24,12 @@ const ENTITY_LABELS: Record<string, string> = {
   audit_working_paper: 'Working Paper',
   audit_finding: 'Finding',
   audit_evidence: 'Evidence',
+  audit_follow_up_evidence: 'Remediation evidence',
+  audit_report: 'Audit report',
+  workflow_request: 'Request attachment',
+  workflow_request_signed: 'Signed request',
+  workflow_approval_signed: 'Signed approval',
+  user_signature: 'Signature',
 };
 
 const extensionOf = (fileName: string): string => {
@@ -33,7 +40,7 @@ const extensionOf = (fileName: string): string => {
 
 const linkedToLabel = (entityType: string | null): string => {
   if (!entityType) return 'Standalone';
-  return ENTITY_LABELS[entityType] ?? entityType;
+  return ENTITY_LABELS[entityType] ?? humanizeStatus(entityType);
 };
 
 export default function DocumentsPage(): JSX.Element | null {
@@ -203,10 +210,9 @@ export default function DocumentsPage(): JSX.Element | null {
             }}
           >
             <option value="">All entity types</option>
-            <option value="audit_engagement">Engagement</option>
-            <option value="audit_working_paper">Working Paper</option>
-            <option value="audit_finding">Finding</option>
-            <option value="audit_evidence">Evidence</option>
+            {Object.entries(ENTITY_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
           </Select>
         </div>
       </Card>

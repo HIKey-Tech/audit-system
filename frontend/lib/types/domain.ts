@@ -474,6 +474,7 @@ export interface AuditWorkingPaper {
   reviewerName: string | null;
   reviewedAt: string | null;
   reviewComment: string | null;
+  rejectionReason?: string | null;
   importMetadata?: unknown | null;
   createdAt: string;
   updatedAt: string;

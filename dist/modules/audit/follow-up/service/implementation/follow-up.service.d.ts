@@ -23,6 +23,11 @@ export declare class FollowUpService implements IFollowUpService {
     private _getFinding;
     /** A finding may be acted on by its primary auditee or any co-responder. */
     private _assertResponder;
+    /**
+     * Auditee actions (response, remediation evidence) are only valid once the report has been
+     * issued and while the finding is still being worked — not on closed/verified findings.
+     */
+    private _assertAcceptsAuditeeAction;
     /** Primary auditee plus co-responders, de-duplicated by user id. */
     private _responders;
     /**

@@ -1,7 +1,8 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.FindingQuerySchema = exports.UpdateFindingStatusRequestSchema = exports.UpdateFindingRequestSchema = exports.CreateFindingRequestSchema = void 0;
+exports.FindingExportQuerySchema = exports.FindingQuerySchema = exports.UpdateFindingStatusRequestSchema = exports.UpdateFindingRequestSchema = exports.CreateFindingRequestSchema = void 0;
 const zod_1 = require("zod");
+const tabular_export_util_1 = require("../../../../../shared/utils/tabular-export.util");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 exports.CreateFindingRequestSchema = zod_1.z.object({
     workingPaperId: zod_1.z.string().uuid().optional(),
@@ -51,5 +52,8 @@ exports.FindingQuerySchema = zod_1.z.object({
     universeId: zod_1.z.string().uuid().optional(),
     sortBy: zod_1.z.enum(['created_at', 'updated_at', 'due_date', 'severity', 'status']).default('created_at'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
+});
+exports.FindingExportQuerySchema = exports.FindingQuerySchema.omit({ page: true, pageSize: true }).extend({
+    format: tabular_export_util_1.ExportFormatSchema,
 });
 //# sourceMappingURL=finding.request.dto.js.map

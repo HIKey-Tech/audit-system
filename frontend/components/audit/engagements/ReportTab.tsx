@@ -80,6 +80,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'report'] });
     qc.invalidateQueries({ queryKey: ['workflow'] });
+    qc.invalidateQueries({ queryKey: ['approval-chain'] });
   };
 
   const approval = useQuery({

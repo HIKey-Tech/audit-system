@@ -788,6 +788,7 @@ export const ROLES: Array<{
     permissions: [
       'engagement:read', 'engagement:read_all',
       'finding:read', 'finding:read_all',
+      'followup:read',
       'report:read', 'report:approve:oversight',
       'committee_pack:read',
       'approval:read', 'approval:approve', 'approval:reject',
@@ -813,6 +814,7 @@ export const ROLES: Array<{
     permissions: [
       'engagement:read', 'engagement:read_all',
       'finding:read', 'finding:read_all',
+      'followup:read',
       'report:read', 'report:issue', 'report:approve:final',
       'committee_pack:read',
       'approval:read', 'approval:approve', 'approval:reject',
@@ -1677,6 +1679,24 @@ async function main(): Promise<void> {
       roles: roles.map((role) => role.name),
     });
   }
+
+  // 3b. Default risk categories, so the register is usable on a fresh install
+  // (the Categories tab can still add more). Upsert by name; never overwrites edits.
+  const DEFAULT_RISK_CATEGORIES: Array<{ name: string; description: string }> = [
+    { name: 'Financial Risk', description: 'Fraud, payment control, reporting and liquidity risks.' },
+    { name: 'Operational Risk', description: 'Process, people and service-delivery failures.' },
+    { name: 'IT & Cyber Risk', description: 'Information security, availability and technology change risks.' },
+    { name: 'Compliance Risk', description: 'Regulatory, legal and policy breaches (including NDPR).' },
+    { name: 'Strategic Risk', description: 'Risks to GBB strategic objectives and reputation.' },
+  ];
+  for (const category of DEFAULT_RISK_CATEGORIES) {
+    await prisma.risk_Category.upsert({
+      where: { name: category.name },
+      create: { ...category, created_by_id: adminUserId },
+      update: {},
+    });
+  }
+  logger.info('Risk categories seeded', { count: DEFAULT_RISK_CATEGORIES.length });
 
   // 4. Upsert default DOCX export templates.
   for (const tpl of DOCUMENT_TEMPLATES) {

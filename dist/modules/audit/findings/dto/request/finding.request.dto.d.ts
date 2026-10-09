@@ -135,8 +135,49 @@ export declare const FindingQuerySchema: z.ZodObject<{
     controlReference?: string | undefined;
     auditeeId?: string | undefined;
 }>;
+export declare const FindingExportQuerySchema: z.ZodObject<Omit<{
+    page: z.ZodDefault<z.ZodNumber>;
+    pageSize: z.ZodDefault<z.ZodNumber>;
+    search: z.ZodOptional<z.ZodString>;
+    severity: z.ZodOptional<z.ZodNativeEnum<typeof FindingSeverity>>;
+    status: z.ZodOptional<z.ZodNativeEnum<typeof FindingStatus>>;
+    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational]>>;
+    controlReference: z.ZodOptional<z.ZodString>;
+    auditeeId: z.ZodOptional<z.ZodString>;
+    riskId: z.ZodOptional<z.ZodString>;
+    universeId: z.ZodOptional<z.ZodString>;
+    sortBy: z.ZodDefault<z.ZodEnum<["created_at", "updated_at", "due_date", "severity", "status"]>>;
+    sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
+}, "page" | "pageSize"> & {
+    format: z.ZodDefault<z.ZodEnum<["csv", "xlsx"]>>;
+}, "strip", z.ZodTypeAny, {
+    format: "csv" | "xlsx";
+    sortBy: "created_at" | "updated_at" | "status" | "due_date" | "severity";
+    sortOrder: "asc" | "desc";
+    search?: string | undefined;
+    status?: FindingStatus | undefined;
+    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    severity?: FindingSeverity | undefined;
+    universeId?: string | undefined;
+    riskId?: string | undefined;
+    controlReference?: string | undefined;
+    auditeeId?: string | undefined;
+}, {
+    format?: "csv" | "xlsx" | undefined;
+    search?: string | undefined;
+    status?: FindingStatus | undefined;
+    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    severity?: FindingSeverity | undefined;
+    sortBy?: "created_at" | "updated_at" | "status" | "due_date" | "severity" | undefined;
+    sortOrder?: "asc" | "desc" | undefined;
+    universeId?: string | undefined;
+    riskId?: string | undefined;
+    controlReference?: string | undefined;
+    auditeeId?: string | undefined;
+}>;
 export type CreateFindingRequestDto = z.infer<typeof CreateFindingRequestSchema>;
 export type UpdateFindingRequestDto = z.infer<typeof UpdateFindingRequestSchema>;
 export type UpdateFindingStatusRequestDto = z.infer<typeof UpdateFindingStatusRequestSchema>;
 export type FindingQueryDto = z.infer<typeof FindingQuerySchema>;
+export type FindingExportQueryDto = z.infer<typeof FindingExportQuerySchema>;
 //# sourceMappingURL=finding.request.dto.d.ts.map

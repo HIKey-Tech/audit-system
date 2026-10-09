@@ -32,11 +32,8 @@ export class NotificationService implements INotificationService {
       auth: config.email.user
         ? { user: config.email.user, pass: config.email.password }
         : undefined,
-      // Pool connections so a batch drain reuses sockets instead of opening
-      // one per message.
-      pool: true,
-      maxConnections: 5,
-      maxMessages: 100,
+      // Deliberately NOT pooled: a pooled transport can leave sendMail() pending
+      // forever after an auth/envelope failure, which froze the notification queue.
       connectionTimeout: 10_000,
       greetingTimeout: 10_000,
       socketTimeout: 15_000,
@@ -44,6 +41,15 @@ export class NotificationService implements INotificationService {
   }
 
   async sendEmail(dto: SendEmailDto): Promise<void> {
+    // The shipped default host is a placeholder: without credentials every send
+    // would only bounce off Gmail with "530 Authentication Required". Fail fast.
+    if (!config.email.user && config.email.host === 'smtp.gmail.com') {
+      logger.warn('Email not sent: SMTP is not configured (set SMTP_HOST / SMTP_USER / SMTP_PASSWORD)', {
+        subject: dto.subject,
+      });
+      throw AppError.serviceUnavailable('SMTP is not configured');
+    }
+
     const logEntry = await prisma.email_Log.create({
       data: {
         to_address: Array.isArray(dto.to) ? dto.to.join(', ') : dto.to,

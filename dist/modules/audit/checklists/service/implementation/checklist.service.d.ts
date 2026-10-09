@@ -14,6 +14,12 @@ export declare class ChecklistService implements IChecklistService {
     getChecklistTemplates(): Promise<Record<AuditType, ChecklistTemplateControl[]>>;
     previewControlsForAuditType(auditType: AuditType): Promise<ChecklistTemplateControl[]>;
     updateChecklistTemplates(dto: UpdateChecklistTemplatesRequestDto, actor: ActorContext): Promise<Record<AuditType, ChecklistTemplateControl[]>>;
-    private _assertChecklistExists;
+    private _getChecklistEngagement;
+    /**
+     * Checklist writes are limited to the engagement's audit team (lead, manager, assignee)
+     * and oversight (`engagement:read_all`), so holding `checklist:*` alone can't touch
+     * another engagement's tests. Reported as not-found so existence isn't revealed.
+     */
+    private _assertEngagementTeam;
 }
 //# sourceMappingURL=checklist.service.d.ts.map

@@ -5,8 +5,8 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
+const tabular_export_util_1 = require("../../../../../shared/utils/tabular-export.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
-const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
@@ -43,9 +43,8 @@ class FindingService {
         if (dto.riskId) {
             await this._assertRiskExists(dto.riskId);
         }
-        // Transactional outbox: the finding and the auditee's "new finding" alert
-        // commit together. Without this the auditee would only learn of the finding
-        // via the daily overdue sweep.
+        // Findings stay internal until the report is issued, so no auditee alert is sent here:
+        // ReportService.issueReport notifies every responder once the report goes out.
         const finding = await prisma_client_1.prisma.$transaction(async (tx) => {
             const created = await tx.audit_Finding.create({
                 data: {
@@ -66,59 +65,12 @@ class FindingService {
                 },
                 include: findingInclude,
             });
-            const dueDate = created.due_date.toISOString();
-            const auditeeName = created.auditee.display_name ?? `${created.auditee.first_name} ${created.auditee.last_name}`.trim();
-            const findingVariables = {
-                auditeeName,
-                findingTitle: created.title,
-                engagementReference: created.engagement.reference_number,
-                severity: created.severity,
-                dueDate,
-            };
-            await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
-                userId: created.auditee_id,
-                title: 'New audit finding assigned',
-                body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-                type: 'warning',
-                referenceType: 'audit_finding',
-                referenceId: created.id,
-                eventKey: 'audit.finding.assigned',
-                variables: findingVariables,
-            }, { tx });
-            await notification_queue_service_1.notificationQueueService.enqueue('email', {
-                to: created.auditee.email,
-                subject: `New Audit Finding: ${created.title}`,
-                text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-                eventKey: 'audit.finding.assigned',
-                variables: findingVariables,
-            }, { tx });
-            // Co-responders: persist the join rows and alert each one, same as the
-            // primary auditee, so a finding can be owned by several people.
+            // Co-responders: persist the join rows so a finding can be owned by several people.
             const extraIds = [...new Set(dto.additionalAuditeeIds ?? [])].filter((uid) => uid !== created.auditee_id);
-            for (const uid of extraIds) {
-                const responder = await tx.audit_Finding_Responder.create({
-                    data: { finding_id: created.id, user_id: uid },
-                    include: { user: { select: { display_name: true, first_name: true, last_name: true, email: true } } },
+            if (extraIds.length > 0) {
+                await tx.audit_Finding_Responder.createMany({
+                    data: extraIds.map((uid) => ({ finding_id: created.id, user_id: uid })),
                 });
-                const responderName = responder.user.display_name ?? `${responder.user.first_name} ${responder.user.last_name}`.trim();
-                const responderVariables = { ...findingVariables, auditeeName: responderName };
-                await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
-                    userId: uid,
-                    title: 'New audit finding assigned',
-                    body: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-                    type: 'warning',
-                    referenceType: 'audit_finding',
-                    referenceId: created.id,
-                    eventKey: 'audit.finding.assigned',
-                    variables: responderVariables,
-                }, { tx });
-                await notification_queue_service_1.notificationQueueService.enqueue('email', {
-                    to: responder.user.email,
-                    subject: `New Audit Finding: ${created.title}`,
-                    text: `Finding "${created.title}" (${created.engagement.reference_number}) has been raised and assigned to you. Due ${dueDate}.`,
-                    eventKey: 'audit.finding.assigned',
-                    variables: responderVariables,
-                }, { tx });
             }
             return created;
         });
@@ -173,19 +125,52 @@ class FindingService {
             return result;
         });
         logger_util_1.logger.info('Audit finding updated', { findingId: id, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.update', module: 'audit', entityType: 'audit_finding', entityId: id });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.finding.update',
+            module: 'audit',
+            entityType: 'audit_finding',
+            entityId: id,
+            oldValues: {
+                title: finding.title, category: finding.category, severity: finding.severity,
+                rootCause: finding.root_cause, riskImplication: finding.risk_implication,
+                recommendation: finding.recommendation, auditeeId: finding.auditee_id,
+                dueDate: finding.due_date,
+            },
+            newValues: {
+                title: updated.title, category: updated.category, severity: updated.severity,
+                rootCause: updated.root_cause, riskImplication: updated.risk_implication,
+                recommendation: updated.recommendation, auditeeId: updated.auditee_id,
+                dueDate: updated.due_date,
+            },
+        });
         return (0, finding_response_dto_1.mapFindingToResponse)(updated);
     }
     async updateFindingStatus(id, newStatus, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'finding:update');
         const finding = await this._getFinding(id);
         (0, audit_utility_1.assertTransition)(finding.status, newStatus, audit_utility_1.FINDING_TRANSITIONS, 'finding');
+        // Each stage is normally reached by the work itself (response, evidence, verification), so a
+        // manual change may only record a stage whose proof already exists.
+        if (newStatus === audit_enum_1.FindingStatus.Verified) {
+            throw app_error_1.AppError.badRequest('A finding can only be verified through the Verify action, which records verification notes');
+        }
+        const followUp = await prisma_client_1.prisma.audit_Follow_Up.findUnique({
+            where: { finding_id: id },
+            select: { management_response: true, remediation_evidence_id: true },
+        });
+        if (newStatus === audit_enum_1.FindingStatus.ManagementResponseReceived && !followUp?.management_response) {
+            throw app_error_1.AppError.badRequest('A management response must be recorded before the finding can move to this stage');
+        }
+        if (newStatus === audit_enum_1.FindingStatus.InRemediation && !followUp?.remediation_evidence_id) {
+            throw app_error_1.AppError.badRequest('Remediation evidence must be submitted before the finding can move to this stage');
+        }
         const updated = await prisma_client_1.prisma.audit_Finding.update({
             where: { id },
             data: { status: newStatus },
         });
         logger_util_1.logger.info('Audit finding status updated', { findingId: id, status: newStatus, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.status.update', module: 'audit', entityType: 'audit_finding', entityId: id, newValues: { status: newStatus } });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.status.update', module: 'audit', entityType: 'audit_finding', entityId: id, oldValues: { status: finding.status }, newValues: { status: newStatus } });
         return (0, finding_response_dto_1.mapFindingToResponse)(updated);
     }
     async closeFinding(id, actor) {
@@ -220,7 +205,14 @@ class FindingService {
             where: {
                 id,
                 deleted_at: null,
-                ...(isAuditee && this._auditeeMatch(actor.id)),
+                // An auditee only sees findings once the report is issued (engagement reported/closed),
+                // matching the list endpoints.
+                ...(isAuditee && {
+                    AND: [
+                        this._auditeeMatch(actor.id),
+                        { engagement: { status: { in: [audit_enum_1.EngagementStatus.Reported, audit_enum_1.EngagementStatus.Closed] } } },
+                    ],
+                }),
             },
             include: {
                 ...findingInclude,
@@ -264,6 +256,41 @@ class FindingService {
             findings: findings.map(finding_response_dto_1.mapFindingToResponse),
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
+    }
+    async exportFindings(query, format, actor) {
+        const findings = await prisma_client_1.prisma.audit_Finding.findMany({
+            where: this._buildFindingWhere(query, actor),
+            include: findingInclude,
+            orderBy: { [query.sortBy]: query.sortOrder },
+            take: tabular_export_util_1.EXPORT_MAX_ROWS,
+        });
+        const rows = findings.map(finding_response_dto_1.mapFindingToResponse);
+        logger_util_1.logger.info('Findings register exported', { actorId: actor.id, format, count: rows.length });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.finding.export',
+            module: 'audit',
+            entityType: 'audit_finding',
+            newValues: { format, count: rows.length, filters: query },
+        });
+        return (0, tabular_export_util_1.buildTabularExport)(rows, [
+            { header: 'Engagement', value: (f) => f.engagementReference },
+            { header: 'Title', value: (f) => f.title },
+            { header: 'Severity', value: (f) => f.severity },
+            { header: 'Status', value: (f) => f.status },
+            { header: 'Category', value: (f) => f.category },
+            { header: 'Control reference', value: (f) => f.controlReference },
+            { header: 'Linked risk', value: (f) => f.riskTitle },
+            { header: 'Description', value: (f) => f.description },
+            { header: 'Root cause', value: (f) => f.rootCause },
+            { header: 'Risk implication', value: (f) => f.riskImplication },
+            { header: 'Recommendation', value: (f) => f.recommendation },
+            { header: 'Auditee', value: (f) => f.auditeeName },
+            { header: 'Due date', value: (f) => f.dueDate },
+            { header: 'Raised by', value: (f) => f.createdByName },
+            { header: 'Raised on', value: (f) => f.createdAt },
+            { header: 'Closed on', value: (f) => f.closedAt },
+        ], { baseName: 'findings-register', format, sheetName: 'Findings' });
     }
     async listFindings(engagementId, query, actor) {
         const eng = await prisma_client_1.prisma.audit_Engagement.findFirst({

@@ -58,7 +58,7 @@ export default function ContinuousMonitoringPage(): JSX.Element {
     return (
       <div>
         <PageHeader title="Continuous monitoring" breadcrumbs={crumbs} />
-        <Card><ErrorState onRetry={() => dashboard.refetch()} /></Card>
+        <Card><ErrorState error={dashboard.error} onRetry={() => dashboard.refetch()} /></Card>
       </div>
     );
   }

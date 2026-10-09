@@ -2,8 +2,8 @@
 
 import { useMemo, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { LogOut, ChevronsLeft, ChevronsRight, ChevronDown } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -20,6 +20,8 @@ import { NAV, type NavGroup, type NavItem, type NavLink } from '@/lib/navigation
 
 export const Sidebar = (): JSX.Element => {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
   const router = useRouter();
   const session = useSession();
   const { nav } = usePermissions();
@@ -55,6 +57,11 @@ export const Sidebar = (): JSX.Element => {
   }, [nav]);
 
   const isActive = (item: NavLink): boolean => {
+    // An access review opens on the shared analysis-run page; keep "Access reviews"
+    // highlighted (not "Data analytics") when that's where the user came from.
+    if (pathname?.startsWith('/system-audit/analytics/') && searchParams?.get('from') === 'access-reviews') {
+      return item.href === '/system-audit/access-reviews';
+    }
     if (item.matchPrefix) return pathname?.startsWith(item.matchPrefix) ?? false;
     return pathname === item.href;
   };
@@ -63,6 +70,8 @@ export const Sidebar = (): JSX.Element => {
     try {
       setSigningOut(true);
       await authApi.logout();
+      // Never let the next person on this browser see the previous user's cached data.
+      queryClient.clear();
       router.push('/login');
       router.refresh();
     } catch {

@@ -47,7 +47,7 @@ export const ProgrammeHealth = (): JSX.Element => {
   // viewport, so it never blocks the initial dashboard paint.
   const { ref, inView } = useInView<HTMLDivElement>({ rootMargin: '300px' });
 
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', 'analytics'],
     queryFn: () => dashboardApi.getAnalytics(),
     enabled: inView,
@@ -58,7 +58,7 @@ export const ProgrammeHealth = (): JSX.Element => {
     <Card>
       <CardHeader title="Programme Health" subtitle="Coverage, cycle time & follow-up performance" />
       {isError ? (
-        <ErrorState compact onRetry={() => refetch()} />
+        <ErrorState compact error={error} onRetry={() => refetch()} />
       ) : isLoading || !data ? (
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
           {[0, 1, 2, 3, 4, 5].map((i) => (

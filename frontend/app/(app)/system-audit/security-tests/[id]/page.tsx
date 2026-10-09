@@ -97,7 +97,7 @@ export default function SecurityTestPage(): JSX.Element {
 
   const crumbs = [{ label: 'System audit', href: '/system-audit' }, { label: 'Security testing', href: '/system-audit/security-tests' }];
   if (!canRead) return <div><PageHeader title="Security test" breadcrumbs={crumbs} /><Card><EmptyState icon={<Lock className="h-4 w-4" />} title="You do not have access to security testing" /></Card></div>;
-  if (test.isError) return <div><PageHeader title="Security test" breadcrumbs={crumbs} /><Card><ErrorState onRetry={() => test.refetch()} /></Card></div>;
+  if (test.isError) return <div><PageHeader title="Security test" breadcrumbs={crumbs} /><Card><ErrorState error={test.error} onRetry={() => test.refetch()} /></Card></div>;
   if (!test.data) return <div><PageHeader title="Loading…" breadcrumbs={crumbs} /><Card><Skeleton className="h-24 w-full" /></Card></div>;
 
   const t = test.data;
@@ -120,6 +120,11 @@ export default function SecurityTestPage(): JSX.Element {
               <Button size="sm" leftIcon={<ShieldCheck className="h-3.5 w-3.5" />} disabled={isOwnTest} title={isOwnTest ? 'The coordinator or creator cannot authorise their own test' : undefined} onClick={() => setAuthoriseOpen(true)}>
                 Authorise test
               </Button>
+            )}
+            {t.status === 'planned' && canAuthorise && isOwnTest && (
+              <span className="self-center text-xs text-text-secondary">
+                You planned this test, so someone else must authorise it.
+              </span>
             )}
             {canManage && t.allowedTransitions.map((s) => (
               <Button key={s} size="sm" variant={s === 'cancelled' ? 'ghost' : 'primary'} isLoading={transition.isPending && transition.variables === s} onClick={() => transition.mutate(s)}>

@@ -47,7 +47,11 @@ export default function NotificationsPage(): JSX.Element {
   const markAll = useMutation({
     mutationFn: () => notificationsApi.markAllRead(),
     onSuccess: (r) => {
-      toast.success(`Marked ${r.updated} as read`);
+      toast.success(
+        r.count === 0
+          ? 'No unread notifications'
+          : `Marked ${r.count} notification${r.count === 1 ? '' : 's'} as read`,
+      );
       qc.invalidateQueries({ queryKey: ['notifications'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),

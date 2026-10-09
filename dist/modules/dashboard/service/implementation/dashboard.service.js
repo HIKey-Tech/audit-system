@@ -70,12 +70,7 @@ class DashboardService {
         const restrictToLead = (0, dashboard_utility_1.isRestrictedAuditor)(actor.permissions);
         const engagementWhereBase = {
             deleted_at: null,
-            ...(restrictToLead ? {
-                OR: [
-                    { lead_auditor_id: actor.id },
-                    { workflow_assignments: { some: { user_id: actor.id } } },
-                ],
-            } : {}),
+            ...(restrictToLead ? this._memberEngagementScope(actor.id) : {}),
         };
         const [totalEngagementsThisYear, closedEngagementsThisYear, overdueEngagements, dueSoon, statusGroups, totalPlansThisYear, approvedPlans,] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.count({
@@ -151,7 +146,8 @@ class DashboardService {
         const restrictToAuditee = (0, dashboard_utility_1.isRestrictedAuditee)(actor.permissions);
         const findingWhereBase = {
             deleted_at: null,
-            ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
+            // Findings stay internal until the report is issued (engagement reported/closed).
+            ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } : {}),
         };
         const openWhere = {
             ...findingWhereBase,
@@ -468,7 +464,9 @@ class DashboardService {
                 { auditee_id: userId },
                 { workflow_assignments: { some: { user_id: userId } } },
             ],
-            status: { notIn: ENGAGEMENT_CLOSED_LIKE_STATUSES },
+            // A "reported" (review issued) engagement is still active work: the auditee
+            // has remediation to do and the audit team has follow-up to verify.
+            status: { not: 'closed' },
         };
         const [activeRaw, pendingStepsRaw, overdueRaw, findingsRaw,] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Engagement.findMany({
@@ -487,6 +485,8 @@ class DashboardService {
             prisma_client_1.prisma.audit_Engagement.findMany({
                 where: {
                     ...myActiveEngagementWhere,
+                    // Overdue is about unfinished fieldwork/review, not engagements already reported.
+                    status: { notIn: ENGAGEMENT_CLOSED_LIKE_STATUSES },
                     sla_deadline: { lt: now },
                 },
                 orderBy: { sla_deadline: 'asc' },
@@ -517,7 +517,8 @@ class DashboardService {
                         // Auditee view: findings assigned to them that still need action.
                         {
                             status: { in: ['open', 'management_response_received', 'in_remediation'] },
-                            engagement: { deleted_at: null },
+                            // Not visible to the auditee until the report is issued.
+                            engagement: { deleted_at: null, status: { in: ['reported', 'closed'] } },
                             OR: [
                                 { auditee_id: userId },
                                 { responders: { some: { user_id: userId } } },
@@ -708,12 +709,22 @@ class DashboardService {
         ORDER BY step.created_at ASC
       `);
     }
+    // Engagements a scoped user is part of: leading, assigned to, or the auditee on.
+    _memberEngagementScope(userId) {
+        return {
+            OR: [
+                { lead_auditor_id: userId },
+                { auditee_id: userId },
+                { workflow_assignments: { some: { user_id: userId } } },
+            ],
+        };
+    }
     async _getLifecycleAnalytics(actor) {
         const summary = await this.getAuditSummary(actor);
         const restrictToLead = (0, dashboard_utility_1.isRestrictedAuditor)(actor.permissions);
         const where = {
             deleted_at: null,
-            ...(restrictToLead ? { lead_auditor_id: actor.id } : {}),
+            ...(restrictToLead ? this._memberEngagementScope(actor.id) : {}),
         };
         const engagements = await prisma_client_1.prisma.audit_Engagement.findMany({
             where,
@@ -797,7 +808,9 @@ class DashboardService {
     async _getFollowUpAnalytics(actor) {
         const restrictToAuditee = (0, dashboard_utility_1.isRestrictedAuditee)(actor.permissions);
         const where = {
-            ...(restrictToAuditee ? { finding: { auditee_id: actor.id } } : {}),
+            ...(restrictToAuditee
+                ? { finding: { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } }
+                : {}),
         };
         const now = new Date();
         const [total, pending, verified, rejected, overdueFindings] = await prisma_client_1.prisma.$transaction([
@@ -810,7 +823,7 @@ class DashboardService {
                     deleted_at: null,
                     due_date: { lt: now },
                     status: { notIn: FINDING_RESOLVED_STATUSES },
-                    ...(restrictToAuditee ? { auditee_id: actor.id } : {}),
+                    ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } : {}),
                 },
             }),
         ]);

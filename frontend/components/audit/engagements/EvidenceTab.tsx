@@ -79,8 +79,17 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
     Array.from(files).forEach((f) => upload.mutate(f));
   };
 
+  const acceptsUploads = engagement.status === 'in_progress';
+
   return (
     <div>
+      {!acceptsUploads && (
+        <p className="mb-4 rounded-md border border-border bg-surface-alt px-4 py-3 text-xs text-text-secondary">
+          Evidence can only be uploaded while the engagement is in progress. This engagement is{' '}
+          {engagement.status.replace(/_/g, ' ')}.
+        </p>
+      )}
+      {acceptsUploads && (
       <div
         onDragOver={(e) => {
           e.preventDefault();
@@ -117,6 +126,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
           onChange={(e) => handleFiles(e.target.files)}
         />
       </div>
+      )}
 
       <Card padded={false}>
         {list.isLoading ? (

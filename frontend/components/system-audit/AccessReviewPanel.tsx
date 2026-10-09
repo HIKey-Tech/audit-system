@@ -183,7 +183,12 @@ export const AccessReviewPanel = ({ run, canReview }: { run: AnalysisRunDetail; 
         {canReview && !locked && (
           <>
             <span className="mr-1 text-xs text-text-secondary">{selected.size} selected</span>
-            <Button size="sm" variant="secondary" leftIcon={<Check className="h-3.5 w-3.5" />} disabled={!selected.size} onClick={() => decide.mutate({ value: 'appropriate' })}>Appropriate</Button>
+            <Button size="sm" variant="secondary" leftIcon={<Check className="h-3.5 w-3.5" />} disabled={!selected.size} onClick={() => {
+              // Privileged or rule-flagged accounts need a written justification.
+              const needsReason = rows.some((r) => selected.has(r.id) && (r.isPrivileged || r.flags.includes('SOD_CONFLICT')));
+              if (needsReason) setNoteFor('appropriate');
+              else decide.mutate({ value: 'appropriate' });
+            }}>Appropriate</Button>
             <Button size="sm" variant="secondary" leftIcon={<Ban className="h-3.5 w-3.5" />} disabled={!selected.size} onClick={() => setNoteFor('revoke')}>Revoke</Button>
             <Button size="sm" variant="secondary" leftIcon={<Pencil className="h-3.5 w-3.5" />} disabled={!selected.size} onClick={() => setNoteFor('modify')}>Modify</Button>
             <Button size="sm" variant="ghost" leftIcon={<RotateCcw className="h-3.5 w-3.5" />} disabled={!selected.size} onClick={() => decide.mutate({ value: 'pending' })}>Reset</Button>
@@ -214,9 +219,19 @@ export const AccessReviewPanel = ({ run, canReview }: { run: AnalysisRunDetail; 
         open={noteFor !== null}
         onClose={() => setNoteFor(null)}
         onConfirm={(note) => decide.mutate({ value: noteFor!, note })}
-        title={noteFor === 'revoke' ? 'Recommend revoking access' : 'Recommend changing access'}
-        description="Say what should be removed or changed. IAMS records the recommendation — the system owner makes the change in the source system."
-        reasonLabel="Recommendation"
+        title={
+          noteFor === 'revoke'
+            ? 'Recommend revoking access'
+            : noteFor === 'appropriate'
+              ? 'Justify this access'
+              : 'Recommend changing access'
+        }
+        description={
+          noteFor === 'appropriate'
+            ? 'Some of the selected accounts are privileged or have a segregation-of-duties conflict. Explain why the access is appropriate.'
+            : 'Say what should be removed or changed. IAMS records the recommendation — the system owner makes the change in the source system.'
+        }
+        reasonLabel={noteFor === 'appropriate' ? 'Justification' : 'Recommendation'}
         confirmLabel="Save decision"
         minLength={5}
         isLoading={decide.isPending}

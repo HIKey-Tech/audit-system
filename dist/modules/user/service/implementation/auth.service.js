@@ -16,6 +16,8 @@ const mfa_utility_1 = require("../../utility/mfa.utility");
 const oidc_client_1 = require("../client/oidc.client");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
 const session_guard_1 = require("../../../../shared/security/session-guard");
+const security_event_utility_1 = require("../../../logging/utility/security-event.utility");
+const logging_enum_1 = require("../../../logging/domain/enum/logging.enum");
 class AuthService {
     userService;
     mfaService;
@@ -30,16 +32,27 @@ class AuthService {
             where: { email: dto.email, deleted_at: null },
             include: prisma_types_1.userWithRolesInclude,
         });
-        if (!user || !user.password_hash) {
-            throw app_error_1.AppError.unauthorized('Invalid credentials');
-        }
-        if (!user.is_active) {
-            throw app_error_1.AppError.unauthorized('Account is deactivated');
-        }
+        const failLogin = (reason) => {
+            (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
+                userId: user?.id,
+                email: dto.email,
+                ipAddress,
+                userAgent,
+                reason,
+                method: 'password',
+                status: 'failure',
+            });
+            throw app_error_1.AppError.unauthorized(reason === 'account_deactivated' ? 'Account is deactivated' : 'Invalid credentials');
+        };
+        if (!user)
+            return failLogin('unknown_account');
+        if (!user.password_hash)
+            return failLogin('no_local_password');
+        if (!user.is_active)
+            return failLogin('account_deactivated');
         const passwordValid = await (0, token_utility_1.comparePassword)(dto.password, user.password_hash);
-        if (!passwordValid) {
-            throw app_error_1.AppError.unauthorized('Invalid credentials');
-        }
+        if (!passwordValid)
+            return failLogin('invalid_password');
         // ── 2FA gate ──────────────────────────────────────────────
         if (user.mfa_enabled) {
             const method = (user.mfa_method ?? 'totp');
@@ -80,6 +93,7 @@ class AuthService {
                 return issued;
             });
             logger_util_1.logger.info('User logged in via password (2FA grace active)', { userId: user.id });
+            (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
             return {
                 status: 'OK',
                 mfaSetupRequired: true,
@@ -94,6 +108,7 @@ class AuthService {
             data: { last_login_at: new Date() },
         });
         logger_util_1.logger.info('User logged in via password', { userId: user.id });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
         return {
             status: 'OK',
             ...tokens,
@@ -119,6 +134,7 @@ class AuthService {
             data: { last_login_at: new Date() },
         });
         logger_util_1.logger.info('User completed 2FA login', { userId: user.id });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password+mfa' });
         return {
             ...tokens,
             user: (0, user_response_dto_1.mapUserToResponse)(user),
@@ -140,6 +156,14 @@ class AuthService {
                     oid: result.profile.oid,
                     amr,
                 });
+                (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
+                    email: result.profile.email,
+                    ipAddress,
+                    userAgent,
+                    reason: 'idp_mfa_missing',
+                    method: 'sso',
+                    status: 'failure',
+                });
                 throw app_error_1.AppError.unauthorized('Multi-factor authentication is required. Please complete MFA with your identity provider.');
             }
         }
@@ -150,6 +174,15 @@ class AuthService {
             include: prisma_types_1.userWithRolesInclude,
         });
         if (!user.is_active) {
+            (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
+                userId: user.id,
+                email: user.email,
+                ipAddress,
+                userAgent,
+                reason: 'account_deactivated',
+                method: 'sso',
+                status: 'failure',
+            });
             throw app_error_1.AppError.unauthorized('Account is deactivated');
         }
         const tokens = await this._issueTokens(user.id, ipAddress, userAgent);
@@ -158,6 +191,7 @@ class AuthService {
             data: { last_login_at: new Date() },
         });
         logger_util_1.logger.info('User logged in via SSO', { userId: user.id, provider: app_config_1.config.oidc.provider });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'sso' });
         return {
             ...tokens,
             user: (0, user_response_dto_1.mapUserToResponse)(user),
@@ -219,6 +253,12 @@ class AuthService {
                     data: { revoked_at: new Date() },
                 });
                 logger_util_1.logger.warn('Refresh token reuse detected', { userId: storedToken.user_id });
+                (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.TokenReuseDetected, {
+                    userId: storedToken.user_id,
+                    ipAddress,
+                    reason: 'revoked_token_replayed',
+                    status: 'failure',
+                });
                 throw app_error_1.AppError.unauthorized('Refresh token has been revoked');
             }
             if (storedToken.expires_at < new Date()) {
@@ -257,10 +297,16 @@ class AuthService {
     }
     async logout(refreshToken) {
         const tokenHash = (0, token_utility_1.hashToken)(refreshToken);
+        const token = await prisma_client_1.prisma.refresh_Token.findFirst({
+            where: { token_hash: tokenHash, revoked_at: null },
+            select: { user_id: true },
+        });
         await prisma_client_1.prisma.refresh_Token.updateMany({
             where: { token_hash: tokenHash, revoked_at: null },
             data: { revoked_at: new Date() },
         });
+        if (token)
+            (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.Logout, { userId: token.user_id, reason: 'single_session' });
     }
     async logoutAll(userId) {
         await prisma_client_1.prisma.refresh_Token.updateMany({
@@ -270,6 +316,7 @@ class AuthService {
         // Also invalidate outstanding access tokens, not just refresh tokens.
         await (0, session_guard_1.revokeUserSessions)(userId);
         logger_util_1.logger.info('All refresh tokens revoked', { userId });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.Logout, { userId, reason: 'all_sessions' });
     }
     async _issueTokens(userId, ipAddress, userAgent, tx) {
         const db = tx ?? prisma_client_1.prisma;

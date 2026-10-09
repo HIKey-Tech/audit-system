@@ -54,7 +54,7 @@ export default function RequestDetailPage(): JSX.Element {
   const [signOpen, setSignOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
 
-  const { data: req, isLoading, isError, refetch } = useQuery({
+  const { data: req, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['request', id],
     queryFn: () => requestsApi.get(id),
   });
@@ -115,7 +115,7 @@ export default function RequestDetailPage(): JSX.Element {
   }
 
   if (isError || !req) {
-    return <ErrorState title="Could not load request" onRetry={() => refetch()} />;
+    return <ErrorState title="Could not load request" error={error} onRetry={() => refetch()} />;
   }
 
   const currentStep = req.steps?.find((s) => s.level === req.currentLevel);

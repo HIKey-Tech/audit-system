@@ -30,6 +30,7 @@ const mapRiskRegisterToResponse = (risk) => ({
     currentImpact: risk.impact,
     currentScore: risk.current_score,
     status: risk.status,
+    businessObjective: risk.business_objective,
     lastAssessedAt: risk.last_assessed_at?.toISOString() ?? null,
     universeId: risk.universe_id,
     universeName: risk.universe?.name ?? null,

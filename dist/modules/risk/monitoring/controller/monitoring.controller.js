@@ -35,6 +35,12 @@ class MonitoringController {
          */
         this.router.get('/monitoring/summary', (0, auth_middleware_1.requirePermission)('risk_monitoring:read'), this._getOrganizationRiskSummary.bind(this));
         /**
+         * @route  GET /risk/monitoring/emerging
+         * @desc   New and rising risks within the look-back window (emerging-risk watchlist)
+         * @access Private - risk_monitoring:read
+         */
+        this.router.get('/monitoring/emerging', (0, auth_middleware_1.requirePermission)('risk_monitoring:read'), (0, validate_middleware_1.validate)(monitoring_request_dto_1.EmergingRiskQuerySchema, 'query'), this._getEmergingRisks.bind(this));
+        /**
          * @route  GET /risk/register/:id/trend
          * @desc   Get risk score trend
          * @access Private - audit:read
@@ -63,6 +69,15 @@ class MonitoringController {
         try {
             const trend = await this.monitoringService.getRiskScoreTrend(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(trend));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _getEmergingRisks(req, res, next) {
+        try {
+            const risks = await this.monitoringService.getEmergingRisks(req.query, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(risks));
         }
         catch (err) {
             next(err);

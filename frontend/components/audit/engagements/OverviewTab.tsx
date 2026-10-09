@@ -153,7 +153,14 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
 
       <div className="space-y-6">
         <Card>
-          <CardHeader title="Findings" subtitle="By severity" />
+          <CardHeader
+            title="Findings"
+            subtitle={
+              hasFindings
+                ? `All findings by severity · ${(engagement.findingStats?.total ?? 0) - (engagement.findingStats?.unresolved ?? 0)} of ${engagement.findingStats?.total ?? 0} closed`
+                : 'By severity'
+            }
+          />
           {!hasFindings ? (
             <p className="text-xs text-text-muted">No findings raised yet.</p>
           ) : (
@@ -203,7 +210,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
             title="Team"
             subtitle={`${team.length} ${team.length === 1 ? 'member' : 'members'}`}
             action={
-              canManageAssignments ? (
+              canManageAssignments && engagement.status !== 'closed' ? (
                 <Button size="sm" variant="secondary" onClick={() => setShowAssignments(true)}>
                   Manage
                 </Button>

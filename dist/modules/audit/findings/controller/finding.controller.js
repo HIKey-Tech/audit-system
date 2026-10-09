@@ -35,6 +35,12 @@ class FindingController {
          */
         this.router.get('/findings', (0, auth_middleware_1.requirePermission)('finding:read'), (0, validate_middleware_1.validate)(finding_request_dto_1.FindingQuerySchema, 'query'), this._listAllFindings.bind(this));
         /**
+         * @route  GET /audit/findings/export
+         * @desc   Export the (filtered) findings register as CSV or Excel
+         * @access Private - finding:read + finding:export
+         */
+        this.router.get('/findings/export', (0, auth_middleware_1.requirePermission)('finding:read', 'finding:export'), (0, validate_middleware_1.validate)(finding_request_dto_1.FindingExportQuerySchema, 'query'), this._exportFindings.bind(this));
+        /**
          * @route  GET /audit/findings/:id
          * @desc   Get finding
          * @access Private - finding:read
@@ -117,6 +123,18 @@ class FindingController {
         try {
             const { findings, meta } = await this.findingService.listAllFindings(req.query, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(findings, 'Findings retrieved', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _exportFindings(req, res, next) {
+        try {
+            const { format, ...query } = req.query;
+            const file = await this.findingService.exportFindings({ ...query, page: 1, pageSize: 1 }, format, req.user);
+            res.setHeader('Content-Type', file.mimeType);
+            res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+            res.status(200).send(file.buffer);
         }
         catch (err) {
             next(err);

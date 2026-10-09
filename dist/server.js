@@ -39,6 +39,7 @@ const dashboard_1 = require("./modules/dashboard");
 const settings_1 = require("./modules/settings");
 const integration_1 = require("./modules/integration");
 const predictive_1 = require("./modules/predictive");
+const system_audit_1 = require("./modules/system-audit");
 const warehouse_1 = require("./modules/warehouse");
 const background_1 = require("./modules/background");
 const openapi_util_1 = require("./shared/docs/openapi.util");
@@ -163,6 +164,7 @@ const buildApp = () => {
     app.use(apiPrefix, (0, settings_1.createSettingsModule)());
     app.use(apiPrefix, (0, integration_1.createIntegrationModule)());
     app.use(apiPrefix, (0, predictive_1.createPredictiveModule)());
+    app.use(apiPrefix, (0, system_audit_1.createSystemAuditModule)());
     app.use(error_handler_middleware_1.notFoundMiddleware);
     app.use(error_handler_middleware_1.errorHandlerMiddleware);
     return app;
@@ -170,6 +172,9 @@ const buildApp = () => {
 const startServer = async () => {
     await (0, storage_client_1.verifyStorageReady)();
     await (0, prisma_client_1.connectDatabase)();
+    // Persist application exceptions for the Event Monitoring view once the
+    // database is reachable (errors before this point stay console-only).
+    logger_util_1.logger.add(new logging_1.SystemLogTransport());
     await cache_client_1.cache.connect();
     const app = buildApp();
     const server = http_1.default.createServer(app);

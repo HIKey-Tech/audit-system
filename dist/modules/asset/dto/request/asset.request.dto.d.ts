@@ -53,8 +53,8 @@ export declare const CreateAssetRequestSchema: z.ZodObject<{
     hostname?: string | null | undefined;
     manufacturer?: string | null | undefined;
     supplier?: string | null | undefined;
-    custodianId?: string | null | undefined;
     ipAddress?: string | null | undefined;
+    custodianId?: string | null | undefined;
     serialNumber?: string | null | undefined;
     osName?: string | null | undefined;
     osVersion?: string | null | undefined;
@@ -77,13 +77,13 @@ export declare const CreateAssetRequestSchema: z.ZodObject<{
     hostname?: string | null | undefined;
     manufacturer?: string | null | undefined;
     supplier?: string | null | undefined;
+    ipAddress?: string | null | undefined;
     lifecycleState?: AssetLifecycleState | undefined;
     dataClassification?: DataClassification | undefined;
     confidentialityRating?: AssetRating | undefined;
     integrityRating?: AssetRating | undefined;
     availabilityRating?: AssetRating | undefined;
     custodianId?: string | null | undefined;
-    ipAddress?: string | null | undefined;
     serialNumber?: string | null | undefined;
     osName?: string | null | undefined;
     osVersion?: string | null | undefined;
@@ -136,6 +136,7 @@ export declare const UpdateAssetRequestSchema: z.ZodObject<{
     hostname?: string | null | undefined;
     manufacturer?: string | null | undefined;
     supplier?: string | null | undefined;
+    ipAddress?: string | null | undefined;
     assetTag?: string | undefined;
     assetType?: AssetType | undefined;
     lifecycleState?: AssetLifecycleState | undefined;
@@ -145,7 +146,6 @@ export declare const UpdateAssetRequestSchema: z.ZodObject<{
     availabilityRating?: AssetRating | undefined;
     ownerId?: string | undefined;
     custodianId?: string | null | undefined;
-    ipAddress?: string | null | undefined;
     serialNumber?: string | null | undefined;
     osName?: string | null | undefined;
     osVersion?: string | null | undefined;
@@ -166,6 +166,7 @@ export declare const UpdateAssetRequestSchema: z.ZodObject<{
     hostname?: string | null | undefined;
     manufacturer?: string | null | undefined;
     supplier?: string | null | undefined;
+    ipAddress?: string | null | undefined;
     assetTag?: string | undefined;
     assetType?: AssetType | undefined;
     lifecycleState?: AssetLifecycleState | undefined;
@@ -175,7 +176,6 @@ export declare const UpdateAssetRequestSchema: z.ZodObject<{
     availabilityRating?: AssetRating | undefined;
     ownerId?: string | undefined;
     custodianId?: string | null | undefined;
-    ipAddress?: string | null | undefined;
     serialNumber?: string | null | undefined;
     osName?: string | null | undefined;
     osVersion?: string | null | undefined;

@@ -107,7 +107,7 @@ export default function AssetDetailPage(): JSX.Element {
       <div>
         <PageHeader title="Asset" breadcrumbs={[{ label: 'Assets', href: '/assets' }]} />
         <Card>
-          <ErrorState onRetry={() => asset.refetch()} />
+          <ErrorState error={asset.error} onRetry={() => asset.refetch()} />
         </Card>
       </div>
     );
@@ -381,7 +381,18 @@ const AttestationsTab = ({
   onAdd: () => void;
 }): JSX.Element => {
   const columns: Column<AssetAttestation>[] = [
-    { key: 'status', header: 'Status', width: '160px', render: (row) => <StatusBadge status={row.status} /> },
+    {
+      key: 'status',
+      header: 'Status',
+      width: '160px',
+      // 'confirmed' is red in the shared status palette (a confirmed audit exception is bad);
+      // for an attestation it is the positive outcome, so colour it explicitly.
+      render: (row) => (
+        <Badge tone={row.status === 'confirmed' ? 'green' : row.status === 'changes_required' ? 'amber' : 'red'}>
+          {assetLabel(row.status)}
+        </Badge>
+      ),
+    },
     { key: 'by', header: 'Attested by', width: '220px', render: (row) => row.attestedBy?.displayName || row.attestedBy?.email || row.attestedById },
     { key: 'at', header: 'Date', width: '180px', render: (row) => <span className="text-xs text-text-secondary">{formatDateTime(row.attestedAt)}</span> },
     { key: 'notes', header: 'Notes', render: (row) => <span className="text-text-secondary">{row.notes ?? '—'}</span> },

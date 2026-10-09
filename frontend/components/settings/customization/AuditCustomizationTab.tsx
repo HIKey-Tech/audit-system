@@ -97,7 +97,7 @@ export const AuditCustomizationTab = (): JSX.Element => {
     );
   }
   if (query.isError) {
-    return <ErrorState onRetry={() => query.refetch()} />;
+    return <ErrorState error={query.error} onRetry={() => query.refetch()} />;
   }
 
   return (

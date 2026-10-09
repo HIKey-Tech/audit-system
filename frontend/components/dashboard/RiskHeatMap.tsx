@@ -35,7 +35,7 @@ const LEGEND: { label: string; swatch: string }[] = [
 ];
 
 export const RiskHeatMap = (): JSX.Element => {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', 'risk-matrix'],
     queryFn: () => dashboardApi.getRiskMatrix(),
   });
@@ -67,7 +67,7 @@ export const RiskHeatMap = (): JSX.Element => {
         {isLoading ? (
           <Skeleton className="h-56 w-full" />
         ) : isError ? (
-          <ErrorState compact onRetry={() => refetch()} />
+          <ErrorState compact error={error} onRetry={() => refetch()} />
         ) : (data?.totalPlotted ?? 0) === 0 ? (
           <EmptyState
             compact

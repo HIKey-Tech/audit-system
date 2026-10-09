@@ -3,22 +3,65 @@
 import { AlertCircle, RotateCw } from 'lucide-react';
 import { Button } from './Button';
 import { cn } from '@/lib/utils/cn';
+import { ApiError, NetworkError } from '@/lib/api-client';
 
 interface ErrorStateProps {
   title?: string;
   message?: string;
+  /** The error thrown by the failed request; used to explain rate limits, permissions and connectivity. */
+  error?: unknown;
   onRetry?: () => void;
   className?: string;
   compact?: boolean;
 }
 
+const describeError = (
+  error: unknown,
+): { title: string; message?: string } | null => {
+  if (error instanceof NetworkError) {
+    return {
+      title: 'Cannot reach the server',
+      message: 'Check your connection and try again.',
+    };
+  }
+  if (error instanceof ApiError) {
+    if (error.status === 429) {
+      return { title: 'Too many requests', message: error.message };
+    }
+    if (error.status === 403) {
+      return {
+        title: 'Access denied',
+        message: 'Your role does not have permission to view this.',
+      };
+    }
+    if (error.status === 404) {
+      return {
+        title: 'Not found',
+        message: 'This item does not exist or you do not have access to it.',
+      };
+    }
+    if (error.status >= 500) {
+      return {
+        title: 'The server had a problem',
+        message: 'Try again in a moment. If it keeps happening, contact support.',
+      };
+    }
+  }
+  return null;
+};
+
 export const ErrorState = ({
-  title = 'Something went wrong',
-  message,
+  title: titleProp,
+  message: messageProp,
+  error,
   onRetry,
   className,
   compact,
-}: ErrorStateProps): JSX.Element => (
+}: ErrorStateProps): JSX.Element => {
+  const described = describeError(error);
+  const title = titleProp ?? described?.title ?? 'Something went wrong';
+  const message = messageProp ?? described?.message;
+  return (
   <div
     className={cn(
       'flex flex-col items-center justify-center text-center',
@@ -45,4 +88,5 @@ export const ErrorState = ({
       </Button>
     )}
   </div>
-);
+  );
+};

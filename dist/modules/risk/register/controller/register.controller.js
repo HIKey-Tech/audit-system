@@ -29,6 +29,18 @@ class RegisterController {
          */
         this.router.get('/', (0, auth_middleware_1.requirePermission)('risk:read'), (0, validate_middleware_1.validate)(register_request_dto_1.RiskRegisterQuerySchema, 'query'), this._listRisks.bind(this));
         /**
+         * @route  GET /risk/register/export
+         * @desc   Export the (filtered) risk register as CSV or Excel
+         * @access Private - risk:read + risk:export
+         */
+        this.router.get('/export', (0, auth_middleware_1.requirePermission)('risk:read', 'risk:export'), (0, validate_middleware_1.validate)(register_request_dto_1.RiskRegisterExportQuerySchema, 'query'), this._exportRisks.bind(this));
+        /**
+         * @route  GET /risk/register/objectives
+         * @desc   Distinct business objectives already linked to risks (form suggestions)
+         * @access Private - risk:read
+         */
+        this.router.get('/objectives', (0, auth_middleware_1.requirePermission)('risk:read'), this._listBusinessObjectives.bind(this));
+        /**
          * @route  GET /risk/register/universe/:universeId
          * @desc   List risks linked to audit universe entity
          * @access Private - audit:read
@@ -108,6 +120,27 @@ class RegisterController {
         try {
             const { risks, meta } = await this.registerService.listRisks(req.query, req.user);
             res.status(200).json({ ...(0, api_response_type_1.buildResponse)(risks), meta });
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _exportRisks(req, res, next) {
+        try {
+            const { format, ...query } = req.query;
+            const file = await this.registerService.exportRisks({ ...query, page: 1, pageSize: 1 }, format, req.user);
+            res.setHeader('Content-Type', file.mimeType);
+            res.setHeader('Content-Disposition', `attachment; filename="${file.fileName}"`);
+            res.status(200).send(file.buffer);
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listBusinessObjectives(_req, res, next) {
+        try {
+            const objectives = await this.registerService.listBusinessObjectives();
+            res.status(200).json((0, api_response_type_1.buildResponse)(objectives));
         }
         catch (err) {
             next(err);

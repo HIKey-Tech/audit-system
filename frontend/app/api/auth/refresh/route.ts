@@ -43,7 +43,7 @@ export async function POST(req: NextRequest): Promise<NextResponse> {
 
   const { accessToken, refreshToken: newRefresh, expiresIn } = json.data;
   const res = NextResponse.json({ success: true, message: 'Refreshed' });
-  res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions(expiresIn || 60 * 60));
+  res.cookies.set(ACCESS_COOKIE, accessToken, accessCookieOptions());
   res.cookies.set(REFRESH_COOKIE, newRefresh, refreshCookieOptions());
   return res;
 }

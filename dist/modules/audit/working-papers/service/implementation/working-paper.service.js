@@ -44,7 +44,7 @@ class WorkingPaperService {
         });
         logger_util_1.logger.info('Audit working paper created', { workingPaperId: paper.id, engagementId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.create', module: 'audit', entityType: 'audit_working_paper', entityId: paper.id });
-        return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper);
+        return this._decorate((0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper));
     }
     async previewWorkingPaperImport(engagementId, file, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:create');
@@ -132,8 +132,8 @@ class WorkingPaperService {
             },
         });
         logger_util_1.logger.info('Audit working paper updated', { workingPaperId: id, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.update', module: 'audit', entityType: 'audit_working_paper', entityId: id });
-        return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.update', module: 'audit', entityType: 'audit_working_paper', entityId: id, oldValues: { title: paper.title, status: paper.status, versionNumber: paper.version_number }, newValues: { title: updated.title, status: updated.status, versionNumber: updated.version_number } });
+        return this._decorate((0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated));
     }
     async submitWorkingPaper(id, actor) {
         const paper = await this._getPaperWithEngagement(id);
@@ -156,7 +156,7 @@ class WorkingPaperService {
         this.approvalService.queueApprovalRequiredNotification(approval);
         logger_util_1.logger.info('Audit working paper submitted', { workingPaperId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.submit', module: 'audit', entityType: 'audit_working_paper', entityId: id });
-        return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
+        return this._decorate((0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated));
     }
     async approveWorkingPaper(id, actor, edits) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'working_paper:approve');
@@ -170,7 +170,7 @@ class WorkingPaperService {
         const updated = await this._getPaper(id);
         logger_util_1.logger.info('Audit working paper approved', { workingPaperId: id, actorId: actor.id, edited: !!edits?.content });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.approve', module: 'audit', entityType: 'audit_working_paper', entityId: id });
-        return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
+        return this._decorate((0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated));
     }
     // ──────────── Review comments (reviewer ↔ preparer back-and-forth) ────────────
     async addComment(workingPaperId, body, actor) {
@@ -240,7 +240,27 @@ class WorkingPaperService {
         const updated = await this._getPaper(id);
         logger_util_1.logger.info('Audit working paper rejected', { workingPaperId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.reject', module: 'audit', entityType: 'audit_working_paper', entityId: id, newValues: { reason } });
-        return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated);
+        return this._decorate((0, working_paper_response_dto_1.mapWorkingPaperToResponse)(updated));
+    }
+    /** Fills in the display names of the preparer and reviewer (the mapper only has ids). */
+    async _decorateMany(dtos) {
+        const ids = Array.from(new Set(dtos.flatMap((d) => [d.createdById, d.reviewedById]).filter((v) => !!v)));
+        if (ids.length === 0)
+            return dtos;
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: { id: { in: ids } },
+            select: { id: true, display_name: true, first_name: true, last_name: true, email: true },
+        });
+        const names = new Map(users.map((u) => [u.id, u.display_name?.trim() || `${u.first_name} ${u.last_name}`.trim() || u.email]));
+        return dtos.map((d) => ({
+            ...d,
+            createdByName: names.get(d.createdById) ?? '',
+            reviewerName: d.reviewedById ? (names.get(d.reviewedById) ?? null) : null,
+        }));
+    }
+    async _decorate(dto) {
+        const [decorated] = await this._decorateMany([dto]);
+        return decorated;
     }
     async getWorkingPaperById(id, actor) {
         const paper = await prisma_client_1.prisma.audit_Working_Paper.findFirst({
@@ -250,7 +270,7 @@ class WorkingPaperService {
         if (!paper)
             throw app_error_1.AppError.notFound('Audit working paper');
         await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(paper.engagement_id, actor);
-        return (0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper);
+        return this._decorate((0, working_paper_response_dto_1.mapWorkingPaperToResponse)(paper));
     }
     async listWorkingPapers(engagementId, actor) {
         await (0, engagement_visibility_util_1.assertCanViewInternalArtifacts)(engagementId, actor);
@@ -258,7 +278,7 @@ class WorkingPaperService {
             where: { engagement_id: engagementId, deleted_at: null },
             orderBy: { updated_at: 'desc' },
         });
-        return papers.map(working_paper_response_dto_1.mapWorkingPaperToResponse);
+        return this._decorateMany(papers.map(working_paper_response_dto_1.mapWorkingPaperToResponse));
     }
     async exportWorkingPaper(id, format) {
         const paper = await prisma_client_1.prisma.audit_Working_Paper.findFirst({

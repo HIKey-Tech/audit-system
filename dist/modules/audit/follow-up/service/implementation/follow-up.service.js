@@ -38,10 +38,16 @@ class FollowUpService {
     async submitManagementResponse(findingId, dto, actor) {
         const finding = await this._getFinding(findingId);
         this._assertResponder(finding, actor.id);
+        this._assertAcceptsAuditeeAction(finding);
         const followUp = await prisma_client_1.prisma.$transaction(async (tx) => {
             await tx.audit_Finding.update({
                 where: { id: findingId },
-                data: { status: audit_enum_1.FindingStatus.ManagementResponseReceived },
+                // A further response on a finding already in remediation must not move it backwards.
+                data: {
+                    status: finding.status === audit_enum_1.FindingStatus.InRemediation
+                        ? audit_enum_1.FindingStatus.InRemediation
+                        : audit_enum_1.FindingStatus.ManagementResponseReceived,
+                },
             });
             return tx.audit_Follow_Up.upsert({
                 where: { finding_id: findingId },
@@ -71,6 +77,7 @@ class FollowUpService {
     async submitRemediationEvidence(findingId, evidenceId, actor) {
         const finding = await this._getFinding(findingId);
         this._assertResponder(finding, actor.id);
+        this._assertAcceptsAuditeeAction(finding);
         const evidence = await prisma_client_1.prisma.audit_Evidence.findUnique({
             where: { id: evidenceId },
             select: { engagement_id: true },
@@ -112,6 +119,7 @@ class FollowUpService {
             throw app_error_1.AppError.internal('Document service is not configured for follow-up evidence upload');
         const finding = await this._getFinding(findingId);
         this._assertResponder(finding, actor.id);
+        this._assertAcceptsAuditeeAction(finding);
         const document = await this.documentService.upload({
             uploadedById: actor.id,
             originalName: file.originalName,
@@ -146,6 +154,9 @@ class FollowUpService {
     async verifyRemediation(findingId, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'followup:verify');
         const finding = await this._getFinding(findingId);
+        if (finding.status === audit_enum_1.FindingStatus.Closed || finding.status === audit_enum_1.FindingStatus.PendingClosure) {
+            throw app_error_1.AppError.badRequest('This finding is already closed or awaiting closure approval');
+        }
         if (!actor.permissions.includes('engagement:read_all')) {
             const allowed = await prisma_client_1.prisma.audit_Engagement.count({
                 where: {
@@ -253,7 +264,7 @@ class FollowUpService {
             void this._suggestRiskReassessment(findingId, finding.title, finding.engagement_id).catch((err) => logger_util_1.logger.warn('Risk reassessment suggestion failed', { findingId, err }));
         }
         logger_util_1.logger.info('Remediation verification updated', { findingId, status: dto.verificationStatus, actorId: actor.id });
-        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, newValues: dto });
+        audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.follow_up.verify', module: 'audit', entityType: 'audit_follow_up', entityId: followUp.id, oldValues: { findingStatus: finding.status }, newValues: dto });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
     /** Notify the owners of risks related to a just-verified finding that a reassessment may be due. */
@@ -380,11 +391,13 @@ class FollowUpService {
                 engagement_id: true,
                 auditee_id: true,
                 title: true,
+                status: true,
                 auditee: { select: responderSelect },
                 responders: { select: { user: { select: responderSelect } } },
                 engagement: {
                     select: {
                         reference_number: true,
+                        status: true,
                         lead_auditor: {
                             select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
                         },
@@ -401,6 +414,19 @@ class FollowUpService {
         const allowed = finding.auditee_id === actorId || finding.responders.some((r) => r.user.id === actorId);
         if (!allowed)
             throw app_error_1.AppError.forbidden('Only an assigned auditee can submit a response for this finding');
+    }
+    /**
+     * Auditee actions (response, remediation evidence) are only valid once the report has been
+     * issued and while the finding is still being worked — not on closed/verified findings.
+     */
+    _assertAcceptsAuditeeAction(finding) {
+        if (finding.engagement.status !== audit_enum_1.EngagementStatus.Reported) {
+            throw app_error_1.AppError.badRequest('Findings can only be responded to after the audit report has been issued');
+        }
+        const open = [audit_enum_1.FindingStatus.Open, audit_enum_1.FindingStatus.ManagementResponseReceived, audit_enum_1.FindingStatus.InRemediation];
+        if (!open.includes(finding.status)) {
+            throw app_error_1.AppError.badRequest('This finding is no longer open for management response or remediation evidence');
+        }
     }
     /** Primary auditee plus co-responders, de-duplicated by user id. */
     _responders(finding) {

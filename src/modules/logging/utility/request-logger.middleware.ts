@@ -3,6 +3,14 @@ import { Request, Response, NextFunction } from 'express';
 import { auditLogService } from '../service/implementation/audit-log.service';
 import { SecurityEvent } from '../domain/enum/logging.enum';
 import { logSecurityEvent } from './security-event.utility';
+import { runWithRequestContext } from '../../../shared/utils/request-context.util';
+
+/**
+ * Authentication endpoints already write a dedicated security event
+ * (`auth.login.succeeded`, `auth.logout`, …) with the real user attached, so the
+ * generic request row would only add an anonymous "System" duplicate.
+ */
+const SECURITY_EVENT_PATHS = /\/auth\/(login|logout|refresh)\/?$/;
 
 const MODULE_ALIASES: Record<string, string> = {
   users: 'user',
@@ -57,6 +65,7 @@ export const requestAuditLogger = (
       });
     }
     if (!isMutating) return;
+    if (SECURITY_EVENT_PATHS.test(requestPath)) return;
 
     const durationMs = Date.now() - startAt;
     const module = getModuleFromPath(requestPath);
@@ -72,5 +81,8 @@ export const requestAuditLogger = (
     });
   });
 
-  next();
+  runWithRequestContext(
+    { ipAddress: req.ip, userAgent: req.headers['user-agent'] },
+    () => next(),
+  );
 };

@@ -74,30 +74,42 @@ const ACTION_LABELS: Record<string, string> = {
   'system_audit.security_test.authorise': 'Authorised security test',
 };
 
-/** Title-cases an arbitrary token, leaving short noise words lowercased. */
-const titleCaseToken = (token: string, index: number): string => {
-  if (!token) return token;
-  const noise = new Set(['api', 'v1', 'v2']);
-  if (index > 0 && noise.has(token.toLowerCase())) return '';
-  return token.charAt(0).toUpperCase() + token.slice(1).toLowerCase();
-};
+/** Title-cases an arbitrary token. */
+const titleCaseToken = (token: string): string =>
+  token ? token.charAt(0).toUpperCase() + token.slice(1).toLowerCase() : token;
 
-/** Cleans an unmapped action into a readable phrase. */
+const NOISE_TOKENS = new Set(['api', 'v1', 'v2']);
+const UUID_START = /^[0-9a-f]{8}-[0-9a-f]{4}-/i;
+
+/** Cleans an unmapped action into a readable phrase (no API prefix, no record ids). */
+const METHOD_VERBS: Record<string, string> = { PATCH: 'Update', PUT: 'Update', DELETE: 'Delete' };
+
 const cleanAction = (raw: string): string => {
   // Strip HTTP method prefix: "POST:/Api/V1/Foo/Bar" → "/Api/V1/Foo/Bar"
   const colonIdx = raw.indexOf(':');
-  const body = colonIdx > 0 && colonIdx < 8 ? raw.slice(colonIdx + 1) : raw;
+  const hasMethod = colonIdx > 0 && colonIdx < 8;
+  const verb = hasMethod ? METHOD_VERBS[raw.slice(0, colonIdx).toUpperCase()] : undefined;
+  const body = hasMethod ? raw.slice(colonIdx + 1) : raw;
   const tokens = body
-    .replace(/[./]+/g, ' ')
-    .split(' ')
+    .split(/[./]+/)
     .map((t) => t.trim())
+    .filter((t) => t && !NOISE_TOKENS.has(t.toLowerCase()) && !UUID_START.test(t))
+    .flatMap((t) => t.split(/[_-]+/))
     .filter(Boolean);
-  return tokens.map((t, i) => titleCaseToken(t, i)).filter(Boolean).join(' ') || raw;
+  const phrase = tokens.map(titleCaseToken).join(' ');
+  return phrase ? (verb ? `${verb} ${phrase}` : phrase) : raw;
+};
+
+/** "module.entity.verb" semantic actions: drop the module, read the rest as a sentence. */
+const cleanSemanticAction = (raw: string): string | null => {
+  if (!/^[a-z_]+(\.[a-z_]+){2,}$/.test(raw)) return null;
+  const words = raw.split('.').slice(1).join(' ').replace(/_/g, ' ');
+  return words.charAt(0).toUpperCase() + words.slice(1);
 };
 
 const humanizeAction = (raw: string): string => {
   const key = raw.toLowerCase();
-  return ACTION_LABELS[key] ?? cleanAction(raw);
+  return ACTION_LABELS[key] ?? cleanSemanticAction(key) ?? cleanAction(raw);
 };
 
 /** Module dropdown labels. */
@@ -435,9 +447,17 @@ export default function LogsPage(): JSX.Element | null {
             </div>
             <KV label="Raw action" value={<span className="font-mono">{selected.action}</span>} />
             <KV label="User agent" value={<span className="break-all">{selected.userAgent ?? '—'}</span>} />
-            <JsonBlock label="Old values" value={selected.oldValues} />
-            <JsonBlock label="New values" value={selected.newValues} />
-            <JsonBlock label="Metadata" value={selected.metadata} />
+            <ChangeTable oldValues={selected.oldValues} newValues={selected.newValues} />
+            <details>
+              <summary className="cursor-pointer text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                Raw values
+              </summary>
+              <div className="mt-2 space-y-3">
+                <JsonBlock label="Old values" value={selected.oldValues} />
+                <JsonBlock label="New values" value={selected.newValues} />
+                <JsonBlock label="Metadata" value={selected.metadata} />
+              </div>
+            </details>
           </div>
         )}
       </SlideOver>
@@ -490,6 +510,68 @@ const KV = ({ label, value }: { label: string; value: React.ReactNode }): JSX.El
     <div className="mt-0.5 text-text-primary">{value}</div>
   </div>
 );
+
+const isPlainObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null && !Array.isArray(value);
+
+const formatValue = (value: unknown): string => {
+  if (value === null || value === undefined) return '—';
+  if (typeof value === 'string') return value === '' ? '—' : value;
+  if (typeof value === 'object') return JSON.stringify(value);
+  return String(value);
+};
+
+const humanizeKey = (key: string): string =>
+  key
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .replace(/_/g, ' ')
+    .replace(/^./, (c) => c.toUpperCase());
+
+/** Field-by-field before/after view; only fields that changed (or were set) are listed. */
+const ChangeTable = ({
+  oldValues,
+  newValues,
+}: {
+  oldValues: unknown;
+  newValues: unknown;
+}): JSX.Element | null => {
+  const before = isPlainObject(oldValues) ? oldValues : {};
+  const after = isPlainObject(newValues) ? newValues : {};
+  const keys = Array.from(new Set([...Object.keys(before), ...Object.keys(after)])).filter(
+    (k) => formatValue(before[k]) !== formatValue(after[k]),
+  );
+  if (keys.length === 0) return null;
+  const hasBefore = Object.keys(before).length > 0;
+  return (
+    <div>
+      <p className="mb-1 text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+        {hasBefore ? 'What changed' : 'Recorded values'}
+      </p>
+      <div className="overflow-hidden rounded-md border border-border">
+        <table className="w-full text-left text-[11px]">
+          <thead className="bg-surface-alt text-text-secondary">
+            <tr>
+              <th className="px-3 py-1.5 font-semibold">Field</th>
+              {hasBefore && <th className="px-3 py-1.5 font-semibold">Before</th>}
+              <th className="px-3 py-1.5 font-semibold">{hasBefore ? 'After' : 'Value'}</th>
+            </tr>
+          </thead>
+          <tbody>
+            {keys.map((k) => (
+              <tr key={k} className="border-t border-border align-top">
+                <td className="px-3 py-1.5 font-medium text-text-primary">{humanizeKey(k)}</td>
+                {hasBefore && (
+                  <td className="break-all px-3 py-1.5 text-text-secondary">{formatValue(before[k])}</td>
+                )}
+                <td className="break-all px-3 py-1.5 text-text-primary">{formatValue(after[k])}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
 
 const JsonBlock = ({ label, value }: { label: string; value: unknown }): JSX.Element | null => {
   if (value === null || value === undefined) return null;

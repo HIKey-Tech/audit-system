@@ -25,6 +25,7 @@ export interface RiskRegisterResponseDto {
     currentImpact: number;
     currentScore: number;
     status: string;
+    businessObjective: string | null;
     lastAssessedAt: string | null;
     universeId: string | null;
     universeName: string | null;
@@ -53,6 +54,7 @@ export declare const mapRiskRegisterToResponse: (risk: {
     impact: number;
     current_score: number;
     status: string;
+    business_objective: string | null;
     last_assessed_at: Date | null;
     universe_id: string | null;
     universe?: {

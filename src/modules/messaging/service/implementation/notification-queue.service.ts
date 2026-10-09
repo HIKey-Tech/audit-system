@@ -27,6 +27,24 @@ const FAILED_STATUS = 'failed';
 // flapping SMTP relay or a single bad recipient from being hammered every tick.
 const RETRY_BACKOFF_CAP_MINUTES = 60;
 const PROCESSING_TIMEOUT_MS = 15 * 60 * 1000;
+// Hard ceiling for delivering ONE queue item. A hung SMTP/DB call must never
+// freeze the single-flight drain loop (and with it every in-app notification).
+const ITEM_TIMEOUT_MS = 45_000;
+const DRAIN_TIMEOUT_MS = 3 * 60_000;
+
+const withTimeout = async <T>(work: Promise<T>, ms: number, label: string): Promise<T> => {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      work,
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms / 1000}s`)), ms);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+};
 const computeRetryDelayMs = (attempts: number): number => {
   const minutes = Math.min(2 ** attempts, RETRY_BACKOFF_CAP_MINUTES);
   return minutes * 60 * 1000;
@@ -235,7 +253,15 @@ export class NotificationQueueService implements INotificationQueueService {
     }
     this.isProcessing = true;
     try {
-      await this._drainQueue();
+      // Overall deadline for one drain. Individual items are already time-boxed, but any
+      // other step (a stuck DB call, a lost connection) must not be able to hold the
+      // single-flight lock forever and silence every notification. Items are claimed
+      // atomically (pending → processing), so releasing the lock cannot double-send.
+      await withTimeout(this._drainQueue(), DRAIN_TIMEOUT_MS, 'Notification queue drain');
+    } catch (err) {
+      logger.error('Notification queue drain aborted; lock released so the next tick can run', {
+        err: err instanceof Error ? err.message : String(err),
+      });
     } finally {
       this.isProcessing = false;
     }
@@ -252,6 +278,10 @@ export class NotificationQueueService implements INotificationQueueService {
       orderBy: [{ priority: 'desc' }, { scheduled_at: 'asc' }],
       take: BATCH_SIZE,
     });
+
+    // In-app notifications first: they are a single DB insert and must never wait
+    // behind slow or failing emails. Order is otherwise preserved.
+    items.sort((a, b) => Number(a.type === 'email') - Number(b.type === 'email'));
 
     for (const item of items) {
       try {
@@ -287,11 +317,23 @@ export class NotificationQueueService implements INotificationQueueService {
         }
 
         if (item.type === 'email') {
-          const emailDto = await renderEmailWithTemplate(parseEmailPayload(item.payload));
-          await notificationService.sendEmail(emailDto);
+          await withTimeout(
+            (async () => {
+              const emailDto = await renderEmailWithTemplate(parseEmailPayload(item.payload));
+              await notificationService.sendEmail(emailDto);
+            })(),
+            ITEM_TIMEOUT_MS,
+            'Email delivery',
+          );
         } else if (item.type === 'in_app') {
-          const inAppDto = await renderInAppWithTemplate(parseInAppPayload(item.payload));
-          await notificationService.sendInAppNotification(inAppDto);
+          await withTimeout(
+            (async () => {
+              const inAppDto = await renderInAppWithTemplate(parseInAppPayload(item.payload));
+              await notificationService.sendInAppNotification(inAppDto);
+            })(),
+            ITEM_TIMEOUT_MS,
+            'In-app notification',
+          );
         } else {
           throw AppError.badRequest(`Unsupported notification queue type: ${item.type}`);
         }
@@ -309,6 +351,9 @@ export class NotificationQueueService implements INotificationQueueService {
           type: item.type,
         });
       } catch (err) {
+        if (err instanceof Error && /timed out/.test(err.message)) {
+          logger.error('Queued notification timed out', { queueId: item.id, type: item.type, message: err.message });
+        }
         const attempts = item.attempts + 1;
         const finalFailure = attempts >= item.max_attempts;
         const status = finalFailure ? FAILED_STATUS : PENDING_STATUS;

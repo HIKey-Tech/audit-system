@@ -15,7 +15,11 @@ export interface CookieOptions {
   maxAge?: number;
 }
 
-export const accessCookieOptions = (maxAgeSeconds = 60 * 60): CookieOptions => ({
+// The cookie outlives the 15-minute JWT it carries, on purpose: when the token expires the
+// API answers 401 and the client silently swaps it using the refresh cookie. If the cookie
+// itself expired with the token, any page reload after 15 idle minutes would bounce a
+// still-signed-in user to the login page.
+export const accessCookieOptions = (maxAgeSeconds = 60 * 60 * 24 * 7): CookieOptions => ({
   httpOnly: true,
   secure: process.env.NODE_ENV === 'production',
   sameSite: 'lax',

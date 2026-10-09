@@ -205,6 +205,7 @@ export default function ProfilePage(): JSX.Element {
   const logoutAllMutation = useMutation({
     mutationFn: () => authApi.logoutAll(),
     onSuccess: () => {
+      qc.clear();
       router.push('/login');
       router.refresh();
     },

@@ -22,7 +22,7 @@ const ENTITY_LABEL: Record<string, string> = {
 };
 
 export const MyWorkPanel = (): JSX.Element => {
-  const { data, isLoading, isError, refetch } = useQuery({
+  const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['dashboard', 'my-work'],
     queryFn: () => dashboardApi.getMyWork(),
   });
@@ -54,7 +54,7 @@ export const MyWorkPanel = (): JSX.Element => {
           </div>
         </div>
       ) : isError ? (
-        <ErrorState compact onRetry={() => refetch()} />
+        <ErrorState compact error={error} onRetry={() => refetch()} />
       ) : (
         <div className="space-y-5">
           {/* ── Section A: Active Engagements (Lead / Manager / Auditee) ── */}

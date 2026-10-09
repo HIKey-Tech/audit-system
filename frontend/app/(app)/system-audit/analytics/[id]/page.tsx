@@ -72,7 +72,7 @@ export default function AnalysisRunPage(): JSX.Element {
     return (
       <div>
         <PageHeader title="Analysis" breadcrumbs={crumbs} />
-        <Card><ErrorState message={run.error instanceof Error ? run.error.message : undefined} onRetry={() => run.refetch()} /></Card>
+        <Card><ErrorState message={run.error instanceof Error ? run.error.message : undefined} error={run.error} onRetry={() => run.refetch()} /></Card>
       </div>
     );
   }

@@ -9,6 +9,47 @@ const risk_enum_1 = require("../../../domain/enum/risk.enum");
 const risk_utility_1 = require("../../../utility/risk.utility");
 const register_response_dto_1 = require("../../../register/dto/response/register.response.dto");
 class RiskMonitoringService {
+    async getEmergingRisks(query, actor) {
+        (0, risk_utility_1.assertHasPermission)(actor.permissions, 'risk_monitoring:read');
+        const since = new Date(Date.now() - query.days * 86_400_000);
+        const restrictToOwner = !actor.permissions.includes('risk:read_all');
+        const risks = await prisma_client_1.prisma.risk_Register.findMany({
+            where: {
+                deleted_at: null,
+                status: { in: [risk_enum_1.RiskStatus.Open, risk_enum_1.RiskStatus.Accepted] },
+                ...(restrictToOwner && { owner_id: actor.id }),
+                OR: [{ created_at: { gte: since } }, { assessments: { some: { assessed_at: { gte: since } } } }],
+            },
+            include: {
+                category: { select: { name: true } },
+                owner: { select: { display_name: true, first_name: true, last_name: true } },
+                assessments: { orderBy: { assessed_at: 'desc' }, select: { score: true, assessed_at: true } },
+            },
+        });
+        const emerging = [];
+        for (const risk of risks) {
+            // The score the risk carried when the window opened, if it existed then.
+            const before = risk.assessments.find((a) => a.assessed_at < since);
+            const isNew = risk.created_at >= since;
+            if (!isNew && (!before || risk.current_score <= before.score))
+                continue;
+            emerging.push({
+                riskId: risk.id,
+                title: risk.title,
+                categoryName: risk.category?.name ?? null,
+                ownerName: risk.owner ? risk.owner.display_name ?? `${risk.owner.first_name} ${risk.owner.last_name}`.trim() : null,
+                trend: isNew ? 'new' : 'rising',
+                currentScore: risk.current_score,
+                previousScore: isNew ? null : before.score,
+                change: isNew ? risk.current_score : risk.current_score - before.score,
+                status: risk.status,
+                lastAssessedAt: risk.last_assessed_at?.toISOString() ?? null,
+            });
+        }
+        return emerging
+            .sort((a, b) => b.currentScore - a.currentScore || b.change - a.change)
+            .slice(0, query.limit);
+    }
     async getHighRiskItems(query, actor) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);
         const restrictToOwner = !actor.permissions.includes('risk:read_all');
