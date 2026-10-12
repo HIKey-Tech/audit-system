@@ -21,7 +21,7 @@ FROM deps AS build
 # prisma.config.ts loads DATABASE_URL at config-parse time; generate needs no
 # real DB, so give it a syntactically valid placeholder for this stage only.
 ENV DATABASE_URL="sqlserver://localhost:1433;database=build;user=build;password=build;encrypt=true;trustServerCertificate=true"
-COPY tsconfig.json prisma.config.ts ./
+COPY tsconfig.json tsconfig.build.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY src ./src
@@ -50,6 +50,7 @@ COPY --from=build /app/node_modules/.prisma ./node_modules/.prisma
 COPY --from=build /app/node_modules/@prisma/client ./node_modules/@prisma/client
 COPY --from=build /app/dist ./dist
 COPY package.json ./
+COPY certs ./certs
 # Writable paths: uploads volume target + winston file logs (cwd-relative logs/)
 RUN mkdir -p /data/uploads /app/logs && chown -R node:node /data /app/logs
 USER node
