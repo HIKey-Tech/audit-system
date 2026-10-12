@@ -25,6 +25,7 @@ COPY tsconfig.json tsconfig.build.json prisma.config.ts ./
 COPY prisma ./prisma
 RUN npx prisma generate
 COPY src ./src
+COPY certs ./certs
 RUN npm run build
 
 FROM node:20-bookworm AS prod-deps
