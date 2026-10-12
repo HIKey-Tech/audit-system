@@ -10,6 +10,7 @@ interface BadgeProps {
   size?: 'xs' | 'sm';
   className?: string;
   withDot?: boolean;
+  onClick?: () => void;
 }
 
 const RAW_TONES = {
@@ -30,6 +31,7 @@ export const Badge = ({
   size = 'xs',
   withDot = false,
   className,
+  onClick,
 }: BadgeProps): JSX.Element => {
   const t = status ? statusTone(status) : null;
 
@@ -45,6 +47,7 @@ export const Badge = ({
 
   return (
     <span
+      onClick={onClick}
       className={cn(
         'inline-flex items-center gap-1.5 rounded-full font-medium ring-1 whitespace-nowrap',
         size === 'xs' ? 'px-2 py-0.5 text-xs' : 'px-2.5 py-1 text-sm',

@@ -2,6 +2,7 @@ import { ActorContext } from '../../../../audit/domain/entity/audit.entity';
 import {
   ImocIntegrationStatus,
   ImocModelSummary,
+  ImocStoredTicket,
   ImocTicket,
   ImocTicketLookup,
   ImocTicketPage,
@@ -10,10 +11,12 @@ import {
 import {
   ImocTicketLinkResponseDto,
   ImocTicketSnapshotResponseDto,
+  ImocRealStatusResponseDto,
 } from '../../dto/response/imoc.response.dto';
 
 export interface IImocTicketService {
   getStatus(): Promise<ImocIntegrationStatus>;
+  checkStatus(): Promise<ImocRealStatusResponseDto>;
   searchTickets(query: ImocTicketSearch, actor: ActorContext): Promise<ImocTicketPage>;
   getTicket(lookup: ImocTicketLookup, actor: ActorContext): Promise<ImocTicket>;
   getModel(modelId: string, actor: ActorContext): Promise<ImocModelSummary>;
@@ -25,4 +28,5 @@ export interface IImocTicketService {
   captureSnapshot(id: string, actor: ActorContext): Promise<ImocTicketSnapshotResponseDto>;
   listSnapshots(id: string, actor: ActorContext): Promise<ImocTicketSnapshotResponseDto[]>;
   syncActiveLinks(limit: number): Promise<{ refreshed: number; failed: number }>;
+  listStoredTickets(query: { createdFrom?: string; category?: string[] }, actor: ActorContext): Promise<ImocStoredTicket[]>;
 }

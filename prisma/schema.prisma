@@ -121,6 +121,11 @@ model User {
   security_test_assets_created    Security_Test_Asset[]    @relation("SecurityTestAssetCreatedBy")
   system_documents_owned          System_Document[]        @relation("SystemDocumentOwner")
   system_documents_created        System_Document[]        @relation("SystemDocumentCreatedBy")
+  imoc_rules_created              Imoc_Ingestion_Rule[]    @relation("ImocRuleCreatedBy")
+  imoc_rules_updated              Imoc_Ingestion_Rule[]    @relation("ImocRuleUpdatedBy")
+  imoc_runs_triggered             Imoc_Ingestion_Run[]     @relation("ImocIngestionRunTriggeredBy")
+  imoc_saved_views                Imoc_Saved_View[]        @relation("ImocSavedViewOwner")
+  imoc_risk_links                 Imoc_Ticket_Risk_Link[]  @relation("ImocRiskLinkCreatedBy")
 
   @@map("users")
 }
@@ -1117,6 +1122,7 @@ model Imoc_Ticket_Link {
   last_sync_error    String?   @db.NVarChar(1000)
   is_active          Boolean   @default(true)
   created_by_id      String
+  imoc_ticket_id     String?
   deleted_at         DateTime?
   created_at         DateTime  @default(now())
   updated_at         DateTime  @updatedAt
@@ -1125,12 +1131,14 @@ model Imoc_Ticket_Link {
   working_paper  Audit_Working_Paper? @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   finding        Audit_Finding?       @relation(fields: [finding_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   created_by     User                  @relation("ImocTicketLinkCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  imoc_ticket    Imoc_Ticket?          @relation(fields: [imoc_ticket_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   snapshots      Imoc_Ticket_Snapshot[]
 
   @@unique([engagement_id, order_id])
   @@index([engagement_id, is_active])
   @@index([order_number])
   @@index([last_status])
+  @@index([imoc_ticket_id])
   @@map("imoc_ticket_links")
 }
 
@@ -1373,6 +1381,7 @@ model Risk_Category {
 
   created_by User            @relation("RiskCategoryCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   risks      Risk_Register[]
+  imoc_rules Imoc_Ingestion_Rule[]
 
   @@map("risk_categories")
 }
@@ -1405,6 +1414,7 @@ model Risk_Register {
   asset_links   Risk_Asset_Link[]
   findings      Audit_Finding[]           @relation("RiskFindings")
   control_links Compliance_Control_Risk[]
+  imoc_ticket_links Imoc_Ticket_Risk_Link[]
 
   @@index([category_id])
   @@index([owner_id])
@@ -2055,3 +2065,134 @@ model System_Config {
 
   @@map("system_config")
 }
+
+// ---------------------------------------------------------------------------
+// IMOC Ingestion, Ingestion Rules, Runs, Saved Views, and Risk Links
+// ---------------------------------------------------------------------------
+
+model Imoc_Ticket {
+  id                 String    @id @default(uuid())
+  order_id           String    @unique
+  order_number       String    @unique
+  order_name         String?
+  model_id           String?
+  model_name         String?
+  model_type         String?
+  order_source       String?
+  order_status       String?
+  sla_status         String?
+  priority           String?
+  current_handler    String?
+  created_by_name    String?
+  imoc_created_at    DateTime?
+  imoc_ended_at      DateTime?
+  category           String?
+  matched_rule_ids   String?   @db.NVarChar(Max) // JSON array string of matched rule IDs
+  first_ingested_at  DateTime  @default(now())
+  last_synced_at     DateTime  @default(now())
+  source_hash        String?   @db.NVarChar(128)
+  is_active          Boolean   @default(true)
+  created_at         DateTime  @default(now())
+  updated_at         DateTime  @updatedAt
+  deleted_at         DateTime?
+
+  ticket_links       Imoc_Ticket_Link[]
+  risk_links         Imoc_Ticket_Risk_Link[]
+
+  @@index([order_status])
+  @@index([sla_status])
+  @@index([category])
+  @@index([imoc_created_at])
+  @@index([model_id])
+  @@index([is_active])
+  @@map("imoc_tickets")
+}
+
+model Imoc_Ingestion_Rule {
+  id               String    @id @default(uuid())
+  name             String    @unique
+  description      String?
+  is_active        Boolean   @default(true)
+  priority         Int       @default(100) // Lower number = higher priority
+  criteria_json    String    @db.NVarChar(Max)
+  category         String?
+  risk_category_id String?
+  lookback_days    Int       @default(30)
+  last_run_at      DateTime?
+  last_run_status  String?
+  last_run_fetched Int?
+  last_run_ingested Int?
+  last_run_error   String?   @db.NVarChar(1000)
+  created_by_id    String
+  updated_by_id    String?
+  deleted_at       DateTime?
+  created_at       DateTime  @default(now())
+  updated_at       DateTime  @updatedAt
+
+  risk_category    Risk_Category? @relation(fields: [risk_category_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_by       User           @relation("ImocRuleCreatedBy", fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  updated_by       User?          @relation("ImocRuleUpdatedBy", fields: [updated_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([is_active, priority])
+  @@map("imoc_ingestion_rules")
+}
+
+model Imoc_Ingestion_Run {
+  id               String    @id @default(uuid())
+  trigger          String    // scheduled | manual
+  triggered_by_id  String?
+  started_at       DateTime  @default(now())
+  finished_at      DateTime?
+  status           String    @default("running") // running | success | partial | failed
+  rules_evaluated  Int       @default(0)
+  fetched          Int       @default(0)
+  created          Int       @default(0)
+  updated          Int       @default(0)
+  skipped          Int       @default(0)
+  error_summary    String?   @db.NVarChar(1000)
+  created_at       DateTime  @default(now())
+
+  triggered_by     User?     @relation("ImocIngestionRunTriggeredBy", fields: [triggered_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([started_at])
+  @@index([status])
+  @@map("imoc_ingestion_runs")
+}
+
+model Imoc_Saved_View {
+  id           String    @id @default(uuid())
+  name         String
+  filters_json String    @db.NVarChar(Max)
+  owner_id     String
+  is_default   Boolean   @default(false)
+  created_at   DateTime  @default(now())
+  updated_at   DateTime  @updatedAt
+  deleted_at   DateTime?
+
+  owner        User      @relation("ImocSavedViewOwner", fields: [owner_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([owner_id, name])
+  @@index([owner_id])
+  @@map("imoc_saved_views")
+}
+
+model Imoc_Ticket_Risk_Link {
+  id             String    @id @default(uuid())
+  imoc_ticket_id String
+  risk_id        String
+  notes          String?   @db.NVarChar(Max)
+  created_by_id  String
+  deleted_at     DateTime?
+  created_at     DateTime  @default(now())
+  updated_at     DateTime  @updatedAt
+
+  ticket         Imoc_Ticket   @relation(fields: [imoc_ticket_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  risk           Risk_Register @relation(fields: [risk_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  created_by     User          @relation("ImocRiskLinkCreatedBy", fields: [created_by_id], references: [id], onDelete: NoAction, onUpdate: NoAction)
+
+  @@unique([imoc_ticket_id, risk_id])
+  @@index([imoc_ticket_id])
+  @@index([risk_id])
+  @@map("imoc_ticket_risk_links")
+}
+

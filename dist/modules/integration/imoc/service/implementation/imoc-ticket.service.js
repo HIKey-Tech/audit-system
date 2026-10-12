@@ -43,6 +43,9 @@ class ImocTicketService {
                     : 'IMOC is enabled but awaits complete machine-user credentials or a valid break-glass token.',
         };
     }
+    async checkStatus() {
+        return this.client.checkStatus();
+    }
     async searchTickets(query, actor) {
         assertPermission(actor, 'imoc:read');
         return this.client.listTickets(query);
@@ -70,6 +73,9 @@ class ImocTicketService {
     async linkTicket(engagementId, lookup, actor) {
         assertPermission(actor, 'imoc:link');
         const ticket = await this.client.getTicket(lookup);
+        const storedTicket = await prisma_client_1.prisma.imoc_Ticket.findUnique({
+            where: { order_id: ticket.orderId },
+        });
         const link = await prisma_client_1.prisma.imoc_Ticket_Link.upsert({
             where: {
                 engagement_id_order_id: {
@@ -81,11 +87,13 @@ class ImocTicketService {
                 engagement_id: engagementId,
                 created_by_id: actor.id,
                 is_active: true,
+                imoc_ticket_id: storedTicket?.id ?? null,
                 ...(0, imoc_response_dto_1.ticketLinkFields)(ticket),
             },
             update: {
                 is_active: true,
                 deleted_at: null,
+                ...(storedTicket ? { imoc_ticket_id: storedTicket.id } : {}),
                 ...(0, imoc_response_dto_1.ticketLinkFields)(ticket),
             },
         });
@@ -246,6 +254,43 @@ class ImocTicketService {
         if (!link)
             throw app_error_1.AppError.notFound('IMOC ticket link');
         return link;
+    }
+    async listStoredTickets(query, actor) {
+        assertPermission(actor, 'imoc:read');
+        const where = { deleted_at: null };
+        if (query.createdFrom) {
+            where.imoc_created_at = { gte: new Date(query.createdFrom) };
+        }
+        if (query.category && query.category.length > 0) {
+            where.category = { in: query.category };
+        }
+        const tickets = await prisma_client_1.prisma.imoc_Ticket.findMany({
+            where,
+            orderBy: { imoc_created_at: 'desc' },
+            take: 1000,
+        });
+        return tickets.map((t) => ({
+            id: t.id,
+            orderId: t.order_id,
+            orderNumber: t.order_number,
+            orderName: t.order_name,
+            modelId: t.model_id,
+            modelName: t.model_name,
+            modelType: t.model_type,
+            orderSource: t.order_source,
+            orderStatus: t.order_status,
+            slaStatus: t.sla_status,
+            priority: t.priority,
+            currentHandler: t.current_handler,
+            createdByName: t.created_by_name,
+            imocCreatedAt: t.imoc_created_at ? t.imoc_created_at.toISOString() : null,
+            imocEndedAt: t.imoc_ended_at ? t.imoc_ended_at.toISOString() : null,
+            category: t.category,
+            matchedRuleIds: t.matched_rule_ids ? JSON.parse(t.matched_rule_ids) : [],
+            firstIngestedAt: t.first_ingested_at.toISOString(),
+            lastSyncedAt: t.last_synced_at.toISOString(),
+            isActive: t.is_active,
+        }));
     }
 }
 exports.ImocTicketService = ImocTicketService;

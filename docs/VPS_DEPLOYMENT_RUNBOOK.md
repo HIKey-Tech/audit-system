@@ -177,6 +177,22 @@ STORAGE_LOCAL_PATH=/data/uploads
 CACHE_DRIVER=redis
 REDIS_URL=redis://redis:6379
 
+# IMOC IT service-management integration (read-only)
+IMOC_ENABLED=false
+IMOC_BASE_URL=https://service-imoc.gbb.com.ng:443
+IMOC_TENANT_ID=
+IMOC_TENANT_ACCOUNT=
+IMOC_MACHINE_USER_ACCOUNT=
+IMOC_ACCESS_KEY=
+IMOC_SECRET_KEY=
+IMOC_CA_CERT_PATH=/app/certs/imoc-ca-chain.pem
+IMOC_TLS_PINNED_FINGERPRINT=87:9E:E0:36:FC:1D:4E:E5:1E:C0:EA:21:EE:20:6F:6F:9A:B3:F7:0E:0C:F9:BA:7F:2D:DB:9F:74:40:05:31:D3
+IMOC_INGEST_ENABLED=false
+IMOC_INGEST_MAX_PAGES=50
+IMOC_INGEST_PAGE_SIZE=100
+IMOC_INGEST_REQUESTS_PER_SECOND=20
+IMOC_TIMESTAMPS_UTC=true
+
 PASSWORD_RESET_TOKEN_TTL=30m
 MFA_CHALLENGE_TTL=5m
 MFA_ENROLL_TTL=15m
@@ -479,3 +495,34 @@ df -h /opt/iams
 | api crash-loops with `PrismaClientInitializationError` | Prisma client generated against a different OpenSSL than the runtime — rebuild with all Dockerfile stages on the same (full bookworm) base |
 | Download links show localhost | `APP_URL` wrong in `.env` |
 | `mssql` never healthy | `docker compose logs mssql` — usually a weak `MSSQL_SA_PASSWORD` (must meet SQL Server complexity rules) or `/opt/iams/mssql` not owned by uid 10001 |
+| IMOC 503 "certificate is not trusted" | Mount GBB's IMOC CA into the container and set `IMOC_CA_CERT_PATH` (see below) |
+
+---
+
+### IMOC Integration TLS Trust (Private CA)
+
+GBB's IMOC API (`https://service-imoc.gbb.com.ng:443`) presents a certificate chained to a private Huawei CA (`GDE23.467633.huawei.com` / `gde`). Node.js strictly rejects untrusted CAs by default (`SELF_SIGNED_CERT_IN_CHAIN`).
+
+To establish trust securely (without disabling TLS verification):
+1. **Obtain the CA certificate chain**:
+   - Ask GBB IT for the IMOC CA PEM bundle, OR extract the CA certificates from the live endpoint:
+     ```bash
+     echo | openssl s_client -connect service-imoc.gbb.com.ng:443 -servername service-imoc.gbb.com.ng -showcerts 2>/dev/null \
+       | awk '/BEGIN CERTIFICATE/{n++} n>=2{print} /END CERTIFICATE/ && n>=2{}' > /opt/iams/certs/imoc-ca-chain.pem
+     ```
+2. **Mount the CA certificate into the backend container**:
+   In `docker-compose.prod.yml`, under `iams-api.volumes`:
+   ```yaml
+   volumes:
+     - /opt/iams/certs/imoc-ca-chain.pem:/app/certs/imoc-ca-chain.pem:ro
+   ```
+3. **Configure environment**:
+   Set `IMOC_CA_CERT_PATH=/app/certs/imoc-ca-chain.pem` in `/opt/iams/app/.env`.
+   If GBB's internal cluster leaf certificate carries an internal cluster SAN (`kube-dns...`), set the pinned leaf SHA-256 fingerprint:
+   ```env
+   IMOC_TLS_PINNED_FINGERPRINT=87:9E:E0:36:FC:1D:4E:E5:1E:C0:EA:21:EE:20:6F:6F:9A:B3:F7:0E:0C:F9:BA:7F:2D:DB:9F:74:40:05:31:D3
+   ```
+   *(Alternatively, `NODE_EXTRA_CA_CERTS=/app/certs/imoc-ca-chain.pem` is supported by Node.js).*
+4. Restart `iams-api`:
+   `docker compose -f docker-compose.prod.yml up -d iams-api`
+   The logs will confirm: `IMOC trust: custom CA loaded (subject=...)`.

@@ -1,14 +1,24 @@
+import fs from 'fs';
+import path from 'path';
+import tls from 'tls';
+import { Agent } from 'undici';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { config } from '../../../../../shared/config/app.config';
 import { logger } from '../../../../../shared/utils/logger.util';
 import {
   ImocModelSummary,
+  ImocRealStatus,
   ImocTicket,
   ImocTicketLookup,
   ImocTicketPage,
   ImocTicketSearch,
 } from '../../domain/entity/imoc.entity';
-import { normalizeImocModel, normalizeImocTicket } from '../../utility/imoc.utility';
+import {
+  classifyImocNetworkError,
+  classifyImocUpstreamError,
+  normalizeImocModel,
+  normalizeImocTicket,
+} from '../../utility/imoc.utility';
 
 interface ImocEnvelope<T> {
   code?: string | number;
@@ -52,14 +62,55 @@ export interface IImocClient {
   readonly configured: boolean;
   listTickets(query: ImocTicketSearch): Promise<ImocTicketPage>;
   getTicket(lookup: ImocTicketLookup): Promise<ImocTicket>;
+  resolveTicket(lookup: ImocTicketLookup): Promise<ImocTicket>;
   getLightweightTickets(orderIds: string[]): Promise<ImocTicket[]>;
   getTicketStatus(orderNumber: string): Promise<ImocTicket>;
   getCurrentTicketStatus(orderNumber: string): Promise<ImocTicket>;
   getModel(modelId: string): Promise<ImocModelSummary>;
+  checkStatus(): Promise<ImocRealStatus>;
 }
 
 const success = (code: unknown): boolean => String(code) === '200' || String(code) === '0';
 const machineTokenSuccess = (code: unknown): boolean => String(code) === '1';
+
+let sharedImocDispatcher: Agent | undefined;
+
+/**
+ * Returns an undici Agent configured to trust the private IMOC CA and/or
+ * verify against a pinned leaf certificate fingerprint when specified.
+ */
+export const getImocDispatcher = (): Agent | undefined => {
+  if (sharedImocDispatcher) return sharedImocDispatcher;
+  const caPath = config.imoc.caCertPath;
+  const pinnedFp = config.imoc.tlsPinnedFingerprint;
+  if (!caPath && !pinnedFp) return undefined;
+
+  let ca: Buffer | undefined;
+  if (caPath) {
+    try {
+      ca = fs.readFileSync(path.resolve(process.cwd(), caPath));
+    } catch (err) {
+      logger.warn('Failed to read IMOC CA certificate file', { caPath, err });
+    }
+  }
+
+  sharedImocDispatcher = new Agent({
+    connect: {
+      ca,
+      checkServerIdentity: (hostname, cert) => {
+        if (pinnedFp) {
+          const cleanPin = pinnedFp.replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+          const cleanCertFp = (cert.fingerprint256 || '').replace(/[^a-fA-F0-9]/g, '').toUpperCase();
+          if (cleanPin && cleanCertFp && cleanPin === cleanCertFp) {
+            return undefined; // Pinned leaf match accepted
+          }
+        }
+        return tls.checkServerIdentity(hostname, cert);
+      },
+    },
+  });
+  return sharedImocDispatcher;
+};
 
 /**
  * Applies for and caches the documented IMOC machine-machine token. Credentials
@@ -110,6 +161,7 @@ export class MachineUserImocTokenProvider implements IImocTokenProvider {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), this.options.timeoutMs);
     try {
+      const dispatcher = getImocDispatcher();
       const response = await this.fetchImpl(
         `${this.options.baseUrl}/esf/iamservice/v1/token/machine-user/apply`,
         {
@@ -125,14 +177,15 @@ export class MachineUserImocTokenProvider implements IImocTokenProvider {
             ...(this.options.machineUserAccount ? { machineUserAccount: this.options.machineUserAccount } : {}),
           }),
           signal: controller.signal,
-        },
+          ...(dispatcher ? { dispatcher } : {}),
+        } as RequestInit,
       );
       const raw = await response.text();
       let envelope: ImocMachineTokenEnvelope;
       try {
         envelope = JSON.parse(raw) as ImocMachineTokenEnvelope;
       } catch {
-        throw AppError.serviceUnavailable(`IMOC token service returned a non-JSON response (${response.status}).`);
+        throw AppError.badGateway(`IMOC token service returned a non-JSON response (${response.status}).`);
       }
       const rawToken = typeof envelope.data?.imoc_token === 'string' ? envelope.data.imoc_token : '';
       if (!response.ok || !machineTokenSuccess(envelope.code) || !rawToken) {
@@ -140,7 +193,7 @@ export class MachineUserImocTokenProvider implements IImocTokenProvider {
           status: response.status,
           upstreamCode: envelope.code,
         });
-        throw AppError.serviceUnavailable('IMOC could not issue a machine token.');
+        throw AppError.badGateway('IMOC rejected the integration credentials.');
       }
 
       // The vendor contract explicitly requires EncodeURI before the token is
@@ -150,10 +203,7 @@ export class MachineUserImocTokenProvider implements IImocTokenProvider {
       return this.token;
     } catch (err) {
       if (err instanceof AppError) throw err;
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw AppError.serviceUnavailable('IMOC token service did not respond before the configured timeout.');
-      }
-      throw AppError.serviceUnavailable('Unable to reach the IMOC token service.');
+      throw classifyImocNetworkError(err);
     } finally {
       clearTimeout(timeout);
     }
@@ -211,10 +261,19 @@ class DisabledImocClient implements IImocClient {
 
   async listTickets(): Promise<ImocTicketPage> { return this.unavailable(); }
   async getTicket(): Promise<ImocTicket> { return this.unavailable(); }
+  async resolveTicket(): Promise<ImocTicket> { return this.unavailable(); }
   async getLightweightTickets(): Promise<ImocTicket[]> { return this.unavailable(); }
   async getTicketStatus(): Promise<ImocTicket> { return this.unavailable(); }
   async getCurrentTicketStatus(): Promise<ImocTicket> { return this.unavailable(); }
   async getModel(): Promise<ImocModelSummary> { return this.unavailable(); }
+  async checkStatus(): Promise<ImocRealStatus> {
+    return {
+      reachable: false,
+      authenticated: false,
+      lastError: 'IMOC integration is not enabled.',
+      checkedAt: new Date().toISOString(),
+    };
+  }
 }
 
 /**
@@ -267,7 +326,33 @@ class HttpImocClient implements IImocClient {
     };
   }
 
+  async resolveTicket(lookup: ImocTicketLookup): Promise<ImocTicket> {
+    const orderId = lookup.orderId?.trim();
+    const orderNumber = lookup.orderNumber?.trim();
+    if (orderId) {
+      return this.getTicket({ orderId });
+    }
+    if (!orderNumber) {
+      throw AppError.badRequest('Provide an IMOC ticket ID or ticket number.');
+    }
+    const page = await this.listTickets({
+      orderNumber,
+      page: 1,
+      pageSize: 10,
+    });
+    const matched = page.items.find(
+      (item) => item.orderNumber.toLowerCase() === orderNumber.toLowerCase(),
+    );
+    if (!matched) {
+      throw AppError.notFound('IMOC ticket');
+    }
+    return this.getTicket({ orderId: matched.orderId });
+  }
+
   async getTicket(lookup: ImocTicketLookup): Promise<ImocTicket> {
+    if (!lookup.orderId && lookup.orderNumber) {
+      return this.resolveTicket(lookup);
+    }
     return normalizeImocTicket(await this._post('/eticket/openapi/order/query/single', { ...lookup }));
   }
 
@@ -290,6 +375,35 @@ class HttpImocClient implements IImocClient {
     return normalizeImocModel(await this._post('/eticket/openapi/model/queryByModelId', { modelId }));
   }
 
+  async checkStatus(): Promise<ImocRealStatus> {
+    const checkedAt = new Date().toISOString();
+    if (!this.configured) {
+      return {
+        reachable: false,
+        authenticated: false,
+        lastError: 'IMOC machine-user credentials are not configured.',
+        checkedAt,
+      };
+    }
+    try {
+      await this.tokenProvider.getToken();
+      return {
+        reachable: true,
+        authenticated: true,
+        lastError: null,
+        checkedAt,
+      };
+    } catch (err) {
+      const safeError = err instanceof AppError ? err.message : 'Unable to connect or authenticate with IMOC.';
+      return {
+        reachable: false,
+        authenticated: false,
+        lastError: safeError,
+        checkedAt,
+      };
+    }
+  }
+
   private async _post<T>(path: string, body: Record<string, unknown>, retried = false): Promise<T> {
     if (!this.configured) {
       throw AppError.serviceUnavailable(
@@ -301,6 +415,7 @@ class HttpImocClient implements IImocClient {
     const timeout = setTimeout(() => controller.abort(), config.imoc.timeoutMs);
     try {
       const token = await this.tokenProvider.getToken();
+      const dispatcher = getImocDispatcher();
       const response = await fetch(`${config.imoc.baseUrl}${path}`, {
         method: 'POST',
         headers: {
@@ -310,13 +425,14 @@ class HttpImocClient implements IImocClient {
         },
         body: JSON.stringify(Object.fromEntries(Object.entries(body).filter(([, value]) => value !== undefined))),
         signal: controller.signal,
-      });
+        ...(dispatcher ? { dispatcher } : {}),
+      } as RequestInit);
       const raw = await response.text();
       let envelope: ImocEnvelope<T>;
       try {
         envelope = JSON.parse(raw) as ImocEnvelope<T>;
       } catch {
-        throw AppError.serviceUnavailable(`IMOC returned a non-JSON response (${response.status}).`);
+        throw AppError.badGateway(`IMOC returned a non-JSON response (${response.status}).`);
       }
       if ((response.status === 401 || response.status === 403) && !retried) {
         this.tokenProvider.invalidate();
@@ -325,18 +441,18 @@ class HttpImocClient implements IImocClient {
       if (!response.ok || !success(envelope.code)) {
         const upstreamCode = envelope.code ?? envelope.status ?? response.status;
         logger.warn('IMOC request failed', { path, status: response.status, upstreamCode });
-        throw AppError.serviceUnavailable(`IMOC request failed (upstream code ${upstreamCode}).`);
+        throw classifyImocUpstreamError(upstreamCode, envelope.msg ?? envelope.error, path.includes('/query/single'));
       }
       if (envelope.data === undefined || envelope.data === null) {
-        throw AppError.serviceUnavailable('IMOC returned a successful response without ticket data.');
+        if (path.includes('/query/single')) {
+          throw AppError.notFound('IMOC ticket');
+        }
+        throw AppError.badGateway('IMOC returned a successful response without ticket data.');
       }
       return envelope.data;
     } catch (err) {
       if (err instanceof AppError) throw err;
-      if (err instanceof Error && err.name === 'AbortError') {
-        throw AppError.serviceUnavailable('IMOC did not respond before the configured timeout.');
-      }
-      throw AppError.serviceUnavailable('Unable to reach IMOC.');
+      throw classifyImocNetworkError(err);
     } finally {
       clearTimeout(timeout);
     }

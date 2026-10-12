@@ -20,6 +20,8 @@ export enum ErrorCode {
   // Server
   INTERNAL_ERROR = 'INTERNAL_ERROR',
   SERVICE_UNAVAILABLE = 'SERVICE_UNAVAILABLE',
+  BAD_GATEWAY = 'BAD_GATEWAY',
+  GATEWAY_TIMEOUT = 'GATEWAY_TIMEOUT',
   DATABASE_ERROR = 'DATABASE_ERROR',
 
   // Business
@@ -83,5 +85,13 @@ export class AppError extends Error {
 
   static serviceUnavailable(message = 'Service temporarily unavailable'): AppError {
     return new AppError(message, 503, ErrorCode.SERVICE_UNAVAILABLE);
+  }
+
+  static badGateway(message = 'Bad gateway'): AppError {
+    return new AppError(message, 502, ErrorCode.BAD_GATEWAY);
+  }
+
+  static gatewayTimeout(message = 'Gateway timeout'): AppError {
+    return new AppError(message, 504, ErrorCode.GATEWAY_TIMEOUT);
   }
 }

@@ -7,6 +7,8 @@ exports.config = void 0;
 // src/shared/config/app.config.ts
 const dotenv_1 = __importDefault(require("dotenv"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
+const crypto_1 = require("crypto");
 const ms_1 = __importDefault(require("ms"));
 dotenv_1.default.config({ path: path_1.default.resolve(process.cwd(), '.env') });
 const requireEnv = (key) => {
@@ -140,6 +142,15 @@ exports.config = {
         // enables the low-volume, persisted background refresh job.
         syncEnabled: optionalEnv('IMOC_SYNC_ENABLED', 'false') === 'true',
         syncBatchSize: parseInt(optionalEnv('IMOC_SYNC_BATCH_SIZE', '25'), 10),
+        // TLS trust configuration
+        caCertPath: optionalEnv('IMOC_CA_CERT_PATH'),
+        tlsPinnedFingerprint: optionalEnv('IMOC_TLS_PINNED_FINGERPRINT'),
+        // Ingestion pipeline configuration
+        ingestEnabled: optionalEnv('IMOC_INGEST_ENABLED', 'false') === 'true',
+        ingestMaxPages: parseInt(optionalEnv('IMOC_INGEST_MAX_PAGES', '50'), 10),
+        ingestPageSize: parseInt(optionalEnv('IMOC_INGEST_PAGE_SIZE', '100'), 10),
+        ingestRequestsPerSecond: parseInt(optionalEnv('IMOC_INGEST_REQUESTS_PER_SECOND', '20'), 10),
+        timestampsUtc: optionalEnv('IMOC_TIMESTAMPS_UTC', 'true') === 'true',
     },
     redis: {
         url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
@@ -206,6 +217,26 @@ if (exports.config.app.isProd) {
         throw new Error('MFA_ENCRYPTION_KEY is required in production: it encrypts TOTP secrets at rest. ' +
             'Without it the system silently falls back to a key derived from JWT_SECRET, ' +
             'coupling two security domains. Generate one with: openssl rand -base64 32');
+    }
+}
+if (exports.config.imoc.caCertPath) {
+    const resolvedCaPath = path_1.default.resolve(process.cwd(), exports.config.imoc.caCertPath);
+    try {
+        const pem = fs_1.default.readFileSync(resolvedCaPath);
+        if (!pem || pem.length === 0) {
+            throw new Error('Certificate file is empty');
+        }
+        try {
+            const cert = new crypto_1.X509Certificate(pem);
+            const subject = cert.subject.replace(/\r?\n/g, ', ');
+            console.log(`IMOC trust: custom CA loaded (subject=${subject})`);
+        }
+        catch {
+            console.log('IMOC trust: custom CA loaded');
+        }
+    }
+    catch (err) {
+        throw new Error(`IMOC_CA_CERT_PATH was specified as "${exports.config.imoc.caCertPath}", but the file cannot be read: ${err instanceof Error ? err.message : String(err)}`);
     }
 }
 if (exports.config.imoc.enabled) {

@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ImocTicketService = exports.directoryMappingService = exports.DirectoryMappingService = exports.createIntegrationModule = void 0;
+exports.imocStoreService = exports.ImocStoreService = exports.imocIngestionService = exports.ImocIngestionService = exports.ImocTicketService = exports.directoryMappingService = exports.DirectoryMappingService = exports.createIntegrationModule = void 0;
 const express_1 = require("express");
 const directory_mapping_controller_1 = require("./controller/directory-mapping.controller");
 const directory_mapping_service_1 = require("./service/implementation/directory-mapping.service");
@@ -13,13 +13,19 @@ const checklist_service_1 = require("../audit/checklists/service/implementation/
 const document_service_1 = require("../document/service/implementation/document.service");
 const user_service_1 = require("../user/service/implementation/user.service");
 const assignment_service_1 = require("../workflow/assignment/service/implementation/assignment.service");
+const imoc_ingestion_service_1 = require("./imoc/service/implementation/imoc-ingestion.service");
+Object.defineProperty(exports, "imocIngestionService", { enumerable: true, get: function () { return imoc_ingestion_service_1.imocIngestionService; } });
+Object.defineProperty(exports, "ImocIngestionService", { enumerable: true, get: function () { return imoc_ingestion_service_1.ImocIngestionService; } });
+const imoc_store_service_1 = require("./imoc/service/implementation/imoc-store.service");
+Object.defineProperty(exports, "imocStoreService", { enumerable: true, get: function () { return imoc_store_service_1.imocStoreService; } });
+Object.defineProperty(exports, "ImocStoreService", { enumerable: true, get: function () { return imoc_store_service_1.ImocStoreService; } });
 const createIntegrationModule = () => {
     const router = (0, express_1.Router)();
     const controller = new directory_mapping_controller_1.DirectoryMappingController(directory_mapping_service_1.directoryMappingService);
     const documentService = new document_service_1.DocumentService();
     const evidenceService = new evidence_service_1.EvidenceService(documentService);
     const engagementService = new engagement_service_1.EngagementService(new checklist_service_1.ChecklistService(), new user_service_1.UserService(), assignment_service_1.workflowAssignmentService);
-    const imocController = new imoc_ticket_controller_1.ImocTicketController(new imoc_ticket_service_1.ImocTicketService((0, imoc_client_1.createImocClient)(), evidenceService), engagementService);
+    const imocController = new imoc_ticket_controller_1.ImocTicketController(new imoc_ticket_service_1.ImocTicketService((0, imoc_client_1.createImocClient)(), evidenceService), engagementService, imoc_ingestion_service_1.imocIngestionService, imoc_store_service_1.imocStoreService);
     router.use('/integration/directory', controller.router);
     router.use('/integration/imoc', imocController.router);
     return router;

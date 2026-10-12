@@ -21,6 +21,8 @@ var ErrorCode;
     // Server
     ErrorCode["INTERNAL_ERROR"] = "INTERNAL_ERROR";
     ErrorCode["SERVICE_UNAVAILABLE"] = "SERVICE_UNAVAILABLE";
+    ErrorCode["BAD_GATEWAY"] = "BAD_GATEWAY";
+    ErrorCode["GATEWAY_TIMEOUT"] = "GATEWAY_TIMEOUT";
     ErrorCode["DATABASE_ERROR"] = "DATABASE_ERROR";
     // Business
     ErrorCode["OPERATION_FAILED"] = "OPERATION_FAILED";
@@ -66,6 +68,12 @@ class AppError extends Error {
     }
     static serviceUnavailable(message = 'Service temporarily unavailable') {
         return new AppError(message, 503, ErrorCode.SERVICE_UNAVAILABLE);
+    }
+    static badGateway(message = 'Bad gateway') {
+        return new AppError(message, 502, ErrorCode.BAD_GATEWAY);
+    }
+    static gatewayTimeout(message = 'Gateway timeout') {
+        return new AppError(message, 504, ErrorCode.GATEWAY_TIMEOUT);
     }
 }
 exports.AppError = AppError;

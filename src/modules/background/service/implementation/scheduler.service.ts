@@ -10,6 +10,7 @@ import { workflowEscalationService } from '../../../workflow/escalation/service/
 import { DocumentService } from '../../../document/service/implementation/document.service';
 import { directoryMappingService } from '../../../integration/service/implementation/directory-mapping.service';
 import { imocTicketService } from '../../../integration/imoc/service/implementation/imoc-ticket.service';
+import { imocIngestionService } from '../../../integration/imoc/service/implementation/imoc-ingestion.service';
 import { warehouseService } from '../../../warehouse/service/implementation/warehouse.service';
 import { predictiveService } from '../../../predictive';
 import { continuousMonitoringService } from '../../../system-audit';
@@ -35,6 +36,7 @@ export const JOB_KEYS = {
   DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
   INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
   INTEGRATION_IMOC_SYNC_HOURLY: 'BG:INTEGRATION:IMOC:SYNC:HOURLY',
+  INTEGRATION_IMOC_INGEST_HOURLY: 'BG:INTEGRATION:IMOC:INGEST:HOURLY',
   WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY: 'BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY',
   PREDICTIVE_INSIGHTS_HOURLY: 'BG:PREDICTIVE:INSIGHTS:HOURLY',
   RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
@@ -304,6 +306,21 @@ export const registerAllJobs = (): void => {
       }
       const result = await imocTicketService.syncActiveLinks(config.imoc.syncBatchSize);
       logger.info('IMOC linked-ticket sync completed', result);
+    },
+  });
+
+  schedulerService.register({
+    key: JOB_KEYS.INTEGRATION_IMOC_INGEST_HOURLY,
+    name: 'IMOC Scheduled Ticket Ingestion',
+    description: 'Ingests IMOC tickets matching active ingestion rules when IMOC_INGEST_ENABLED is true.',
+    cronExpression: '30 * * * *', // Every hour at :30
+    handler: async () => {
+      if (!config.imoc.enabled || !config.imoc.ingestEnabled) {
+        logger.info('IMOC ingestion skipped (IMOC_ENABLED or IMOC_INGEST_ENABLED is false)');
+        return;
+      }
+      const result = await imocIngestionService.runIngestion('scheduled');
+      logger.info('IMOC scheduled ingestion completed', result);
     },
   });
 

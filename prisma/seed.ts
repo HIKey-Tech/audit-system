@@ -618,6 +618,9 @@ export const PERMISSIONS: PermissionSeed[] = [
   permission('imoc:link', 'Link and unlink existing IMOC tickets to audit engagements', 'integration'),
   permission('imoc:capture', 'Capture redacted IMOC ticket snapshots as audit evidence', 'integration'),
   permission('imoc:sync', 'Refresh IMOC ticket data and trigger the IMOC sync job', 'integration'),
+  permission('imoc:rules', 'Manage IMOC ticket ingestion rules', 'integration'),
+  permission('imoc:ingest', 'Trigger IMOC ticket ingestion runs', 'integration'),
+  permission('imoc:export', 'Export stored IMOC tickets to spreadsheet or CSV', 'integration'),
   permission('predictive:read', 'View predictive analytics insights', 'predictive'),
 
   permission('sysaudit:read', 'View system audit analyses, user access reviews, and continuous monitoring', 'system-audit'),
@@ -673,7 +676,7 @@ export const ROLES: Array<{
       'risk_category:read', 'risk_category:write',
       'risk_monitoring:read',
       'asset:read', 'asset:create', 'asset:update', 'asset:delete', 'asset:admin', 'asset:attest', 'asset:import', 'asset:link', 'asset:export',
-      'integration:read', 'imoc:read', 'imoc:link', 'imoc:capture', 'imoc:sync',
+      'integration:read', 'imoc:read', 'imoc:link', 'imoc:capture', 'imoc:sync', 'imoc:rules', 'imoc:ingest', 'imoc:export',
       'predictive:read',
       'sysaudit:read', 'sysaudit:run', 'sysaudit:review', 'sysaudit:admin',
       'sectest:read', 'sectest:manage', 'sectest:authorise',
@@ -716,7 +719,7 @@ export const ROLES: Array<{
       'risk:read', 'risk:export',
       'risk_monitoring:read',
       'asset:read', 'asset:link', 'asset:attest', 'asset:export',
-      'imoc:read', 'imoc:link', 'imoc:capture',
+      'imoc:read', 'imoc:link', 'imoc:capture', 'imoc:export',
       'predictive:read',
       // System audit toolkit — read-only access to user management for access reviews.
       'sysaudit:read', 'sysaudit:run', 'sysaudit:review',

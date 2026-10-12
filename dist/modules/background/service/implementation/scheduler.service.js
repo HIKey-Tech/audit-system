@@ -49,6 +49,7 @@ const escalation_service_1 = require("../../../workflow/escalation/service/imple
 const document_service_1 = require("../../../document/service/implementation/document.service");
 const directory_mapping_service_1 = require("../../../integration/service/implementation/directory-mapping.service");
 const imoc_ticket_service_1 = require("../../../integration/imoc/service/implementation/imoc-ticket.service");
+const imoc_ingestion_service_1 = require("../../../integration/imoc/service/implementation/imoc-ingestion.service");
 const warehouse_service_1 = require("../../../warehouse/service/implementation/warehouse.service");
 const predictive_1 = require("../../../predictive");
 const system_audit_1 = require("../../../system-audit");
@@ -73,6 +74,7 @@ exports.JOB_KEYS = {
     DOCUMENT_VERSION_PRUNE_WEEKLY: 'BG:DOCUMENT:VERSION:PRUNE:WEEKLY',
     INTEGRATION_DIRECTORY_SYNC_DAILY: 'BG:INTEGRATION:DIRECTORY:SYNC:DAILY',
     INTEGRATION_IMOC_SYNC_HOURLY: 'BG:INTEGRATION:IMOC:SYNC:HOURLY',
+    INTEGRATION_IMOC_INGEST_HOURLY: 'BG:INTEGRATION:IMOC:INGEST:HOURLY',
     WAREHOUSE_PREDICTIVE_SNAPSHOT_DAILY: 'BG:WAREHOUSE:PREDICTIVE_SNAPSHOT:DAILY',
     PREDICTIVE_INSIGHTS_HOURLY: 'BG:PREDICTIVE:INSIGHTS:HOURLY',
     RETENTION_PURGE_WEEKLY: 'BG:RETENTION:PURGE:WEEKLY',
@@ -300,6 +302,20 @@ const registerAllJobs = () => {
             }
             const result = await imoc_ticket_service_1.imocTicketService.syncActiveLinks(app_config_1.config.imoc.syncBatchSize);
             logger_util_1.logger.info('IMOC linked-ticket sync completed', result);
+        },
+    });
+    exports.schedulerService.register({
+        key: exports.JOB_KEYS.INTEGRATION_IMOC_INGEST_HOURLY,
+        name: 'IMOC Scheduled Ticket Ingestion',
+        description: 'Ingests IMOC tickets matching active ingestion rules when IMOC_INGEST_ENABLED is true.',
+        cronExpression: '30 * * * *', // Every hour at :30
+        handler: async () => {
+            if (!app_config_1.config.imoc.enabled || !app_config_1.config.imoc.ingestEnabled) {
+                logger_util_1.logger.info('IMOC ingestion skipped (IMOC_ENABLED or IMOC_INGEST_ENABLED is false)');
+                return;
+            }
+            const result = await imoc_ingestion_service_1.imocIngestionService.runIngestion('scheduled');
+            logger_util_1.logger.info('IMOC scheduled ingestion completed', result);
         },
     });
     // BG:TOKEN:CLEANUP:HOURLY — purge expired refresh tokens

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { CloudCog, Link2, RefreshCw, ShieldCheck, Trash2 } from 'lucide-react';
+import { CloudCog, Database, Link2, RefreshCw, Search, ShieldCheck, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/Badge';
 import { Input } from '@/components/ui/Input';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { imocApi } from '@/lib/api/imoc';
+import { imocApi, ImocStoredTicket } from '@/lib/api/imoc';
 import { formatDate } from '@/lib/utils/format';
 import { useSession, hasPermission } from '@/components/providers/AuthProvider';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
@@ -27,6 +27,9 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
   const session = useSession();
   const qc = useQueryClient();
   const [ticketNumber, setTicketNumber] = useState('');
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [storeSearchQuery, setStoreSearchQuery] = useState('');
+
   const canLink = hasPermission(session, 'imoc:link');
   const canRefresh = hasPermission(session, 'imoc:sync');
   const canCapture = hasPermission(session, 'imoc:capture');
@@ -36,21 +39,36 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
     queryKey: ['engagements', engagement.id, 'imoc-tickets'],
     queryFn: () => imocApi.listLinks(engagement.id),
   });
+
+  const storedTickets = useQuery({
+    queryKey: ['integration', 'imoc', 'store', 'picker', storeSearchQuery],
+    queryFn: () => imocApi.listStoredTickets({ search: storeSearchQuery || undefined, pageSize: 8 }),
+    enabled: pickerOpen,
+  });
+
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'imoc-tickets'] });
     qc.invalidateQueries({ queryKey: ['integration', 'imoc', 'status'] });
   };
 
   const link = useMutation({
-    mutationFn: (orderNumber: string) => imocApi.link(engagement.id, { orderNumber }),
-    onSuccess: () => { toast.success('IMOC ticket linked'); setTicketNumber(''); invalidate(); },
+    mutationFn: (target: { orderNumber?: string; orderId?: string }) =>
+      imocApi.link(engagement.id, target),
+    onSuccess: () => {
+      toast.success('IMOC ticket linked');
+      setTicketNumber('');
+      setPickerOpen(false);
+      invalidate();
+    },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not link IMOC ticket'),
   });
+
   const refresh = useMutation({
     mutationFn: imocApi.refresh,
     onSuccess: () => { toast.success('IMOC ticket refreshed'); invalidate(); },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not refresh ticket'),
   });
+
   const capture = useMutation({
     mutationFn: imocApi.capture,
     onSuccess: () => {
@@ -60,6 +78,7 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not capture snapshot'),
   });
+
   const unlink = useMutation({
     mutationFn: imocApi.unlink,
     onSuccess: () => { toast.success('IMOC ticket unlinked'); invalidate(); },
@@ -69,7 +88,7 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const orderNumber = ticketNumber.trim();
-    if (orderNumber) link.mutate(orderNumber);
+    if (orderNumber) link.mutate({ orderNumber });
   };
 
   if (status.data && !status.data.enabled) {
@@ -87,6 +106,8 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
     );
   }
 
+  const alreadyLinkedOrderIds = new Set((links.data || []).map((l) => l.orderId));
+
   return (
     <div className="space-y-4">
       <Card>
@@ -97,21 +118,97 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
               Read-only service-ticket context for this engagement. IMOC never changes IAMS workflow status or approvals.
             </p>
           </div>
-          {status.data && <Badge tone={status.data.configured ? 'green' : 'amber'}>{status.data.configured ? 'Connected' : 'Configuration incomplete'}</Badge>}
+          {status.data && (
+            <Badge tone={status.data.configured ? 'green' : 'amber'}>
+              {status.data.configured ? 'Connected' : 'Configuration incomplete'}
+            </Badge>
+          )}
         </div>
+
         {canLink && (
-          <form onSubmit={submit} className="mt-4 flex flex-wrap gap-2">
-            <Input
-              value={ticketNumber}
-              onChange={(event) => setTicketNumber(event.target.value)}
-              placeholder="IMOC ticket number"
-              aria-label="IMOC ticket number"
-              className="max-w-sm"
-            />
-              <Button type="submit" size="sm" leftIcon={<Link2 className="h-3.5 w-3.5" />} isLoading={link.isPending}>
-              Link ticket
-            </Button>
-          </form>
+          <div className="mt-4 space-y-3">
+            <div className="flex flex-wrap items-center gap-2">
+              <form onSubmit={submit} className="flex flex-1 flex-wrap gap-2">
+                <Input
+                  value={ticketNumber}
+                  onChange={(event) => setTicketNumber(event.target.value)}
+                  placeholder="Type IMOC ticket number (e.g. INCT2607220012)"
+                  aria-label="IMOC ticket number"
+                  className="max-w-sm"
+                />
+                <Button
+                  type="submit"
+                  size="sm"
+                  leftIcon={<Link2 className="h-3.5 w-3.5" />}
+                  isLoading={link.isPending}
+                >
+                  Link ticket
+                </Button>
+              </form>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                leftIcon={<Database className="h-3.5 w-3.5" />}
+                onClick={() => setPickerOpen(!pickerOpen)}
+              >
+                {pickerOpen ? 'Hide store picker' : 'Attach from IMOC store'}
+              </Button>
+            </div>
+
+            {pickerOpen && (
+              <div className="rounded-lg border border-border bg-surface-subtle p-3.5">
+                <div className="flex items-center gap-2 mb-2">
+                  <Search className="h-4 w-4 text-text-muted" />
+                  <Input
+                    value={storeSearchQuery}
+                    onChange={(e) => setStoreSearchQuery(e.target.value)}
+                    placeholder="Search stored tickets by number or title..."
+                    className="h-8 text-xs"
+                  />
+                </div>
+                {storedTickets.isLoading ? (
+                  <div className="space-y-2 py-2">
+                    <Skeleton className="h-8 w-full" />
+                    <Skeleton className="h-8 w-full" />
+                  </div>
+                ) : !storedTickets.data?.items?.length ? (
+                  <p className="text-xs text-text-muted py-2 text-center">
+                    No matching ingested tickets in local store.
+                  </p>
+                ) : (
+                  <ul className="divide-y divide-border max-h-56 overflow-y-auto">
+                    {storedTickets.data.items.map((st: ImocStoredTicket) => {
+                      const isLinked = alreadyLinkedOrderIds.has(st.orderId);
+                      return (
+                        <li key={st.id} className="flex items-center justify-between py-2 text-xs">
+                          <div>
+                            <span className="font-mono font-semibold text-text-primary mr-2">
+                              {st.orderNumber}
+                            </span>
+                            <span className="text-text-secondary">{st.orderName}</span>
+                            <div className="text-[11px] text-text-muted mt-0.5">
+                              {st.category ?? 'Uncategorised'} · {st.orderStatus}
+                              {st.slaStatus ? ` · SLA: ${st.slaStatus}` : ''}
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            disabled={isLinked}
+                            isLoading={link.isPending}
+                            onClick={() => link.mutate({ orderNumber: st.orderNumber, orderId: st.orderId })}
+                          >
+                            {isLinked ? 'Already linked' : 'Attach'}
+                          </Button>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            )}
+          </div>
         )}
       </Card>
 

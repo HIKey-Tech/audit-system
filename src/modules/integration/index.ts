@@ -11,6 +11,11 @@ import { DocumentService } from '../document/service/implementation/document.ser
 import { UserService } from '../user/service/implementation/user.service';
 import { workflowAssignmentService } from '../workflow/assignment/service/implementation/assignment.service';
 
+import { imocIngestionService, ImocIngestionService } from './imoc/service/implementation/imoc-ingestion.service';
+import { imocStoreService, ImocStoreService } from './imoc/service/implementation/imoc-store.service';
+import { IImocIngestionService } from './imoc/service/interface/imoc-ingestion.service.interface';
+import { IImocStoreService } from './imoc/service/interface/imoc-store.service.interface';
+
 export const createIntegrationModule = (): Router => {
   const router = Router();
   const controller = new DirectoryMappingController(directoryMappingService);
@@ -24,6 +29,8 @@ export const createIntegrationModule = (): Router => {
   const imocController = new ImocTicketController(
     new ImocTicketService(createImocClient(), evidenceService),
     engagementService,
+    imocIngestionService,
+    imocStoreService,
   );
   router.use('/integration/directory', controller.router);
   router.use('/integration/imoc', imocController.router);
@@ -37,3 +44,7 @@ export {
 export type { IDirectoryMappingService } from './service/interface/directory.service.interface';
 export { ImocTicketService } from './imoc/service/implementation/imoc-ticket.service';
 export type { IImocTicketService } from './imoc/service/interface/imoc-ticket.service.interface';
+export { ImocIngestionService, imocIngestionService };
+export type { IImocIngestionService };
+export { ImocStoreService, imocStoreService };
+export type { IImocStoreService };

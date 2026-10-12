@@ -97,13 +97,35 @@ class LiveSourceService {
         return { systemName: 'IAMS', records, mappedFields: mappedFieldsOf(records), parameterDefaults: {} };
     }
     async _imocIncidents(days, actor) {
+        const actorContext = { id: actor.id, roles: actor.roles, permissions: actor.permissions };
+        const sinceDate = new Date(Date.now() - days * 86_400_000);
+        // Prefer local ticket store so continuous monitoring functions independently of live IMOC connectivity
+        try {
+            const stored = await this.imocTicketService.listStoredTickets({ createdFrom: sinceDate.toISOString() }, actorContext);
+            if (stored.length > 0) {
+                const records = toRecords(stored.map((t) => ({
+                    incident_id: t.orderNumber,
+                    title: t.orderName,
+                    category: t.category ?? t.modelName,
+                    reported_at: (0, extract_parser_utility_1.toDate)(t.imocCreatedAt),
+                    resolved_at: (0, extract_parser_utility_1.toDate)(t.imocEndedAt),
+                    status: t.orderStatus,
+                    sla_status: t.slaStatus,
+                    assignee: t.currentHandler,
+                })));
+                return { systemName: 'IMOC', records, mappedFields: mappedFieldsOf(records), parameterDefaults: {} };
+            }
+        }
+        catch {
+            // Fall through to live fetch if store read errors or is empty
+        }
         if (!app_config_1.config.imoc.enabled) {
             throw app_error_1.AppError.badRequest('The IMOC integration is not enabled (IMOC_ENABLED=false) — upload an incident export instead');
         }
-        const since = imocTimestamp(new Date(Date.now() - days * 86_400_000));
+        const since = imocTimestamp(sinceDate);
         const tickets = [];
         for (let page = 1; page <= IMOC_MAX_PAGES; page += 1) {
-            const result = await this.imocTicketService.searchTickets({ page, pageSize: IMOC_PAGE_SIZE, beginStartDate: since }, { id: actor.id, roles: actor.roles, permissions: actor.permissions });
+            const result = await this.imocTicketService.searchTickets({ page, pageSize: IMOC_PAGE_SIZE, beginStartDate: since }, actorContext);
             tickets.push(...result.items);
             if (!result.hasNext)
                 break;

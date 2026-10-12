@@ -116,15 +116,43 @@ export class LiveSourceService implements ILiveSourceService {
   }
 
   private async _imocIncidents(days: number, actor: SystemAuditActor): Promise<LiveExtract> {
+    const actorContext = { id: actor.id, roles: actor.roles, permissions: actor.permissions };
+    const sinceDate = new Date(Date.now() - days * 86_400_000);
+
+    // Prefer local ticket store so continuous monitoring functions independently of live IMOC connectivity
+    try {
+      const stored = await this.imocTicketService.listStoredTickets(
+        { createdFrom: sinceDate.toISOString() },
+        actorContext,
+      );
+      if (stored.length > 0) {
+        const records = toRecords(
+          stored.map((t) => ({
+            incident_id: t.orderNumber,
+            title: t.orderName,
+            category: t.category ?? t.modelName,
+            reported_at: toDate(t.imocCreatedAt),
+            resolved_at: toDate(t.imocEndedAt),
+            status: t.orderStatus,
+            sla_status: t.slaStatus,
+            assignee: t.currentHandler,
+          })),
+        );
+        return { systemName: 'IMOC', records, mappedFields: mappedFieldsOf(records), parameterDefaults: {} };
+      }
+    } catch {
+      // Fall through to live fetch if store read errors or is empty
+    }
+
     if (!config.imoc.enabled) {
       throw AppError.badRequest('The IMOC integration is not enabled (IMOC_ENABLED=false) — upload an incident export instead');
     }
-    const since = imocTimestamp(new Date(Date.now() - days * 86_400_000));
+    const since = imocTimestamp(sinceDate);
     const tickets: ImocTicket[] = [];
     for (let page = 1; page <= IMOC_MAX_PAGES; page += 1) {
       const result = await this.imocTicketService.searchTickets(
         { page, pageSize: IMOC_PAGE_SIZE, beginStartDate: since },
-        { id: actor.id, roles: actor.roles, permissions: actor.permissions },
+        actorContext,
       );
       tickets.push(...result.items);
       if (!result.hasNext) break;

@@ -1,7 +1,7 @@
 import { IEvidenceService } from '../../../../audit/evidence/service/interface/evidence.service.interface';
 import { ActorContext } from '../../../../audit/domain/entity/audit.entity';
-import { ImocIntegrationStatus, ImocModelSummary, ImocTicket, ImocTicketLookup, ImocTicketPage, ImocTicketSearch } from '../../domain/entity/imoc.entity';
-import { ImocTicketLinkResponseDto, ImocTicketSnapshotResponseDto } from '../../dto/response/imoc.response.dto';
+import { ImocIntegrationStatus, ImocModelSummary, ImocStoredTicket, ImocTicket, ImocTicketLookup, ImocTicketPage, ImocTicketSearch } from '../../domain/entity/imoc.entity';
+import { ImocRealStatusResponseDto, ImocTicketLinkResponseDto, ImocTicketSnapshotResponseDto } from '../../dto/response/imoc.response.dto';
 import { IImocClient } from '../client/imoc.client';
 import { IImocTicketService } from '../interface/imoc-ticket.service.interface';
 export declare class ImocTicketService implements IImocTicketService {
@@ -9,6 +9,7 @@ export declare class ImocTicketService implements IImocTicketService {
     private readonly evidenceService?;
     constructor(client: IImocClient, evidenceService?: IEvidenceService | undefined);
     getStatus(): Promise<ImocIntegrationStatus>;
+    checkStatus(): Promise<ImocRealStatusResponseDto>;
     searchTickets(query: ImocTicketSearch, actor: ActorContext): Promise<ImocTicketPage>;
     getTicket(lookup: ImocTicketLookup, actor: ActorContext): Promise<ImocTicket>;
     getModel(modelId: string, actor: ActorContext): Promise<ImocModelSummary>;
@@ -26,6 +27,10 @@ export declare class ImocTicketService implements IImocTicketService {
     private _refreshLink;
     private _updateLinkFromTicket;
     private _getActiveLink;
+    listStoredTickets(query: {
+        createdFrom?: string;
+        category?: string[];
+    }, actor: ActorContext): Promise<ImocStoredTicket[]>;
 }
 export declare const imocTicketService: ImocTicketService;
 //# sourceMappingURL=imoc-ticket.service.d.ts.map

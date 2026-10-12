@@ -7,7 +7,7 @@
     "node": ">=20"
   },
   "scripts": {
-    "build": "tsc",
+    "build": "tsc -p tsconfig.build.json",
     "start": "node dist/server.js",
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "prisma:generate": "prisma generate",
@@ -65,6 +65,7 @@
     "qrcode": "^1.5.4",
     "redis": "^4.7.0",
     "swagger-ui-express": "^5.0.1",
+    "undici": "6.21.1",
     "uuid": "^10.0.0",
     "winston": "^3.13.1",
     "winston-transport": "^4.9.0",

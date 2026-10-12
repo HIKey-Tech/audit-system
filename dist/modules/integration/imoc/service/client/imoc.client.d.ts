@@ -1,4 +1,5 @@
-import { ImocModelSummary, ImocTicket, ImocTicketLookup, ImocTicketPage, ImocTicketSearch } from '../../domain/entity/imoc.entity';
+import { Agent } from 'undici';
+import { ImocModelSummary, ImocRealStatus, ImocTicket, ImocTicketLookup, ImocTicketPage, ImocTicketSearch } from '../../domain/entity/imoc.entity';
 type ImocFetch = (input: string, init: RequestInit) => Promise<{
     ok: boolean;
     status: number;
@@ -24,11 +25,18 @@ export interface IImocClient {
     readonly configured: boolean;
     listTickets(query: ImocTicketSearch): Promise<ImocTicketPage>;
     getTicket(lookup: ImocTicketLookup): Promise<ImocTicket>;
+    resolveTicket(lookup: ImocTicketLookup): Promise<ImocTicket>;
     getLightweightTickets(orderIds: string[]): Promise<ImocTicket[]>;
     getTicketStatus(orderNumber: string): Promise<ImocTicket>;
     getCurrentTicketStatus(orderNumber: string): Promise<ImocTicket>;
     getModel(modelId: string): Promise<ImocModelSummary>;
+    checkStatus(): Promise<ImocRealStatus>;
 }
+/**
+ * Returns an undici Agent configured to trust the private IMOC CA and/or
+ * verify against a pinned leaf certificate fingerprint when specified.
+ */
+export declare const getImocDispatcher: () => Agent | undefined;
 /**
  * Applies for and caches the documented IMOC machine-machine token. Credentials
  * are read from deployment configuration only; neither credentials nor tokens

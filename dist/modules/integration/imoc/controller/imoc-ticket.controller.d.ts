@@ -1,34 +1,48 @@
 import { Router } from 'express';
 import { IEngagementService } from '../../../audit/engagement/service/interface/engagement.service.interface';
 import { IImocTicketService } from '../service/interface/imoc-ticket.service.interface';
-/** HTTP boundary for the optional, read-only IMOC ticket integration. */
+import { IImocIngestionService } from '../service/interface/imoc-ingestion.service.interface';
+import { IImocStoreService } from '../service/interface/imoc-store.service.interface';
+/** HTTP boundary for IMOC integration: ticket search, linking, ingestion rules, local store, saved views, and risk links. */
 export declare class ImocTicketController {
     private readonly imocService;
     private readonly engagementService;
+    private readonly ingestionService;
+    private readonly storeService;
     readonly router: Router;
-    constructor(imocService: IImocTicketService, engagementService: IEngagementService);
+    constructor(imocService: IImocTicketService, engagementService: IEngagementService, ingestionService?: IImocIngestionService, storeService?: IImocStoreService);
     private _registerRoutes;
-    /** @route GET /integration/imoc/status @desc View non-secret IMOC availability @access integration:read */
     private _status;
-    /** @route POST /integration/imoc/tickets/search @desc Search IMOC tickets read-only @access imoc:read */
+    private _checkStatus;
     private _search;
-    /** @route POST /integration/imoc/tickets/detail @desc Read one IMOC ticket @access imoc:read */
     private _detail;
-    /** @route POST /integration/imoc/models/detail @desc Read safe IMOC model metadata @access imoc:read */
     private _model;
-    /** @route POST /integration/imoc/sync @desc Refresh a small batch of already-linked tickets @access imoc:sync */
     private _sync;
-    /** @route GET /integration/imoc/engagements/:id/tickets @desc List engagement IMOC links @access imoc:read */
+    private _listRules;
+    private _createRule;
+    private _getRule;
+    private _updateRule;
+    private _toggleRule;
+    private _deleteRule;
+    private _previewRule;
+    private _runIngestion;
+    private _listRuns;
+    private _getRun;
+    private _listStoredTickets;
+    private _storedSummary;
+    private _getStoredTicket;
+    private _exportStoredTickets;
+    private _listViews;
+    private _createView;
+    private _updateView;
+    private _deleteView;
+    private _linkRisk;
+    private _unlinkRisk;
     private _listLinks;
-    /** @route POST /integration/imoc/engagements/:id/tickets @desc Link an existing IMOC ticket @access imoc:link */
     private _link;
-    /** @route DELETE /integration/imoc/tickets/:id @desc Remove an IMOC engagement link @access imoc:link */
     private _unlink;
-    /** @route POST /integration/imoc/tickets/:id/refresh @desc Refresh one existing IMOC ticket link @access imoc:sync */
     private _refresh;
-    /** @route POST /integration/imoc/tickets/:id/capture @desc Capture redacted IMOC ticket snapshot as evidence @access imoc:capture */
     private _capture;
-    /** @route GET /integration/imoc/tickets/:id/snapshots @desc List captured IMOC audit snapshots @access imoc:read */
     private _snapshots;
     private _assertInternalEngagementAccess;
 }

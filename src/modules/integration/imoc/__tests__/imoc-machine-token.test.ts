@@ -52,10 +52,10 @@ describe('IMOC machine token provider', () => {
     const provider = new MachineUserImocTokenProvider(machineOptions, fetchImpl);
 
     await expect(provider.getToken()).rejects.toMatchObject<Partial<AppError>>({
-      statusCode: 503,
+      statusCode: 502,
     });
     await expect(provider.getToken()).rejects.toMatchObject<Partial<AppError>>({
-      statusCode: 503,
+      statusCode: 502,
     });
 
     expect(fetchImpl).toHaveBeenCalledTimes(2);

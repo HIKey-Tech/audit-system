@@ -12,6 +12,8 @@ export declare enum ErrorCode {
     TOO_MANY_REQUESTS = "TOO_MANY_REQUESTS",
     INTERNAL_ERROR = "INTERNAL_ERROR",
     SERVICE_UNAVAILABLE = "SERVICE_UNAVAILABLE",
+    BAD_GATEWAY = "BAD_GATEWAY",
+    GATEWAY_TIMEOUT = "GATEWAY_TIMEOUT",
     DATABASE_ERROR = "DATABASE_ERROR",
     OPERATION_FAILED = "OPERATION_FAILED",
     INVALID_STATE = "INVALID_STATE"
@@ -31,5 +33,7 @@ export declare class AppError extends Error {
     static validationError(details: unknown): AppError;
     static internal(message?: string): AppError;
     static serviceUnavailable(message?: string): AppError;
+    static badGateway(message?: string): AppError;
+    static gatewayTimeout(message?: string): AppError;
 }
 //# sourceMappingURL=app.error.d.ts.map

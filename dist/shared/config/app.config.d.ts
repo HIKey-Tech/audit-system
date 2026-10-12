@@ -76,6 +76,13 @@ export declare const config: {
         readonly tokenRefreshSkewMs: number;
         readonly syncEnabled: boolean;
         readonly syncBatchSize: number;
+        readonly caCertPath: string;
+        readonly tlsPinnedFingerprint: string;
+        readonly ingestEnabled: boolean;
+        readonly ingestMaxPages: number;
+        readonly ingestPageSize: number;
+        readonly ingestRequestsPerSecond: number;
+        readonly timestampsUtc: boolean;
     };
     readonly redis: {
         readonly url: string;
