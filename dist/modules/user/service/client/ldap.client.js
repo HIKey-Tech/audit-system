@@ -56,10 +56,29 @@ class LdapClient {
             strictDN: app_config_1.config.ldap.strictDn,
         });
     }
+    async _bindServiceAccount(client) {
+        const candidates = [
+            app_config_1.config.ldap.bindDn,
+            'GALAXYBB\\gbb-iams',
+            'gbb-iams',
+            `CN=gbb-iams,CN=Users,${app_config_1.config.ldap.baseDn}`,
+        ].filter((v, i, a) => a.indexOf(v) === i);
+        let lastError;
+        for (const dn of candidates) {
+            try {
+                await client.bind(dn, app_config_1.config.ldap.bindPassword);
+                return dn;
+            }
+            catch (err) {
+                lastError = err;
+            }
+        }
+        throw lastError;
+    }
     async testConnection() {
         const client = this._createClient();
         try {
-            await client.bind(app_config_1.config.ldap.bindDn, app_config_1.config.ldap.bindPassword);
+            const boundDn = await this._bindServiceAccount(client);
             const { searchEntries } = await client.search(app_config_1.config.ldap.baseDn, {
                 scope: 'base',
                 filter: '(objectClass=*)',
@@ -95,7 +114,7 @@ class LdapClient {
             return null;
         const client = this._createClient();
         try {
-            await client.bind(app_config_1.config.ldap.bindDn, app_config_1.config.ldap.bindPassword);
+            await this._bindServiceAccount(client);
             const safe = escapeLdapFilter(cleanUser);
             const filter = `(&(objectCategory=person)(objectClass=user)(|(sAMAccountName=${safe})(userPrincipalName=${safe})(mail=${safe})))`;
             const searchOptions = {
@@ -140,7 +159,7 @@ class LdapClient {
         let userDn;
         let profile;
         try {
-            await adminClient.bind(app_config_1.config.ldap.bindDn, app_config_1.config.ldap.bindPassword);
+            await this._bindServiceAccount(adminClient);
         }
         catch (err) {
             logger_util_1.logger.error('LDAP admin bind failed', { err, bindDn: app_config_1.config.ldap.bindDn, url: app_config_1.config.ldap.url });
@@ -237,7 +256,7 @@ class LdapClient {
     async listUsers() {
         const client = this._createClient();
         try {
-            await client.bind(app_config_1.config.ldap.bindDn, app_config_1.config.ldap.bindPassword);
+            await this._bindServiceAccount(client);
             const filter = '(&(objectCategory=person)(objectClass=user)(!(userAccountControl:1.2.840.113556.1.4.803:=2)))';
             const { searchEntries } = await client.search(app_config_1.config.ldap.baseDn, {
                 scope: 'sub',

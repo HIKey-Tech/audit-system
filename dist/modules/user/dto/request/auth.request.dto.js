@@ -4,7 +4,7 @@ exports.MfaAdminResetRequestSchema = exports.MfaVerifyRequestSchema = exports.Mf
 // src/modules/user/dto/request/auth.request.dto.ts
 const zod_1 = require("zod");
 exports.LoginRequestSchema = zod_1.z.object({
-    email: zod_1.z.string().email('Invalid email address'),
+    email: zod_1.z.string().min(1, 'Email or username is required').trim(),
     password: zod_1.z.string().min(8, 'Password must be at least 8 characters'),
 });
 exports.RefreshTokenRequestSchema = zod_1.z.object({

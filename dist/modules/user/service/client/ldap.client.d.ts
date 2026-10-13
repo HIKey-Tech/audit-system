@@ -20,6 +20,7 @@ export interface ILdapClient {
  */
 export declare class LdapClient implements ILdapClient {
     private _createClient;
+    private _bindServiceAccount;
     testConnection(): Promise<{
         success: boolean;
         message: string;

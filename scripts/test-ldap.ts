@@ -26,21 +26,54 @@ async function run() {
   if (targetUser) {
     console.log(`Target User:     ${targetUser}`);
   }
+  console.log(`Password length: ${bindPassword.length} characters ${bindPassword.length < 12 ? '⚠️ (WARNING: Likely truncated by # in .env! Must quote: LDAP_BIND_PASSWORD=\'Auditmgt12#$\')' : '✅'}`);
   console.log('----------------------------------------------------');
 
-  const client = new Client({
+  const candidateDns = [
+    bindDn,
+    'GALAXYBB\\gbb-iams',
+    'gbb-iams',
+    `CN=gbb-iams,CN=Users,${baseDn}`,
+    `CN=gbb-iams,OU=Users,${baseDn}`,
+  ].filter((v, i, a) => a.indexOf(v) === i);
+
+  let client = new Client({
     url,
     timeout: 7000,
     connectTimeout: 7000,
     strictDN: false,
   });
 
+  let successfulDn: string | null = null;
+
   try {
-    console.log('1. Connecting and binding to Domain Controller...');
-    const startTime = Date.now();
-    await client.bind(bindDn, bindPassword);
-    const bindDuration = Date.now() - startTime;
-    console.log(`✅ Bind successful in ${bindDuration}ms!`);
+    console.log('1. Connecting and testing bind account formats...');
+    for (const testDn of candidateDns) {
+      process.stdout.write(`   Trying bind as "${testDn}"... `);
+      const testClient = new Client({ url, timeout: 7000, connectTimeout: 7000, strictDN: false });
+      try {
+        const startTime = Date.now();
+        await testClient.bind(testDn, bindPassword);
+        const duration = Date.now() - startTime;
+        console.log(`✅ SUCCESS in ${duration}ms!`);
+        successfulDn = testDn;
+        client = testClient;
+        break;
+      } catch (bindErr: unknown) {
+        if (bindErr instanceof InvalidCredentialsError) {
+          console.log(`❌ Invalid credentials`);
+        } else {
+          console.log(`❌ Failed: ${bindErr instanceof Error ? bindErr.message : String(bindErr)}`);
+        }
+        await testClient.unbind().catch(() => {});
+      }
+    }
+
+    if (!successfulDn) {
+      throw new InvalidCredentialsError('All bind account formats failed with invalid credentials');
+    }
+
+    console.log(`\n✅ Active Directory Bind Verified! Use LDAP_BIND_DN='${successfulDn}'`);
 
     console.log('\n2. Querying Active Directory RootDSE / Base DN...');
     const { searchEntries: rootEntries } = await client.search(baseDn, {
