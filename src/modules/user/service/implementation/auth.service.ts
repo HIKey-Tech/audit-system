@@ -27,6 +27,7 @@ import {
 } from '../../utility/token.utility';
 import { generateScopedToken } from '../../utility/mfa.utility';
 import { createOidcClient, IOidcClient } from '../client/oidc.client';
+import { createLdapClient, ILdapClient } from '../client/ldap.client';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
 import { revokeUserSessions } from '../../../../shared/security/session-guard';
 import { logSecurityEvent } from '../../../logging/utility/security-event.utility';
@@ -35,12 +36,15 @@ import { SecurityEvent } from '../../../logging/domain/enum/logging.enum';
 
 export class AuthService implements IAuthService {
   private readonly oidcClient: IOidcClient;
+  private readonly ldapClient: ILdapClient;
 
   constructor(
     private readonly userService: IUserService,
     private readonly mfaService: IMfaService,
+    ldapClient?: ILdapClient,
   ) {
     this.oidcClient = createOidcClient();
+    this.ldapClient = ldapClient ?? createLdapClient();
   }
 
   async login(
@@ -48,10 +52,70 @@ export class AuthService implements IAuthService {
     ipAddress?: string,
     userAgent?: string,
   ): Promise<LoginResultDto> {
-    const user = await prisma.user.findUnique({
+    // ── 1. Active Directory (on-premises LDAP) authentication ────
+    if (config.ldap.enabled) {
+      try {
+        const ldapAuth = await this.ldapClient.authenticate(dto.email, dto.password);
+        if (ldapAuth.success && ldapAuth.profile) {
+          const userDto = await this.userService.syncFromLdap(ldapAuth.profile);
+          const user = (await prisma.user.findUniqueOrThrow({
+            where: { id: userDto.id },
+            include: userWithRolesInclude,
+          })) as UserWithRoles;
+
+          if (!user.is_active) {
+            logSecurityEvent(SecurityEvent.LoginFailed, {
+              userId: user.id,
+              email: user.email,
+              ipAddress,
+              userAgent,
+              reason: 'account_deactivated',
+              method: 'active_directory_ldap',
+              status: 'failure',
+            });
+            throw AppError.unauthorized('Account is deactivated');
+          }
+
+          return this._completeLogin(user, ipAddress, userAgent, 'active_directory_ldap');
+        }
+
+        if (ldapAuth.reason === 'account_disabled') {
+          logSecurityEvent(SecurityEvent.LoginFailed, {
+            email: dto.email,
+            ipAddress,
+            userAgent,
+            reason: 'ad_account_disabled',
+            method: 'active_directory_ldap',
+            status: 'failure',
+          });
+          throw AppError.unauthorized('Your Active Directory account is disabled');
+        }
+
+        if (ldapAuth.reason === 'account_locked') {
+          logSecurityEvent(SecurityEvent.LoginFailed, {
+            email: dto.email,
+            ipAddress,
+            userAgent,
+            reason: 'ad_account_locked',
+            method: 'active_directory_ldap',
+            status: 'failure',
+          });
+          throw AppError.unauthorized('Your Active Directory account is locked out');
+        }
+
+        // If ldapAuth.reason is 'user_not_found' or 'invalid_credentials',
+        // fall through to local database password check below.
+      } catch (err) {
+        if (err instanceof AppError) throw err;
+        logger.error('Unexpected LDAP authentication error, attempting local fallback', { err });
+      }
+    }
+
+    // ── 2. Local database password fallback ───────────────────
+    const user = (await prisma.user.findUnique({
       where: { email: dto.email, deleted_at: null },
       include: userWithRolesInclude,
-    }) as UserWithRoles | null;
+    })) as UserWithRoles | null;
 
     const failLogin = (reason: string): never => {
       logSecurityEvent(SecurityEvent.LoginFailed, {
@@ -73,10 +137,19 @@ export class AuthService implements IAuthService {
     const passwordValid = await comparePassword(dto.password, user.password_hash);
     if (!passwordValid) return failLogin('invalid_password');
 
+    return this._completeLogin(user, ipAddress, userAgent, 'password');
+  }
+
+  private async _completeLogin(
+    user: UserWithRoles,
+    ipAddress?: string,
+    userAgent?: string,
+    method: string = 'password',
+  ): Promise<LoginResultDto> {
     // ── 2FA gate ──────────────────────────────────────────────
     if (user.mfa_enabled) {
-      const method = (user.mfa_method ?? 'totp') as 'totp' | 'email';
-      if (method === 'email') {
+      const authMethod = (user.mfa_method ?? 'totp') as 'totp' | 'email';
+      if (authMethod === 'email') {
         await this.mfaService.startEmailChallenge(user.id, user.email);
       }
       const challengeToken = generateScopedToken(
@@ -85,8 +158,8 @@ export class AuthService implements IAuthService {
         'mfa_challenge',
         config.mfa.challengeTtl,
       );
-      logger.info('Password OK — 2FA challenge issued', { userId: user.id, method });
-      return { status: 'MFA_REQUIRED', method, challengeToken };
+      logger.info('Password OK — 2FA challenge issued', { userId: user.id, method: authMethod });
+      return { status: 'MFA_REQUIRED', method: authMethod, challengeToken };
     }
 
     if (config.mfa.mandatory) {
@@ -126,8 +199,8 @@ export class AuthService implements IAuthService {
         });
         return issued;
       });
-      logger.info('User logged in via password (2FA grace active)', { userId: user.id });
-      logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
+      logger.info(`User logged in via ${method} (2FA grace active)`, { userId: user.id });
+      logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
       return {
         status: 'OK',
         mfaSetupRequired: true,
@@ -144,8 +217,8 @@ export class AuthService implements IAuthService {
       data: { last_login_at: new Date() },
     });
 
-    logger.info('User logged in via password', { userId: user.id });
-    logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
+    logger.info(`User logged in via ${method}`, { userId: user.id });
+    logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
 
     return {
       status: 'OK',

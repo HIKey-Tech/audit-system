@@ -42,6 +42,7 @@ export interface IUserService {
     removeRole(userId: string, roleId: string, actor: RoleManagementActor): Promise<UserResponseDto>;
     changePassword(userId: string, dto: ChangePasswordRequestDto): Promise<void>;
     syncFromAzureAd(azureOid: string, profile: AzureAdProfile): Promise<UserResponseDto>;
+    syncFromLdap(profile: LdapUserProfile): Promise<UserResponseDto>;
 }
 export interface AzureAdProfile {
     oid: string;
@@ -56,5 +57,20 @@ export interface AzureAdProfile {
     groupsOverage?: boolean;
     authMethods?: string[];
     emailVerified?: boolean;
+}
+export interface LdapUserProfile {
+    sAMAccountName: string;
+    userPrincipalName?: string;
+    distinguishedName: string;
+    email: string;
+    givenName?: string;
+    familyName?: string;
+    displayName?: string;
+    jobTitle?: string;
+    department?: string;
+    phone?: string;
+    groups: string[];
+    accountEnabled: boolean;
+    accountLocked: boolean;
 }
 //# sourceMappingURL=user.service.interface.d.ts.map

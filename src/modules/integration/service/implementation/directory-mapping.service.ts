@@ -8,6 +8,7 @@ import {
   createGraphDirectoryClient,
   IGraphDirectoryClient,
 } from '../client/graph.client';
+import { ldapClient } from '../../../user/service/client/ldap.client';
 import {
   IDirectoryMappingService,
   DirectoryAccount,
@@ -185,8 +186,23 @@ export class DirectoryMappingService implements IDirectoryMappingService {
   }
 
   async listDirectoryAccounts(): Promise<DirectoryAccount[]> {
+    if (config.ldap.enabled) {
+      const [ldapUsers, mappings] = await Promise.all([
+        ldapClient.listUsers(),
+        prisma.directory_Group_Mapping.findMany({ select: { ad_group_id: true, ad_group_name: true } }),
+      ]);
+      const groupNames = new Map(mappings.map((m) => [m.ad_group_id, m.ad_group_name]));
+      return ldapUsers.map((u) => ({
+        oid: u.sAMAccountName,
+        email: u.email,
+        displayName: u.displayName ?? null,
+        accountEnabled: u.accountEnabled,
+        groups: u.groups.map((id) => groupNames.get(id) ?? id),
+      }));
+    }
+
     if (!config.directorySync.enabled) {
-      throw AppError.badRequest('Entra ID directory sync is not enabled (DIRECTORY_SYNC_ENABLED=false)');
+      throw AppError.badRequest('Directory sync is not enabled');
     }
     const [directoryUsers, mappings] = await Promise.all([
       this.graph.listUsersWithGroups(),
@@ -203,9 +219,34 @@ export class DirectoryMappingService implements IDirectoryMappingService {
   }
 
   async runFullDirectorySync(): Promise<{ usersProcessed: number; deactivated: number }> {
-    const directoryUsers = await this.graph.listUsersWithGroups();
     let usersProcessed = 0;
     let deactivated = 0;
+
+    // ── On-Premises Active Directory (LDAP) sync ─────────────
+    if (config.ldap.enabled) {
+      const ldapUsers = await ldapClient.listUsers();
+      for (const lu of ldapUsers) {
+        const user = await prisma.user.findFirst({
+          where: { email: lu.email.toLowerCase(), deleted_at: null },
+          select: { id: true, is_active: true },
+        });
+        if (!user) continue;
+
+        await this.applyAdRolesToUser(user.id, lu.groups);
+        usersProcessed++;
+
+        if (!lu.accountEnabled && user.is_active) {
+          await prisma.user.update({ where: { id: user.id }, data: { is_active: false } });
+          deactivated++;
+          logger.info('Deactivated user disabled in on-prem Active Directory', { userId: user.id });
+        }
+      }
+      logger.info('LDAP Active Directory sync complete', { usersProcessed, deactivated });
+      return { usersProcessed, deactivated };
+    }
+
+    // ── Cloud Microsoft Graph sync fallback ──────────────────
+    const directoryUsers = await this.graph.listUsersWithGroups();
 
     for (const du of directoryUsers) {
       const user = await prisma.user.findFirst({

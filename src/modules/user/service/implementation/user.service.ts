@@ -12,6 +12,7 @@ import { createGraphDirectoryClient } from '../../../integration/service/client/
 import {
   IUserService,
   AzureAdProfile,
+  LdapUserProfile,
   RoleManagementActor,
 } from '../interface/user.service.interface';
 import {
@@ -697,6 +698,80 @@ export class UserService implements IUserService {
       await directoryMappingService.applyAdRolesToUser(userId, groupIds);
     } catch (err) {
       logger.error('Directory role apply failed during SSO login', { userId, err });
+    }
+  }
+
+  /**
+   * Syncs or provisions a user authenticated via on-premises Active Directory (LDAP).
+   * Maps AD security groups to IAMS roles via directory_group_mappings.
+   */
+  async syncFromLdap(profile: LdapUserProfile): Promise<UserResponseDto> {
+    const email = profile.email.toLowerCase();
+
+    let existing = await prisma.user.findFirst({
+      where: { email, deleted_at: null },
+      include: userWithRolesInclude,
+    });
+
+    if (existing) {
+      const updated = await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          first_name: profile.givenName ?? existing.first_name,
+          last_name: profile.familyName ?? existing.last_name,
+          display_name: profile.displayName ?? existing.display_name,
+          job_title: profile.jobTitle ?? existing.job_title,
+          department: profile.department ?? existing.department,
+          phone: profile.phone ?? existing.phone,
+          email_verified: true,
+        },
+        include: userWithRolesInclude,
+      });
+
+      await this._applyLdapDirectoryRoles(updated.id, profile);
+      const refreshed = await prisma.user.findUniqueOrThrow({
+        where: { id: updated.id },
+        include: userWithRolesInclude,
+      });
+      logger.info('User synced from on-premises Active Directory', { userId: existing.id, email });
+      return mapUserToResponse(refreshed);
+    }
+
+    // JIT provisioning on first AD login
+    const created = await prisma.user.create({
+      data: {
+        email,
+        first_name: profile.givenName ?? profile.sAMAccountName,
+        last_name: profile.familyName ?? '',
+        display_name:
+          profile.displayName ||
+          `${profile.givenName || ''} ${profile.familyName || ''}`.trim() ||
+          profile.sAMAccountName,
+        job_title: profile.jobTitle,
+        department: profile.department,
+        phone: profile.phone,
+        email_verified: true,
+      },
+      include: userWithRolesInclude,
+    });
+
+    await this._applyLdapDirectoryRoles(created.id, profile);
+    const provisioned = await prisma.user.findUniqueOrThrow({
+      where: { id: created.id },
+      include: userWithRolesInclude,
+    });
+    logger.info('User JIT-provisioned from on-premises Active Directory', { userId: created.id, email });
+    return mapUserToResponse(provisioned);
+  }
+
+  private async _applyLdapDirectoryRoles(
+    userId: string,
+    profile: LdapUserProfile,
+  ): Promise<void> {
+    try {
+      await directoryMappingService.applyAdRolesToUser(userId, profile.groups);
+    } catch (err) {
+      logger.error('Directory role apply failed during LDAP login', { userId, err });
     }
   }
 

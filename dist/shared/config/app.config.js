@@ -84,6 +84,20 @@ exports.config = {
         // concurrent refreshes from multiple tabs/devices sharing one cookie.
         refreshRotationGrace: requireDurationEnv('JWT_REFRESH_ROTATION_GRACE', '30s'),
     },
+    ldap: {
+        // On-premises Active Directory Domain Services (AD DS) via LDAP / LDAPS
+        enabled: optionalEnv('LDAP_ENABLED', 'false') === 'true',
+        url: optionalEnv('LDAP_URL', 'ldap://10.0.124.10:389'),
+        bindDn: optionalEnv('LDAP_BIND_DN', 'gbb-iams@galaxybb.local'),
+        bindPassword: optionalEnv('LDAP_BIND_PASSWORD', 'Auditmgt12#$'),
+        baseDn: optionalEnv('LDAP_BASE_DN', 'DC=galaxybb,DC=local'),
+        searchFilter: optionalEnv('LDAP_SEARCH_FILTER', '(&(objectCategory=person)(objectClass=user)(|(sAMAccountName={{username}})(userPrincipalName={{username}})(mail={{username}})))'),
+        timeoutMs: parseInt(optionalEnv('LDAP_TIMEOUT_MS', '5000'), 10),
+        connectTimeoutMs: parseInt(optionalEnv('LDAP_CONNECT_TIMEOUT_MS', '5000'), 10),
+        strictDn: optionalEnv('LDAP_STRICT_DN', 'false') === 'true',
+        defaultRoleName: optionalEnv('LDAP_DEFAULT_ROLE', optionalEnv('SSO_DEFAULT_ROLE', 'viewer')),
+        syncEnabled: optionalEnv('LDAP_SYNC_ENABLED', 'false') === 'true',
+    },
     oidc: {
         provider: optionalEnv('OIDC_PROVIDER', 'azure_ad'),
         // When true, an SSO login is only accepted if the IdP token proves MFA

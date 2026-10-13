@@ -14,6 +14,7 @@ const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
 const mfa_utility_1 = require("../../utility/mfa.utility");
 const oidc_client_1 = require("../client/oidc.client");
+const ldap_client_1 = require("../client/ldap.client");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
 const session_guard_1 = require("../../../../shared/security/session-guard");
 const security_event_utility_1 = require("../../../logging/utility/security-event.utility");
@@ -22,16 +23,74 @@ class AuthService {
     userService;
     mfaService;
     oidcClient;
-    constructor(userService, mfaService) {
+    ldapClient;
+    constructor(userService, mfaService, ldapClient) {
         this.userService = userService;
         this.mfaService = mfaService;
         this.oidcClient = (0, oidc_client_1.createOidcClient)();
+        this.ldapClient = ldapClient ?? (0, ldap_client_1.createLdapClient)();
     }
     async login(dto, ipAddress, userAgent) {
-        const user = await prisma_client_1.prisma.user.findUnique({
+        // ── 1. Active Directory (on-premises LDAP) authentication ────
+        if (app_config_1.config.ldap.enabled) {
+            try {
+                const ldapAuth = await this.ldapClient.authenticate(dto.email, dto.password);
+                if (ldapAuth.success && ldapAuth.profile) {
+                    const userDto = await this.userService.syncFromLdap(ldapAuth.profile);
+                    const user = (await prisma_client_1.prisma.user.findUniqueOrThrow({
+                        where: { id: userDto.id },
+                        include: prisma_types_1.userWithRolesInclude,
+                    }));
+                    if (!user.is_active) {
+                        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
+                            userId: user.id,
+                            email: user.email,
+                            ipAddress,
+                            userAgent,
+                            reason: 'account_deactivated',
+                            method: 'active_directory_ldap',
+                            status: 'failure',
+                        });
+                        throw app_error_1.AppError.unauthorized('Account is deactivated');
+                    }
+                    return this._completeLogin(user, ipAddress, userAgent, 'active_directory_ldap');
+                }
+                if (ldapAuth.reason === 'account_disabled') {
+                    (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
+                        email: dto.email,
+                        ipAddress,
+                        userAgent,
+                        reason: 'ad_account_disabled',
+                        method: 'active_directory_ldap',
+                        status: 'failure',
+                    });
+                    throw app_error_1.AppError.unauthorized('Your Active Directory account is disabled');
+                }
+                if (ldapAuth.reason === 'account_locked') {
+                    (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
+                        email: dto.email,
+                        ipAddress,
+                        userAgent,
+                        reason: 'ad_account_locked',
+                        method: 'active_directory_ldap',
+                        status: 'failure',
+                    });
+                    throw app_error_1.AppError.unauthorized('Your Active Directory account is locked out');
+                }
+                // If ldapAuth.reason is 'user_not_found' or 'invalid_credentials',
+                // fall through to local database password check below.
+            }
+            catch (err) {
+                if (err instanceof app_error_1.AppError)
+                    throw err;
+                logger_util_1.logger.error('Unexpected LDAP authentication error, attempting local fallback', { err });
+            }
+        }
+        // ── 2. Local database password fallback ───────────────────
+        const user = (await prisma_client_1.prisma.user.findUnique({
             where: { email: dto.email, deleted_at: null },
             include: prisma_types_1.userWithRolesInclude,
-        });
+        }));
         const failLogin = (reason) => {
             (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginFailed, {
                 userId: user?.id,
@@ -53,15 +112,18 @@ class AuthService {
         const passwordValid = await (0, token_utility_1.comparePassword)(dto.password, user.password_hash);
         if (!passwordValid)
             return failLogin('invalid_password');
+        return this._completeLogin(user, ipAddress, userAgent, 'password');
+    }
+    async _completeLogin(user, ipAddress, userAgent, method = 'password') {
         // ── 2FA gate ──────────────────────────────────────────────
         if (user.mfa_enabled) {
-            const method = (user.mfa_method ?? 'totp');
-            if (method === 'email') {
+            const authMethod = (user.mfa_method ?? 'totp');
+            if (authMethod === 'email') {
                 await this.mfaService.startEmailChallenge(user.id, user.email);
             }
             const challengeToken = (0, mfa_utility_1.generateScopedToken)(user.id, user.email, 'mfa_challenge', app_config_1.config.mfa.challengeTtl);
-            logger_util_1.logger.info('Password OK — 2FA challenge issued', { userId: user.id, method });
-            return { status: 'MFA_REQUIRED', method, challengeToken };
+            logger_util_1.logger.info('Password OK — 2FA challenge issued', { userId: user.id, method: authMethod });
+            return { status: 'MFA_REQUIRED', method: authMethod, challengeToken };
         }
         if (app_config_1.config.mfa.mandatory) {
             const now = new Date();
@@ -92,8 +154,8 @@ class AuthService {
                 });
                 return issued;
             });
-            logger_util_1.logger.info('User logged in via password (2FA grace active)', { userId: user.id });
-            (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
+            logger_util_1.logger.info(`User logged in via ${method} (2FA grace active)`, { userId: user.id });
+            (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
             return {
                 status: 'OK',
                 mfaSetupRequired: true,
@@ -107,8 +169,8 @@ class AuthService {
             where: { id: user.id },
             data: { last_login_at: new Date() },
         });
-        logger_util_1.logger.info('User logged in via password', { userId: user.id });
-        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password' });
+        logger_util_1.logger.info(`User logged in via ${method}`, { userId: user.id });
+        (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
         return {
             status: 'OK',
             ...tokens,

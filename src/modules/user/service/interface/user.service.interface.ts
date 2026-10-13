@@ -102,6 +102,8 @@ export interface IUserService {
   ): Promise<void>;
 
   syncFromAzureAd(azureOid: string, profile: AzureAdProfile): Promise<UserResponseDto>;
+
+  syncFromLdap(profile: LdapUserProfile): Promise<UserResponseDto>;
 }
 
 export interface AzureAdProfile {
@@ -117,4 +119,20 @@ export interface AzureAdProfile {
   groupsOverage?: boolean; // true when Azure omitted groups due to the >150/200 limit
   authMethods?: string[]; // `amr` claim — e.g. ["pwd","mfa"]
   emailVerified?: boolean; // IdP asserted the email is verified (OIDC `email_verified`)
+}
+
+export interface LdapUserProfile {
+  sAMAccountName: string;
+  userPrincipalName?: string;
+  distinguishedName: string;
+  email: string;
+  givenName?: string;
+  familyName?: string;
+  displayName?: string;
+  jobTitle?: string;
+  department?: string;
+  phone?: string;
+  groups: string[]; // Active Directory security group names and/or DNs
+  accountEnabled: boolean;
+  accountLocked: boolean;
 }

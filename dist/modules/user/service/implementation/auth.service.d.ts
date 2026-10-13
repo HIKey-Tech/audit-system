@@ -4,12 +4,15 @@ import { IMfaService } from '../interface/mfa.service.interface';
 import { LoginRequestDto, RefreshTokenRequestDto } from '../../dto/request/auth.request.dto';
 import { AuthResponseDto, SsoRedirectResponseDto, LoginResultDto } from '../../dto/response/user.response.dto';
 import { TokenPair } from '../../domain/entity/token.entity';
+import { ILdapClient } from '../client/ldap.client';
 export declare class AuthService implements IAuthService {
     private readonly userService;
     private readonly mfaService;
     private readonly oidcClient;
-    constructor(userService: IUserService, mfaService: IMfaService);
+    private readonly ldapClient;
+    constructor(userService: IUserService, mfaService: IMfaService, ldapClient?: ILdapClient);
     login(dto: LoginRequestDto, ipAddress?: string, userAgent?: string): Promise<LoginResultDto>;
+    private _completeLogin;
     completeMfaLogin(userId: string, ipAddress?: string, userAgent?: string): Promise<AuthResponseDto>;
     getSsoAuthorizationUrl(state?: string): Promise<SsoRedirectResponseDto>;
     handleOidcCallback(code: string, state: string, ipAddress?: string, userAgent?: string): Promise<AuthResponseDto>;

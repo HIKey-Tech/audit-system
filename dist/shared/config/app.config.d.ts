@@ -35,6 +35,19 @@ export declare const config: {
         readonly refreshExpiresIn: string;
         readonly refreshRotationGrace: string;
     };
+    readonly ldap: {
+        readonly enabled: boolean;
+        readonly url: string;
+        readonly bindDn: string;
+        readonly bindPassword: string;
+        readonly baseDn: string;
+        readonly searchFilter: string;
+        readonly timeoutMs: number;
+        readonly connectTimeoutMs: number;
+        readonly strictDn: boolean;
+        readonly defaultRoleName: string;
+        readonly syncEnabled: boolean;
+    };
     readonly oidc: {
         readonly provider: "azure_ad" | "generic";
         readonly requireIdpMfa: boolean;

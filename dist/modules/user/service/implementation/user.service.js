@@ -543,6 +543,70 @@ class UserService {
         }
     }
     /**
+     * Syncs or provisions a user authenticated via on-premises Active Directory (LDAP).
+     * Maps AD security groups to IAMS roles via directory_group_mappings.
+     */
+    async syncFromLdap(profile) {
+        const email = profile.email.toLowerCase();
+        let existing = await prisma_client_1.prisma.user.findFirst({
+            where: { email, deleted_at: null },
+            include: prisma_types_1.userWithRolesInclude,
+        });
+        if (existing) {
+            const updated = await prisma_client_1.prisma.user.update({
+                where: { id: existing.id },
+                data: {
+                    first_name: profile.givenName ?? existing.first_name,
+                    last_name: profile.familyName ?? existing.last_name,
+                    display_name: profile.displayName ?? existing.display_name,
+                    job_title: profile.jobTitle ?? existing.job_title,
+                    department: profile.department ?? existing.department,
+                    phone: profile.phone ?? existing.phone,
+                    email_verified: true,
+                },
+                include: prisma_types_1.userWithRolesInclude,
+            });
+            await this._applyLdapDirectoryRoles(updated.id, profile);
+            const refreshed = await prisma_client_1.prisma.user.findUniqueOrThrow({
+                where: { id: updated.id },
+                include: prisma_types_1.userWithRolesInclude,
+            });
+            logger_util_1.logger.info('User synced from on-premises Active Directory', { userId: existing.id, email });
+            return (0, user_response_dto_1.mapUserToResponse)(refreshed);
+        }
+        // JIT provisioning on first AD login
+        const created = await prisma_client_1.prisma.user.create({
+            data: {
+                email,
+                first_name: profile.givenName ?? profile.sAMAccountName,
+                last_name: profile.familyName ?? '',
+                display_name: profile.displayName ||
+                    `${profile.givenName || ''} ${profile.familyName || ''}`.trim() ||
+                    profile.sAMAccountName,
+                job_title: profile.jobTitle,
+                department: profile.department,
+                phone: profile.phone,
+                email_verified: true,
+            },
+            include: prisma_types_1.userWithRolesInclude,
+        });
+        await this._applyLdapDirectoryRoles(created.id, profile);
+        const provisioned = await prisma_client_1.prisma.user.findUniqueOrThrow({
+            where: { id: created.id },
+            include: prisma_types_1.userWithRolesInclude,
+        });
+        logger_util_1.logger.info('User JIT-provisioned from on-premises Active Directory', { userId: created.id, email });
+        return (0, user_response_dto_1.mapUserToResponse)(provisioned);
+    }
+    async _applyLdapDirectoryRoles(userId, profile) {
+        try {
+            await directory_mapping_service_1.directoryMappingService.applyAdRolesToUser(userId, profile.groups);
+        }
+        catch (err) {
+            logger_util_1.logger.error('Directory role apply failed during LDAP login', { userId, err });
+        }
+    }
+    /**
      * Least-privilege guard for granting/removing roles. A super admin may manage
      * any role. Everyone else:
      *   - may never grant or remove the `super_admin` role, and

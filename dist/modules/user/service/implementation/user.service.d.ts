@@ -1,6 +1,6 @@
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
-import { IUserService, AzureAdProfile, RoleManagementActor } from '../interface/user.service.interface';
+import { IUserService, AzureAdProfile, LdapUserProfile, RoleManagementActor } from '../interface/user.service.interface';
 import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
 import { UserResponseDto, UserDirectoryDto, UserAccessEntitlementDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 export declare class UserService implements IUserService {
@@ -39,6 +39,12 @@ export declare class UserService implements IUserService {
      * Never throws — a role-sync failure must not block login.
      */
     private _applyDirectoryRoles;
+    /**
+     * Syncs or provisions a user authenticated via on-premises Active Directory (LDAP).
+     * Maps AD security groups to IAMS roles via directory_group_mappings.
+     */
+    syncFromLdap(profile: LdapUserProfile): Promise<UserResponseDto>;
+    private _applyLdapDirectoryRoles;
     /**
      * Least-privilege guard for granting/removing roles. A super admin may manage
      * any role. Everyone else:

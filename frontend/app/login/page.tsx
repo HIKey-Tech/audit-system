@@ -14,7 +14,7 @@ import { FormField } from '@/components/ui/FormField';
 import { Input } from '@/components/ui/Input';
 
 const LoginSchema = z.object({
-  email: z.string().email('Enter a valid email address'),
+  email: z.string().min(1, 'Enter your email or domain username').trim(),
   password: z.string().min(8, 'Password must be at least 8 characters'),
 });
 
@@ -137,16 +137,16 @@ const LoginInner = (): JSX.Element => {
 
           <form onSubmit={onSubmit} className="space-y-4" noValidate>
             <FormField
-              label="Email address"
+              label="Work email or Domain username"
               htmlFor="email"
               required
               error={errors.email?.message}
             >
               <Input
                 id="email"
-                type="email"
+                type="text"
                 autoComplete="username"
-                placeholder="you@gbb.gov.ng"
+                placeholder="you@galaxybb.local or username"
                 leftIcon={<Mail className="h-4 w-4" />}
                 error={errors.email?.message}
                 {...register('email')}

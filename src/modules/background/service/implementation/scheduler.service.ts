@@ -282,8 +282,8 @@ export const registerAllJobs = (): void => {
       'Pulls users + group memberships from Microsoft Graph, reconciles azure_ad roles, and deactivates users disabled in Azure AD',
     cronExpression: '0 2 * * *', // every day at 02:00
     handler: async () => {
-      if (!config.directorySync.enabled) {
-        logger.info('Directory sync skipped (DIRECTORY_SYNC_ENABLED=false)');
+      if (!config.directorySync.enabled && !config.ldap.syncEnabled) {
+        logger.info('Directory sync skipped (neither DIRECTORY_SYNC_ENABLED nor LDAP_SYNC_ENABLED is true)');
         return;
       }
       const result = await directoryMappingService.runFullDirectorySync();
