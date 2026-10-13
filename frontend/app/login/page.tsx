@@ -131,7 +131,7 @@ const LoginInner = (): JSX.Element => {
           <div className="mb-6">
             <h1 className="text-lg font-semibold text-text-primary">Welcome back</h1>
             <p className="mt-1 text-xs text-text-secondary">
-              Internal Audit Management System — sign in with your work email.
+              Internal Audit Management System — sign in with your domain username or email.
             </p>
           </div>
 
@@ -204,27 +204,6 @@ const LoginInner = (): JSX.Element => {
               {isSubmitting ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
-
-          <div className="my-5 flex items-center gap-3">
-            <span className="h-px flex-1 bg-border" />
-            <span className="text-[11px] font-medium uppercase tracking-wide text-text-muted">
-              or
-            </span>
-            <span className="h-px flex-1 bg-border" />
-          </div>
-
-          <a
-            href="/api/auth/sso"
-            className="flex w-full cursor-pointer items-center justify-center gap-2.5 rounded-md border border-border bg-surface px-4 py-2.5 text-sm font-medium text-text-primary transition-colors hover:bg-surface-alt focus:outline-none focus:ring-2 focus:ring-primary/40"
-          >
-            <svg viewBox="0 0 21 21" className="h-4 w-4" aria-hidden="true">
-              <rect x="1" y="1" width="9" height="9" fill="#f25022" />
-              <rect x="11" y="1" width="9" height="9" fill="#7fba00" />
-              <rect x="1" y="11" width="9" height="9" fill="#00a4ef" />
-              <rect x="11" y="11" width="9" height="9" fill="#ffb900" />
-            </svg>
-            Sign in with Microsoft
-          </a>
         </div>
       </div>
     </div>
