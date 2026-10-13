@@ -447,7 +447,6 @@ Then in a browser:
 cd /opt/iams/app
 /opt/iams/backup.sh                                          # back up before migrating
 git pull origin dev
-source .env
 docker compose -f docker-compose.prod.yml --profile ops build   # --profile ops also rebuilds the db-migrate image
 docker compose -f docker-compose.prod.yml --profile ops run --rm db-migrate
 docker compose -f docker-compose.prod.yml up -d

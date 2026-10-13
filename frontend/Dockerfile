@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # IAMS frontend (Next.js App Router, BFF auth proxy).
 # Uses Next standalone output (enabled via NEXT_OUTPUT=standalone, see
 # next.config.js) so the runtime image carries only the compiled server —

@@ -1,4 +1,3 @@
-# syntax=docker/dockerfile:1
 # IAMS backend (Express + Prisma). Multi-stage:
 #   deps      — full npm install (dev deps included; needed by build + db tools)
 #   build     — prisma generate + tsc. Also serves as the "db tools" image:
