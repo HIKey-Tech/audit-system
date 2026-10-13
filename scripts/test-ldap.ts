@@ -60,17 +60,34 @@ async function run() {
         client = testClient;
         break;
       } catch (bindErr: unknown) {
-        if (bindErr instanceof InvalidCredentialsError) {
-          console.log(`❌ Invalid credentials`);
-        } else {
-          console.log(`❌ Failed: ${bindErr instanceof Error ? bindErr.message : String(bindErr)}`);
+        const errMsg = bindErr instanceof Error ? bindErr.message : String(bindErr);
+        console.log(`❌ ${errMsg}`);
+
+        const dataMatch = errMsg.match(/data\s+([0-9a-fA-F]+)/i);
+        if (dataMatch) {
+          const code = dataMatch[1].toLowerCase();
+          const adCodeDescriptions: Record<string, string> = {
+            '52e': 'Username or password does not match what is stored in Active Directory',
+            '52f': 'Account restriction prevents logon',
+            '530': 'Not permitted to logon at this time',
+            '531': 'Not permitted to logon at this workstation',
+            '532': 'Password has expired',
+            '533': 'Account is disabled in Active Directory',
+            '701': 'Account has expired in Active Directory',
+            '773': 'User MUST change password at next logon (flag is set in Active Directory)',
+            '775': 'Account is locked out in Active Directory (too many failed attempts)',
+          };
+          const explanation = adCodeDescriptions[code] || `Active Directory error subcode data=${code}`;
+          console.log(`      ↳ AD Diagnostic: ${explanation}`);
         }
         await testClient.unbind().catch(() => {});
       }
     }
 
     if (!successfulDn) {
-      throw new InvalidCredentialsError('All bind account formats failed with invalid credentials');
+      console.log('\n----------------------------------------------------');
+      console.log('❌ All bind attempts failed.');
+      process.exit(1);
     }
 
     console.log(`\n✅ Active Directory Bind Verified! Use LDAP_BIND_DN='${successfulDn}'`);
