@@ -1427,6 +1427,16 @@ const SEEDED_USERS: SeedUser[] = [
     isSystemUser: true,
   },
   {
+    email: 'davidaiyewumi1@gmail.com',
+    password: 'Wole@123456!',
+    firstName: 'Wole',
+    lastName: 'Aiyewumi',
+    department: 'Internal Audit',
+    jobTitle: 'System Administrator',
+    roles: ['super_admin'],
+    isSystemUser: true,
+  },
+  {
     email: 'adaeze@gbb.gov.ng',
     password: 'Adaeze@123456!',
     firstName: 'Adaeze',

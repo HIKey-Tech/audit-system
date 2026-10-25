@@ -17,6 +17,7 @@
     "prisma:seed": "ts-node prisma/seed.ts",
     "seed:role-permissions": "ts-node scripts/seed-role-permissions.ts",
     "seed:notification-templates": "ts-node scripts/seed-notification-templates.ts",
+    "seed:admin-user": "ts-node scripts/seed-admin-user.ts",
     "lint": "eslint . --ext .ts",
     "lint:fix": "eslint . --ext .ts --fix",
     "test": "jest",
