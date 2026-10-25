@@ -33,6 +33,7 @@ import { revokeUserSessions } from '../../../../shared/security/session-guard';
 import { logSecurityEvent } from '../../../logging/utility/security-event.utility';
 import { SecurityEvent } from '../../../logging/domain/enum/logging.enum';
 import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
+import { NOTIFICATION_PRIORITY } from '../../../messaging/service/interface/notification-queue.service.interface';
 
 // Sign-in times in the notice email are shown in Nigerian time (WAT).
 const LOGIN_NOTICE_TIME_ZONE = 'Africa/Lagos';
@@ -279,13 +280,17 @@ export class AuthService implements IAuthService {
     const device = describeDevice(userAgent);
     const ip = ipAddress || 'unknown';
 
-    void notificationQueueService.enqueueSafe('email', {
-      to: user.email,
-      subject: 'New sign-in to your IAMS account',
-      text: `Dear ${recipientName},\n\nYour IAMS account was signed in to on ${loginTime} (WAT) from ${device}, IP address ${ip}.\n\nIf this was you, no action is needed. If it was not you, change your password and contact the IAMS administrator immediately.\n\nRegards,\nIAMS — Internal Audit System`,
-      eventKey: 'user.login.notice',
-      variables: { recipientName, loginTime: `${loginTime} (WAT)`, device, ipAddress: ip },
-    });
+    void notificationQueueService.enqueueSafe(
+      'email',
+      {
+        to: user.email,
+        subject: 'New sign-in to your IAMS account',
+        text: `Dear ${recipientName},\n\nYour IAMS account was signed in to on ${loginTime} (WAT) from ${device}, IP address ${ip}.\n\nIf this was you, no action is needed. If it was not you, change your password and contact the IAMS administrator immediately.\n\nRegards,\nIAMS — Internal Audit System`,
+        eventKey: 'user.login.notice',
+        variables: { recipientName, loginTime: `${loginTime} (WAT)`, device, ipAddress: ip },
+      },
+      { priority: NOTIFICATION_PRIORITY.HIGH },
+    );
   }
 
   async completeMfaLogin(

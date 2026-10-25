@@ -236,6 +236,14 @@ export class NotificationQueueService implements INotificationQueueService {
     });
 
     logger.info('Notification queued', { type, priority: options.priority ?? NOTIFICATION_PRIORITY.NORMAL });
+
+    // Instantly trigger queue processing on the next tick so non-deferred notifications
+    // deliver immediately without waiting for the background cron tick.
+    if (!options.tx && (!options.scheduledAt || options.scheduledAt <= new Date())) {
+      setImmediate(() => {
+        void this.processQueue();
+      });
+    }
   }
 
   async enqueueSafe<T extends NotificationQueueType>(
