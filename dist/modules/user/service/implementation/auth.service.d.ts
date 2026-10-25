@@ -13,6 +13,8 @@ export declare class AuthService implements IAuthService {
     constructor(userService: IUserService, mfaService: IMfaService, ldapClient?: ILdapClient);
     login(dto: LoginRequestDto, ipAddress?: string, userAgent?: string): Promise<LoginResultDto>;
     private _completeLogin;
+    /** Emails the user that their account was just signed in to. Never blocks or fails a login. */
+    private _sendLoginNotice;
     completeMfaLogin(userId: string, ipAddress?: string, userAgent?: string): Promise<AuthResponseDto>;
     getSsoAuthorizationUrl(state?: string): Promise<SsoRedirectResponseDto>;
     handleOidcCallback(code: string, state: string, ipAddress?: string, userAgent?: string): Promise<AuthResponseDto>;

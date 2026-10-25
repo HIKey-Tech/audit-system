@@ -19,6 +19,7 @@ import {
   AlertTriangle,
   Download,
   FileCheck2,
+  Eye,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -33,6 +34,7 @@ import { FormField } from '@/components/ui/FormField';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Avatar } from '@/components/ui/Avatar';
 import { SignaturePad } from '@/components/common/SignaturePad';
+import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 import { requestsApi } from '@/lib/api/workflow';
 import { signatureApi } from '@/lib/api/signature';
 import { formatDateTime, formatRelative, formatFileSize, initialsFromName } from '@/lib/utils/format';
@@ -53,6 +55,7 @@ export default function RequestDetailPage(): JSX.Element {
   const [comment, setComment] = useState('');
   const [signOpen, setSignOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [viewerDoc, setViewerDoc] = useState<{ id: string; name: string; isSignable: boolean } | null>(null);
 
   const { data: req, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['request', id],
@@ -172,8 +175,20 @@ export default function RequestDetailPage(): JSX.Element {
                 >
                   Approve
                 </Button>
-                <Button leftIcon={<PenLine className="h-4 w-4" />} onClick={() => setSignOpen(true)}>
-                  Sign
+                <Button
+                  leftIcon={<PenLine className="h-4 w-4" />}
+                  onClick={() => {
+                    const pdfAtt = req.attachments?.find((a) =>
+                      a.originalName.toLowerCase().endsWith('.pdf'),
+                    );
+                    if (pdfAtt) {
+                      setViewerDoc({ id: pdfAtt.documentId, name: pdfAtt.originalName, isSignable: true });
+                    } else {
+                      setSignOpen(true);
+                    }
+                  }}
+                >
+                  Sign Document
                 </Button>
                 <Button
                   variant="danger"
@@ -230,24 +245,47 @@ export default function RequestDetailPage(): JSX.Element {
             />
             {req.attachments && req.attachments.length > 0 ? (
               <ul className="space-y-1.5">
-                {req.attachments.map((a) => (
-                  <li
-                    key={a.documentId}
-                    className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
-                  >
-                    <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
-                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{a.originalName}</span>
-                    <span className="text-xs text-text-secondary">{formatFileSize(a.fileSize)}</span>
-                    <a
-                      href={`/api/proxy/documents/${a.documentId}/file`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs font-medium text-primary hover:underline"
+                {req.attachments.map((a) => {
+                  const isPdf = a.originalName.toLowerCase().endsWith('.pdf');
+                  return (
+                    <li
+                      key={a.documentId}
+                      className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-white"
                     >
-                      Download
-                    </a>
-                  </li>
-                ))}
+                      <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
+                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
+                        {a.originalName}
+                      </span>
+                      <span className="text-xs text-text-secondary">{formatFileSize(a.fileSize)}</span>
+                      {isPdf && (
+                        <button
+                          type="button"
+                          onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: false })}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline px-1.5 py-0.5 rounded hover:bg-slate-100"
+                        >
+                          <Eye className="h-3.5 w-3.5" /> View
+                        </button>
+                      )}
+                      {isPdf && isMyTurn && (
+                        <button
+                          type="button"
+                          onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: true })}
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200"
+                        >
+                          <PenLine className="h-3.5 w-3.5" /> Sign on Document
+                        </button>
+                      )}
+                      <a
+                        href={`/api/proxy/documents/${a.documentId}/file`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="text-xs font-medium text-text-secondary hover:text-text-primary hover:underline px-1"
+                      >
+                        Download
+                      </a>
+                    </li>
+                  );
+                })}
               </ul>
             ) : (
               <p className="flex items-center gap-1.5 text-sm text-text-secondary">
@@ -257,7 +295,12 @@ export default function RequestDetailPage(): JSX.Element {
           </Card>
 
           {/* Signed documents (generated on completion) */}
-          {req.status === 'completed' && <SignedDocumentsCard requestId={id} />}
+          {req.status === 'completed' && (
+            <SignedDocumentsCard
+              requestId={id}
+              onPreviewDoc={(d) => setViewerDoc({ id: d.id, name: d.name, isSignable: false })}
+            />
+          )}
 
           {/* Activity timeline */}
           <Card>
@@ -346,6 +389,21 @@ export default function RequestDetailPage(): JSX.Element {
       />
 
       <VerifyModal open={verifyOpen} onClose={() => setVerifyOpen(false)} requestId={id} request={req} />
+
+      {viewerDoc && (
+        <DocumentSignerModal
+          open={Boolean(viewerDoc)}
+          onClose={() => setViewerDoc(null)}
+          documentId={viewerDoc.id}
+          documentName={viewerDoc.name}
+          requestId={id}
+          isSignable={viewerDoc.isSignable}
+          onSigned={() => {
+            setViewerDoc(null);
+            invalidate();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -552,7 +610,13 @@ const SignModal = ({
   );
 };
 
-const SignedDocumentsCard = ({ requestId }: { requestId: string }): JSX.Element | null => {
+const SignedDocumentsCard = ({
+  requestId,
+  onPreviewDoc,
+}: {
+  requestId: string;
+  onPreviewDoc?: (doc: { id: string; name: string }) => void;
+}): JSX.Element | null => {
   const { data, isLoading } = useQuery({
     queryKey: ['request', requestId, 'signed'],
     queryFn: () => requestsApi.signedDocuments(requestId),
@@ -572,23 +636,32 @@ const SignedDocumentsCard = ({ requestId }: { requestId: string }): JSX.Element 
     <Card>
       <CardHeader
         title="Signed documents"
-        subtitle="Downloadable copies with every signature stamped on a signature page. PDF attachments only."
+        subtitle="Official documents stamped with signatures and cryptographic verification."
       />
       <ul className="space-y-1.5">
         {data.map((d) => (
           <li
             key={d.id}
-            className="flex items-center gap-2 rounded-md border border-border px-3 py-2"
+            className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-emerald-50/20"
           >
             <FileCheck2 className="h-4 w-4 shrink-0 text-success" />
-            <span className="min-w-0 flex-1 truncate text-sm text-text-primary">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
               {d.sourceName ?? 'Signature certificate'}
             </span>
+            {onPreviewDoc && (
+              <button
+                type="button"
+                onClick={() => onPreviewDoc({ id: d.signedDocumentId, name: d.sourceName ?? 'Signed Document' })}
+                className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline px-1.5 py-0.5 rounded hover:bg-slate-100"
+              >
+                <Eye className="h-3.5 w-3.5" /> View
+              </button>
+            )}
             <a
               href={d.downloadUrl}
               target="_blank"
               rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+              className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:underline px-1"
             >
               <Download className="h-3.5 w-3.5" /> Download
             </a>

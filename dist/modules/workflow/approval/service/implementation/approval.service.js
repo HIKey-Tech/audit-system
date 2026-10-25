@@ -36,6 +36,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.workflowApprovalService = exports.ApprovalService = void 0;
 const client_1 = require("@prisma/client");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
+const app_config_1 = require("../../../../../shared/config/app.config");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
@@ -862,9 +863,8 @@ class ApprovalService {
         if (!user)
             return;
         const recipientName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
-        const variables = context.variables
-            ? { recipientName, ...context.variables }
-            : undefined;
+        const actionUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/workflow/approvals`;
+        const variables = { recipientName, actionUrl, ...context.variables };
         await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: user.id,
             title: notification.title,

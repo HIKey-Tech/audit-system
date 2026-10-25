@@ -3,6 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.workflowRequestService = exports.RequestService = void 0;
 const client_1 = require("@prisma/client");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
+const app_config_1 = require("../../../../../shared/config/app.config");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
@@ -15,6 +16,7 @@ const request_response_dto_1 = require("../../dto/response/request.response.dto"
 const signature_utility_1 = require("../../utility/signature.utility");
 const signature_service_1 = require("../../../../user/service/implementation/signature.service");
 const signed_document_service_1 = require("./signed-document.service");
+const signed_document_utility_1 = require("../../utility/signed-document.utility");
 const RECEIVE_PERMISSION = 'request:receive';
 const ADMIN_PERMISSION = 'request:admin';
 const ATTACHMENT_ENTITY_TYPE = 'workflow_request';
@@ -146,10 +148,50 @@ class RequestService {
         this._assertCurrentRecipient(request, actor.id);
         await this._assertAffirmation(actor.id, dto.affirmation);
         const { hash, manifest } = await this._buildSignature(request, actor.id);
-        // Record which stored signature image was used, so the signed-PDF generator can
-        // stamp the right image even if the user later changes their signature. Null is
-        // fine — the manifest-hash signature is unaffected when no image exists.
         const sigRef = await signature_service_1.userSignatureService.getActiveSignatureRef(actor.id);
+        // If in-place document signing placements are provided, stamp the PDF directly
+        if (dto.documentId && dto.placements && dto.placements.length > 0) {
+            try {
+                const file = await this.documentService.getFileById(dto.documentId);
+                let sigFile = null;
+                if (sigRef?.documentId) {
+                    try {
+                        sigFile = await this.documentService.getFileById(sigRef.documentId);
+                    }
+                    catch {
+                        // Proceed even if stored signature image file cannot be retrieved
+                    }
+                }
+                const user = await prisma_client_1.prisma.user.findUnique({ where: { id: actor.id } });
+                const signerName = user?.display_name?.trim() || `${user?.first_name} ${user?.last_name}`.trim();
+                const signerRole = user?.job_title ?? undefined;
+                const stamped = await (0, signed_document_utility_1.stampPdfWithPlacements)({
+                    pdfBuffer: file.buffer,
+                    placements: dto.placements,
+                    signatureImageBuffer: sigFile?.buffer,
+                    signatureFormat: sigFile?.mimeType === 'image/jpeg' ? 'jpg' : 'png',
+                    signerName,
+                    signerRole,
+                    referenceNumber: request.reference_number,
+                    manifestHash: hash,
+                });
+                await signed_document_service_1.signedDocumentService.storeDirectSignedDocument({
+                    requestId,
+                    sourceDocumentId: dto.documentId,
+                    sourceName: file.originalName,
+                    stampedBuffer: stamped,
+                    uploadedById: actor.id,
+                });
+                logger_util_1.logger.info('In-place PDF stamped successfully during request sign-off', {
+                    requestId,
+                    documentId: dto.documentId,
+                    placementsCount: dto.placements.length,
+                });
+            }
+            catch (stampErr) {
+                logger_util_1.logger.warn('Direct in-place PDF stamping failed; fallback to receipt flow', { requestId, err: stampErr });
+            }
+        }
         return this._advance(requestId, actor, request_enum_1.RequestActionType.Sign, {
             stepStatus: request_enum_1.RequestStepStatus.Signed,
             comment: dto.comment,
@@ -601,7 +643,12 @@ class RequestService {
         if (!user)
             return;
         const recipientName = this._actorName(user);
-        const variables = { recipientName, ...notification.variables };
+        const variables = {
+            recipientName,
+            requestDescription: request.description?.trim() || '(no description)',
+            actionUrl: `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/requests/${request.id}`,
+            ...notification.variables,
+        };
         await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
             userId: user.id,
             title: notification.title,

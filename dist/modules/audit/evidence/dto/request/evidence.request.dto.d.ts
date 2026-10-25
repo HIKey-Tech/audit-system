@@ -34,7 +34,7 @@ export declare const EvidenceRepositoryQuerySchema: z.ZodObject<{
     workingPaperId: z.ZodOptional<z.ZodString>;
     uploadedById: z.ZodOptional<z.ZodString>;
     fileType: z.ZodOptional<z.ZodString>;
-    isDisputed: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "true" | "false">>;
+    isDisputed: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "false" | "true">>;
     uploadedFrom: z.ZodOptional<z.ZodDate>;
     uploadedTo: z.ZodOptional<z.ZodDate>;
 }, "strip", z.ZodTypeAny, {
@@ -58,7 +58,7 @@ export declare const EvidenceRepositoryQuerySchema: z.ZodObject<{
     engagementId?: string | undefined;
     fileType?: string | undefined;
     workingPaperId?: string | undefined;
-    isDisputed?: "true" | "false" | undefined;
+    isDisputed?: "false" | "true" | undefined;
     uploadedFrom?: Date | undefined;
     uploadedTo?: Date | undefined;
 }>;

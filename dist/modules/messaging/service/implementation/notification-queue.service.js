@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.notificationQueueService = exports.NotificationQueueService = void 0;
 const prisma_client_1 = require("../../../../shared/prisma/prisma.client");
+const app_config_1 = require("../../../../shared/config/app.config");
 const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const notification_queue_service_interface_1 = require("../interface/notification-queue.service.interface");
@@ -139,21 +140,23 @@ const parseInAppPayload = (payload) => {
     };
 };
 const renderEmailWithTemplate = async (dto) => {
-    if (!dto.eventKey)
-        return dto;
-    const template = await template_service_1.templateService.getTemplateByEventAndChannel(dto.eventKey, 'email');
-    if (!template)
+    const template = dto.eventKey
+        ? await template_service_1.templateService.getTemplateByEventAndChannel(dto.eventKey, 'email')
+        : null;
+    // Emails that build their own HTML (password reset, onboarding, 2FA code) and
+    // have no template are sent exactly as given.
+    if (!template && (dto.html || dto.text === undefined))
         return dto;
     const variables = dto.variables ?? {};
-    const renderedBody = (0, template_utility_1.renderTemplate)(template.body, variables);
-    const renderedSubject = template.subject
-        ? (0, template_utility_1.renderTemplate)(template.subject, variables)
-        : dto.subject;
+    const text = template ? (0, template_utility_1.renderTemplate)(template.body, variables) : dto.text;
+    const subject = template?.subject ? (0, template_utility_1.renderTemplate)(template.subject, variables) : dto.subject;
+    // Every notification email links back to the item (or to IAMS itself).
+    const actionUrl = variables.actionUrl || app_config_1.config.app.frontendUrl;
     return {
         ...dto,
-        subject: renderedSubject,
-        html: renderedBody,
-        text: renderedBody,
+        subject,
+        text: `${text}\n\nOpen in IAMS: ${actionUrl}`,
+        html: (0, template_utility_1.plainTextToEmailHtml)(text, actionUrl),
     };
 };
 const renderInAppWithTemplate = async (dto) => {
@@ -185,6 +188,13 @@ class NotificationQueueService {
             },
         });
         logger_util_1.logger.info('Notification queued', { type, priority: options.priority ?? notification_queue_service_interface_1.NOTIFICATION_PRIORITY.NORMAL });
+        // Instantly trigger queue processing on the next tick so non-deferred notifications
+        // deliver immediately without waiting for the background cron tick.
+        if (!options.tx && (!options.scheduledAt || options.scheduledAt <= new Date())) {
+            setImmediate(() => {
+                void this.processQueue();
+            });
+        }
     }
     async enqueueSafe(type, payload, options = {}) {
         try {

@@ -7,6 +7,13 @@ export declare class SignedDocumentService implements ISignedDocumentService {
     /** Fire-and-forget generation means failures are otherwise invisible — tell the initiator. Best-effort. */
     private _notifyGenerationFailure;
     list(requestId: string): Promise<SignedDocumentSummary[]>;
+    storeDirectSignedDocument(opts: {
+        requestId: string;
+        sourceDocumentId: string;
+        sourceName: string;
+        stampedBuffer: Buffer;
+        uploadedById: string;
+    }): Promise<void>;
     private _buildEntries;
     private _store;
 }

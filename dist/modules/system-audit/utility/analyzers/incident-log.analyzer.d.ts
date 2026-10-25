@@ -44,11 +44,11 @@ declare const ParametersSchema: z.ZodObject<{
             resolutionHours: number;
         }>;
     }, "strip", z.ZodTypeAny, {
-        low: {
+        medium: {
             responseMinutes: number;
             resolutionHours: number;
         };
-        medium: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -61,11 +61,11 @@ declare const ParametersSchema: z.ZodObject<{
             resolutionHours: number;
         };
     }, {
-        low: {
+        medium: {
             responseMinutes: number;
             resolutionHours: number;
         };
-        medium: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -82,11 +82,11 @@ declare const ParametersSchema: z.ZodObject<{
     openAgeDays: z.ZodDefault<z.ZodNumber>;
 }, "strip", z.ZodTypeAny, {
     sla: {
-        low: {
+        medium: {
             responseMinutes: number;
             resolutionHours: number;
         };
-        medium: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -102,11 +102,11 @@ declare const ParametersSchema: z.ZodObject<{
     openAgeDays: number;
 }, {
     sla?: {
-        low: {
+        medium: {
             responseMinutes: number;
             resolutionHours: number;
         };
-        medium: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };

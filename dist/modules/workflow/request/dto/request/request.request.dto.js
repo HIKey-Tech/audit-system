@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.RequestIdParamsSchema = exports.RequestInboxQuerySchema = exports.RequestListQuerySchema = exports.CommentRequestSchema = exports.SignRequestSchema = exports.RejectRequestSchema = exports.ApproveRequestSchema = exports.CreateRequestSchema = void 0;
+exports.RequestIdParamsSchema = exports.RequestInboxQuerySchema = exports.RequestListQuerySchema = exports.CommentRequestSchema = exports.SignRequestSchema = exports.PlacementSchema = exports.RejectRequestSchema = exports.ApproveRequestSchema = exports.CreateRequestSchema = void 0;
 const zod_1 = require("zod");
 // ──────────────────────────────────────────────────────────────
 // Create request (ordered recipient chain)
@@ -22,6 +22,16 @@ exports.ApproveRequestSchema = zod_1.z.object({
 exports.RejectRequestSchema = zod_1.z.object({
     reason: zod_1.z.string().trim().min(1, 'A rejection reason is required').max(5000),
 });
+exports.PlacementSchema = zod_1.z.object({
+    type: zod_1.z.enum(['signature', 'text']),
+    pageIndex: zod_1.z.number().int().min(0).default(0),
+    xPercent: zod_1.z.number().min(0).max(100),
+    yPercent: zod_1.z.number().min(0).max(100),
+    widthPercent: zod_1.z.number().min(0).max(100).optional(),
+    heightPercent: zod_1.z.number().min(0).max(100).optional(),
+    text: zod_1.z.string().max(1000).optional(),
+    fontSize: zod_1.z.number().min(6).max(36).optional(),
+});
 exports.SignRequestSchema = zod_1.z.object({
     affirmation: zod_1.z
         .string()
@@ -29,6 +39,8 @@ exports.SignRequestSchema = zod_1.z.object({
         .min(1, 'Type your full name to affirm the signature')
         .max(200),
     comment: zod_1.z.string().trim().max(5000).optional(),
+    documentId: zod_1.z.string().uuid().optional(),
+    placements: zod_1.z.array(exports.PlacementSchema).optional(),
 });
 exports.CommentRequestSchema = zod_1.z.object({
     comment: zod_1.z.string().trim().min(1, 'Comment cannot be empty').max(5000),

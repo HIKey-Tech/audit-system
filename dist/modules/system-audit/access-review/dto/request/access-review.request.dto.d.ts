@@ -5,8 +5,8 @@ export declare const AccessItemListQuerySchema: z.ZodObject<{
     pageSize: z.ZodDefault<z.ZodNumber>;
     decision: z.ZodOptional<z.ZodNativeEnum<typeof AccessDecision>>;
     /** Only accounts an analysis rule raised something against. */
-    flagged: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "true" | "false">>;
-    privileged: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "true" | "false">>;
+    flagged: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "false" | "true">>;
+    privileged: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "false" | "true">>;
     search: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     page: number;
@@ -20,8 +20,8 @@ export declare const AccessItemListQuerySchema: z.ZodObject<{
     decision?: AccessDecision | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
-    privileged?: "true" | "false" | undefined;
-    flagged?: "true" | "false" | undefined;
+    privileged?: "false" | "true" | undefined;
+    flagged?: "false" | "true" | undefined;
 }>;
 export declare const DecideAccessItemsSchema: z.ZodEffects<z.ZodObject<{
     itemIds: z.ZodArray<z.ZodString, "many">;

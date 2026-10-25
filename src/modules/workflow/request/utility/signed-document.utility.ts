@@ -158,3 +158,105 @@ export async function buildCertificatePdf(data: SignaturePageData): Promise<Buff
   await drawPanel(pdf, page, font, bold, data);
   return Buffer.from(await pdf.save());
 }
+
+export interface PlacementData {
+  type: 'signature' | 'text';
+  pageIndex: number;
+  xPercent: number;
+  yPercent: number;
+  widthPercent?: number;
+  heightPercent?: number;
+  text?: string;
+  fontSize?: number;
+}
+
+export async function stampPdfWithPlacements(opts: {
+  pdfBuffer: Buffer;
+  placements: PlacementData[];
+  signatureImageBuffer?: Buffer;
+  signatureFormat?: 'png' | 'jpg';
+  signerName: string;
+  signerRole?: string;
+  referenceNumber: string;
+  manifestHash?: string;
+}): Promise<Buffer> {
+  const pdf = await PDFDocument.load(opts.pdfBuffer);
+  const pages = pdf.getPages();
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const bold = await pdf.embedFont(StandardFonts.HelveticaBold);
+
+  let embeddedSig: any = null;
+  if (opts.signatureImageBuffer) {
+    try {
+      if (opts.signatureFormat === 'jpg') {
+        embeddedSig = await pdf.embedJpg(opts.signatureImageBuffer);
+      } else {
+        embeddedSig = await pdf.embedPng(opts.signatureImageBuffer);
+      }
+    } catch {
+      try {
+        embeddedSig = await pdf.embedJpg(opts.signatureImageBuffer);
+      } catch {
+        // Ignored if invalid image format
+      }
+    }
+  }
+
+  for (const item of opts.placements) {
+    const pageIdx = Math.min(Math.max(0, item.pageIndex), pages.length - 1);
+    const page = pages[pageIdx];
+    const { width, height } = page.getSize();
+
+    if (item.type === 'signature' && embeddedSig) {
+      const wPercent = item.widthPercent ?? 24;
+      const hPercent = item.heightPercent ?? 8;
+      const targetWidth = (wPercent / 100) * width;
+      const targetHeight = (hPercent / 100) * height;
+      const x = (item.xPercent / 100) * width;
+      // In PDF coordinates, (0,0) is bottom-left. DOM coordinates are from top-left.
+      const y = height - ((item.yPercent / 100) * height) - targetHeight;
+
+      page.drawImage(embeddedSig, {
+        x: Math.max(0, x),
+        y: Math.max(0, y),
+        width: targetWidth,
+        height: targetHeight,
+      });
+    } else if (item.type === 'text') {
+      const text =
+        item.text ??
+        `${opts.signerName}${opts.signerRole ? ` · ${opts.signerRole}` : ''}\nDate: ${new Date().toLocaleDateString('en-GB')}`;
+      const fontSize = item.fontSize ?? 10;
+      const x = (item.xPercent / 100) * width;
+      const lines = text.split('\n');
+      let curY = height - ((item.yPercent / 100) * height) - fontSize;
+
+      for (const line of lines) {
+        page.drawText(line, {
+          x: Math.max(0, x),
+          y: Math.max(0, curY),
+          size: fontSize,
+          font: bold,
+          color: rgb(0.12, 0.15, 0.2),
+        });
+        curY -= fontSize + 3;
+      }
+    }
+  }
+
+  // Stamp a clean verification watermark at the bottom margin of the first stamped page
+  const stampedPageIdx = opts.placements[0]?.pageIndex ?? 0;
+  const auditPage = pages[Math.min(stampedPageIdx, pages.length - 1)];
+  const shortHash = (opts.manifestHash ?? '').slice(0, 16);
+  const verificationText = `Digitally signed by ${opts.signerName} via GBB IAMS | Ref: ${opts.referenceNumber} | Date: ${new Date().toISOString().slice(0, 10)}${shortHash ? ` | Hash: ${shortHash}` : ''}`;
+
+  auditPage.drawText(verificationText, {
+    x: 36,
+    y: 18,
+    size: 7,
+    font,
+    color: rgb(0.4, 0.45, 0.53),
+  });
+
+  return Buffer.from(await pdf.save());
+}

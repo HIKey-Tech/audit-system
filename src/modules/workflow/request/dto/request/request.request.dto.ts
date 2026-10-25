@@ -23,6 +23,17 @@ export const RejectRequestSchema = z.object({
   reason: z.string().trim().min(1, 'A rejection reason is required').max(5000),
 });
 
+export const PlacementSchema = z.object({
+  type: z.enum(['signature', 'text']),
+  pageIndex: z.number().int().min(0).default(0),
+  xPercent: z.number().min(0).max(100),
+  yPercent: z.number().min(0).max(100),
+  widthPercent: z.number().min(0).max(100).optional(),
+  heightPercent: z.number().min(0).max(100).optional(),
+  text: z.string().max(1000).optional(),
+  fontSize: z.number().min(6).max(36).optional(),
+});
+
 export const SignRequestSchema = z.object({
   affirmation: z
     .string()
@@ -30,6 +41,8 @@ export const SignRequestSchema = z.object({
     .min(1, 'Type your full name to affirm the signature')
     .max(200),
   comment: z.string().trim().max(5000).optional(),
+  documentId: z.string().uuid().optional(),
+  placements: z.array(PlacementSchema).optional(),
 });
 
 export const CommentRequestSchema = z.object({

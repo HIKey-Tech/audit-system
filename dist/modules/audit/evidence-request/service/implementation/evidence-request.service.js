@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EvidenceRequestService = void 0;
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
+const app_config_1 = require("../../../../../shared/config/app.config");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
@@ -40,8 +41,10 @@ class EvidenceRequestService {
         });
         logger_util_1.logger.info('Evidence request created', { requestId: request.id, engagementId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.create', module: 'audit', entityType: 'audit_evidence_request', entityId: request.id });
-        const due = dto.dueDate ? ` Due ${dto.dueDate.toISOString().slice(0, 10)}.` : '';
-        await this._notify(assignee.id, assignee.email, 'Evidence requested from you', `"${dto.title}" has been requested for audit ${engagement.reference_number} — ${engagement.title}.${due} Please log in to IAMS to upload the requested documents.`, engagementId);
+        const due = dto.dueDate ? ` Due: ${dto.dueDate.toISOString().slice(0, 10)}.` : '';
+        const desc = dto.description?.trim() ? `\n\nDescription: ${dto.description.trim()}` : '';
+        const actionUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${engagementId}?tab=requests`;
+        await this._notify(assignee.id, assignee.email, 'Evidence requested from you', `"${dto.title}" has been requested for audit ${engagement.reference_number} — ${engagement.title}.${due}${desc}\n\nUse the link below to open the request and upload the requested documents.`, engagementId, actionUrl);
         return (0, evidence_request_response_dto_1.mapEvidenceRequestToResponse)(request);
     }
     async listAssignableUsers(engagementId, actor) {
@@ -144,7 +147,8 @@ class EvidenceRequestService {
         ]);
         logger_util_1.logger.info('Evidence request responded', { requestId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.respond', module: 'audit', entityType: 'audit_evidence_request', entityId: requestId });
-        await this._notify(updated.requested_by_id, updated.requested_by.email, 'Evidence submitted', `${updated.assigned_to.display_name ?? 'The auditee'} uploaded "${file.originalName}" for your request "${updated.title}" (${updated.engagement.reference_number}). Please review and accept or return it.`, updated.engagement_id);
+        const actionUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${updated.engagement_id}?tab=requests`;
+        await this._notify(updated.requested_by_id, updated.requested_by.email, 'Evidence submitted', `${updated.assigned_to.display_name ?? 'The auditee'} uploaded "${file.originalName}" for your request "${updated.title}" (${updated.engagement.reference_number}). Please review and accept or return it.`, updated.engagement_id, actionUrl);
         return (0, evidence_request_response_dto_1.mapEvidenceRequestToResponse)(updated);
     }
     async accept(requestId, actor) {
@@ -159,7 +163,8 @@ class EvidenceRequestService {
         });
         logger_util_1.logger.info('Evidence request fulfilled', { requestId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.accept', module: 'audit', entityType: 'audit_evidence_request', entityId: requestId });
-        await this._notify(updated.assigned_to_id, updated.assigned_to.email, 'Evidence accepted', `Your submission for "${updated.title}" (${updated.engagement.reference_number}) has been accepted. Nothing further is needed for this request.`, updated.engagement_id);
+        const actionUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${updated.engagement_id}?tab=requests`;
+        await this._notify(updated.assigned_to_id, updated.assigned_to.email, 'Evidence accepted', `Your submission for "${updated.title}" (${updated.engagement.reference_number}) has been accepted. Nothing further is needed for this request.`, updated.engagement_id, actionUrl);
         return (0, evidence_request_response_dto_1.mapEvidenceRequestToResponse)(updated);
     }
     async returnRequest(requestId, reason, actor) {
@@ -174,7 +179,8 @@ class EvidenceRequestService {
         });
         logger_util_1.logger.info('Evidence request returned', { requestId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.return', module: 'audit', entityType: 'audit_evidence_request', entityId: requestId, newValues: { reason } });
-        await this._notify(updated.assigned_to_id, updated.assigned_to.email, 'Evidence returned — action needed', `Your submission for "${updated.title}" (${updated.engagement.reference_number}) was returned: ${reason}. Please log in to IAMS and upload a corrected document.`, updated.engagement_id);
+        const actionUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${updated.engagement_id}?tab=requests`;
+        await this._notify(updated.assigned_to_id, updated.assigned_to.email, 'Evidence returned — action needed', `Your submission for "${updated.title}" (${updated.engagement.reference_number}) was returned: ${reason}. Please use the link below to open the request and upload a corrected document.`, updated.engagement_id, actionUrl);
         return (0, evidence_request_response_dto_1.mapEvidenceRequestToResponse)(updated);
     }
     async cancelRequest(requestId, actor) {
@@ -206,7 +212,7 @@ class EvidenceRequestService {
         return engagement;
     }
     /** in-app + email; queue-backed so a notification hiccup never fails the request. */
-    async _notify(userId, email, title, body, engagementId) {
+    async _notify(userId, email, title, body, engagementId, actionUrl) {
         await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
             userId,
             title,
@@ -220,6 +226,7 @@ class EvidenceRequestService {
                 to: email,
                 subject: `IAMS — ${title}`,
                 text: `${body}\n\nRegards,\nIAMS — Internal Audit System`,
+                variables: actionUrl ? { actionUrl } : undefined,
             });
         }
     }

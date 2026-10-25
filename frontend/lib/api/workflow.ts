@@ -16,6 +16,24 @@ import type {
 } from '../types/domain';
 import type { PaginatedResult } from '../types/api';
 
+export interface DocumentPlacementDto {
+  type: 'signature' | 'text';
+  pageIndex: number;
+  xPercent: number;
+  yPercent: number;
+  widthPercent?: number;
+  heightPercent?: number;
+  text?: string;
+  fontSize?: number;
+}
+
+export interface SignRequestPayload {
+  affirmation: string;
+  comment?: string;
+  documentId?: string;
+  placements?: DocumentPlacementDto[];
+}
+
 type WorkflowAssignmentRole = 'lead_auditor' | 'supporting_auditor';
 
 export const workflowApi = {
@@ -102,8 +120,17 @@ export const requestsApi = {
   },
   approve: (id: string, comment?: string) =>
     api.post<WorkflowRequest>(`/workflow/requests/${id}/approve`, { comment }),
-  sign: (id: string, affirmation: string, comment?: string) =>
-    api.post<WorkflowRequest>(`/workflow/requests/${id}/sign`, { affirmation, comment }),
+  sign: (
+    id: string,
+    payloadOrAffirmation: string | SignRequestPayload,
+    comment?: string,
+  ) => {
+    const body =
+      typeof payloadOrAffirmation === 'string'
+        ? { affirmation: payloadOrAffirmation, comment }
+        : payloadOrAffirmation;
+    return api.post<WorkflowRequest>(`/workflow/requests/${id}/sign`, body);
+  },
   reject: (id: string, reason: string) =>
     api.post<WorkflowRequest>(`/workflow/requests/${id}/reject`, { reason }),
   comment: (id: string, comment: string) =>

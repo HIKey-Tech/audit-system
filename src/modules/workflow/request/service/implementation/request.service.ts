@@ -47,6 +47,7 @@ import {
 } from '../../utility/signature.utility';
 import { userSignatureService } from '../../../../user/service/implementation/signature.service';
 import { signedDocumentService } from './signed-document.service';
+import { stampPdfWithPlacements } from '../../utility/signed-document.utility';
 
 const RECEIVE_PERMISSION = 'request:receive';
 const ADMIN_PERMISSION = 'request:admin';
@@ -210,10 +211,52 @@ export class RequestService implements IRequestService {
     await this._assertAffirmation(actor.id, dto.affirmation);
 
     const { hash, manifest } = await this._buildSignature(request, actor.id);
-    // Record which stored signature image was used, so the signed-PDF generator can
-    // stamp the right image even if the user later changes their signature. Null is
-    // fine — the manifest-hash signature is unaffected when no image exists.
     const sigRef = await userSignatureService.getActiveSignatureRef(actor.id);
+
+    // If in-place document signing placements are provided, stamp the PDF directly
+    if (dto.documentId && dto.placements && dto.placements.length > 0) {
+      try {
+        const file = await this.documentService.getFileById(dto.documentId);
+        let sigFile: { buffer: Buffer; mimeType: string } | null = null;
+        if (sigRef?.documentId) {
+          try {
+            sigFile = await this.documentService.getFileById(sigRef.documentId);
+          } catch {
+            // Proceed even if stored signature image file cannot be retrieved
+          }
+        }
+
+        const user = await prisma.user.findUnique({ where: { id: actor.id } });
+        const signerName = user?.display_name?.trim() || `${user?.first_name} ${user?.last_name}`.trim();
+        const signerRole = user?.job_title ?? undefined;
+
+        const stamped = await stampPdfWithPlacements({
+          pdfBuffer: file.buffer,
+          placements: dto.placements,
+          signatureImageBuffer: sigFile?.buffer,
+          signatureFormat: sigFile?.mimeType === 'image/jpeg' ? 'jpg' : 'png',
+          signerName,
+          signerRole,
+          referenceNumber: request.reference_number,
+          manifestHash: hash,
+        });
+
+        await signedDocumentService.storeDirectSignedDocument({
+          requestId,
+          sourceDocumentId: dto.documentId,
+          sourceName: file.originalName,
+          stampedBuffer: stamped,
+          uploadedById: actor.id,
+        });
+        logger.info('In-place PDF stamped successfully during request sign-off', {
+          requestId,
+          documentId: dto.documentId,
+          placementsCount: dto.placements.length,
+        });
+      } catch (stampErr) {
+        logger.warn('Direct in-place PDF stamping failed; fallback to receipt flow', { requestId, err: stampErr });
+      }
+    }
 
     return this._advance(requestId, actor, RequestActionType.Sign, {
       stepStatus: RequestStepStatus.Signed,

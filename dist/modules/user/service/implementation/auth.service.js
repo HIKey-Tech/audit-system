@@ -19,6 +19,36 @@ const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
 const session_guard_1 = require("../../../../shared/security/session-guard");
 const security_event_utility_1 = require("../../../logging/utility/security-event.utility");
 const logging_enum_1 = require("../../../logging/domain/enum/logging.enum");
+const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
+const notification_queue_service_interface_1 = require("../../../messaging/service/interface/notification-queue.service.interface");
+// Sign-in times in the notice email are shown in Nigerian time (WAT).
+const LOGIN_NOTICE_TIME_ZONE = 'Africa/Lagos';
+/** "Chrome on Windows" from a user-agent string, for the sign-in notice email. */
+const describeDevice = (userAgent) => {
+    if (!userAgent)
+        return 'an unknown device';
+    const browser = /Edg\//.test(userAgent)
+        ? 'Edge'
+        : /Chrome\//.test(userAgent)
+            ? 'Chrome'
+            : /Firefox\//.test(userAgent)
+                ? 'Firefox'
+                : /Safari\//.test(userAgent)
+                    ? 'Safari'
+                    : 'a browser';
+    const os = /Windows/.test(userAgent)
+        ? 'Windows'
+        : /Android/.test(userAgent)
+            ? 'Android'
+            : /iPhone|iPad/.test(userAgent)
+                ? 'iPhone/iPad'
+                : /Mac OS X/.test(userAgent)
+                    ? 'Mac'
+                    : /Linux/.test(userAgent)
+                        ? 'Linux'
+                        : 'an unknown system';
+    return `${browser} on ${os}`;
+};
 class AuthService {
     userService;
     mfaService;
@@ -87,8 +117,18 @@ class AuthService {
             }
         }
         // ── 2. Local database password fallback ───────────────────
-        const user = (await prisma_client_1.prisma.user.findUnique({
-            where: { email: dto.email, deleted_at: null },
+        const rawInput = dto.email.trim();
+        const cleanInput = rawInput.replace(/^[a-zA-Z0-9_.-]+\\/, '');
+        const user = (await prisma_client_1.prisma.user.findFirst({
+            where: {
+                OR: [
+                    { email: rawInput },
+                    { email: cleanInput },
+                    { email: `${cleanInput}@gbb.gov.ng` },
+                    { email: `${cleanInput}@galaxybb.local` },
+                ],
+                deleted_at: null,
+            },
             include: prisma_types_1.userWithRolesInclude,
         }));
         const failLogin = (reason) => {
@@ -156,6 +196,7 @@ class AuthService {
             });
             logger_util_1.logger.info(`User logged in via ${method} (2FA grace active)`, { userId: user.id });
             (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
+            this._sendLoginNotice(user, ipAddress, userAgent);
             return {
                 status: 'OK',
                 mfaSetupRequired: true,
@@ -171,11 +212,30 @@ class AuthService {
         });
         logger_util_1.logger.info(`User logged in via ${method}`, { userId: user.id });
         (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
+        this._sendLoginNotice(user, ipAddress, userAgent);
         return {
             status: 'OK',
             ...tokens,
             user: (0, user_response_dto_1.mapUserToResponse)(user),
         };
+    }
+    /** Emails the user that their account was just signed in to. Never blocks or fails a login. */
+    _sendLoginNotice(user, ipAddress, userAgent) {
+        const recipientName = user.display_name?.trim() || `${user.first_name} ${user.last_name}`.trim();
+        const loginTime = new Intl.DateTimeFormat('en-GB', {
+            dateStyle: 'full',
+            timeStyle: 'short',
+            timeZone: LOGIN_NOTICE_TIME_ZONE,
+        }).format(new Date());
+        const device = describeDevice(userAgent);
+        const ip = ipAddress || 'unknown';
+        void notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+            to: user.email,
+            subject: 'New sign-in to your IAMS account',
+            text: `Dear ${recipientName},\n\nYour IAMS account was signed in to on ${loginTime} (WAT) from ${device}, IP address ${ip}.\n\nIf this was you, no action is needed. If it was not you, change your password and contact the IAMS administrator immediately.\n\nRegards,\nIAMS — Internal Audit System`,
+            eventKey: 'user.login.notice',
+            variables: { recipientName, loginTime: `${loginTime} (WAT)`, device, ipAddress: ip },
+        }, { priority: notification_queue_service_interface_1.NOTIFICATION_PRIORITY.HIGH });
     }
     async completeMfaLogin(userId, ipAddress, userAgent) {
         // Bug fix: use findUnique with deleted_at:null so a user soft-deleted
@@ -197,6 +257,7 @@ class AuthService {
         });
         logger_util_1.logger.info('User completed 2FA login', { userId: user.id });
         (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password+mfa' });
+        this._sendLoginNotice(user, ipAddress, userAgent);
         return {
             ...tokens,
             user: (0, user_response_dto_1.mapUserToResponse)(user),
@@ -254,6 +315,7 @@ class AuthService {
         });
         logger_util_1.logger.info('User logged in via SSO', { userId: user.id, provider: app_config_1.config.oidc.provider });
         (0, security_event_utility_1.logSecurityEvent)(logging_enum_1.SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'sso' });
+        this._sendLoginNotice(user, ipAddress, userAgent);
         return {
             ...tokens,
             user: (0, user_response_dto_1.mapUserToResponse)(user),

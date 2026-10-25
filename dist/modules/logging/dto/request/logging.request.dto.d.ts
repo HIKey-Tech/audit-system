@@ -11,7 +11,7 @@ export declare const AuditLogListQuerySchema: z.ZodObject<{
     dateFrom: z.ZodOptional<z.ZodDate>;
     dateTo: z.ZodOptional<z.ZodDate>;
     /** Only entries that recorded a data change (old/new values) — the change history view. */
-    hasChanges: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "true" | "false">>;
+    hasChanges: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "false" | "true">>;
     sortBy: z.ZodDefault<z.ZodEnum<["createdAt"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "strip", z.ZodTypeAny, {
@@ -39,7 +39,7 @@ export declare const AuditLogListQuerySchema: z.ZodObject<{
     entityId?: string | undefined;
     dateFrom?: Date | undefined;
     dateTo?: Date | undefined;
-    hasChanges?: "true" | "false" | undefined;
+    hasChanges?: "false" | "true" | undefined;
     sortBy?: "createdAt" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
 }>;
@@ -55,7 +55,7 @@ export declare const AuditLogExportQuerySchema: z.ZodObject<Omit<{
     dateFrom: z.ZodOptional<z.ZodDate>;
     dateTo: z.ZodOptional<z.ZodDate>;
     /** Only entries that recorded a data change (old/new values) — the change history view. */
-    hasChanges: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "true" | "false">>;
+    hasChanges: z.ZodOptional<z.ZodEffects<z.ZodEnum<["true", "false"]>, boolean, "false" | "true">>;
     sortBy: z.ZodDefault<z.ZodEnum<["createdAt"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "page" | "pageSize"> & {
@@ -83,7 +83,7 @@ export declare const AuditLogExportQuerySchema: z.ZodObject<Omit<{
     entityId?: string | undefined;
     dateFrom?: Date | undefined;
     dateTo?: Date | undefined;
-    hasChanges?: "true" | "false" | undefined;
+    hasChanges?: "false" | "true" | undefined;
     sortBy?: "createdAt" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
 }>;

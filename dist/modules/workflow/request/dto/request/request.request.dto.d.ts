@@ -26,15 +26,94 @@ export declare const RejectRequestSchema: z.ZodObject<{
 }, {
     reason: string;
 }>;
+export declare const PlacementSchema: z.ZodObject<{
+    type: z.ZodEnum<["signature", "text"]>;
+    pageIndex: z.ZodDefault<z.ZodNumber>;
+    xPercent: z.ZodNumber;
+    yPercent: z.ZodNumber;
+    widthPercent: z.ZodOptional<z.ZodNumber>;
+    heightPercent: z.ZodOptional<z.ZodNumber>;
+    text: z.ZodOptional<z.ZodString>;
+    fontSize: z.ZodOptional<z.ZodNumber>;
+}, "strip", z.ZodTypeAny, {
+    type: "text" | "signature";
+    pageIndex: number;
+    xPercent: number;
+    yPercent: number;
+    text?: string | undefined;
+    fontSize?: number | undefined;
+    widthPercent?: number | undefined;
+    heightPercent?: number | undefined;
+}, {
+    type: "text" | "signature";
+    xPercent: number;
+    yPercent: number;
+    text?: string | undefined;
+    fontSize?: number | undefined;
+    pageIndex?: number | undefined;
+    widthPercent?: number | undefined;
+    heightPercent?: number | undefined;
+}>;
 export declare const SignRequestSchema: z.ZodObject<{
     affirmation: z.ZodString;
     comment: z.ZodOptional<z.ZodString>;
+    documentId: z.ZodOptional<z.ZodString>;
+    placements: z.ZodOptional<z.ZodArray<z.ZodObject<{
+        type: z.ZodEnum<["signature", "text"]>;
+        pageIndex: z.ZodDefault<z.ZodNumber>;
+        xPercent: z.ZodNumber;
+        yPercent: z.ZodNumber;
+        widthPercent: z.ZodOptional<z.ZodNumber>;
+        heightPercent: z.ZodOptional<z.ZodNumber>;
+        text: z.ZodOptional<z.ZodString>;
+        fontSize: z.ZodOptional<z.ZodNumber>;
+    }, "strip", z.ZodTypeAny, {
+        type: "text" | "signature";
+        pageIndex: number;
+        xPercent: number;
+        yPercent: number;
+        text?: string | undefined;
+        fontSize?: number | undefined;
+        widthPercent?: number | undefined;
+        heightPercent?: number | undefined;
+    }, {
+        type: "text" | "signature";
+        xPercent: number;
+        yPercent: number;
+        text?: string | undefined;
+        fontSize?: number | undefined;
+        pageIndex?: number | undefined;
+        widthPercent?: number | undefined;
+        heightPercent?: number | undefined;
+    }>, "many">>;
 }, "strip", z.ZodTypeAny, {
     affirmation: string;
     comment?: string | undefined;
+    documentId?: string | undefined;
+    placements?: {
+        type: "text" | "signature";
+        pageIndex: number;
+        xPercent: number;
+        yPercent: number;
+        text?: string | undefined;
+        fontSize?: number | undefined;
+        widthPercent?: number | undefined;
+        heightPercent?: number | undefined;
+    }[] | undefined;
 }, {
     affirmation: string;
     comment?: string | undefined;
+    documentId?: string | undefined;
+    placements?: {
+        type: "text" | "signature";
+        xPercent: number;
+        yPercent: number;
+        text?: string | undefined;
+        fontSize?: number | undefined;
+        pageIndex?: number | undefined;
+        widthPercent?: number | undefined;
+        heightPercent?: number | undefined;
+    }[] | undefined;
 }>;
 export declare const CommentRequestSchema: z.ZodObject<{
     comment: z.ZodString;

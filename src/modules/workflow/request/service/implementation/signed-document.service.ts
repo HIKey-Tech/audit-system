@@ -61,6 +61,12 @@ export class SignedDocumentService implements ISignedDocumentService {
 
       for (const att of attachments) {
         try {
+          // If an attachment was already stamped directly by the user in-place, preserve it!
+          const existingSigned = await prisma.workflow_Request_Signed_Document.findFirst({
+            where: { request_id: requestId, source_document_id: att.id },
+          });
+          if (existingSigned) continue;
+
           const file = await this.documents.getFileById(att.id);
           const data: SignaturePageData = {
             reference: request.reference_number,
@@ -120,6 +126,22 @@ export class SignedDocumentService implements ISignedDocumentService {
       downloadUrl: `/api/proxy/documents/${r.signed_document_id}/file`,
       generatedAt: r.generated_at.toISOString(),
     }));
+  }
+
+  async storeDirectSignedDocument(opts: {
+    requestId: string;
+    sourceDocumentId: string;
+    sourceName: string;
+    stampedBuffer: Buffer;
+    uploadedById: string;
+  }): Promise<void> {
+    await this._store(
+      opts.requestId,
+      opts.sourceDocumentId,
+      opts.sourceName,
+      opts.stampedBuffer,
+      opts.uploadedById,
+    );
   }
 
   private async _buildEntries(request: RequestForGeneration): Promise<SignaturePanelEntry[]> {
