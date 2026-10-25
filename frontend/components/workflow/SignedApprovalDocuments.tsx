@@ -1,10 +1,12 @@
 'use client';
 
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { FileCheck2, Download } from 'lucide-react';
+import { FileCheck2, Download, Eye } from 'lucide-react';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { workflowApi } from '@/lib/api/workflow';
+import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 
 /**
  * Lists the frozen, signed artifacts generated when an approval completed.
@@ -26,6 +28,8 @@ export function SignedApprovalDocuments(
     enabled: !direct && 'entityType' in props,
   });
 
+  const [previewDoc, setPreviewDoc] = useState<{ url: string; name: string } | null>(null);
+
   const approvalId = direct ?? resolved.data?.id ?? '';
 
   const { data, isLoading } = useQuery({
@@ -45,27 +49,48 @@ export function SignedApprovalDocuments(
   if (!approvalId || !data || data.length === 0) return null;
 
   return (
-    <Card>
-      <CardHeader
-        title="Signed document"
-        subtitle="Frozen copy with every approver's signature, generated when this was fully approved."
-      />
-      <ul className="space-y-1.5">
-        {data.map((d) => (
-          <li key={d.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
-            <FileCheck2 className="h-4 w-4 shrink-0 text-success" />
-            <span className="min-w-0 flex-1 truncate text-sm text-text-primary">Signed document</span>
-            <a
-              href={d.downloadUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
-            >
-              <Download className="h-3.5 w-3.5" /> Download
-            </a>
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <>
+      <Card>
+        <CardHeader
+          title="Signed document"
+          subtitle="Frozen copy with every approver's signature, generated when this was fully approved."
+        />
+        <ul className="space-y-1.5">
+          {data.map((d) => (
+            <li key={d.id} className="flex items-center gap-2 rounded-md border border-border px-3 py-2">
+              <FileCheck2 className="h-4 w-4 shrink-0 text-success" />
+              <span className="min-w-0 flex-1 truncate text-sm text-text-primary">Signed document</span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewDoc({ url: d.downloadUrl, name: 'Signed Document.pdf' })}
+                  className="inline-flex items-center gap-1 text-xs font-medium text-text-secondary hover:text-text-primary hover:underline"
+                >
+                  <Eye className="h-3.5 w-3.5" /> View
+                </button>
+                <a
+                  href={d.downloadUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-xs font-medium text-primary hover:underline"
+                >
+                  <Download className="h-3.5 w-3.5" /> Download
+                </a>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </Card>
+
+      {previewDoc && (
+        <DocumentSignerModal
+          open={!!previewDoc}
+          onClose={() => setPreviewDoc(null)}
+          fileUrl={previewDoc.url}
+          documentName={previewDoc.name}
+          isSignable={false}
+        />
+      )}
+    </>
   );
 }

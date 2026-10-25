@@ -21,6 +21,7 @@ import { WorkingPaperDocument } from './WorkingPaperDocument';
 import { SamplingToolSlideOver } from './SamplingToolSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
+import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 import { formatRelative } from '@/lib/utils/format';
 import { usePermission } from '@/hooks/usePermission';
 import { useSession } from '@/components/providers/AuthProvider';
@@ -62,7 +63,13 @@ const WritePreviewToggle = ({
 
 /** Split-button export: primary downloads PDF (signature images embedded), the
  * chevron menu offers Word (.docx, typed sign-off block). Mirrors the report tab. */
-const WorkingPaperExportButton = ({ paperId }: { paperId: string }): JSX.Element => {
+const WorkingPaperExportButton = ({
+  paperId,
+  onPreviewPdf,
+}: {
+  paperId: string;
+  onPreviewPdf?: (url: string, name: string) => void;
+}): JSX.Element => {
   const [exportingFormat, setExportingFormat] = useState<'pdf' | 'docx' | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
@@ -96,6 +103,17 @@ const WorkingPaperExportButton = ({ paperId }: { paperId: string }): JSX.Element
     }
   };
 
+  const handlePreview = async () => {
+    setShowMenu(false);
+    try {
+      const { blob, fileName } = await workingPapersApi.exportFile(paperId, 'pdf');
+      const url = URL.createObjectURL(blob);
+      onPreviewPdf?.(url, fileName);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to generate PDF preview');
+    }
+  };
+
   return (
     <div ref={menuRef} className="relative flex">
       <Button
@@ -119,7 +137,17 @@ const WorkingPaperExportButton = ({ paperId }: { paperId: string }): JSX.Element
         <ChevronDown className="h-3.5 w-3.5" />
       </button>
       {showMenu && (
-        <div className="absolute right-0 top-full z-10 mt-1 w-40 rounded-md border border-border bg-white py-1 shadow-lg">
+        <div className="absolute right-0 top-full z-10 mt-1 w-44 rounded-md border border-border bg-white py-1 shadow-lg">
+          {onPreviewPdf && (
+            <button
+              type="button"
+              onClick={handlePreview}
+              className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-text-primary hover:bg-surface-alt"
+            >
+              <Eye className="h-3.5 w-3.5 text-primary" />
+              Preview PDF
+            </button>
+          )}
           <button
             type="button"
             onClick={() => handleExport('docx')}
@@ -177,6 +205,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
   const [editing, setEditing] = useState<AuditWorkingPaper | null>(null);
   const [rejecting, setRejecting] = useState<AuditWorkingPaper | null>(null);
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; name: string } | null>(null);
 
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'working-papers'],
@@ -285,7 +314,10 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                     <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setEditing(wp)}>
                       View
                     </Button>
-                    <WorkingPaperExportButton paperId={wp.id} />
+                    <WorkingPaperExportButton
+                      paperId={wp.id}
+                      onPreviewPdf={(url, name) => setPdfPreview({ url, name })}
+                    />
                     {canSubmitWP && wp.createdById === session.id && (wp.status === 'draft' || wp.status === 'rejected') && (
                       <Button
                         size="sm"
@@ -394,6 +426,19 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
         tone="danger"
         isLoading={rejectMut.isPending}
       />
+
+      {pdfPreview && (
+        <DocumentSignerModal
+          open={!!pdfPreview}
+          onClose={() => {
+            URL.revokeObjectURL(pdfPreview.url);
+            setPdfPreview(null);
+          }}
+          fileUrl={pdfPreview.url}
+          documentName={pdfPreview.name}
+          isSignable={false}
+        />
+      )}
     </div>
   );
 };

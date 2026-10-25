@@ -25,6 +25,7 @@ import { assetsApi } from '@/lib/api/assets';
 import { workflowApi } from '@/lib/api/workflow';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
+import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 import { ApprovalChain } from '@/components/audit/engagements/ApprovalChain';
 import { formatRelative, formatDate } from '@/lib/utils/format';
 import { auditTypeLabel } from '@/lib/audit-domains';
@@ -128,6 +129,8 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const [activeView, setActiveView] = useState<'cards' | 'preview'>('cards');
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [approveOpen, setApproveOpen] = useState(false);
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; name: string } | null>(null);
+  const [loadingPdf, setLoadingPdf] = useState(false);
 
   useEffect(() => {
     if (!showExportMenu) return;
@@ -139,6 +142,24 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, [showExportMenu]);
+
+  const handleViewPdf = async () => {
+    if (!report.data) return;
+    setLoadingPdf(true);
+    try {
+      const { blob, fileName } = await reportsApi.exportFile(
+        report.data.id,
+        'pdf',
+        engagement.referenceNumber,
+      );
+      const url = URL.createObjectURL(blob);
+      setPdfPreview({ url, name: fileName });
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to generate PDF preview');
+    } finally {
+      setLoadingPdf(false);
+    }
+  };
 
   const handleExport = async (format: 'pdf' | 'docx') => {
     setExportingFormat(format);
@@ -324,6 +345,16 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                 Preview
               </button>
             </div>
+
+            <Button
+              variant="secondary"
+              size="sm"
+              leftIcon={<Eye className="h-4 w-4" />}
+              isLoading={loadingPdf}
+              onClick={handleViewPdf}
+            >
+              View PDF
+            </Button>
 
             {canExportReport && (
               <div ref={exportMenuRef} className="relative flex">
@@ -641,6 +672,19 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
         tone="danger"
         isLoading={rejectMut.isPending}
       />
+
+      {pdfPreview && (
+        <DocumentSignerModal
+          open={!!pdfPreview}
+          onClose={() => {
+            URL.revokeObjectURL(pdfPreview.url);
+            setPdfPreview(null);
+          }}
+          fileUrl={pdfPreview.url}
+          documentName={pdfPreview.name}
+          isSignable={false}
+        />
+      )}
     </div>
   );
 };

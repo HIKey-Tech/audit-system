@@ -17,6 +17,7 @@ import { FormField } from '@/components/ui/FormField';
 import { workflowApi } from '@/lib/api/workflow';
 import type { WorkflowApproval } from '@/lib/types/domain';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
+import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { formatRelative } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
@@ -110,26 +111,33 @@ export default function ApprovalsPage(): JSX.Element {
           <Card padded={false}>
             <ul className="divide-y divide-border">
               {history.data.map((a) => (
-                <li key={a.id} className="flex flex-wrap items-center gap-3 px-5 py-4">
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge tone="gray">{humanizeStatus(a.entityType)}</Badge>
-                      {a.entityTitle && (
-                        <span className="text-sm font-medium text-text-primary truncate">{a.entityTitle}</span>
+                <li key={a.id} className="px-5 py-4 space-y-2">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <Badge tone="gray">{humanizeStatus(a.entityType)}</Badge>
+                        {a.entityTitle && (
+                          <span className="text-sm font-medium text-text-primary truncate">{a.entityTitle}</span>
+                        )}
+                        <StatusBadge status={a.status} />
+                      </div>
+                      <p className="mt-1 text-xs text-text-secondary">
+                        Submitted by {submitterName(a)} · {formatRelative(a.updatedAt)}
+                      </p>
+                      {a.rejectionReason && (
+                        <p className="mt-1 text-xs text-danger">Reason: {a.rejectionReason}</p>
                       )}
-                      <StatusBadge status={a.status} />
                     </div>
-                    <p className="mt-1 text-xs text-text-secondary">
-                      Submitted by {submitterName(a)} · {formatRelative(a.updatedAt)}
-                    </p>
-                    {a.rejectionReason && (
-                      <p className="mt-1 text-xs text-danger">Reason: {a.rejectionReason}</p>
+                    {entityHref(a) && (
+                      <Link href={entityHref(a)!} className="text-xs font-medium text-primary hover:underline">
+                        View
+                      </Link>
                     )}
                   </div>
-                  {entityHref(a) && (
-                    <Link href={entityHref(a)!} className="text-xs font-medium text-primary hover:underline">
-                      View
-                    </Link>
+                  {a.status === 'approved' && (
+                    <div className="pt-1">
+                      <SignedApprovalDocuments approvalId={a.id} />
+                    </div>
                   )}
                 </li>
               ))}

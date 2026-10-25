@@ -5,7 +5,7 @@ const client_1 = require("@prisma/client");
 exports.evidenceRequestInclude = client_1.Prisma.validator()({
     requested_by: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
     assigned_to: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
-    evidence: { select: { id: true, file_name: true, uploaded_at: true }, orderBy: { uploaded_at: 'desc' } },
+    evidence: { select: { id: true, file_name: true, uploaded_at: true, document_id: true }, orderBy: { uploaded_at: 'desc' } },
     engagement: { select: { reference_number: true, title: true } },
 });
 const userName = (u) => u.display_name ?? `${u.first_name} ${u.last_name}`.trim();
@@ -26,7 +26,12 @@ const mapEvidenceRequestToResponse = (r) => ({
     fulfilledAt: r.fulfilled_at?.toISOString() ?? null,
     createdAt: r.created_at.toISOString(),
     updatedAt: r.updated_at.toISOString(),
-    evidence: r.evidence.map((e) => ({ id: e.id, fileName: e.file_name, uploadedAt: e.uploaded_at.toISOString() })),
+    evidence: r.evidence.map((e) => ({
+        id: e.id,
+        fileName: e.file_name,
+        uploadedAt: e.uploaded_at.toISOString(),
+        documentId: e.document_id,
+    })),
 });
 exports.mapEvidenceRequestToResponse = mapEvidenceRequestToResponse;
 //# sourceMappingURL=evidence-request.response.dto.js.map

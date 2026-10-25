@@ -31,9 +31,10 @@ import { cn } from '@/lib/utils/cn';
 interface DocumentSignerModalProps {
   open: boolean;
   onClose: () => void;
-  documentId: string;
+  documentId?: string;
+  fileUrl?: string;
   documentName: string;
-  requestId: string;
+  requestId?: string;
   isSignable?: boolean;
   onSigned?: () => void;
 }
@@ -54,6 +55,7 @@ export function DocumentSignerModal({
   open,
   onClose,
   documentId,
+  fileUrl,
   documentName,
   requestId,
   isSignable = false,
@@ -102,9 +104,11 @@ export function DocumentSignerModal({
   const fullName = session.displayName?.trim() || `${session.firstName} ${session.lastName}`.trim();
   const primaryRole = session.roles[0]?.replace(/_/g, ' ') ?? 'Auditor';
 
+  const docUrl = fileUrl || (documentId ? `/api/proxy/documents/${documentId}/file` : '');
+
   // Load and render PDF pages using local pdfjs
   useEffect(() => {
-    if (!open || !documentId) return;
+    if (!open || !docUrl) return;
 
     let isMounted = true;
     setLoading(true);
@@ -120,7 +124,6 @@ export function DocumentSignerModal({
           pdfjs.GlobalWorkerOptions.workerSrc = '/vendor/pdfjs/pdf.worker.min.mjs';
         }
 
-        const docUrl = `/api/proxy/documents/${documentId}/file`;
         const res = await fetch(docUrl, { credentials: 'include' });
         if (!res.ok) throw new Error(`Could not load document (status ${res.status})`);
 
@@ -295,6 +298,10 @@ export function DocumentSignerModal({
         fontSize: i.fontSize,
       }));
 
+      if (!requestId) {
+        throw new Error('Request ID is required to sign this document');
+      }
+
       return requestsApi.sign(requestId, {
         affirmation: affirmation.trim(),
         comment: comment.trim() || undefined,
@@ -400,7 +407,7 @@ export function DocumentSignerModal({
             )}
 
             <a
-              href={`/api/proxy/documents/${documentId}/file`}
+              href={docUrl}
               target="_blank"
               rel="noopener noreferrer"
               className="inline-flex h-8 items-center gap-1.5 rounded-md border border-slate-700 bg-slate-800 px-2.5 text-xs font-medium text-slate-300 hover:bg-slate-700 hover:text-white transition-colors"

@@ -2,10 +2,11 @@
 
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Upload, FileType2, Download, AlertOctagon } from 'lucide-react';
+import { Upload, FileType2, Download, AlertOctagon, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 import Link from 'next/link';
+import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -30,6 +31,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
   const inputRef = useRef<HTMLInputElement>(null);
   const [dragOver, setDragOver] = useState(false);
   const [disputing, setDisputing] = useState<AuditEvidence | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<{ id: string; name: string } | null>(null);
 
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'evidence'],
@@ -167,6 +169,14 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
                   />
                 </div>
                 <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    leftIcon={<Eye className="h-3.5 w-3.5" />}
+                    onClick={() => setViewingDoc({ id: ev.documentId, name: ev.fileName })}
+                  >
+                    View
+                  </Button>
                   <a
                     href={documentsApi.downloadUrl(ev.documentId)}
                     target="_blank"
@@ -207,6 +217,16 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
         tone="danger"
         isLoading={dispute.isPending}
       />
+
+      {viewingDoc && (
+        <DocumentSignerModal
+          open={!!viewingDoc}
+          onClose={() => setViewingDoc(null)}
+          documentId={viewingDoc.id}
+          documentName={viewingDoc.name}
+          isSignable={false}
+        />
+      )}
     </div>
   );
 };

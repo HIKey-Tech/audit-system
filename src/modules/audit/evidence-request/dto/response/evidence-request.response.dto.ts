@@ -3,7 +3,7 @@ import { Prisma } from '@prisma/client';
 export const evidenceRequestInclude = Prisma.validator<Prisma.Audit_Evidence_RequestInclude>()({
   requested_by: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
   assigned_to: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
-  evidence: { select: { id: true, file_name: true, uploaded_at: true }, orderBy: { uploaded_at: 'desc' } },
+  evidence: { select: { id: true, file_name: true, uploaded_at: true, document_id: true }, orderBy: { uploaded_at: 'desc' } },
   engagement: { select: { reference_number: true, title: true } },
 });
 
@@ -28,7 +28,7 @@ export interface EvidenceRequestResponseDto {
   fulfilledAt: string | null;
   createdAt: string;
   updatedAt: string;
-  evidence: { id: string; fileName: string; uploadedAt: string }[];
+  evidence: { id: string; fileName: string; uploadedAt: string; documentId: string }[];
 }
 
 /** A person an evidence request can be assigned to (who will upload the document). */
@@ -62,5 +62,10 @@ export const mapEvidenceRequestToResponse = (r: EvidenceRequestWithDetails): Evi
   fulfilledAt: r.fulfilled_at?.toISOString() ?? null,
   createdAt: r.created_at.toISOString(),
   updatedAt: r.updated_at.toISOString(),
-  evidence: r.evidence.map((e) => ({ id: e.id, fileName: e.file_name, uploadedAt: e.uploaded_at.toISOString() })),
+  evidence: r.evidence.map((e) => ({
+    id: e.id,
+    fileName: e.file_name,
+    uploadedAt: e.uploaded_at.toISOString(),
+    documentId: e.document_id,
+  })),
 });

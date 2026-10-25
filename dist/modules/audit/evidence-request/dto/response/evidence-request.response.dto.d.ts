@@ -23,6 +23,7 @@ export declare const evidenceRequestInclude: {
             id: true;
             file_name: true;
             uploaded_at: true;
+            document_id: true;
         };
         orderBy: {
             uploaded_at: "desc";
@@ -59,6 +60,7 @@ export interface EvidenceRequestResponseDto {
         id: string;
         fileName: string;
         uploadedAt: string;
+        documentId: string;
     }[];
 }
 /** A person an evidence request can be assigned to (who will upload the document). */

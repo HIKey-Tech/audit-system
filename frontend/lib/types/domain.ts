@@ -521,7 +521,7 @@ export interface EvidenceRequest {
   fulfilledAt: string | null;
   createdAt: string;
   updatedAt: string;
-  evidence: { id: string; fileName: string; uploadedAt: string }[];
+  evidence: { id: string; fileName: string; uploadedAt: string; documentId?: string }[];
 }
 
 export interface AuditEvidence {

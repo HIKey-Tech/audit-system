@@ -2,8 +2,9 @@
 
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Upload, FileType2, CheckCircle2, CornerUpLeft, Trash2, Inbox } from 'lucide-react';
+import { Plus, Upload, FileType2, CheckCircle2, CornerUpLeft, Trash2, Inbox, Eye } from 'lucide-react';
 import { toast } from 'sonner';
+import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -36,6 +37,7 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
   const [assignedToId, setAssignedToId] = useState('');
   const [returning, setReturning] = useState<EvidenceRequest | null>(null);
   const [respondingTo, setRespondingTo] = useState<string | null>(null);
+  const [viewingDoc, setViewingDoc] = useState<{ id: string; name: string } | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const list = useQuery({
@@ -251,10 +253,22 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
                       {r.evidence.length > 0 && (
                         <ul className="mt-2 space-y-1">
                           {r.evidence.map((f) => (
-                            <li key={f.id} className="flex items-center gap-1.5 text-xs text-text-secondary">
-                              <FileType2 className="h-3.5 w-3.5 shrink-0" />
-                              <span className="truncate">{f.fileName}</span>
-                              <span className="text-text-muted">· {formatRelative(f.uploadedAt)}</span>
+                            <li key={f.id} className="flex items-center justify-between gap-2 text-xs text-text-secondary bg-surface-alt/50 px-2 py-1 rounded">
+                              <div className="flex items-center gap-1.5 min-w-0">
+                                <FileType2 className="h-3.5 w-3.5 shrink-0 text-text-muted" />
+                                <span className="truncate font-medium">{f.fileName}</span>
+                                <span className="text-text-muted">· {formatRelative(f.uploadedAt)}</span>
+                              </div>
+                              {f.documentId && (
+                                <button
+                                  type="button"
+                                  onClick={() => setViewingDoc({ id: f.documentId!, name: f.fileName })}
+                                  className="inline-flex items-center gap-1 text-[11px] font-medium text-primary hover:underline shrink-0"
+                                >
+                                  <Eye className="h-3 w-3" />
+                                  View
+                                </button>
+                              )}
                             </li>
                           ))}
                         </ul>
@@ -323,6 +337,16 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
         onClose={() => setReturning(null)}
         isLoading={returnReq.isPending}
       />
+
+      {viewingDoc && (
+        <DocumentSignerModal
+          open={!!viewingDoc}
+          onClose={() => setViewingDoc(null)}
+          documentId={viewingDoc.id}
+          documentName={viewingDoc.name}
+          isSignable={false}
+        />
+      )}
     </div>
   );
 };
