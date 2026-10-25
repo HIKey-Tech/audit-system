@@ -17,6 +17,7 @@ const signature_utility_1 = require("../../utility/signature.utility");
 const signature_service_1 = require("../../../../user/service/implementation/signature.service");
 const signed_document_service_1 = require("./signed-document.service");
 const signed_document_utility_1 = require("../../utility/signed-document.utility");
+const docx_to_pdf_utility_1 = require("../../utility/docx-to-pdf.utility");
 const RECEIVE_PERMISSION = 'request:receive';
 const ADMIN_PERMISSION = 'request:admin';
 const ATTACHMENT_ENTITY_TYPE = 'workflow_request';
@@ -165,8 +166,12 @@ class RequestService {
                 const user = await prisma_client_1.prisma.user.findUnique({ where: { id: actor.id } });
                 const signerName = user?.display_name?.trim() || `${user?.first_name} ${user?.last_name}`.trim();
                 const signerRole = user?.job_title ?? undefined;
+                let sourcePdfBuffer = file.buffer;
+                if ((0, docx_to_pdf_utility_1.isDocx)(file.originalName, file.mimeType)) {
+                    sourcePdfBuffer = await (0, docx_to_pdf_utility_1.convertDocxToPdf)(file.buffer);
+                }
                 const stamped = await (0, signed_document_utility_1.stampPdfWithPlacements)({
-                    pdfBuffer: file.buffer,
+                    pdfBuffer: sourcePdfBuffer,
                     placements: dto.placements,
                     signatureImageBuffer: sigFile?.buffer,
                     signatureFormat: sigFile?.mimeType === 'image/jpeg' ? 'jpg' : 'png',
@@ -175,10 +180,11 @@ class RequestService {
                     referenceNumber: request.reference_number,
                     manifestHash: hash,
                 });
+                const signedFileName = file.originalName.replace(/\.docx?$/i, '') + ' (signed).pdf';
                 await signed_document_service_1.signedDocumentService.storeDirectSignedDocument({
                     requestId,
                     sourceDocumentId: dto.documentId,
-                    sourceName: file.originalName,
+                    sourceName: signedFileName,
                     stampedBuffer: stamped,
                     uploadedById: actor.id,
                 });

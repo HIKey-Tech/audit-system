@@ -12,6 +12,7 @@ import {
   SignaturePanelEntry,
   SignaturePageData,
 } from '../../utility/signed-document.utility';
+import { isDocx, convertDocxToPdf } from '../../utility/docx-to-pdf.utility';
 import {
   ISignedDocumentService,
   SignedDocumentSummary,
@@ -40,13 +41,22 @@ export class SignedDocumentService implements ISignedDocumentService {
       });
       if (!request) return;
 
+      // If direct in-place stamped documents already exist for this request, preserve them!
+      const existingSignedCount = await prisma.workflow_Request_Signed_Document.count({
+        where: { request_id: requestId },
+      });
+      if (existingSignedCount > 0) {
+        return;
+      }
+
       const entries = await this._buildEntries(request);
       const manifestHash =
         [...request.actions].reverse().find((a) => a.action_type === 'sign')?.signature_hash ?? '—';
 
-      const attachments = (
-        await this.documents.listByEntity(ATTACHMENT_ENTITY_TYPE, requestId)
-      ).filter((d) => d.mimeType === 'application/pdf');
+      const allAttachments = await this.documents.listByEntity(ATTACHMENT_ENTITY_TYPE, requestId);
+      const attachments = allAttachments.filter(
+        (d) => d.mimeType === 'application/pdf' || isDocx(d.originalName, d.mimeType),
+      );
 
       if (attachments.length === 0) {
         const bytes = await buildCertificatePdf({
@@ -61,13 +71,11 @@ export class SignedDocumentService implements ISignedDocumentService {
 
       for (const att of attachments) {
         try {
-          // If an attachment was already stamped directly by the user in-place, preserve it!
-          const existingSigned = await prisma.workflow_Request_Signed_Document.findFirst({
-            where: { request_id: requestId, source_document_id: att.id },
-          });
-          if (existingSigned) continue;
-
           const file = await this.documents.getFileById(att.id);
+          let pdfBuffer = file.buffer;
+          if (isDocx(att.originalName, att.mimeType)) {
+            pdfBuffer = await convertDocxToPdf(file.buffer);
+          }
           const data: SignaturePageData = {
             reference: request.reference_number,
             title: request.title,
@@ -75,10 +83,11 @@ export class SignedDocumentService implements ISignedDocumentService {
             fileChecksum: crypto.createHash('sha256').update(file.buffer).digest('hex'),
             entries,
           };
-          const signed = await appendSignaturePage(file.buffer, data);
-          await this._store(requestId, att.id, att.originalName, signed, request.initiator_id);
+          const signed = await appendSignaturePage(pdfBuffer, data);
+          const signedName = att.originalName.replace(/\.docx?$/i, '') + ' (signed).pdf';
+          await this._store(requestId, att.id, signedName, signed, request.initiator_id);
         } catch (err) {
-          // Per-attachment isolation: a corrupt/encrypted PDF must not block the others.
+          // Per-attachment isolation: a corrupt/encrypted document must not block the others.
           logger.warn('Signed-PDF generation failed for attachment', {
             requestId,
             documentId: att.id,

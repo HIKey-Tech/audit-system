@@ -48,7 +48,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        low: {
+        critical: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -56,7 +56,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        critical: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -65,7 +65,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        low: {
+        critical: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -73,7 +73,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        critical: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -86,7 +86,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        low: {
+        critical: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -94,7 +94,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        critical: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -106,7 +106,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        low: {
+        critical: {
             responseMinutes: number;
             resolutionHours: number;
         };
@@ -114,7 +114,7 @@ declare const ParametersSchema: z.ZodObject<{
             responseMinutes: number;
             resolutionHours: number;
         };
-        critical: {
+        low: {
             responseMinutes: number;
             resolutionHours: number;
         };

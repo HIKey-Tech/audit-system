@@ -15,6 +15,7 @@ import {
   TemplateQuerySchema,
   DocumentListQuerySchema,
 } from '../dto/request/document.request.dto';
+import { isDocx, convertDocxToPdf } from '../../workflow/request/utility/docx-to-pdf.utility';
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 
@@ -421,8 +422,22 @@ export class DocumentController {
         if (!allowed) throw AppError.forbidden('Insufficient permissions');
       }
       await this.documentService.assertCanUserAccess(req.params.id, req.user!);
-      const file = await this.documentService.getFileById(req.params.id);
-      this._sendFile(res, file);
+      let file = await this.documentService.getFileById(req.params.id);
+      const asPdf = req.query.asPdf === 'true';
+      if (asPdf && isDocx(file.originalName, file.mimeType)) {
+        try {
+          const pdfBuffer = await convertDocxToPdf(file.buffer);
+          file = {
+            buffer: pdfBuffer,
+            mimeType: 'application/pdf',
+            originalName: file.originalName.replace(/\.docx?$/i, '.pdf'),
+            fileSize: pdfBuffer.length,
+          };
+        } catch {
+          // If conversion fails, return original file
+        }
+      }
+      this._sendFile(res, file, asPdf);
     } catch (err) {
       next(err);
     }
@@ -431,14 +446,16 @@ export class DocumentController {
   private _sendFile(
     res: Response,
     file: { buffer: Buffer; mimeType: string; originalName: string; fileSize: number },
+    inline = false,
   ): void {
     // RFC 5987 encoding keeps non-ASCII filenames intact for browsers.
     const encodedName = encodeURIComponent(file.originalName);
     res.setHeader('Content-Type', file.mimeType);
     res.setHeader('Content-Length', file.fileSize);
+    const dispositionType = inline ? 'inline' : 'attachment';
     res.setHeader(
       'Content-Disposition',
-      `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`,
+      `${dispositionType}; filename="${encodedName}"; filename*=UTF-8''${encodedName}`,
     );
     res.status(200).send(file.buffer);
   }

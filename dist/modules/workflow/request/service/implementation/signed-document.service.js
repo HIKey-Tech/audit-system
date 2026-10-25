@@ -12,6 +12,7 @@ const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const document_1 = require("../../../../document");
 const signed_document_utility_1 = require("../../utility/signed-document.utility");
+const docx_to_pdf_utility_1 = require("../../utility/docx-to-pdf.utility");
 // Documents attached to a request are stored with this entity_type (see request.service.ts).
 const ATTACHMENT_ENTITY_TYPE = 'workflow_request';
 // Generated signed copies are stored under their own entity_type so they never mix with originals.
@@ -33,9 +34,17 @@ class SignedDocumentService {
             });
             if (!request)
                 return;
+            // If direct in-place stamped documents already exist for this request, preserve them!
+            const existingSignedCount = await prisma_client_1.prisma.workflow_Request_Signed_Document.count({
+                where: { request_id: requestId },
+            });
+            if (existingSignedCount > 0) {
+                return;
+            }
             const entries = await this._buildEntries(request);
             const manifestHash = [...request.actions].reverse().find((a) => a.action_type === 'sign')?.signature_hash ?? '—';
-            const attachments = (await this.documents.listByEntity(ATTACHMENT_ENTITY_TYPE, requestId)).filter((d) => d.mimeType === 'application/pdf');
+            const allAttachments = await this.documents.listByEntity(ATTACHMENT_ENTITY_TYPE, requestId);
+            const attachments = allAttachments.filter((d) => d.mimeType === 'application/pdf' || (0, docx_to_pdf_utility_1.isDocx)(d.originalName, d.mimeType));
             if (attachments.length === 0) {
                 const bytes = await (0, signed_document_utility_1.buildCertificatePdf)({
                     reference: request.reference_number,
@@ -48,13 +57,11 @@ class SignedDocumentService {
             }
             for (const att of attachments) {
                 try {
-                    // If an attachment was already stamped directly by the user in-place, preserve it!
-                    const existingSigned = await prisma_client_1.prisma.workflow_Request_Signed_Document.findFirst({
-                        where: { request_id: requestId, source_document_id: att.id },
-                    });
-                    if (existingSigned)
-                        continue;
                     const file = await this.documents.getFileById(att.id);
+                    let pdfBuffer = file.buffer;
+                    if ((0, docx_to_pdf_utility_1.isDocx)(att.originalName, att.mimeType)) {
+                        pdfBuffer = await (0, docx_to_pdf_utility_1.convertDocxToPdf)(file.buffer);
+                    }
                     const data = {
                         reference: request.reference_number,
                         title: request.title,
@@ -62,11 +69,12 @@ class SignedDocumentService {
                         fileChecksum: crypto_1.default.createHash('sha256').update(file.buffer).digest('hex'),
                         entries,
                     };
-                    const signed = await (0, signed_document_utility_1.appendSignaturePage)(file.buffer, data);
-                    await this._store(requestId, att.id, att.originalName, signed, request.initiator_id);
+                    const signed = await (0, signed_document_utility_1.appendSignaturePage)(pdfBuffer, data);
+                    const signedName = att.originalName.replace(/\.docx?$/i, '') + ' (signed).pdf';
+                    await this._store(requestId, att.id, signedName, signed, request.initiator_id);
                 }
                 catch (err) {
-                    // Per-attachment isolation: a corrupt/encrypted PDF must not block the others.
+                    // Per-attachment isolation: a corrupt/encrypted document must not block the others.
                     logger_util_1.logger.warn('Signed-PDF generation failed for attachment', {
                         requestId,
                         documentId: att.id,

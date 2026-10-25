@@ -13,6 +13,7 @@ const validate_middleware_1 = require("../../../shared/middleware/validate.middl
 const api_response_type_1 = require("../../../shared/types/api-response.type");
 const app_error_1 = require("../../../shared/errors/app.error");
 const document_request_dto_1 = require("../dto/request/document.request.dto");
+const docx_to_pdf_utility_1 = require("../../workflow/request/utility/docx-to-pdf.utility");
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024; // 50MB
 // Allowlist of document/evidence file types. Anything else (HTML, SVG, scripts,
 // executables, …) is rejected up front. This is the first gate only — it does
@@ -306,19 +307,35 @@ class DocumentController {
                     throw app_error_1.AppError.forbidden('Insufficient permissions');
             }
             await this.documentService.assertCanUserAccess(req.params.id, req.user);
-            const file = await this.documentService.getFileById(req.params.id);
-            this._sendFile(res, file);
+            let file = await this.documentService.getFileById(req.params.id);
+            const asPdf = req.query.asPdf === 'true';
+            if (asPdf && (0, docx_to_pdf_utility_1.isDocx)(file.originalName, file.mimeType)) {
+                try {
+                    const pdfBuffer = await (0, docx_to_pdf_utility_1.convertDocxToPdf)(file.buffer);
+                    file = {
+                        buffer: pdfBuffer,
+                        mimeType: 'application/pdf',
+                        originalName: file.originalName.replace(/\.docx?$/i, '.pdf'),
+                        fileSize: pdfBuffer.length,
+                    };
+                }
+                catch {
+                    // If conversion fails, return original file
+                }
+            }
+            this._sendFile(res, file, asPdf);
         }
         catch (err) {
             next(err);
         }
     }
-    _sendFile(res, file) {
+    _sendFile(res, file, inline = false) {
         // RFC 5987 encoding keeps non-ASCII filenames intact for browsers.
         const encodedName = encodeURIComponent(file.originalName);
         res.setHeader('Content-Type', file.mimeType);
         res.setHeader('Content-Length', file.fileSize);
-        res.setHeader('Content-Disposition', `attachment; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
+        const dispositionType = inline ? 'inline' : 'attachment';
+        res.setHeader('Content-Disposition', `${dispositionType}; filename="${encodedName}"; filename*=UTF-8''${encodedName}`);
         res.status(200).send(file.buffer);
     }
     // ──────────────────────────────────────────────────────────

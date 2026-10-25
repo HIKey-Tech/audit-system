@@ -48,6 +48,7 @@ import {
 import { userSignatureService } from '../../../../user/service/implementation/signature.service';
 import { signedDocumentService } from './signed-document.service';
 import { stampPdfWithPlacements } from '../../utility/signed-document.utility';
+import { isDocx, convertDocxToPdf } from '../../utility/docx-to-pdf.utility';
 
 const RECEIVE_PERMISSION = 'request:receive';
 const ADMIN_PERMISSION = 'request:admin';
@@ -230,8 +231,13 @@ export class RequestService implements IRequestService {
         const signerName = user?.display_name?.trim() || `${user?.first_name} ${user?.last_name}`.trim();
         const signerRole = user?.job_title ?? undefined;
 
+        let sourcePdfBuffer = file.buffer;
+        if (isDocx(file.originalName, file.mimeType)) {
+          sourcePdfBuffer = await convertDocxToPdf(file.buffer);
+        }
+
         const stamped = await stampPdfWithPlacements({
-          pdfBuffer: file.buffer,
+          pdfBuffer: sourcePdfBuffer,
           placements: dto.placements,
           signatureImageBuffer: sigFile?.buffer,
           signatureFormat: sigFile?.mimeType === 'image/jpeg' ? 'jpg' : 'png',
@@ -241,10 +247,12 @@ export class RequestService implements IRequestService {
           manifestHash: hash,
         });
 
+        const signedFileName = file.originalName.replace(/\.docx?$/i, '') + ' (signed).pdf';
+
         await signedDocumentService.storeDirectSignedDocument({
           requestId,
           sourceDocumentId: dto.documentId,
-          sourceName: file.originalName,
+          sourceName: signedFileName,
           stampedBuffer: stamped,
           uploadedById: actor.id,
         });

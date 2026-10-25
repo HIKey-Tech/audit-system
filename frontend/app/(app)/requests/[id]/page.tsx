@@ -183,17 +183,17 @@ export default function RequestDetailPage(): JSX.Element {
                 <Button
                   leftIcon={<PenLine className="h-4 w-4" />}
                   onClick={() => {
-                    const pdfAtt = req.attachments?.find((a) =>
-                      a.originalName.toLowerCase().endsWith('.pdf'),
+                    const signableAtt = req.attachments?.find((a) =>
+                      /\.(pdf|docx?|doc)$/i.test(a.originalName),
                     );
-                    if (pdfAtt) {
-                      setViewerDoc({ id: pdfAtt.documentId, name: pdfAtt.originalName, isSignable: true });
+                    if (signableAtt) {
+                      setViewerDoc({ id: signableAtt.documentId, name: signableAtt.originalName, isSignable: true });
                     } else {
                       setSignOpen(true);
                     }
                   }}
                 >
-                  Sign Document
+                  View & Sign Document
                 </Button>
                 <Button
                   variant="danger"
@@ -251,7 +251,7 @@ export default function RequestDetailPage(): JSX.Element {
             {req.attachments && req.attachments.length > 0 ? (
               <ul className="space-y-1.5">
                 {req.attachments.map((a) => {
-                  const isPdf = a.originalName.toLowerCase().endsWith('.pdf');
+                  const isSignable = /\.(pdf|docx?|doc)$/i.test(a.originalName);
                   return (
                     <li
                       key={a.documentId}
@@ -262,22 +262,22 @@ export default function RequestDetailPage(): JSX.Element {
                         {a.originalName}
                       </span>
                       <span className="text-xs text-text-secondary">{formatFileSize(a.fileSize)}</span>
-                      {isPdf && (
+                      {isSignable && (
                         <button
                           type="button"
                           onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: false })}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline px-1.5 py-0.5 rounded hover:bg-slate-100"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline px-2 py-0.5 rounded hover:bg-slate-100"
                         >
                           <Eye className="h-3.5 w-3.5" /> View
                         </button>
                       )}
-                      {isPdf && isMyTurn && (
+                      {isSignable && isMyTurn && (
                         <button
                           type="button"
                           onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: true })}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline px-2 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200"
+                          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline px-2.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200"
                         >
-                          <PenLine className="h-3.5 w-3.5" /> Sign on Document
+                          <PenLine className="h-3.5 w-3.5" /> View & Sign
                         </button>
                       )}
                       <a

@@ -108,7 +108,8 @@ export function DocumentSignerModal({
   const fullName = session.displayName?.trim() || `${session.firstName} ${session.lastName}`.trim();
   const primaryRole = session.roles[0]?.replace(/_/g, ' ') ?? 'Auditor';
 
-  const docUrl = fileUrl || (documentId ? `/api/proxy/documents/${documentId}/file` : '');
+  const isWordDoc = Boolean(documentName && /\.(docx?|doc)$/i.test(documentName));
+  const docUrl = fileUrl || (documentId ? `/api/proxy/documents/${documentId}/file${isWordDoc ? '?asPdf=true' : ''}` : '');
 
   // Load and render PDF pages using local pdfjs
   useEffect(() => {
