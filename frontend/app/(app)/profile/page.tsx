@@ -11,15 +11,12 @@ import {
   CalendarDays,
   CheckCircle2,
   Clock,
-  Copy,
   KeyRound,
   Lock,
   LogOut,
   Mail,
   Phone,
-  RotateCcw,
   Save,
-  ShieldCheck,
   Tags,
   UserRound,
 } from 'lucide-react';
@@ -103,7 +100,6 @@ export default function ProfilePage(): JSX.Element {
   const session = useSession();
   const qc = useQueryClient();
   const [activeTab, setActiveTab] = useState('profile');
-  const [backupCodes, setBackupCodes] = useState<string[]>([]);
 
   const { data: user, isLoading } = useQuery({
     queryKey: ['users', 'me'],
@@ -190,16 +186,6 @@ export default function ProfilePage(): JSX.Element {
       toast.success('Password changed');
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not change password'),
-  });
-
-  const backupMutation = useMutation({
-    mutationFn: () => authApi.regenerateBackupCodes(),
-    onSuccess: (codes) => {
-      setBackupCodes(codes);
-      toast.success('Backup codes regenerated');
-    },
-    onError: (err) =>
-      toast.error(err instanceof Error ? err.message : 'Could not regenerate backup codes'),
   });
 
   const logoutAllMutation = useMutation({
@@ -422,68 +408,7 @@ export default function ProfilePage(): JSX.Element {
                     </div>
                   </form>
 
-                  <div className="border-t border-border pt-5">
-                    <CardHeader
-                      title="Two-Factor Authentication"
-                      subtitle="Authenticator app, email OTP, and recovery codes."
-                      className="mb-3"
-                    />
-                    <div className="flex flex-wrap gap-2">
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        leftIcon={<ShieldCheck className="h-4 w-4" />}
-                        onClick={() => router.push('/login/2fa/enroll?optional=1&next=/profile')}
-                      >
-                        Set up 2FA
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="secondary"
-                        leftIcon={<RotateCcw className="h-4 w-4" />}
-                        isLoading={backupMutation.isPending}
-                        onClick={() => backupMutation.mutate()}
-                      >
-                        Regenerate backup codes
-                      </Button>
-                    </div>
-
-                    {backupCodes.length > 0 && (
-                      <div className="mt-4 rounded-md border border-amber-200 bg-amber-50 p-4">
-                        <div className="flex flex-wrap items-center justify-between gap-3">
-                          <div>
-                            <p className="text-sm font-semibold text-amber-900">New backup codes</p>
-                            <p className="mt-0.5 text-xs text-amber-800">
-                              Store these now. They are shown once.
-                            </p>
-                          </div>
-                          <Button
-                            type="button"
-                            size="sm"
-                            variant="secondary"
-                            leftIcon={<Copy className="h-3.5 w-3.5" />}
-                            onClick={() => {
-                              navigator.clipboard?.writeText(backupCodes.join('\n'));
-                              toast.success('Backup codes copied');
-                            }}
-                          >
-                            Copy
-                          </Button>
-                        </div>
-                        <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                          {backupCodes.map((code) => (
-                            <code
-                              key={code}
-                              className="rounded border border-amber-200 bg-white px-2 py-1.5 text-center font-mono text-xs text-text-primary"
-                            >
-                              {code}
-                            </code>
-                          ))}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-
+                  {/* Two-factor setup is hidden: GBB's Active Directory already enforces 2FA. */}
                   <div className="border-t border-border pt-5">
                     <CardHeader
                       title="Sessions"

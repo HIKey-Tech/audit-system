@@ -1,4 +1,5 @@
 import { prisma } from '../../../../shared/prisma/prisma.client';
+import { config } from '../../../../shared/config/app.config';
 import { AppError } from '../../../../shared/errors/app.error';
 import { logger } from '../../../../shared/utils/logger.util';
 import {
@@ -14,7 +15,7 @@ import {
 } from '../interface/notification-queue.service.interface';
 import { notificationService } from './notification.service';
 import { templateService } from './template.service';
-import { renderTemplate } from '../../utility/template.utility';
+import { plainTextToEmailHtml, renderTemplate } from '../../utility/template.utility';
 import { NotificationQueueStatsResponseDto } from '../../dto/response/notification-queue.response.dto';
 
 const BATCH_SIZE = 50;
@@ -175,22 +176,25 @@ const parseInAppPayload = (payload: string): CreateInAppNotificationDto => {
 };
 
 const renderEmailWithTemplate = async (dto: SendEmailDto): Promise<SendEmailDto> => {
-  if (!dto.eventKey) return dto;
+  const template = dto.eventKey
+    ? await templateService.getTemplateByEventAndChannel(dto.eventKey, 'email')
+    : null;
 
-  const template = await templateService.getTemplateByEventAndChannel(dto.eventKey, 'email');
-  if (!template) return dto;
+  // Emails that build their own HTML (password reset, onboarding, 2FA code) and
+  // have no template are sent exactly as given.
+  if (!template && (dto.html || dto.text === undefined)) return dto;
 
   const variables = dto.variables ?? {};
-  const renderedBody = renderTemplate(template.body, variables);
-  const renderedSubject = template.subject
-    ? renderTemplate(template.subject, variables)
-    : dto.subject;
+  const text = template ? renderTemplate(template.body, variables) : (dto.text as string);
+  const subject = template?.subject ? renderTemplate(template.subject, variables) : dto.subject;
+  // Every notification email links back to the item (or to IAMS itself).
+  const actionUrl = variables.actionUrl || config.app.frontendUrl;
 
   return {
     ...dto,
-    subject: renderedSubject,
-    html: renderedBody,
-    text: renderedBody,
+    subject,
+    text: `${text}\n\nOpen in IAMS: ${actionUrl}`,
+    html: plainTextToEmailHtml(text, actionUrl),
   };
 };
 

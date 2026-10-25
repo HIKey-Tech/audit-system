@@ -1,4 +1,5 @@
 import { prisma } from '../../../../../shared/prisma/prisma.client';
+import { config } from '../../../../../shared/config/app.config';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
@@ -53,13 +54,17 @@ export class EvidenceRequestService implements IEvidenceRequestService {
     logger.info('Evidence request created', { requestId: request.id, engagementId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.create', module: 'audit', entityType: 'audit_evidence_request', entityId: request.id });
 
-    const due = dto.dueDate ? ` Due ${dto.dueDate.toISOString().slice(0, 10)}.` : '';
+    const due = dto.dueDate ? ` Due: ${dto.dueDate.toISOString().slice(0, 10)}.` : '';
+    const desc = dto.description?.trim() ? `\n\nDescription: ${dto.description.trim()}` : '';
+    const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${engagementId}?tab=requests`;
+
     await this._notify(
       assignee.id,
       assignee.email,
       'Evidence requested from you',
-      `"${dto.title}" has been requested for audit ${engagement.reference_number} — ${engagement.title}.${due} Please log in to IAMS to upload the requested documents.`,
+      `"${dto.title}" has been requested for audit ${engagement.reference_number} — ${engagement.title}.${due}${desc}\n\nUse the link below to open the request and upload the requested documents.`,
       engagementId,
+      actionUrl,
     );
 
     return mapEvidenceRequestToResponse(request);
@@ -172,12 +177,14 @@ export class EvidenceRequestService implements IEvidenceRequestService {
     logger.info('Evidence request responded', { requestId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.respond', module: 'audit', entityType: 'audit_evidence_request', entityId: requestId });
 
+    const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${updated.engagement_id}?tab=requests`;
     await this._notify(
       updated.requested_by_id,
       updated.requested_by.email,
       'Evidence submitted',
       `${updated.assigned_to.display_name ?? 'The auditee'} uploaded "${file.originalName}" for your request "${updated.title}" (${updated.engagement.reference_number}). Please review and accept or return it.`,
       updated.engagement_id,
+      actionUrl,
     );
 
     return mapEvidenceRequestToResponse(updated);
@@ -197,12 +204,14 @@ export class EvidenceRequestService implements IEvidenceRequestService {
     logger.info('Evidence request fulfilled', { requestId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.accept', module: 'audit', entityType: 'audit_evidence_request', entityId: requestId });
 
+    const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${updated.engagement_id}?tab=requests`;
     await this._notify(
       updated.assigned_to_id,
       updated.assigned_to.email,
       'Evidence accepted',
       `Your submission for "${updated.title}" (${updated.engagement.reference_number}) has been accepted. Nothing further is needed for this request.`,
       updated.engagement_id,
+      actionUrl,
     );
 
     return mapEvidenceRequestToResponse(updated);
@@ -222,12 +231,14 @@ export class EvidenceRequestService implements IEvidenceRequestService {
     logger.info('Evidence request returned', { requestId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.evidence_request.return', module: 'audit', entityType: 'audit_evidence_request', entityId: requestId, newValues: { reason } });
 
+    const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${updated.engagement_id}?tab=requests`;
     await this._notify(
       updated.assigned_to_id,
       updated.assigned_to.email,
       'Evidence returned — action needed',
-      `Your submission for "${updated.title}" (${updated.engagement.reference_number}) was returned: ${reason}. Please log in to IAMS and upload a corrected document.`,
+      `Your submission for "${updated.title}" (${updated.engagement.reference_number}) was returned: ${reason}. Please use the link below to open the request and upload a corrected document.`,
       updated.engagement_id,
+      actionUrl,
     );
 
     return mapEvidenceRequestToResponse(updated);
@@ -262,7 +273,14 @@ export class EvidenceRequestService implements IEvidenceRequestService {
   }
 
   /** in-app + email; queue-backed so a notification hiccup never fails the request. */
-  private async _notify(userId: string, email: string, title: string, body: string, engagementId: string): Promise<void> {
+  private async _notify(
+    userId: string,
+    email: string,
+    title: string,
+    body: string,
+    engagementId: string,
+    actionUrl?: string,
+  ): Promise<void> {
     await notificationQueueService.enqueueSafe('in_app', {
       userId,
       title,
@@ -276,6 +294,7 @@ export class EvidenceRequestService implements IEvidenceRequestService {
         to: email,
         subject: `IAMS — ${title}`,
         text: `${body}\n\nRegards,\nIAMS — Internal Audit System`,
+        variables: actionUrl ? { actionUrl } : undefined,
       });
     }
   }

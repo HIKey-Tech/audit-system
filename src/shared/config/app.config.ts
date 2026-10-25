@@ -56,7 +56,8 @@ export const config = {
 
   mfa: {
     // When true, local-password users must enrol in 2FA before gaining access.
-    mandatory: optionalEnv('MFA_MANDATORY', 'true') === 'true',
+    // Default is false: Active Directory already enforces 2FA at the domain level.
+    mandatory: optionalEnv('MFA_MANDATORY', 'false') === 'true',
     // Days a not-yet-enrolled user may keep logging in (with a setup prompt)
     // before the mandatory gate hard-blocks them. Starts on their first login.
     gracePeriodDays: parseInt(optionalEnv('MFA_GRACE_PERIOD_DAYS', '7'), 10),

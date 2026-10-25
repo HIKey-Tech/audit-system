@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
+import { config } from '../../../../../shared/config/app.config';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import {
@@ -781,7 +782,12 @@ export class RequestService implements IRequestService {
     if (!user) return;
 
     const recipientName = this._actorName(user);
-    const variables = { recipientName, ...notification.variables };
+    const variables = {
+      recipientName,
+      requestDescription: request.description?.trim() || '(no description)',
+      actionUrl: `${config.app.frontendUrl.replace(/\/$/, '')}/requests/${request.id}`,
+      ...notification.variables,
+    };
 
     await notificationQueueService.enqueue('in_app', {
       userId: user.id,

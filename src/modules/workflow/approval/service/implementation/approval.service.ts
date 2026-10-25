@@ -1,5 +1,6 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
+import { config } from '../../../../../shared/config/app.config';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import {
@@ -1034,9 +1035,8 @@ export class ApprovalService implements IApprovalService {
     if (!user) return;
 
     const recipientName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
-    const variables = context.variables
-      ? { recipientName, ...context.variables }
-      : undefined;
+    const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/workflow/approvals`;
+    const variables = { recipientName, actionUrl, ...context.variables };
 
     await notificationQueueService.enqueue(
       'in_app',

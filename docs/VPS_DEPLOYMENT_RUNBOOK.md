@@ -151,7 +151,7 @@ JWT_SECRET=${JWT_SECRET}
 JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
 JWT_EXPIRES_IN=15m
 JWT_REFRESH_EXPIRES_IN=7d
-MFA_MANDATORY=true
+MFA_MANDATORY=false # AD upstream already enforces 2FA
 MFA_ENCRYPTION_KEY=${MFA_ENCRYPTION_KEY}
 MFA_ISSUER="GBB IAMS"
 
@@ -432,8 +432,8 @@ Then in a browser:
 - [ ] UFW: only 22, 80 (redirect-only), and 443 open. fail2ban active. No container publishes any other port.
 - [ ] HTTPS works; cookies are httpOnly + secure.
 - [ ] `NODE_ENV=production`, rate limiting on.
-- [ ] `MFA_MANDATORY=true`.
-- [ ] Super admin password changed from the seed default; 2FA set up.
+- [ ] `MFA_MANDATORY=false` (2FA handled upstream by Active Directory).
+- [ ] Super admin password changed from the seed default.
 - [ ] Backups running (check `/opt/iams/logs/backup.log` after night one) and one restore tested.
 - [ ] Audit trail works: change something, confirm it shows in Audit Logs.
 

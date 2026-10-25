@@ -38,7 +38,7 @@ const DOCUMENT_TEMPLATES: Array<{
 // ─────────────────────────────────────────────────────────────
 // Notification templates (event-driven body + subject)
 // ─────────────────────────────────────────────────────────────
-const NOTIFICATION_TEMPLATES: Array<{
+export const NOTIFICATION_TEMPLATES: Array<{
   eventKey: string;
   channel: 'email' | 'in_app';
   name: string;
@@ -352,9 +352,9 @@ const NOTIFICATION_TEMPLATES: Array<{
     channel: 'email',
     name: 'Request Awaiting Action — Email',
     subject: 'Action Required: Request {{requestReference}}',
-    body: 'Dear {{recipientName}},\n\n{{initiatorName}} has sent you a request that needs your action.\n\nTitle: {{requestTitle}}\nReference: {{requestReference}}\n\nPlease log in to IAMS to approve, sign, reject, or comment.\n\nRegards,\nIAMS — Internal Audit System',
+    body: 'Dear {{recipientName}},\n\n{{initiatorName}} has sent you a request that needs your action.\n\nTitle: {{requestTitle}}\nReference: {{requestReference}}\nDescription: {{requestDescription}}\n\nUse the link below to open the request and approve, sign, reject or comment.\n\nRegards,\nIAMS — Internal Audit System',
     description:
-      'Sent to the current recipient when a request is created or advances to them. Variables: recipientName, initiatorName, requestTitle, requestReference.',
+      'Sent to the current recipient when a request is created or advances to them. Variables: recipientName, initiatorName, requestTitle, requestReference, requestDescription, actionUrl (link added below the message).',
   },
   {
     eventKey: 'workflow.request.created',
@@ -412,7 +412,7 @@ const NOTIFICATION_TEMPLATES: Array<{
     channel: 'email',
     name: 'Request Comment — Email',
     subject: 'New comment on Request {{requestReference}}',
-    body: 'Dear {{recipientName}},\n\n{{actorName}} commented on the request "{{requestTitle}}" ({{requestReference}}).\n\nPlease log in to IAMS to view the comment.\n\nRegards,\nIAMS — Internal Audit System',
+    body: 'Dear {{recipientName}},\n\n{{actorName}} commented on the request "{{requestTitle}}" ({{requestReference}}).\n\nUse the link below to read the comment.\n\nRegards,\nIAMS — Internal Audit System',
     description:
       'Sent to the initiator and current recipient when a comment is added. Variables: recipientName, actorName, requestTitle, requestReference.',
   },
@@ -444,6 +444,17 @@ const NOTIFICATION_TEMPLATES: Array<{
     body: 'The request "{{requestTitle}}" ({{requestReference}}) has been cancelled.',
     description:
       'In-app variant of request-cancelled. Variables: requestTitle, requestReference.',
+  },
+
+  // user.login.notice (email only — sent on every successful sign-in)
+  {
+    eventKey: 'user.login.notice',
+    channel: 'email',
+    name: 'New Sign-in — Email',
+    subject: 'New sign-in to your IAMS account',
+    body: 'Dear {{recipientName}},\n\nYour IAMS account was signed in to on {{loginTime}} from {{device}}, IP address {{ipAddress}}.\n\nIf this was you, no action is needed. If it was not you, change your password and contact the IAMS administrator immediately.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the user after every successful sign-in. Variables: recipientName, loginTime, device, ipAddress.',
   },
 ];
 

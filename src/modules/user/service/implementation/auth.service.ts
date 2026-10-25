@@ -32,7 +32,36 @@ import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/p
 import { revokeUserSessions } from '../../../../shared/security/session-guard';
 import { logSecurityEvent } from '../../../logging/utility/security-event.utility';
 import { SecurityEvent } from '../../../logging/domain/enum/logging.enum';
+import { notificationQueueService } from '../../../messaging/service/implementation/notification-queue.service';
 
+// Sign-in times in the notice email are shown in Nigerian time (WAT).
+const LOGIN_NOTICE_TIME_ZONE = 'Africa/Lagos';
+
+/** "Chrome on Windows" from a user-agent string, for the sign-in notice email. */
+const describeDevice = (userAgent?: string): string => {
+  if (!userAgent) return 'an unknown device';
+  const browser = /Edg\//.test(userAgent)
+    ? 'Edge'
+    : /Chrome\//.test(userAgent)
+      ? 'Chrome'
+      : /Firefox\//.test(userAgent)
+        ? 'Firefox'
+        : /Safari\//.test(userAgent)
+          ? 'Safari'
+          : 'a browser';
+  const os = /Windows/.test(userAgent)
+    ? 'Windows'
+    : /Android/.test(userAgent)
+      ? 'Android'
+      : /iPhone|iPad/.test(userAgent)
+        ? 'iPhone/iPad'
+        : /Mac OS X/.test(userAgent)
+          ? 'Mac'
+          : /Linux/.test(userAgent)
+            ? 'Linux'
+            : 'an unknown system';
+  return `${browser} on ${os}`;
+};
 
 export class AuthService implements IAuthService {
   private readonly oidcClient: IOidcClient;
@@ -112,8 +141,18 @@ export class AuthService implements IAuthService {
     }
 
     // ── 2. Local database password fallback ───────────────────
-    const user = (await prisma.user.findUnique({
-      where: { email: dto.email, deleted_at: null },
+    const rawInput = dto.email.trim();
+    const cleanInput = rawInput.replace(/^[a-zA-Z0-9_.-]+\\/, '');
+    const user = (await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email: rawInput },
+          { email: cleanInput },
+          { email: `${cleanInput}@gbb.gov.ng` },
+          { email: `${cleanInput}@galaxybb.local` },
+        ],
+        deleted_at: null,
+      },
       include: userWithRolesInclude,
     })) as UserWithRoles | null;
 
@@ -201,6 +240,7 @@ export class AuthService implements IAuthService {
       });
       logger.info(`User logged in via ${method} (2FA grace active)`, { userId: user.id });
       logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
+      this._sendLoginNotice(user, ipAddress, userAgent);
       return {
         status: 'OK',
         mfaSetupRequired: true,
@@ -219,12 +259,33 @@ export class AuthService implements IAuthService {
 
     logger.info(`User logged in via ${method}`, { userId: user.id });
     logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method });
+    this._sendLoginNotice(user, ipAddress, userAgent);
 
     return {
       status: 'OK',
       ...tokens,
       user: mapUserToResponse(user),
     };
+  }
+
+  /** Emails the user that their account was just signed in to. Never blocks or fails a login. */
+  private _sendLoginNotice(user: UserWithRoles, ipAddress?: string, userAgent?: string): void {
+    const recipientName = user.display_name?.trim() || `${user.first_name} ${user.last_name}`.trim();
+    const loginTime = new Intl.DateTimeFormat('en-GB', {
+      dateStyle: 'full',
+      timeStyle: 'short',
+      timeZone: LOGIN_NOTICE_TIME_ZONE,
+    }).format(new Date());
+    const device = describeDevice(userAgent);
+    const ip = ipAddress || 'unknown';
+
+    void notificationQueueService.enqueueSafe('email', {
+      to: user.email,
+      subject: 'New sign-in to your IAMS account',
+      text: `Dear ${recipientName},\n\nYour IAMS account was signed in to on ${loginTime} (WAT) from ${device}, IP address ${ip}.\n\nIf this was you, no action is needed. If it was not you, change your password and contact the IAMS administrator immediately.\n\nRegards,\nIAMS — Internal Audit System`,
+      eventKey: 'user.login.notice',
+      variables: { recipientName, loginTime: `${loginTime} (WAT)`, device, ipAddress: ip },
+    });
   }
 
   async completeMfaLogin(
@@ -256,6 +317,7 @@ export class AuthService implements IAuthService {
 
     logger.info('User completed 2FA login', { userId: user.id });
     logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'password+mfa' });
+    this._sendLoginNotice(user, ipAddress, userAgent);
 
     return {
       ...tokens,
@@ -334,6 +396,7 @@ export class AuthService implements IAuthService {
 
     logger.info('User logged in via SSO', { userId: user.id, provider: config.oidc.provider });
     logSecurityEvent(SecurityEvent.LoginSucceeded, { userId: user.id, ipAddress, userAgent, method: 'sso' });
+    this._sendLoginNotice(user, ipAddress, userAgent);
 
     return {
       ...tokens,
