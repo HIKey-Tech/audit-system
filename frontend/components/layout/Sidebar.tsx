@@ -11,12 +11,13 @@ import { cn } from '@/lib/utils/cn';
 import { initialsFromName } from '@/lib/utils/format';
 import { authApi } from '@/lib/api/auth';
 import { notificationsApi } from '@/lib/api/notifications';
+import { requestsApi, workflowApi } from '@/lib/api/workflow';
 import { useSession } from '@/components/providers/AuthProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { Tooltip } from '@/components/ui/Tooltip';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useLayout } from '@/components/providers/LayoutProvider';
-import { NAV, type NavGroup, type NavItem, type NavLink } from '@/lib/navigation';
+import { NAV, type BadgeKey, type NavGroup, type NavItem, type NavLink } from '@/lib/navigation';
 
 export const Sidebar = (): JSX.Element => {
   const pathname = usePathname();
@@ -36,12 +37,40 @@ export const Sidebar = (): JSX.Element => {
   } = useLayout();
   const [signingOut, setSigningOut] = useState(false);
 
-  const { data: unread } = useQuery({
+  const { data: unreadNotifications } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => notificationsApi.unreadCount(),
-    refetchInterval: 60_000,
-    staleTime: 30_000,
+    refetchInterval: 15_000,
+    staleTime: 10_000,
   });
+
+  const { data: inboxData } = useQuery({
+    queryKey: ['workflow', 'requests-inbox-count'],
+    queryFn: () => requestsApi.inbox({ pageSize: 1 }),
+    enabled: Boolean(nav.requests),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+
+  const { data: pendingApprovals } = useQuery({
+    queryKey: ['workflow', 'approvals-pending-count'],
+    queryFn: () => workflowApi.listPending(),
+    enabled: Boolean(nav.workflow),
+    refetchInterval: 15_000,
+    staleTime: 10_000,
+  });
+
+  const getBadgeCount = (badgeKey?: BadgeKey): number => {
+    if (!badgeKey) return 0;
+    if (badgeKey === 'notifications') return unreadNotifications?.unread ?? 0;
+    if (badgeKey === 'requests') return inboxData?.meta?.total ?? 0;
+    if (badgeKey === 'approvals') return Array.isArray(pendingApprovals) ? pendingApprovals.length : 0;
+    return 0;
+  };
+
+  const getGroupBadgeCount = (group: NavGroup): number => {
+    return group.children.reduce((acc, child) => acc + getBadgeCount(child.badgeKey), 0);
+  };
 
   // Filter nav items based on role visibility. For groups, drop hidden children
   // and remove the whole group if nothing remains visible.
@@ -86,7 +115,7 @@ export const Sidebar = (): JSX.Element => {
   const renderLink = (item: NavLink, indented = false): JSX.Element => {
     const Icon = item.icon;
     const active = isActive(item);
-    const unreadCount = item.badgeKey === 'notifications' ? (unread?.unread ?? 0) : 0;
+    const count = getBadgeCount(item.badgeKey);
 
     return (
       <li key={item.href}>
@@ -120,13 +149,20 @@ export const Sidebar = (): JSX.Element => {
                 Soon
               </span>
             )}
-            {!item.comingSoon && unreadCount > 0 && (
-              <span className={cn('inline-flex h-4 min-w-[18px] items-center justify-center rounded-full bg-accent px-1.5 text-[10px] font-semibold', isCollapsed && 'lg:hidden')}>
-                {unreadCount > 99 ? '99+' : unreadCount}
+            {!item.comingSoon && count > 0 && (
+              <span
+                className={cn(
+                  'inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-emerald-400/30',
+                  isCollapsed && 'lg:hidden',
+                )}
+              >
+                {count > 99 ? '99+' : count}
               </span>
             )}
-            {isCollapsed && unreadCount > 0 && (
-              <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
+            {isCollapsed && count > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white shadow-sm ring-1 ring-emerald-400/50 lg:flex hidden">
+                {count > 9 ? '9+' : count}
+              </span>
             )}
           </Link>
         </Tooltip>
@@ -138,6 +174,7 @@ export const Sidebar = (): JSX.Element => {
     const Icon = item.icon;
     const hasActiveChild = item.children.some((child) => isActive(child));
     const expanded = openGroups.includes(item.label) || hasActiveChild;
+    const groupBadgeCount = getGroupBadgeCount(item);
 
     const onParentClick = () => {
       // When the sidebar is icon-collapsed, expand it first so the children are usable.
@@ -174,6 +211,16 @@ export const Sidebar = (): JSX.Element => {
               aria-hidden
             />
             <span className={cn('flex-1 truncate text-left', isCollapsed && 'lg:hidden')}>{item.label}</span>
+            {groupBadgeCount > 0 && (
+              <span
+                className={cn(
+                  'inline-flex h-5 min-w-[20px] items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[10px] font-bold text-white shadow-sm ring-1 ring-emerald-400/30 mr-1',
+                  isCollapsed && 'lg:hidden',
+                )}
+              >
+                {groupBadgeCount > 99 ? '99+' : groupBadgeCount}
+              </span>
+            )}
             <ChevronDown
               className={cn(
                 'h-4 w-4 shrink-0 transition-transform duration-200',
@@ -182,7 +229,12 @@ export const Sidebar = (): JSX.Element => {
               )}
               aria-hidden
             />
-            {isCollapsed && hasActiveChild && (
+            {isCollapsed && groupBadgeCount > 0 && (
+              <span className="absolute -right-1 -top-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-emerald-500 px-1 text-[9px] font-bold text-white shadow-sm ring-1 ring-emerald-400/50 lg:flex hidden">
+                {groupBadgeCount > 9 ? '9+' : groupBadgeCount}
+              </span>
+            )}
+            {isCollapsed && hasActiveChild && groupBadgeCount === 0 && (
               <span className="absolute -right-0 -top-0 h-2 w-2 rounded-full bg-accent lg:block hidden" />
             )}
           </button>

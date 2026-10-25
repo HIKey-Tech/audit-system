@@ -39,12 +39,14 @@ import {
 import { AUDIT_DOMAINS } from '@/lib/audit-domains';
 import type { NavVisibility } from '@/lib/hooks/usePermissions';
 
+export type BadgeKey = 'notifications' | 'requests' | 'approvals';
+
 export interface NavLink {
   type: 'link';
   label: string;
   href: string;
   icon: LucideIcon;
-  badgeKey?: 'notifications';
+  badgeKey?: BadgeKey;
   comingSoon?: boolean;
   matchPrefix?: string;
   /** Key into NavVisibility — if set the item is hidden when the value is false. */
@@ -75,10 +77,10 @@ export const NAV: NavItem[] = [
     defaultOpen: true,
     children: [
       // Each is its own route under /workflow; all are sub-features of the backend workflow module.
-      { type: 'link', label: 'Review/Approval', href: '/workflow/approvals', icon: Inbox, matchPrefix: '/workflow/approvals', visKey: 'workflow', description: 'Review and approve audit records — programmes, engagements, and reviews — awaiting your sign-off.' },
+      { type: 'link', label: 'Review/Approval', href: '/workflow/approvals', icon: Inbox, matchPrefix: '/workflow/approvals', badgeKey: 'approvals', visKey: 'workflow', description: 'Review and approve audit records — programmes, engagements, and reviews — awaiting your sign-off.' },
       { type: 'link', label: 'Assignments', href: '/workflow/assignments', icon: Users, matchPrefix: '/workflow/assignments', visKey: 'workflow', description: 'Staff assigned to engagements.' },
       { type: 'link', label: 'Escalations', href: '/workflow/escalations', icon: AlertOctagon, matchPrefix: '/workflow/escalations', visKey: 'workflow', description: 'Overdue items that have been escalated.' },
-      { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', visKey: 'requests', description: 'Ad-hoc approval & sign-off requests you send to or receive from colleagues.' },
+      { type: 'link', label: 'Requests', href: '/requests', icon: Send, matchPrefix: '/requests', badgeKey: 'requests', visKey: 'requests', description: 'Ad-hoc approval & sign-off requests you send to or receive from colleagues.' },
       { type: 'link', label: 'Escalation Policies', href: '/workflow/policies', icon: SlidersHorizontal, matchPrefix: '/workflow/policies', visKey: 'escalationPolicies', description: 'Configure wait times before escalation per audit type.' },
     ],
   },

@@ -101,14 +101,14 @@ export default function NotificationsPage(): JSX.Element {
         ) : (
           <ul className="divide-y divide-border">
             {list.data.items.map((n) => {
-              const href = notificationHref(n.referenceType, n.referenceId);
+              const href = notificationHref(n.referenceType, n.referenceId, n);
               return (
                 <li key={n.id}>
                   <button
                     type="button"
                     onClick={() => {
                       if (!n.isRead) markRead.mutate(n.id);
-                      if (href) router.push(href);
+                      if (href && href !== '/notifications') router.push(href);
                     }}
                     className={cn(
                       'w-full px-5 py-4 text-left transition-colors hover:bg-surface-alt/40',

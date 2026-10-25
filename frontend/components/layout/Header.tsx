@@ -29,13 +29,14 @@ export const Header = (): JSX.Element => {
   const { data: unread } = useQuery({
     queryKey: ['notifications', 'unread-count'],
     queryFn: () => notificationsApi.unreadCount(),
-    refetchInterval: 60_000,
+    refetchInterval: 15_000,
   });
 
   const { data: latestList } = useQuery({
     queryKey: ['notifications', 'latest'],
     queryFn: () => notificationsApi.list({ pageSize: 5 }),
     enabled: open,
+    refetchInterval: open ? 10_000 : undefined,
   });
 
   const markRead = useMutation({
@@ -127,7 +128,7 @@ export const Header = (): JSX.Element => {
                 ) : (
                   <ul className="divide-y divide-border">
                     {latestList.items.map((n) => {
-                      const href = notificationHref(n.referenceType, n.referenceId);
+                      const href = notificationHref(n.referenceType, n.referenceId, n);
                       return (
                       <li key={n.id}>
                         <button
@@ -135,8 +136,6 @@ export const Header = (): JSX.Element => {
                           onClick={() => {
                             if (!n.isRead) markRead.mutate(n.id);
                             setOpen(false);
-                            // Land on the record the alert is about, same as the
-                            // notifications page.
                             if (href) router.push(href);
                           }}
                           className={cn(
