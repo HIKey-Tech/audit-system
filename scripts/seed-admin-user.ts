@@ -5,7 +5,7 @@
 // Safe & idempotent: can be run on staging, production, or dev at any time.
 
 import { PrismaClient } from '@prisma/client';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -30,7 +30,7 @@ async function main() {
       data: {
         name: 'super_admin',
         description: 'Full system access and administration',
-        is_system_role: true,
+        is_system: true,
       },
     });
     console.log('Created super_admin role');
@@ -46,7 +46,7 @@ async function main() {
       display_name: DISPLAY_NAME,
       password_hash: passwordHash,
       department: 'Internal Audit',
-      jobTitle: 'System Administrator',
+      job_title: 'System Administrator',
       email_verified: true,
       is_system_user: true,
       is_super_admin: true,
@@ -58,7 +58,7 @@ async function main() {
       display_name: DISPLAY_NAME,
       password_hash: passwordHash,
       department: 'Internal Audit',
-      jobTitle: 'System Administrator',
+      job_title: 'System Administrator',
       email_verified: true,
       is_system_user: true,
       is_super_admin: true,
