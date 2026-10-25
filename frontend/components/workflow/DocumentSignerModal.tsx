@@ -37,10 +37,12 @@ interface DocumentSignerModalProps {
   onClose: () => void;
   documentId?: string;
   fileUrl?: string;
-  documentName: string;
+  documentName?: string;
   requestId?: string;
   isSignable?: boolean;
   onSigned?: () => void;
+  onApprove?: () => void;
+  isApproving?: boolean;
 }
 
 interface PlacedItem {
@@ -60,10 +62,12 @@ export function DocumentSignerModal({
   onClose,
   documentId,
   fileUrl,
-  documentName,
+  documentName = 'Document',
   requestId,
   isSignable = false,
   onSigned,
+  onApprove,
+  isApproving = false,
 }: DocumentSignerModalProps): JSX.Element | null {
   const session = useSession();
   const queryClient = useQueryClient();
@@ -468,6 +472,24 @@ export function DocumentSignerModal({
                 <ZoomIn className="h-4 w-4" />
               </button>
             </div>
+
+            {/* Direct Approve button (for View & Approve workflow) */}
+            {onApprove && (
+              <Button
+                variant="success"
+                size="sm"
+                leftIcon={<Check className="h-3.5 w-3.5" />}
+                isLoading={isApproving}
+                onClick={() => {
+                  onApprove();
+                  onClose();
+                }}
+                className="bg-emerald-600 hover:bg-emerald-700 text-white font-semibold shadow-xs"
+                title="Approve directly after reviewing this document"
+              >
+                Approve
+              </Button>
+            )}
 
             {/* Stamping tools (only if signable) */}
             {isSignable && (

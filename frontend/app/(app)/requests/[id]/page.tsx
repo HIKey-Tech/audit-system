@@ -403,6 +403,8 @@ export default function RequestDetailPage(): JSX.Element {
           documentName={viewerDoc.name}
           requestId={id}
           isSignable={viewerDoc.isSignable}
+          onApprove={isMyTurn ? () => approve.mutate() : undefined}
+          isApproving={approve.isPending}
           onSigned={() => {
             setViewerDoc(null);
             invalidate();
