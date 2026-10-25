@@ -13,6 +13,7 @@ import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { CopyButton } from '@/components/ui/CopyButton';
 
 import { engagementsApi } from '@/lib/api/audit';
 import { usePermissions } from '@/lib/hooks/usePermissions';
@@ -158,7 +159,12 @@ export default function EngagementDetailPage(): JSX.Element {
     <div>
       <PageHeader
         title={data.title}
-        subtitle={`Reference ${data.referenceNumber}`}
+        subtitle={
+          <span className="inline-flex items-center gap-1.5">
+            Reference {data.referenceNumber}
+            <CopyButton value={data.referenceNumber} label="reference" />
+          </span>
+        }
         breadcrumbs={[
           { label: 'Engagements', href: '/audit/engagements' },
           { label: data.referenceNumber },

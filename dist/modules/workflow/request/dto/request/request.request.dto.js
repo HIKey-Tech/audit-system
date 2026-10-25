@@ -53,6 +53,7 @@ exports.RequestListQuerySchema = zod_1.z.object({
     pageSize: zod_1.z.coerce.number().int().positive().max(100).default(20),
     status: zod_1.z.enum(['pending', 'completed', 'rejected', 'cancelled']).optional(),
     role: zod_1.z.enum(['initiated', 'received']).optional(),
+    search: zod_1.z.string().trim().max(100).optional(),
     sortBy: zod_1.z.enum(['created_at', 'updated_at']).default('created_at'),
     sortOrder: zod_1.z.enum(['asc', 'desc']).default('desc'),
 });

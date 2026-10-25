@@ -33,6 +33,7 @@ import { Input, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Avatar } from '@/components/ui/Avatar';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { SignaturePad } from '@/components/common/SignaturePad';
 import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 import { requestsApi } from '@/lib/api/workflow';
@@ -156,7 +157,11 @@ export default function RequestDetailPage(): JSX.Element {
         }
       />
 
-      <div className="mb-4">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
+        <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-alt border border-border px-2.5 py-1 font-mono text-xs font-semibold text-text-primary shadow-2xs">
+          {req.referenceNumber}
+          <CopyButton value={req.referenceNumber} label="reference" />
+        </span>
         <StatusBadge status={req.status} withDot />
       </div>
 

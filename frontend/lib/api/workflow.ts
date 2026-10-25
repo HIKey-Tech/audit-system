@@ -105,7 +105,7 @@ export const workflowApi = {
 
 // ── Ad-hoc requests ──────────────────────────────────────────
 export const requestsApi = {
-  list: (query?: { status?: RequestStatus; role?: 'initiated' | 'received'; page?: number; pageSize?: number }) =>
+  list: (query?: { status?: RequestStatus; role?: 'initiated' | 'received'; search?: string; page?: number; pageSize?: number }) =>
     api.getPaginated<WorkflowRequest>('/workflow/requests', query),
   inbox: (query?: { page?: number; pageSize?: number }) =>
     api.getPaginated<WorkflowRequest>('/workflow/requests/inbox', query),

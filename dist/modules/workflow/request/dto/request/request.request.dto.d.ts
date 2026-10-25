@@ -127,6 +127,7 @@ export declare const RequestListQuerySchema: z.ZodObject<{
     pageSize: z.ZodDefault<z.ZodNumber>;
     status: z.ZodOptional<z.ZodEnum<["pending", "completed", "rejected", "cancelled"]>>;
     role: z.ZodOptional<z.ZodEnum<["initiated", "received"]>>;
+    search: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodEnum<["created_at", "updated_at"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
 }, "strip", z.ZodTypeAny, {
@@ -134,9 +135,11 @@ export declare const RequestListQuerySchema: z.ZodObject<{
     pageSize: number;
     sortBy: "created_at" | "updated_at";
     sortOrder: "asc" | "desc";
+    search?: string | undefined;
     status?: "pending" | "rejected" | "cancelled" | "completed" | undefined;
     role?: "received" | "initiated" | undefined;
 }, {
+    search?: string | undefined;
     status?: "pending" | "rejected" | "cancelled" | "completed" | undefined;
     role?: "received" | "initiated" | undefined;
     page?: number | undefined;

@@ -1,9 +1,9 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Inbox, Send } from 'lucide-react';
+import { Inbox, Send, Search, X } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -38,6 +38,8 @@ export default function ApprovalsPage(): JSX.Element {
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
   const [approvingId, setApprovingId] = useState<string | null>(null);
+  const [historyFilter, setHistoryFilter] = useState<'all' | 'approved' | 'rejected'>('all');
+  const [historySearch, setHistorySearch] = useState('');
 
   const pending = useQuery({
     queryKey: ['workflow', 'pending'],
@@ -49,6 +51,23 @@ export default function ApprovalsPage(): JSX.Element {
     queryFn: () => workflowApi.listHistory(),
     enabled: view === 'history',
   });
+
+  const filteredHistory = useMemo(() => {
+    let items = history.data ?? [];
+    if (historyFilter !== 'all') {
+      items = items.filter((a) => a.status === historyFilter);
+    }
+    if (historySearch.trim()) {
+      const q = historySearch.trim().toLowerCase();
+      items = items.filter(
+        (a) =>
+          (a.entityTitle?.toLowerCase().includes(q) ?? false) ||
+          a.entityType.toLowerCase().includes(q) ||
+          (a.submittedBy?.displayName?.toLowerCase().includes(q) ?? false),
+      );
+    }
+    return items;
+  }, [history.data, historyFilter, historySearch]);
 
   const reject = useMutation({
     mutationFn: ({ id, reason }: { id: string; reason: string }) => workflowApi.reject(id, reason),
@@ -108,9 +127,81 @@ export default function ApprovalsPage(): JSX.Element {
             />
           </Card>
         ) : (
-          <Card padded={false}>
-            <ul className="divide-y divide-border">
-              {history.data.map((a) => (
+          <div>
+            {/* Filter pills & search */}
+            <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+              <div className="flex flex-wrap items-center gap-1.5">
+                {(
+                  [
+                    { key: 'all', label: 'All' },
+                    { key: 'approved', label: 'Approved' },
+                    { key: 'rejected', label: 'Rejected' },
+                  ] as const
+                ).map((chip) => {
+                  const count =
+                    chip.key === 'all'
+                      ? history.data.length
+                      : history.data.filter((i) => i.status === chip.key).length;
+                  const isSelected = historyFilter === chip.key;
+                  return (
+                    <button
+                      key={chip.key}
+                      type="button"
+                      onClick={() => setHistoryFilter(chip.key)}
+                      className={cn(
+                        'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer',
+                        isSelected
+                          ? 'bg-slate-900 text-white shadow-xs'
+                          : 'bg-surface-alt text-text-secondary hover:bg-slate-200 hover:text-text-primary',
+                      )}
+                    >
+                      <span>{chip.label}</span>
+                      <span
+                        className={cn(
+                          'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
+                          isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-text-muted',
+                        )}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+
+              <div className="relative w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+                <input
+                  type="text"
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  placeholder="Filter history..."
+                  className="h-8 w-full rounded-md border border-border bg-white pl-8 pr-7 text-xs text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+                />
+                {historySearch && (
+                  <button
+                    type="button"
+                    onClick={() => setHistorySearch('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                )}
+              </div>
+            </div>
+
+            {filteredHistory.length === 0 ? (
+              <Card>
+                <EmptyState
+                  icon={<Inbox className="h-4 w-4" />}
+                  title="No matching history items"
+                  description="Try adjusting your filter or search query."
+                />
+              </Card>
+            ) : (
+              <Card padded={false}>
+                <ul className="divide-y divide-border">
+                  {filteredHistory.map((a) => (
                 <li key={a.id} className="px-5 py-4 space-y-2">
                   <div className="flex flex-wrap items-center gap-3">
                     <div className="min-w-0 flex-1">
@@ -143,7 +234,9 @@ export default function ApprovalsPage(): JSX.Element {
               ))}
             </ul>
           </Card>
-        )
+        )}
+      </div>
+    )
       ) : pending.isLoading ? (
         <Card>
           <Skeleton className="h-12 w-full" />

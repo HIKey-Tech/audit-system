@@ -345,6 +345,16 @@ class RequestService {
             deleted_at: null,
             ...(query.status && { status: query.status }),
             OR: involvement,
+            ...(query.search && {
+                AND: [
+                    {
+                        OR: [
+                            { title: { contains: query.search } },
+                            { reference_number: { contains: query.search } },
+                        ],
+                    },
+                ],
+            }),
         };
         const [total, requests] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.workflow_Request.count({ where }),

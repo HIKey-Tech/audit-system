@@ -14,6 +14,7 @@ import {
   X,
   FileText,
   CheckCircle2,
+  Search,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -23,6 +24,7 @@ import { Card } from '@/components/ui/Card';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { CopyButton } from '@/components/ui/CopyButton';
 import { ListSkeleton } from '@/components/ui/Skeleton';
 import { Input, Textarea } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
@@ -40,6 +42,8 @@ export default function RequestsPage(): JSX.Element {
   const canCreate = hasPermission('request:create');
   const [tab, setTab] = useState<TabKey>('inbox');
   const [createOpen, setCreateOpen] = useState(false);
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed' | 'rejected'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const inbox = useQuery({
     queryKey: ['requests', 'inbox'],
@@ -57,6 +61,23 @@ export default function RequestsPage(): JSX.Element {
   ];
 
   const active = tab === 'inbox' ? inbox : mine;
+
+  const filteredItems = useMemo(() => {
+    let items = active.data?.items ?? [];
+    if (statusFilter !== 'all') {
+      items = items.filter((r) => r.status === statusFilter);
+    }
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      items = items.filter(
+        (r) =>
+          r.title.toLowerCase().includes(q) ||
+          r.referenceNumber.toLowerCase().includes(q) ||
+          (r.initiator?.displayName?.toLowerCase().includes(q) ?? false),
+      );
+    }
+    return items;
+  }, [active.data?.items, statusFilter, searchQuery]);
 
   return (
     <div>
@@ -76,17 +97,88 @@ export default function RequestsPage(): JSX.Element {
         <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
       </Card>
 
+      {/* Fast Filter Chips & Search Bar */}
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-1.5">
+          {(
+            [
+              { key: 'all', label: 'All' },
+              { key: 'pending', label: 'Pending' },
+              { key: 'completed', label: 'Completed' },
+              { key: 'rejected', label: 'Rejected' },
+            ] as const
+          ).map((chip) => {
+            const count =
+              chip.key === 'all'
+                ? active.data?.items.length ?? 0
+                : (active.data?.items ?? []).filter((i) => i.status === chip.key).length;
+            const isSelected = statusFilter === chip.key;
+            return (
+              <button
+                key={chip.key}
+                type="button"
+                onClick={() => setStatusFilter(chip.key)}
+                className={cn(
+                  'inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-medium transition-all cursor-pointer',
+                  isSelected
+                    ? 'bg-slate-900 text-white shadow-xs'
+                    : 'bg-surface-alt text-text-secondary hover:bg-slate-200 hover:text-text-primary',
+                )}
+              >
+                <span>{chip.label}</span>
+                <span
+                  className={cn(
+                    'rounded-full px-1.5 py-0.2 text-[10px] font-bold',
+                    isSelected ? 'bg-white/20 text-white' : 'bg-slate-200/80 text-text-muted',
+                  )}
+                >
+                  {count}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="relative w-full sm:w-64">
+          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-muted pointer-events-none" />
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Filter requests..."
+            className="h-8 w-full rounded-md border border-border bg-white pl-8 pr-7 text-xs text-text-primary placeholder:text-text-muted focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery('')}
+              className="absolute right-2 top-1/2 -translate-y-1/2 text-text-muted hover:text-text-primary"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
+        </div>
+      </div>
+
       {active.isLoading ? (
         <Card>
           <ListSkeleton rows={4} />
         </Card>
-      ) : !active.data || active.data.items.length === 0 ? (
+      ) : filteredItems.length === 0 ? (
         <Card>
           <EmptyState
             icon={tab === 'inbox' ? <Inbox className="h-4 w-4" /> : <Send className="h-4 w-4" />}
-            title={tab === 'inbox' ? 'Nothing needs your action' : 'You have not sent any requests'}
+            title={
+              searchQuery || statusFilter !== 'all'
+                ? 'No matching requests'
+                : tab === 'inbox'
+                ? 'Nothing needs your action'
+                : 'You have not sent any requests'
+            }
             description={
-              tab === 'inbox'
+              searchQuery || statusFilter !== 'all'
+                ? 'Try adjusting your search query or status filter.'
+                : tab === 'inbox'
                 ? 'Requests addressed to you appear here when it is your turn to act.'
                 : 'Use “New request” to send a document or note for approval or sign-off.'
             }
@@ -95,7 +187,7 @@ export default function RequestsPage(): JSX.Element {
       ) : (
         <Card padded={false}>
           <ul className="divide-y divide-border">
-            {active.data.items.map((r) => (
+            {filteredItems.map((r) => (
               <RequestRow key={r.id} request={r} showRecipient={tab === 'mine'} />
             ))}
           </ul>
@@ -124,7 +216,8 @@ const RequestRow = ({
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <span className="font-mono text-xs text-primary">{request.referenceNumber}</span>
+            <span className="font-mono text-xs font-semibold text-primary">{request.referenceNumber}</span>
+            <CopyButton value={request.referenceNumber} label="reference" />
             <StatusBadge status={request.status} withDot />
           </div>
           <p className="mt-1 truncate text-sm font-medium text-text-primary">{request.title}</p>

@@ -16,6 +16,10 @@ import {
   Check,
   FileText,
   Loader2,
+  Sparkles,
+  ChevronLeft,
+  ChevronRight,
+  ArrowDownToLine,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -226,6 +230,76 @@ export function DocumentSignerModal({
     toast.success('Signer text box added. Drag it to position.');
   };
 
+  const scrollToPage = useCallback(
+    (index: number) => {
+      if (index >= 0 && index < pageCount) {
+        setActivePage(index);
+        pageRefs.current[index]?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    },
+    [pageCount],
+  );
+
+  const handleQuickStamp = () => {
+    if (!sig) {
+      setShowDrawPad(true);
+      return;
+    }
+    const targetPage = pageCount > 0 ? pageCount - 1 : 0;
+    scrollToPage(targetPage);
+
+    const sigItem: PlacedItem = {
+      id: `item-${Date.now()}-1`,
+      type: 'signature',
+      pageIndex: targetPage,
+      xPercent: 60,
+      yPercent: 78,
+      widthPercent: 32,
+      heightPercent: 12,
+    };
+    const textItem: PlacedItem = {
+      id: `item-${Date.now()}-2`,
+      type: 'text',
+      pageIndex: targetPage,
+      xPercent: 60,
+      yPercent: 91,
+      widthPercent: 32,
+      heightPercent: 6,
+      text: `${fullName} · ${primaryRole}\nDate: ${new Date().toLocaleDateString('en-GB')}`,
+      fontSize: 9,
+    };
+    setItems((prev) => [...prev.filter((i) => i.pageIndex !== targetPage), sigItem, textItem]);
+    toast.success(`Standard signature block placed on Page ${targetPage + 1}`);
+  };
+
+  // Keyboard navigation & shortcuts
+  useEffect(() => {
+    if (!open) return;
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.key === 'Escape') {
+        if (confirmOpen) setConfirmOpen(false);
+        else if (showDrawPad) setShowDrawPad(false);
+        else onClose();
+      } else if (e.key === 'ArrowRight' || e.key === 'PageDown') {
+        e.preventDefault();
+        scrollToPage(Math.min(pageCount - 1, activePage + 1));
+      } else if (e.key === 'ArrowLeft' || e.key === 'PageUp') {
+        e.preventDefault();
+        scrollToPage(Math.max(0, activePage - 1));
+      } else if (e.key === '=' || e.key === '+') {
+        e.preventDefault();
+        setScale((s) => Math.min(2.0, s + 0.15));
+      } else if (e.key === '-') {
+        e.preventDefault();
+        setScale((s) => Math.max(0.7, s - 0.15));
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [open, onClose, confirmOpen, showDrawPad, activePage, pageCount, scrollToPage]);
+
   const handleRemoveItem = (id: string) => {
     setItems((prev) => prev.filter((item) => item.id !== id));
     if (selectedItemId === id) setSelectedItemId(null);
@@ -337,13 +411,49 @@ export function DocumentSignerModal({
 
           {/* Interactive Tools */}
           <div className="flex items-center gap-2">
+            {/* Page Navigation & Jump */}
+            {pageCount > 1 && (
+              <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800/80 px-1.5 py-0.5 text-xs text-slate-300">
+                <button
+                  type="button"
+                  onClick={() => scrollToPage(activePage - 1)}
+                  disabled={activePage === 0}
+                  className="p-1 text-slate-300 hover:text-white disabled:opacity-30 disabled:hover:text-slate-300"
+                  title="Previous page (←)"
+                >
+                  <ChevronLeft className="h-3.5 w-3.5" />
+                </button>
+                <span className="px-1.5 font-mono text-[11px]">
+                  {activePage + 1} / {pageCount}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => scrollToPage(activePage + 1)}
+                  disabled={activePage >= pageCount - 1}
+                  className="p-1 text-slate-300 hover:text-white disabled:opacity-30 disabled:hover:text-slate-300"
+                  title="Next page (→)"
+                >
+                  <ChevronRight className="h-3.5 w-3.5" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => scrollToPage(pageCount - 1)}
+                  className="ml-1.5 flex items-center gap-1 rounded bg-slate-700/60 px-1.5 py-0.5 text-[10px] text-slate-300 hover:bg-slate-700 hover:text-white"
+                  title="Jump to signature page"
+                >
+                  <ArrowDownToLine className="h-3 w-3 text-amber-400" />
+                  Last Page
+                </button>
+              </div>
+            )}
+
             {/* Zoom Controls */}
             <div className="flex items-center rounded-lg border border-slate-700 bg-slate-800/80 px-1 py-0.5">
               <button
                 type="button"
                 onClick={() => setScale((s) => Math.max(0.7, s - 0.15))}
                 className="p-1 text-slate-300 hover:text-white"
-                title="Zoom out"
+                title="Zoom out (-)"
               >
                 <ZoomOut className="h-4 w-4" />
               </button>
@@ -352,7 +462,7 @@ export function DocumentSignerModal({
                 type="button"
                 onClick={() => setScale((s) => Math.min(2.0, s + 0.15))}
                 className="p-1 text-slate-300 hover:text-white"
-                title="Zoom in"
+                title="Zoom in (+)"
               >
                 <ZoomIn className="h-4 w-4" />
               </button>
@@ -361,6 +471,17 @@ export function DocumentSignerModal({
             {/* Stamping tools (only if signable) */}
             {isSignable && (
               <>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  leftIcon={<Sparkles className="h-3.5 w-3.5 text-amber-400" />}
+                  onClick={handleQuickStamp}
+                  className="bg-amber-950/40 border-amber-600/40 text-amber-200 hover:bg-amber-900/50 hover:text-amber-100"
+                  title="1-click place signature & date block onto bottom right of final page"
+                >
+                  Quick Stamp
+                </Button>
+
                 <Button
                   variant="secondary"
                   size="sm"

@@ -13,6 +13,7 @@ import {
   ShieldAlert,
   Server,
   Users,
+  Send,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -25,6 +26,7 @@ import { engagementsApi, findingsApi, plansApi } from '@/lib/api/audit';
 import { riskApi } from '@/lib/api/risk';
 import { assetsApi } from '@/lib/api/assets';
 import { usersApi } from '@/lib/api/users';
+import { requestsApi } from '@/lib/api/workflow';
 import { auditTypeLabel } from '@/lib/audit-domains';
 
 interface Command {
@@ -33,7 +35,7 @@ interface Command {
   hint?: string;
   href: string;
   icon: NavLink['icon'];
-  group: 'Go to' | 'Programmes' | 'Engagements' | 'Findings' | 'Risks' | 'Assets' | 'People';
+  group: 'Go to' | 'Requests' | 'Programmes' | 'Engagements' | 'Findings' | 'Risks' | 'Assets' | 'People';
 }
 
 /** Minimum characters before we hit the API for records. */
@@ -122,6 +124,13 @@ export const CommandPalette = (): JSX.Element | null => {
     staleTime: 30_000,
   });
 
+  const requests = useQuery({
+    queryKey: ['command-palette', 'requests', debouncedQuery],
+    queryFn: () => requestsApi.list({ search: debouncedQuery, pageSize: 5 }),
+    enabled: searchRecords && nav.requests,
+    staleTime: 30_000,
+  });
+
   const commands: Command[] = useMemo(() => {
     const needle = query.trim().toLowerCase();
 
@@ -196,9 +205,19 @@ export const CommandPalette = (): JSX.Element | null => {
       group: 'People' as const,
     }));
 
+    const requestCommands: Command[] = (requests.data?.items ?? []).map((r) => ({
+      id: `request:${r.id}`,
+      label: r.title,
+      hint: `${r.referenceNumber} · ${r.status}`,
+      href: `/requests/${r.id}`,
+      icon: Send,
+      group: 'Requests' as const,
+    }));
+
     // Records first once the user has typed enough — they're the specific thing
     // being looked for; destinations are always available as a fallback.
     return [
+      ...requestCommands,
       ...planCommands,
       ...engagementCommands,
       ...findingCommands,
@@ -210,6 +229,7 @@ export const CommandPalette = (): JSX.Element | null => {
   }, [
     query,
     nav,
+    requests.data,
     plans.data,
     engagements.data,
     findings.data,
@@ -263,7 +283,8 @@ export const CommandPalette = (): JSX.Element | null => {
 
   const isSearching =
     searchRecords &&
-    (plans.isFetching ||
+    (requests.isFetching ||
+      plans.isFetching ||
       engagements.isFetching ||
       findings.isFetching ||
       risks.isFetching ||

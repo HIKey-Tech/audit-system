@@ -57,6 +57,7 @@ export const RequestListQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   status: z.enum(['pending', 'completed', 'rejected', 'cancelled']).optional(),
   role: z.enum(['initiated', 'received']).optional(),
+  search: z.string().trim().max(100).optional(),
   sortBy: z.enum(['created_at', 'updated_at']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
