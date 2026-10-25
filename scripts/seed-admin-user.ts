@@ -1,3 +1,4 @@
+/// <reference types="node" />
 // scripts/seed-admin-user.ts
 //
 // Creates or updates the developer/admin super-admin user
@@ -10,7 +11,7 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 const ADMIN_EMAIL = 'davidaiyewumi1@gmail.com';
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'Wole@123456!';
+const ADMIN_PASSWORD = 'Wole@123456!';
 const FIRST_NAME = 'Wole';
 const LAST_NAME = 'Aiyewumi';
 const DISPLAY_NAME = 'Wole Aiyewumi';
