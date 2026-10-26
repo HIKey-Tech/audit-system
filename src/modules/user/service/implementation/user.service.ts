@@ -501,11 +501,30 @@ export class UserService implements IUserService {
       throw AppError.badRequest('One or more role IDs are invalid');
     }
 
-    await this._assertCanGrantRoles(dto.roleIds, actor);
+    // Identify current roles so we can remove unselected ones
+    const currentRoles = await prisma.user_Role.findMany({
+      where: { user_id: userId },
+      select: { role_id: true },
+    });
+    const currentRoleIds = currentRoles.map((r) => r.role_id);
+    const rolesToRemove = currentRoleIds.filter((id) => !dto.roleIds.includes(id));
 
-    // Upsert each role assignment
-    await prisma.$transaction(
-      dto.roleIds.map((roleId) =>
+    // Verify actor can grant the new roles and remove unselected roles
+    await this._assertCanGrantRoles([...dto.roleIds, ...rolesToRemove], actor);
+
+    // Reconcile role assignments in a single transaction
+    await prisma.$transaction([
+      ...(rolesToRemove.length > 0
+        ? [
+            prisma.user_Role.deleteMany({
+              where: {
+                user_id: userId,
+                role_id: { in: rolesToRemove },
+              },
+            }),
+          ]
+        : []),
+      ...dto.roleIds.map((roleId) =>
         prisma.user_Role.upsert({
           where: { user_id_role_id: { user_id: userId, role_id: roleId } },
           create: {
@@ -520,9 +539,14 @@ export class UserService implements IUserService {
           },
         }),
       ),
-    );
+    ]);
 
-    logger.info('Roles assigned', { userId, roleIds: dto.roleIds, actorId });
+    logger.info('Roles assigned and reconciled', {
+      userId,
+      roleIds: dto.roleIds,
+      removedRoleIds: rolesToRemove,
+      actorId,
+    });
     await this._syncUserSuperAdminFlag(userId);
     // Force the next request to pick up the new authority: the current access
     // token (with stale permissions) is rejected and silently refreshed.
