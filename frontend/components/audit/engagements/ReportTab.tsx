@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2, Eye, LayoutGrid } from 'lucide-react';
+import { FileText, Send, Check, X, Download, Sparkles, ChevronDown, Loader2, Eye, LayoutGrid, Clock } from 'lucide-react';
 import { toast } from 'sonner';
 import { toastOnInvalid } from '@/lib/utils/form';
 
@@ -304,6 +304,112 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     approval.data?.status === 'pending' &&
     currentStep?.approverId === session.id;
 
+  const approvalChain = useQuery({
+    queryKey: ['approval-chain', 'audit_report', r.id],
+    queryFn: () => workflowApi.getApprovalChain('audit_report', r.id),
+    enabled: Boolean(r?.id),
+  });
+
+  const finalApproverName = (() => {
+    if (approval.data?.steps && approval.data.steps.length > 0) {
+      const highestStep = [...approval.data.steps].sort((a, b) => b.level - a.level)[0];
+      if (highestStep?.approver?.displayName) return highestStep.approver.displayName;
+    }
+    if (approvalChain.data?.levels && approvalChain.data.levels.length > 0) {
+      const highestLevel = [...approvalChain.data.levels].sort((a, b) => b.level - a.level)[0];
+      if (highestLevel.resolvedApprover?.displayName) return highestLevel.resolvedApprover.displayName;
+      if (highestLevel.candidates.length > 0) return highestLevel.candidates[0].displayName;
+    }
+    return 'Managing Director / CEO';
+  })();
+
+  const approvalRows = (() => {
+    if (approval.data?.steps && approval.data.steps.length > 0) {
+      return [...approval.data.steps]
+        .sort((a, b) => a.level - b.level)
+        .map((step) => {
+          const chainLvl = approvalChain.data?.levels?.find((l) => l.level === step.level);
+          const name =
+            step.approver?.displayName ||
+            chainLvl?.resolvedApprover?.displayName ||
+            chainLvl?.candidates?.[0]?.displayName ||
+            `Approver (Level ${step.level})`;
+          const position =
+            step.approver?.jobTitle ||
+            chainLvl?.resolvedApprover?.jobTitle ||
+            (step.level === 1 ? 'Head of Unit / Manager' : step.level === 2 ? 'Executive Director' : 'Managing Director / CEO');
+          const isPendingCurrent = approval.data?.status === 'pending' && step.level === approval.data.currentLevel;
+          return {
+            level: step.level,
+            id: step.id,
+            name,
+            position,
+            status: step.status,
+            signatureId: step.signatureId,
+            actedAt: step.actedAt,
+            isPendingCurrent,
+          };
+        });
+    }
+
+    if (approvalChain.data?.levels && approvalChain.data.levels.length > 0) {
+      return [...approvalChain.data.levels]
+        .sort((a, b) => a.level - b.level)
+        .map((lvl) => {
+          const name =
+            lvl.resolvedApprover?.displayName ||
+            lvl.candidates[0]?.displayName ||
+            (lvl.candidates.length > 1 ? lvl.candidates.map((c) => c.displayName).join(', ') : 'Eligible Approver');
+          const position =
+            lvl.resolvedApprover?.jobTitle ||
+            (lvl.level === 1 ? 'Head of Unit / Manager' : lvl.level === 2 ? 'Executive Director' : 'Managing Director / CEO');
+          return {
+            level: lvl.level,
+            id: `chain-${lvl.level}`,
+            name,
+            position,
+            status: lvl.status,
+            signatureId: null,
+            actedAt: null,
+            isPendingCurrent: false,
+          };
+        });
+    }
+
+    return [
+      {
+        level: 1,
+        id: 'fallback-1',
+        name: engagement.auditManagerName || 'Head of Unit (HOU)',
+        position: 'Head of Unit / Audit Manager',
+        status: 'upcoming',
+        signatureId: null,
+        actedAt: null,
+        isPendingCurrent: false,
+      },
+      {
+        level: 2,
+        id: 'fallback-2',
+        name: 'Head of Department (HOD)',
+        position: 'Executive Director / HOD',
+        status: 'upcoming',
+        signatureId: null,
+        actedAt: null,
+        isPendingCurrent: false,
+      },
+      {
+        level: 3,
+        id: 'fallback-3',
+        name: 'Managing Director / CEO',
+        position: 'MD / CEO',
+        status: 'upcoming',
+        signatureId: null,
+        actedAt: null,
+        isPendingCurrent: false,
+      },
+    ];
+  })();
+
   return (
     <div className="space-y-6">
       <Card>
@@ -485,171 +591,379 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
           </Card>
         </div>
       ) : (
-        <div className="w-full max-w-[816px] mx-auto bg-white border border-border shadow-[0_4px_24px_rgba(0,0,0,0.06)] rounded-lg p-10 md:p-14 text-slate-800 space-y-6 select-none font-sans transition-all duration-300">
-          {/* A4 simulated print header */}
-          <div className="text-center pb-5 border-b-2 border-slate-200 space-y-2">
-            <div className="text-xs font-semibold tracking-wider text-slate-500 uppercase">{previewOrgName}</div>
-            <h1 className="text-xl font-bold tracking-tight text-text-primary uppercase" style={{ color: previewPrimary }}>{r.title}</h1>
-            <div className="text-[10px] text-text-secondary">{previewOrgAddress}</div>
+        <div className="w-full max-w-[850px] mx-auto bg-white border border-border shadow-xl rounded-lg p-8 sm:p-12 md:p-16 text-slate-800 space-y-8 select-text font-sans transition-all duration-300">
+          {/* Running top bar */}
+          <div className="flex items-center justify-between text-[11px] font-semibold tracking-wider text-slate-400 border-b border-slate-200 pb-2 mb-2 uppercase">
+            <span>Galaxy Backbone Limited</span>
+            <span className="text-danger font-bold">Internal Use Only</span>
           </div>
 
-          {/* Metadata Block */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-slate-50 border border-slate-100 rounded-md p-4 text-xs">
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                <span className="font-medium text-slate-500">Review Reference:</span>
-                <span className="text-text-primary font-semibold">{engagement.referenceNumber}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                <span className="font-medium text-slate-500">Audit Type:</span>
-                <span className="text-text-primary uppercase font-semibold">{auditTypeLabel(engagement.auditType)}</span>
-              </div>
-              <div className="flex justify-between border-b border-slate-200 pb-1.5 md:border-none md:pb-0">
-                <span className="font-medium text-slate-500">Audited Entity:</span>
-                <span className="text-text-primary font-semibold">{engagement.universeName || '—'}</span>
-              </div>
+          {/* Centered GBB Logo & Organization Title */}
+          <div className="text-center space-y-3 pt-2">
+            <img
+              src="/gbb-logo.png"
+              alt="Galaxy Backbone Limited"
+              className="h-20 sm:h-24 object-contain mx-auto drop-shadow-sm"
+            />
+            <h2 className="text-base font-bold tracking-wider text-slate-700 uppercase">
+              Galaxy Backbone Limited
+            </h2>
+          </div>
+
+          {/* Formal Title Box (matching GBB Template Table 1) */}
+          <div className="border-y-4 border-[#4F6228] bg-slate-50/80 py-8 px-6 text-center space-y-3 rounded-sm my-6 shadow-xs">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight uppercase" style={{ color: previewPrimary }}>
+              {r.title}
+            </h1>
+            <div className="text-sm font-semibold text-slate-600">
+              Version {r.version}.0
             </div>
-            <div className="space-y-2">
-              <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                <span className="font-medium text-slate-500">Audit Period:</span>
-                <span className="text-text-primary font-semibold">
-                  {engagement.plannedStartDate ? new Date(engagement.plannedStartDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'} to {engagement.plannedEndDate ? new Date(engagement.plannedEndDate).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
+            <div className="pt-2 text-xs font-bold tracking-widest text-slate-500 uppercase">
+              DOCUMENT REFERENCE NUMBER:
+            </div>
+            <div className="text-sm font-mono font-bold text-slate-900 bg-white inline-block px-3 py-1 rounded border border-slate-200 shadow-xs">
+              {engagement.referenceNumber}
+            </div>
+          </div>
+
+          {/* Confidentiality Callout Box */}
+          <div className="p-4 border border-slate-300 bg-slate-50/70 rounded text-xs leading-relaxed text-slate-700">
+            <p>
+              <strong className="font-bold text-slate-900">Confidentiality: </strong>
+              No part of this document may be disclosed verbally or in writing, including by reproduction, to any third party without the prior written consent of Galaxy Backbone Limited. This document, its associated appendices and any attachments remain the property of Galaxy Backbone Limited and shall be returned upon request.
+            </p>
+          </div>
+
+          {/* Table 1: Document Information */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold tracking-wide text-slate-900 uppercase">Document Information</h3>
+            <div className="overflow-hidden border border-slate-300 rounded-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-xs">
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 w-2/5 border-r border-slate-200">Document ID:</td>
+                    <td className="px-4 py-2 font-mono text-slate-900">{engagement.referenceNumber}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Document Version:</td>
+                    <td className="px-4 py-2 text-slate-900 font-medium">Version {r.version}.0</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Date of Version:</td>
+                    <td className="px-4 py-2 text-slate-900">{r.issuedAt ? formatDate(r.issuedAt) : formatDate(r.updatedAt || new Date())}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Document Division:</td>
+                    <td className="px-4 py-2 text-slate-900">{engagement.universeName || 'Internal Audit & Assurance'}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Document Owner:</td>
+                    <td className="px-4 py-2 text-slate-900">{engagement.leadAuditorName || 'Lead Auditor'}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Document Author:</td>
+                    <td className="px-4 py-2 text-slate-900">{engagement.leadAuditorName || 'Internal Audit Team'}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Approved by:</td>
+                    <td className="px-4 py-2 font-semibold text-slate-900">{finalApproverName}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Document Classification:</td>
+                    <td className="px-4 py-2 font-bold text-danger uppercase tracking-wider">{previewClassification}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-bold bg-slate-100 text-slate-700 border-r border-slate-200">Document Status:</td>
+                    <td className="px-4 py-2 font-semibold uppercase text-slate-900">{r.status}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Table 2: Change History */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold tracking-wide text-slate-900 uppercase">Change history</h3>
+            <div className="overflow-hidden border border-slate-300 rounded-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left border-r border-slate-200">Version</th>
+                    <th className="px-4 py-2 text-left border-r border-slate-200">Date</th>
+                    <th className="px-4 py-2 text-left border-r border-slate-200">Created by</th>
+                    <th className="px-4 py-2 text-left">Change from Previous Version</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  <tr>
+                    <td className="px-4 py-2 font-medium border-r border-slate-200">Version 1.0</td>
+                    <td className="px-4 py-2 border-r border-slate-200">{engagement.actualStartDate ? formatDate(engagement.actualStartDate) : formatDate(r.createdAt)}</td>
+                    <td className="px-4 py-2 border-r border-slate-200">{engagement.leadAuditorName || 'Lead Auditor'}</td>
+                    <td className="px-4 py-2">Initial audit review draft formulation</td>
+                  </tr>
+                  {r.version > 1 && (
+                    <tr>
+                      <td className="px-4 py-2 font-medium border-r border-slate-200">Version {r.version}.0</td>
+                      <td className="px-4 py-2 border-r border-slate-200">{r.issuedAt ? formatDate(r.issuedAt) : formatDate(r.updatedAt)}</td>
+                      <td className="px-4 py-2 border-r border-slate-200">{engagement.leadAuditorName || 'Audit Team'}</td>
+                      <td className="px-4 py-2">Review revisions and formal approval cycle</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Table 3: Distribution List */}
+          <div className="space-y-2">
+            <h3 className="text-sm font-bold tracking-wide text-slate-900 uppercase">Distribution List</h3>
+            <div className="overflow-hidden border border-slate-300 rounded-sm">
+              <table className="min-w-full divide-y divide-slate-200 text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left border-r border-slate-200">Name</th>
+                    <th className="px-4 py-2 text-left border-r border-slate-200">Version</th>
+                    <th className="px-4 py-2 text-left">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  <tr>
+                    <td className="px-4 py-2 font-medium border-r border-slate-200">Board Audit Committee &amp; Executive Management</td>
+                    <td className="px-4 py-2 border-r border-slate-200">Version {r.version}.0</td>
+                    <td className="px-4 py-2">{r.issuedAt ? formatDate(r.issuedAt) : formatDate(r.updatedAt || new Date())}</td>
+                  </tr>
+                  <tr>
+                    <td className="px-4 py-2 font-medium border-r border-slate-200">Audited Entity ({engagement.universeName || 'Business Unit'})</td>
+                    <td className="px-4 py-2 border-r border-slate-200">Version {r.version}.0</td>
+                    <td className="px-4 py-2">{r.issuedAt ? formatDate(r.issuedAt) : formatDate(r.updatedAt || new Date())}</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {/* Table 4: Approval List with Interactive Append Signature */}
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h3 className="text-sm font-bold tracking-wide text-slate-900 uppercase">Approval List</h3>
+              {canActOnCurrentApproval && (
+                <span className="text-xs text-emerald-800 bg-emerald-50 px-2.5 py-1 rounded border border-emerald-200 font-semibold inline-flex items-center gap-1.5 animate-pulse">
+                  <span>✍️</span> Action required: click Append Signature below
                 </span>
-              </div>
-              <div className="flex justify-between border-b border-slate-200 pb-1.5">
-                <span className="font-medium text-slate-500">Review Date:</span>
-                <span className="text-text-primary font-semibold">{r.issuedAt ? new Date(r.issuedAt).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' }) : 'Draft'}</span>
-              </div>
-              <div className="flex justify-between">
-                <span className="font-medium text-slate-500">Classification:</span>
-                <span className="text-text-primary font-bold tracking-wider uppercase text-danger">{previewClassification}</span>
-              </div>
+              )}
+            </div>
+            <div className="overflow-hidden border border-slate-300 rounded-sm shadow-xs">
+              <table className="min-w-full divide-y divide-slate-200 text-xs">
+                <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                  <tr>
+                    <th className="px-4 py-2 text-left border-r border-slate-200 w-1/4">Name</th>
+                    <th className="px-4 py-2 text-left border-r border-slate-200 w-1/4">Position</th>
+                    <th className="px-4 py-2 text-center border-r border-slate-200 w-1/3">Signature</th>
+                    <th className="px-4 py-2 text-center">Date</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200 bg-white">
+                  {approvalRows.map((row) => (
+                    <tr key={row.id} className="hover:bg-slate-50/50 transition-colors">
+                      <td className="px-4 py-3 font-semibold text-slate-900 border-r border-slate-200">
+                        {row.name}
+                      </td>
+                      <td className="px-4 py-3 text-slate-600 border-r border-slate-200">
+                        {row.position}
+                      </td>
+                      <td className="px-4 py-3 text-center border-r border-slate-200">
+                        {row.status === 'approved' ? (
+                          <div className="flex flex-col items-center justify-center space-y-1">
+                            {row.signatureId ? (
+                              <img
+                                src={`/api/proxy/documents/${row.signatureId}/file`}
+                                alt="Signature"
+                                className="h-10 max-h-12 object-contain mx-auto border-b border-slate-300 pb-1"
+                              />
+                            ) : (
+                              <span className="font-serif italic text-base text-slate-800">{row.name}</span>
+                            )}
+                            <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200">
+                              <Check className="h-2.5 w-2.5" /> Digitally Signed
+                            </span>
+                          </div>
+                        ) : row.isPendingCurrent && canActOnCurrentApproval ? (
+                          <div className="flex flex-col items-center justify-center gap-1.5 py-1">
+                            <Button
+                              size="sm"
+                              variant="success"
+                              leftIcon={<Check className="h-3.5 w-3.5" />}
+                              onClick={() => {
+                                setApproveOpen(true);
+                                toast.info('Approve & Sign panel opened below');
+                              }}
+                              className="shadow-sm font-semibold text-xs"
+                            >
+                              Append Signature
+                            </Button>
+                            <span className="text-[10px] text-emerald-700 font-medium">Ready for your sign-off</span>
+                          </div>
+                        ) : row.isPendingCurrent ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-amber-700 bg-amber-50 px-2.5 py-1 rounded border border-amber-200 font-medium">
+                            <Clock className="h-3 w-3" /> Awaiting signature
+                          </span>
+                        ) : row.status === 'rejected' ? (
+                          <span className="inline-flex items-center gap-1 text-xs text-danger bg-red-50 px-2 py-0.5 rounded border border-red-200 font-medium">
+                            <X className="h-3 w-3" /> Rejected
+                          </span>
+                        ) : (
+                          <span className="text-xs text-slate-400 italic">Pending prior level</span>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 text-center text-slate-700">
+                        {row.actedAt ? formatDate(row.actedAt) : row.status === 'approved' ? formatDate(r.updatedAt) : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           </div>
 
-          {/* Section 1: Executive Summary */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(0, '1. Executive Summary')}</h2>
-            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
-              {r.executiveSummary || 'No executive summary provided.'}
-            </p>
+          {/* Change Control Notice */}
+          <div className="p-3 border-l-4 border-slate-400 bg-slate-50 text-xs italic text-slate-600 rounded-r">
+            <strong className="font-semibold text-slate-800 not-italic">Change Control: </strong>
+            The contents of this document are subject to change control. Any proposed amendments should be submitted to the Document Owner for review and approval prior to implementation.
           </div>
 
-          {/* Section 2: Scope */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(1, '2. Audit Scope')}</h2>
-            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
-              {r.scope || 'No scope details specified.'}
-            </p>
+          {/* Table of contents */}
+          <div className="p-5 border border-slate-200 bg-slate-50/50 rounded-sm space-y-3 text-xs">
+            <div className="font-bold text-slate-900 tracking-wider uppercase border-b border-slate-200 pb-1.5">
+              Table of Contents
+            </div>
+            <ol className="list-decimal list-inside space-y-1.5 text-slate-700 font-medium">
+              <li>{sectionTitle(0, 'Executive Summary')}</li>
+              <li>{sectionTitle(1, 'Audit Scope')}</li>
+              <li>{sectionTitle(2, 'Methodology')}</li>
+              <li>{sectionTitle(3, 'Findings Summary Table')}</li>
+              {scopeAssets.length > 0 && <li>Assets in Scope</li>}
+              <li>Validity and Document Management</li>
+            </ol>
           </div>
 
-          {/* Section 3: Methodology */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(2, '3. Methodology')}</h2>
-            <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
-              {r.methodology || 'No methodology notes entered.'}
-            </p>
-          </div>
-
-          {/* Section 4: Findings Summary */}
-          <div className="space-y-2">
-            <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">{sectionTitle(3, '4. Findings Summary Table')}</h2>
-            {(reportFindings).length === 0 ? (
-              <p className="text-xs text-slate-500 italic pl-1">No findings were identified during the course of this engagement.</p>
-            ) : (
-              <div className="overflow-hidden border border-slate-200 rounded-md">
-                <table className="min-w-full divide-y divide-slate-200 text-xs">
-                  <thead className="bg-slate-50 text-text-secondary border-b border-slate-200">
-                    <tr>
-                      <th scope="col" className="px-4 py-2 text-left font-semibold">Ref</th>
-                      <th scope="col" className="px-4 py-2 text-left font-semibold">Finding Title</th>
-                      <th scope="col" className="px-4 py-2 text-center font-semibold">Severity</th>
-                      <th scope="col" className="px-4 py-2 text-center font-semibold">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {(reportFindings).map((f, idx) => (
-                      <tr key={f.id} className="hover:bg-slate-50/50">
-                        <td className="px-4 py-2 font-medium text-slate-500">{idx + 1}</td>
-                        <td className="px-4 py-2 text-slate-900 font-medium">{f.title}</td>
-                        <td className="px-4 py-2 text-center">
-                          <StatusBadge status={f.severity} size="xs" />
-                        </td>
-                        <td className="px-4 py-2 text-center capitalize text-slate-500">{f.status?.replace('_', ' ')}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-
-          {/* Section 5: Assets in Scope — auto-assembled from the engagement's linked assets */}
-          {scopeAssets.length > 0 && (
+          {/* Document Sections with Section Separators */}
+          <div className="space-y-6 pt-4 border-t-2 border-slate-200">
+            {/* Section 1: Executive Summary */}
             <div className="space-y-2">
-              <h2 className="text-sm font-bold text-text-primary border-b border-slate-100 pb-1">5. Assets in Scope</h2>
-              <div className="overflow-hidden border border-slate-200 rounded-md">
-                <table className="min-w-full divide-y divide-slate-200 text-xs">
-                  <thead className="bg-slate-50 text-text-secondary border-b border-slate-200">
-                    <tr>
-                      <th scope="col" className="px-4 py-2 text-left font-semibold">Tag</th>
-                      <th scope="col" className="px-4 py-2 text-left font-semibold">Name</th>
-                      <th scope="col" className="px-4 py-2 text-left font-semibold">Type</th>
-                      <th scope="col" className="px-4 py-2 text-center font-semibold">Criticality</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-200 bg-white">
-                    {scopeAssets.map((a) => (
-                      <tr key={a.id} className="hover:bg-slate-50/50">
-                        <td className="px-4 py-2 font-medium text-slate-900">{a.assetTag}</td>
-                        <td className="px-4 py-2 text-slate-700">{a.name}</td>
-                        <td className="px-4 py-2 capitalize text-slate-500">{a.assetType?.replace(/_/g, ' ')}</td>
-                        <td className="px-4 py-2 text-center">
-                          <StatusBadge status={a.criticality ?? 'low'} size="xs" />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 uppercase tracking-wide">
+                {sectionTitle(0, '1. Executive Summary')}
+              </h2>
+              <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
+                {r.executiveSummary || 'No executive summary provided.'}
+              </p>
             </div>
-          )}
 
-          {/* Signature Blocks */}
-          <div className="pt-6 border-t border-slate-200">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 text-xs text-slate-700">
-              <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
-                <div className="font-bold text-slate-500">Prepared by:</div>
-                <div className="font-medium text-slate-900">{engagement.leadAuditorName || 'Lead Auditor'}</div>
-                <div className="text-[10px] text-slate-400">Date: {engagement.actualStartDate ? formatDate(engagement.actualStartDate) : '—'}</div>
-              </div>
-              <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
-                <div className="font-bold text-slate-500">Reviewed by:</div>
-                <div className="font-medium text-slate-900">{engagement.auditManagerName ?? '—'}</div>
-              </div>
-              <div className="space-y-1 bg-slate-50/50 border border-slate-100 rounded-md p-3">
-                <div className="font-bold text-slate-500">Approved by:</div>
-                <div className="font-medium text-slate-900">
-                  {(() => {
-                    if (approval.data?.steps) {
-                      const approvedSteps = approval.data.steps.filter((s) => s.status === 'approved');
-                      const highest = approvedSteps.length > 0
-                        ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
-                        : undefined;
-                      return highest?.approver?.displayName || '—';
-                    }
-                    return '—';
-                  })()}
+            {/* Section 2: Scope */}
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 uppercase tracking-wide">
+                {sectionTitle(1, '2. Audit Scope')}
+              </h2>
+              <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
+                {r.scope || 'No scope details specified.'}
+              </p>
+            </div>
+
+            {/* Section 3: Methodology */}
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 uppercase tracking-wide">
+                {sectionTitle(2, '3. Methodology')}
+              </h2>
+              <p className="text-xs leading-relaxed text-slate-700 whitespace-pre-wrap pl-1">
+                {r.methodology || 'No methodology notes entered.'}
+              </p>
+            </div>
+
+            {/* Section 4: Findings Summary */}
+            <div className="space-y-2">
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 uppercase tracking-wide">
+                {sectionTitle(3, '4. Findings Summary Table')}
+              </h2>
+              {reportFindings.length === 0 ? (
+                <p className="text-xs text-slate-500 italic pl-1">
+                  No findings were identified during the course of this engagement.
+                </p>
+              ) : (
+                <div className="overflow-hidden border border-slate-300 rounded-sm">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <tr>
+                        <th scope="col" className="px-4 py-2 text-left border-r border-slate-200">Ref</th>
+                        <th scope="col" className="px-4 py-2 text-left border-r border-slate-200">Finding Title</th>
+                        <th scope="col" className="px-4 py-2 text-center border-r border-slate-200">Severity</th>
+                        <th scope="col" className="px-4 py-2 text-center">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {reportFindings.map((f, idx) => (
+                        <tr key={f.id} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-2 font-medium text-slate-500 border-r border-slate-200">{idx + 1}</td>
+                          <td className="px-4 py-2 text-slate-900 font-medium border-r border-slate-200">{f.title}</td>
+                          <td className="px-4 py-2 text-center border-r border-slate-200">
+                            <StatusBadge status={f.severity} size="xs" />
+                          </td>
+                          <td className="px-4 py-2 text-center capitalize text-slate-600">{f.status?.replace('_', ' ')}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {/* Section 5: Assets in Scope */}
+            {scopeAssets.length > 0 && (
+              <div className="space-y-2">
+                <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 uppercase tracking-wide">
+                  5. Assets in Scope
+                </h2>
+                <div className="overflow-hidden border border-slate-300 rounded-sm">
+                  <table className="min-w-full divide-y divide-slate-200 text-xs">
+                    <thead className="bg-slate-100 text-slate-700 font-bold border-b border-slate-200">
+                      <tr>
+                        <th scope="col" className="px-4 py-2 text-left border-r border-slate-200">Tag</th>
+                        <th scope="col" className="px-4 py-2 text-left border-r border-slate-200">Name</th>
+                        <th scope="col" className="px-4 py-2 text-left border-r border-slate-200">Type</th>
+                        <th scope="col" className="px-4 py-2 text-center">Criticality</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-200 bg-white">
+                      {scopeAssets.map((a) => (
+                        <tr key={a.id} className="hover:bg-slate-50/50">
+                          <td className="px-4 py-2 font-medium text-slate-900 border-r border-slate-200">{a.assetTag}</td>
+                          <td className="px-4 py-2 text-slate-700 border-r border-slate-200">{a.name}</td>
+                          <td className="px-4 py-2 capitalize text-slate-600 border-r border-slate-200">{a.assetType?.replace(/_/g, ' ')}</td>
+                          <td className="px-4 py-2 text-center">
+                            <StatusBadge status={a.criticality ?? 'low'} size="xs" />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 </div>
               </div>
+            )}
+
+            {/* Section 6: Validity and Document Management */}
+            <div className="space-y-2 pt-2">
+              <h2 className="text-sm font-bold text-slate-900 border-b border-slate-200 pb-1.5 uppercase tracking-wide">
+                {scopeAssets.length > 0 ? '6. Validity and Document Management' : '5. Validity and Document Management'}
+              </h2>
+              <p className="text-xs leading-relaxed text-slate-700 pl-1">
+                This document was last reviewed on {r.issuedAt ? formatDate(r.issuedAt) : formatDate(r.updatedAt || new Date())}. This document remains valid and binding until superseded by a subsequent version approved through the Galaxy Backbone Limited internal approval matrix.
+              </p>
             </div>
           </div>
 
-          {previewFooter && (
-            <div className="pt-4 mt-6 border-t border-slate-200 text-center text-[11px] text-slate-400">
-              {previewFooter}
-            </div>
-          )}
+          {/* Running Footer */}
+          <div className="pt-6 mt-8 border-t border-slate-200 flex flex-wrap items-center justify-between text-[11px] text-slate-400">
+            <span>{r.title} | Version {r.version}.0</span>
+            <span>Galaxy Backbone Limited | {previewClassification}</span>
+          </div>
         </div>
       )}
 

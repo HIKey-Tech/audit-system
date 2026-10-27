@@ -755,6 +755,20 @@ export class ApprovalService implements IApprovalService {
           requiredPermission: ENGAGEMENT_MANAGER_PERMISSION[entityType] ?? null,
           resolvedApprover: manager ? mapWorkflowUserBrief(manager) : null, candidates: [],
         });
+      } else if (typeof entry === 'string' && entry.startsWith('user:')) {
+        const parts = entry.split(':');
+        const userId = parts[1];
+        const permission = parts.slice(2).join(':') || null;
+        const user = await prisma.user.findUnique({
+          where: { id: userId },
+          select: workflowUserSelect,
+        });
+        levels.push({
+          level, kind: 'person', status: 'upcoming',
+          requiredPermission: permission,
+          resolvedApprover: user ? mapWorkflowUserBrief(user) : null,
+          candidates: user ? [mapWorkflowUserBrief(user)] : [],
+        });
       } else {
         levels.push({
           level, kind: 'permission', status: 'upcoming',
@@ -808,6 +822,34 @@ export class ApprovalService implements IApprovalService {
         }
         // Pinned to the engagement's manager, who must still hold the permission to act.
         specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
+        continue;
+      }
+
+      // Check if level pins a specific user: user:<userId>:<permission> or user:<userId>
+      if (typeof level === 'string' && level.startsWith('user:')) {
+        const parts = level.split(':');
+        const userId = parts[1];
+        const permission = parts.slice(2).join(':') || null;
+        const user = await db.user.findFirst({
+          where: { id: userId, is_active: true, deleted_at: null },
+          select: { id: true },
+        });
+        if (!user) {
+          throw AppError.badRequest(`Designated approver in approval matrix was not found or is inactive`);
+        }
+        if (submittedById && userId === submittedById) {
+          if (permission) {
+            const hasOtherHolder = await this._hasActiveUserWithPermission(db, permission, submittedById);
+            if (!hasOtherHolder) {
+              throw AppError.badRequest(
+                `You submitted this ${entityType.replace(/_/g, ' ')} and are its designated approver. Another user holding '${permission}' must be available to approve it (segregation of duties).`,
+              );
+            }
+            specs.push({ approverId: null, requiredPermission: permission });
+            continue;
+          }
+        }
+        specs.push({ approverId: userId, requiredPermission: permission ?? 'approval:approve' });
         continue;
       }
 
@@ -908,7 +950,15 @@ export class ApprovalService implements IApprovalService {
       is_active: true,
       user_roles: {
         some: {
-          role: { role_permissions: { some: { permission: { slug: permissionSlug } } } },
+          role: {
+            role_permissions: {
+              some: {
+                permission: {
+                  slug: { in: [permissionSlug, '*'] },
+                },
+              },
+            },
+          },
         },
       },
     };
@@ -953,7 +1003,10 @@ export class ApprovalService implements IApprovalService {
     // A step always requires its permission. A pinned step additionally requires
     // the actor to be that specific user (the engagement's manager); a pool step
     // is open to any holder of the permission.
-    const holdsPermission = !step.required_permission || actor.permissions.includes(step.required_permission);
+    const holdsPermission =
+      !step.required_permission ||
+      actor.permissions.includes(step.required_permission) ||
+      actor.permissions.includes('*');
     const isPinnedApprover = step.approver_id === null || step.approver_id === actor.id;
     if (!holdsPermission || !isPinnedApprover) {
       throw AppError.forbidden('You are not authorized to act on the current approval step');
@@ -961,12 +1014,14 @@ export class ApprovalService implements IApprovalService {
     return step;
   }
   private async _assertCanViewApproval(approval: ApprovalWithDetails, actor: ApprovalActor): Promise<void> {
-    if (actor.permissions.includes('engagement:read_all')) return;
+    if (actor.permissions.includes('engagement:read_all') || actor.permissions.includes('*')) return;
     if (approval.submitted_by_id === actor.id) return;
     if (
       approval.steps.some((step) =>
         step.approver_id === actor.id ||
-        (step.approver_id === null && !!step.required_permission && actor.permissions.includes(step.required_permission))
+        (step.approver_id === null &&
+          !!step.required_permission &&
+          (actor.permissions.includes(step.required_permission) || actor.permissions.includes('*')))
       )
     ) {
       return;
@@ -979,7 +1034,7 @@ export class ApprovalService implements IApprovalService {
     entityId: string,
     actor: ApprovalActor,
   ): Promise<void> {
-    if (actor.permissions.includes('engagement:read_all')) return;
+    if (actor.permissions.includes('engagement:read_all') || actor.permissions.includes('*')) return;
 
     const teamWhere = {
       OR: [

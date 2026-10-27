@@ -40,7 +40,7 @@ export const hasPermission = (
   permission: string,
 ): boolean => {
   if (!user) return false;
-  if (user.roles.includes('super_admin')) return true;
-  return user.permissions.includes(permission);
+  if (user.permissions.includes('*') || user.permissions.includes(permission)) return true;
+  return user.roles.includes('super_admin');
 };
 

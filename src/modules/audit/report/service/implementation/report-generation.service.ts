@@ -1,3 +1,5 @@
+import * as fs from 'fs';
+import * as path from 'path';
 import {
   Document,
   Packer,
@@ -31,6 +33,21 @@ import { ReportTemplateResponseDto } from '../../../../settings/dto/response/set
 import { DocumentService } from '../../../../document';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
+
+const GBB_LOGO_PATH = path.resolve(__dirname, '../../../../../assets/gbb-logo.png');
+let cachedLogoBuffer: Buffer | null = null;
+const getGbbLogoBuffer = (): Buffer | null => {
+  if (cachedLogoBuffer) return cachedLogoBuffer;
+  try {
+    if (fs.existsSync(GBB_LOGO_PATH)) {
+      cachedLogoBuffer = fs.readFileSync(GBB_LOGO_PATH);
+      return cachedLogoBuffer;
+    }
+  } catch (err) {
+    logger.warn('Could not read GBB logo file', { err });
+  }
+  return null;
+};
 
 /** Resolved approver signature images, keyed by approval step id. */
 type StepSignatureMap = Map<string, { buffer: Buffer; dataUrl: string; type: 'png' | 'jpg' }>;
@@ -439,11 +456,31 @@ export class ReportGenerationService implements IReportGenerationService {
     const header = this._getHeaderConfig(config);
     const footerNotice = this._getFooterNotice(config);
 
-    // Header
-    children.push(...this._buildDocxHeader(header));
+    // Cover Page Header (GBB Logo + Company name + Title Box + Confidentiality Callout)
+    children.push(...this._buildDocxCoverHeader(data, header));
 
-    // Metadata table
-    children.push(this._buildDocxMetadataTable(data, header.classification));
+    // Table 1: Document Information Table
+    children.push(...this._buildDocxDocumentInfoTable(data, header.classification, approval));
+
+    // Table 2: Change History Table
+    children.push(...this._buildDocxChangeHistoryTable(data));
+
+    // Table 3: Distribution List Table
+    children.push(...this._buildDocxDistributionTable(data));
+
+    // Table 4: Approval List Table
+    children.push(...this._buildDocxApprovalListTable(approval, sigMap, data));
+
+    // Change Control & Table of Contents
+    children.push(...this._buildDocxChangeControlAndToc());
+
+    // Page Break before main report body
+    children.push(
+      new Paragraph({
+        pageBreakBefore: true,
+        children: [],
+      }),
+    );
 
     // Sections
     config.template.sections.forEach((section, idx) => {
@@ -463,9 +500,7 @@ export class ReportGenerationService implements IReportGenerationService {
       children.push(...this._buildDocxSectionContent(section.key, data));
     });
 
-    // Assets in scope — appended when the engagement has linked assets, so the
-    // technology/data/service scope always reaches the report regardless of
-    // whether the template declares an assets section.
+    // Assets in scope — appended when the engagement has linked assets
     if (data.assetsInScope.length > 0) {
       children.push(
         new Paragraph({
@@ -483,8 +518,31 @@ export class ReportGenerationService implements IReportGenerationService {
       children.push(this._buildDocxAssetsInScopeTable(data.assetsInScope));
     }
 
-    // Signature block
-    children.push(this._buildDocxSignatureBlock(data, approval, config, sigMap));
+    // Validity and Document Management section
+    const validitySecNum = data.assetsInScope.length > 0 ? config.template.sections.length + 2 : config.template.sections.length + 1;
+    children.push(
+      new Paragraph({
+        spacing: { before: 240, after: 120 },
+        children: [
+          new TextRun({
+            text: `${validitySecNum}. Validity and Document Management`,
+            bold: true,
+            size: 24,
+            color: header.primaryColor,
+          }),
+        ],
+      }),
+      new Paragraph({
+        spacing: { after: 240 },
+        children: [
+          new TextRun({
+            text: `This document was last reviewed on ${formatDate(data.report.issuedAt || new Date(), 'dd MMMM yyyy')}. This document remains valid and binding until superseded by a subsequent version approved through the Galaxy Backbone Limited internal approval matrix.`,
+            size: 20,
+            color: '334155',
+          }),
+        ],
+      }),
+    );
 
     // Footer notice
     children.push(
@@ -549,6 +607,462 @@ export class ReportGenerationService implements IReportGenerationService {
         },
       ],
     });
+  }
+
+  private _buildDocxCoverHeader(data: ReportData, header: RenderHeaderConfig): (Paragraph | Table)[] {
+    const items: (Paragraph | Table)[] = [];
+    const logoBuf = getGbbLogoBuffer();
+    if (logoBuf) {
+      items.push(
+        new Paragraph({
+          alignment: AlignmentType.CENTER,
+          spacing: { before: 100, after: 120 },
+          children: [
+            new ImageRun({
+              type: 'png',
+              data: logoBuf,
+              transformation: { width: 140, height: 98 },
+            }),
+          ],
+        }),
+      );
+    }
+    items.push(
+      new Paragraph({
+        alignment: AlignmentType.CENTER,
+        spacing: { before: 80, after: 180 },
+        children: [
+          new TextRun({
+            text: 'Galaxy Backbone Limited',
+            bold: true,
+            size: 26,
+            color: '334155',
+          }),
+        ],
+      }),
+    );
+
+    // Title box (Table 1 in docx template) with 4F6228 border
+    items.push(
+      new Table({
+        rows: [
+          new TableRow({
+            children: [
+              new TableCell({
+                shading: { fill: 'F8FAF8', type: ShadingType.SOLID },
+                margins: { top: 240, bottom: 240, left: 240, right: 240 },
+                children: [
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 100, after: 100 },
+                    children: [
+                      new TextRun({
+                        text: data.report.title.toUpperCase(),
+                        bold: true,
+                        size: 32,
+                        color: header.primaryColor,
+                      }),
+                    ],
+                  }),
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 60, after: 100 },
+                    children: [
+                      new TextRun({
+                        text: `Version ${data.report.versionNumber}.0`,
+                        bold: true,
+                        size: 22,
+                        color: '475569',
+                      }),
+                    ],
+                  }),
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 80, after: 40 },
+                    children: [
+                      new TextRun({
+                        text: 'DOCUMENT REFERENCE NUMBER:',
+                        bold: true,
+                        size: 18,
+                        color: '64748B',
+                      }),
+                    ],
+                  }),
+                  new Paragraph({
+                    alignment: AlignmentType.CENTER,
+                    spacing: { before: 40, after: 100 },
+                    children: [
+                      new TextRun({
+                        text: data.engagement.referenceNumber,
+                        bold: true,
+                        size: 22,
+                        color: '0F172A',
+                      }),
+                    ],
+                  }),
+                ],
+              }),
+            ],
+          }),
+        ],
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 24, color: '4F6228' },
+          bottom: { style: BorderStyle.SINGLE, size: 24, color: '4F6228' },
+          left: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+          right: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+          insideHorizontal: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+          insideVertical: { style: BorderStyle.NONE, size: 0, color: 'auto' },
+        },
+      }),
+    );
+
+    // Confidentiality Notice
+    items.push(
+      new Paragraph({
+        spacing: { before: 200, after: 180 },
+        children: [
+          new TextRun({ text: 'Confidentiality: ', bold: true, size: 19 }),
+          new TextRun({
+            text:
+              'No part of this document may be disclosed verbally or in writing, including by reproduction, to any third party without the prior written consent of Galaxy Backbone Limited. This document, its associated appendices and any attachments remain the property of Galaxy Backbone Limited and shall be returned upon request.',
+            size: 19,
+            color: '334155',
+          }),
+        ],
+      }),
+    );
+
+    return items;
+  }
+
+  private _buildDocxDocumentInfoTable(
+    data: ReportData,
+    classification: string,
+    approval: ApprovalResponseDto | null,
+  ): (Paragraph | Table)[] {
+    let finalApproverName = 'Managing Director / CEO';
+    if (approval?.steps) {
+      const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
+      if (approvedSteps.length > 0) {
+        const highest = approvedSteps.reduce((max, s) => (s.level > max.level ? s : max));
+        if (highest?.approver?.displayName) finalApproverName = highest.approver.displayName;
+      }
+    }
+
+    const leadAuditorName =
+      data.engagement.leadAuditor.displayName ??
+      `${data.engagement.leadAuditor.firstName} ${data.engagement.leadAuditor.lastName}`.trim() ??
+      'Internal Audit Team';
+
+    const rows = [
+      this._docxMetadataRow('Document ID:', data.engagement.referenceNumber),
+      this._docxMetadataRow('Document Version:', `Version ${data.report.versionNumber}.0`),
+      this._docxMetadataRow('Date of Version:', formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy')),
+      this._docxMetadataRow('Document Division:', data.engagement.universe.name || 'Internal Audit & Assurance'),
+      this._docxMetadataRow('Document Owner:', leadAuditorName),
+      this._docxMetadataRow('Document Author:', leadAuditorName),
+      this._docxMetadataRow('Approved by:', finalApproverName),
+      this._docxMetadataRow('Document Classification:', classification),
+      this._docxMetadataRow('Document Status:', data.report.status.toUpperCase()),
+    ];
+
+    return [
+      new Paragraph({
+        spacing: { before: 200, after: 100 },
+        children: [new TextRun({ text: 'Document Information', bold: true, size: 22, color: '003087' })],
+      }),
+      new Table({
+        rows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          left: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          right: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+        },
+      }),
+    ];
+  }
+
+  private _buildDocxChangeHistoryTable(data: ReportData): (Paragraph | Table)[] {
+    const leadAuditorName =
+      data.engagement.leadAuditor.displayName ??
+      `${data.engagement.leadAuditor.firstName} ${data.engagement.leadAuditor.lastName}`.trim() ??
+      'Internal Audit Team';
+
+    const headerRow = new TableRow({
+      children: [
+        this._docxHeaderCell('Version'),
+        this._docxHeaderCell('Date'),
+        this._docxHeaderCell('Created by'),
+        this._docxHeaderCell('Change from Previous Version'),
+      ],
+    });
+
+    const rows = [
+      headerRow,
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Version 1.0' })] })] }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [
+                  new TextRun({
+                    text: data.engagement.actualStartDate
+                      ? formatDate(data.engagement.actualStartDate, 'dd/MM/yyyy')
+                      : formatDate(new Date(), 'dd/MM/yyyy'),
+                  }),
+                ],
+              }),
+            ],
+          }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: leadAuditorName })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Initial audit review formulation' })] })] }),
+        ],
+      }),
+    ];
+
+    if (data.report.versionNumber > 1) {
+      rows.push(
+        new TableRow({
+          children: [
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `Version ${data.report.versionNumber}.0` })] })] }),
+            new TableCell({
+              children: [
+                new Paragraph({
+                  children: [new TextRun({ text: formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy') })],
+                }),
+              ],
+            }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: leadAuditorName })] })] }),
+            new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Audit review revision and approval' })] })] }),
+          ],
+        }),
+      );
+    }
+
+    return [
+      new Paragraph({
+        spacing: { before: 200, after: 100 },
+        children: [new TextRun({ text: 'Change history', bold: true, size: 22, color: '003087' })],
+      }),
+      new Table({
+        rows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          left: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          right: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+        },
+      }),
+    ];
+  }
+
+  private _buildDocxDistributionTable(data: ReportData): (Paragraph | Table)[] {
+    const dateStr = formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy');
+    const verStr = `Version ${data.report.versionNumber}.0`;
+
+    const headerRow = new TableRow({
+      children: [
+        this._docxHeaderCell('Name'),
+        this._docxHeaderCell('Version'),
+        this._docxHeaderCell('Date'),
+      ],
+    });
+
+    const rows = [
+      headerRow,
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: 'Board Audit Committee & Executive Management' })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: verStr })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: dateStr })] })] }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: `Audited Entity (${data.engagement.universe.name})` })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: verStr })] })] }),
+          new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: dateStr })] })] }),
+        ],
+      }),
+    ];
+
+    return [
+      new Paragraph({
+        spacing: { before: 200, after: 100 },
+        children: [new TextRun({ text: 'Distribution List', bold: true, size: 22, color: '003087' })],
+      }),
+      new Table({
+        rows,
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          left: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          right: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+        },
+      }),
+    ];
+  }
+
+  private _buildDocxApprovalListTable(
+    approval: ApprovalResponseDto | null,
+    sigMap: StepSignatureMap,
+    data: ReportData,
+  ): (Paragraph | Table)[] {
+    const headerRow = new TableRow({
+      children: [
+        this._docxHeaderCell('Name'),
+        this._docxHeaderCell('Position'),
+        this._docxHeaderCell('Signature'),
+        this._docxHeaderCell('Date'),
+      ],
+    });
+
+    const dataRows: TableRow[] = [];
+    const steps = approval?.steps ?? [];
+
+    if (steps.length > 0) {
+      const sortedSteps = [...steps].sort((a, b) => a.level - b.level);
+      sortedSteps.forEach((step) => {
+        const name = step.approver?.displayName || `Designated Approver (Level ${step.level})`;
+        const position =
+          step.approver?.jobTitle ||
+          (step.level === 1 ? 'Head of Unit / Reviewer' : step.level === 2 ? 'Executive Director' : 'Managing Director / CEO');
+        const sigEntry = sigMap.get(step.id);
+        const sigChildren: Paragraph[] = [];
+
+        if (step.status === 'approved') {
+          if (sigEntry) {
+            sigChildren.push(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [
+                  new ImageRun({
+                    type: sigEntry.type,
+                    data: sigEntry.buffer,
+                    transformation: { width: 110, height: 38 },
+                  }),
+                ],
+              }),
+            );
+          } else {
+            sigChildren.push(
+              new Paragraph({
+                alignment: AlignmentType.CENTER,
+                children: [new TextRun({ text: '[Digitally Signed]', italics: true, bold: true, color: '166534' })],
+              }),
+            );
+          }
+        } else if (step.status === 'rejected') {
+          sigChildren.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [new TextRun({ text: 'Rejected', color: 'DC2626' })],
+            }),
+          );
+        } else {
+          sigChildren.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              children: [new TextRun({ text: 'Pending Approval', italics: true, color: '64748B' })],
+            }),
+          );
+        }
+
+        const dateStr = step.actedAt ? formatDate(new Date(step.actedAt), 'dd/MM/yyyy') : '—';
+
+        dataRows.push(
+          new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: name, bold: true })] })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: position })] })] }),
+              new TableCell({ children: sigChildren }),
+              new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: dateStr })] })] }),
+            ],
+          }),
+        );
+      });
+    } else {
+      const defaultApprovers = [
+        { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
+        { name: 'Executive Director (ED)', pos: 'Executive Director' },
+        { name: 'Managing Director / CEO', pos: 'MD / CEO' },
+      ];
+      defaultApprovers.forEach((def) => {
+        dataRows.push(
+          new TableRow({
+            children: [
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: def.name, bold: true })] })] }),
+              new TableCell({ children: [new Paragraph({ children: [new TextRun({ text: def.pos })] })] }),
+              new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: 'Pending Submission', italics: true, color: '64748B' })] })] }),
+              new TableCell({ children: [new Paragraph({ alignment: AlignmentType.CENTER, children: [new TextRun({ text: '—' })] })] }),
+            ],
+          }),
+        );
+      });
+    }
+
+    return [
+      new Paragraph({
+        spacing: { before: 200, after: 100 },
+        children: [new TextRun({ text: 'Approval List', bold: true, size: 22, color: '003087' })],
+      }),
+      new Table({
+        rows: [headerRow, ...dataRows],
+        width: { size: 100, type: WidthType.PERCENTAGE },
+        borders: {
+          top: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          bottom: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          left: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          right: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideHorizontal: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+          insideVertical: { style: BorderStyle.SINGLE, size: 4, color: '808080' },
+        },
+      }),
+    ];
+  }
+
+  private _buildDocxChangeControlAndToc(): (Paragraph | Table)[] {
+    return [
+      new Paragraph({
+        spacing: { before: 180, after: 140 },
+        children: [
+          new TextRun({ text: 'Change Control: ', bold: true, size: 18 }),
+          new TextRun({
+            text:
+              'The contents of this document are subject to change control. Any proposed amendments should be submitted to the Document Owner for review and approval prior to implementation.',
+            italics: true,
+            size: 18,
+            color: '475569',
+          }),
+        ],
+      }),
+      new Paragraph({
+        spacing: { before: 180, after: 80 },
+        children: [new TextRun({ text: 'Table of Contents', bold: true, size: 22, color: '003087' })],
+      }),
+      new Paragraph({ children: [new TextRun({ text: '1. Executive Summary', size: 20 })] }),
+      new Paragraph({ children: [new TextRun({ text: '2. Audit Scope', size: 20 })] }),
+      new Paragraph({ children: [new TextRun({ text: '3. Methodology', size: 20 })] }),
+      new Paragraph({ children: [new TextRun({ text: '4. Findings Summary Table', size: 20 })] }),
+      new Paragraph({ children: [new TextRun({ text: '5. Detailed Findings', size: 20 })] }),
+      new Paragraph({ children: [new TextRun({ text: '6. Assets in Scope', size: 20 })] }),
+      new Paragraph({
+        spacing: { after: 240 },
+        children: [new TextRun({ text: '7. Validity and Document Management', size: 20 })],
+      }),
+    ];
   }
 
   private _buildDocxHeader(header: RenderHeaderConfig): Paragraph[] {
@@ -1326,40 +1840,38 @@ export class ReportGenerationService implements IReportGenerationService {
       });
     }
 
-    const reviewedSig = sigImg(reviewedStepId);
-    const approvedSig = sigImg(approvedStepId);
-    const signatureColumns: Content = {
-      columns: [
-        {
-          width: '*',
-          stack: [
-            { text: `${labels.preparedBy}:`, bold: true, color: primary, margin: [0, 0, 0, 4] },
-            { text: leadAuditorName },
-            { text: leadAuditorTitle },
-            { text: preparedDate },
-          ],
-        },
-        {
-          width: '*',
-          stack: [
-            { text: `${labels.reviewedBy}:`, bold: true, color: primary, margin: [0, 0, 0, 4] },
-            ...(reviewedSig ? [reviewedSig] : []),
-            { text: auditManagerName },
-            { text: auditManagerTitle },
-          ],
-        },
-        {
-          width: '*',
-          stack: [
-            { text: `${labels.approvedBy}:`, bold: true, color: primary, margin: [0, 0, 0, 4] },
-            ...(approvedSig ? [approvedSig] : []),
-            { text: caeApproverName },
-          ],
-        },
-      ],
-      columnGap: 10,
-      margin: [0, 30, 0, 0],
-    };
+    const logoBuf = getGbbLogoBuffer();
+    const logoDataUrl = logoBuf ? `data:image/png;base64,${logoBuf.toString('base64')}` : null;
+
+    const approvalListPdfRows: PdfTableCell[][] = [];
+    if (approval?.steps && approval.steps.length > 0) {
+      const sortedSteps = [...approval.steps].sort((a, b) => a.level - b.level);
+      sortedSteps.forEach((step) => {
+        const name = step.approver?.displayName || `Approver (Level ${step.level})`;
+        const position =
+          step.approver?.jobTitle ||
+          (step.level === 1 ? 'Head of Unit / Reviewer' : step.level === 2 ? 'Executive Director' : 'Managing Director / CEO');
+        const sig = sigImg(step.id);
+        let sigCell: PdfTableCell;
+        if (step.status === 'approved') {
+          sigCell = sig ? sig : { text: '[Digitally Signed]', italics: true, color: '#166534', bold: true };
+        } else if (step.status === 'rejected') {
+          sigCell = { text: 'Rejected', color: '#DC2626' };
+        } else {
+          sigCell = { text: 'Pending Approval', italics: true, color: '#64748B' };
+        }
+        const dateStr = step.actedAt ? formatDate(new Date(step.actedAt), 'dd/MM/yyyy') : '—';
+        approvalListPdfRows.push([{ text: name, bold: true }, { text: position }, sigCell, { text: dateStr, alignment: 'center' }]);
+      });
+    } else {
+      approvalListPdfRows.push(
+        [{ text: auditManagerName, bold: true }, { text: auditManagerTitle || 'Head of Unit / Audit Manager' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+        [{ text: 'Executive Director (ED)', bold: true }, { text: 'Executive Director' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+        [{ text: 'Managing Director / CEO', bold: true }, { text: 'MD / CEO' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+      );
+    }
+
+    const pad = (l: number, t: number, r: number, b: number): [number, number, number, number] => [l, t, r, b];
 
     return {
       pageSize: 'A4',
@@ -1369,38 +1881,181 @@ export class ReportGenerationService implements IReportGenerationService {
         alignment: 'center',
         fontSize: 9,
         color: '#64748B',
-        margin: [mm(20), 8, mm(20), 0],
+        margin: pad(mm(20), 8, mm(20), 0),
       }),
       content: [
-        { text: header.orgName, style: 'orgName', alignment: 'center' },
-        { text: header.reportTitle.toUpperCase(), style: 'reportTitle', alignment: 'center', margin: [0, 6, 0, 4] },
-        { text: header.orgAddress, alignment: 'center', fontSize: 10, color: '#64748B' },
+        ...(logoDataUrl
+          ? [{ image: logoDataUrl, width: 120, alignment: 'center' as const, margin: pad(0, 0, 0, 8) }]
+          : []),
+        { text: 'Galaxy Backbone Limited', style: 'orgName', alignment: 'center', margin: pad(0, 0, 0, 6) },
         {
-          canvas: [{ type: 'line', x1: 0, y1: 0, x2: 482, y2: 0, lineWidth: 2, lineColor: accent }],
-          margin: [0, 8, 0, 14],
+          table: {
+            widths: ['*'],
+            body: [
+              [
+                {
+                  stack: [
+                    { text: data.report.title.toUpperCase(), bold: true, fontSize: 14, color: primary, alignment: 'center', margin: pad(0, 4, 0, 3) },
+                    { text: `Version ${data.report.versionNumber}.0`, bold: true, fontSize: 10, color: '#475569', alignment: 'center', margin: pad(0, 0, 0, 4) },
+                    { text: 'DOCUMENT REFERENCE NUMBER:', bold: true, fontSize: 8, color: '#64748B', alignment: 'center', margin: pad(0, 3, 0, 1) },
+                    { text: data.engagement.referenceNumber, bold: true, fontSize: 10, color: '#0F172A', alignment: 'center', margin: pad(0, 0, 0, 4) },
+                  ],
+                  fillColor: '#F8FAF8',
+                  margin: pad(8, 4, 8, 4),
+                },
+              ],
+            ],
+          },
+          layout: {
+            hLineWidth: (i: number, node: any) => (i === 0 || i === node.table.body.length ? 3 : 0),
+            vLineWidth: () => 0,
+            hLineColor: () => '#4F6228',
+          },
+          margin: pad(0, 4, 0, 8),
         },
         {
           table: {
-            widths: [140, '*'],
+            widths: ['*'],
             body: [
-              [labelCell('Report Reference'), { text: data.engagement.referenceNumber }],
-              [labelCell('Audit Type'), { text: AUDIT_TYPE_LABEL[data.engagement.auditType] ?? data.engagement.auditType }],
-              [labelCell('Audited Entity'), { text: data.engagement.universe.name }],
               [
-                labelCell('Audit Period'),
-                { text: `${formatDate(data.engagement.plannedStartDate, 'dd MMM yyyy')} to ${formatDate(data.engagement.plannedEndDate, 'dd MMM yyyy')}` },
+                {
+                  text: [
+                    { text: 'Confidentiality: ', bold: true, color: '#0F172A' },
+                    'No part of this document may be disclosed verbally or in writing, including by reproduction, to any third party without the prior written consent of Galaxy Backbone Limited. This document, its associated appendices and any attachments remain the property of Galaxy Backbone Limited and shall be returned upon request.',
+                  ],
+                  fontSize: 7.5,
+                  fillColor: '#F8F9FA',
+                  color: '#334155',
+                  margin: pad(6, 4, 6, 4),
+                },
               ],
-              [
-                labelCell('Report Date'),
-                { text: data.report.issuedAt ? formatDate(data.report.issuedAt, 'dd MMMM yyyy') : 'Not yet issued' },
-              ],
-              [labelCell('Classification'), { text: header.classification, bold: true }],
             ],
           },
           layout: borderedTableLayout,
+          margin: pad(0, 0, 0, 8),
+        },
+        { text: 'Document Information', bold: true, fontSize: 9.5, color: primary, margin: pad(0, 2, 0, 2) },
+        {
+          table: {
+            widths: [130, '*'],
+            body: [
+              [labelCell('Document ID:'), { text: data.engagement.referenceNumber, fontSize: 8.5 }],
+              [labelCell('Document Version:'), { text: `Version ${data.report.versionNumber}.0`, fontSize: 8.5 }],
+              [labelCell('Date of Version:'), { text: formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy'), fontSize: 8.5 }],
+              [labelCell('Document Division:'), { text: data.engagement.universe.name || 'Internal Audit & Assurance', fontSize: 8.5 }],
+              [labelCell('Document Owner:'), { text: leadAuditorName, fontSize: 8.5 }],
+              [labelCell('Document Author:'), { text: leadAuditorName, fontSize: 8.5 }],
+              [labelCell('Approved by:'), { text: caeApproverName, bold: true, fontSize: 8.5 }],
+              [labelCell('Document Classification:'), { text: header.classification, bold: true, color: '#DC2626', fontSize: 8.5 }],
+              [labelCell('Document Status:'), { text: data.report.status.toUpperCase(), bold: true, fontSize: 8.5 }],
+            ],
+          },
+          layout: borderedTableLayout,
+          margin: pad(0, 0, 0, 8),
+        },
+        { text: 'Change history', bold: true, fontSize: 9.5, color: primary, margin: pad(0, 2, 0, 2) },
+        {
+          table: {
+            headerRows: 1,
+            widths: [65, 70, 100, '*'],
+            body: [
+              ['Version', 'Date', 'Created by', 'Change from Previous Version'].map(
+                (h): PdfTableCell => ({ text: h, bold: true, fillColor: '#F1F5F9', color: primary, fontSize: 8.5 }),
+              ),
+              [
+                { text: 'Version 1.0', fontSize: 8.5 },
+                { text: data.engagement.actualStartDate ? formatDate(data.engagement.actualStartDate, 'dd/MM/yyyy') : formatDate(new Date(), 'dd/MM/yyyy'), fontSize: 8.5 },
+                { text: leadAuditorName, fontSize: 8.5 },
+                { text: 'Initial audit review draft formulation', fontSize: 8.5 },
+              ],
+              ...(data.report.versionNumber > 1
+                ? [
+                    [
+                      { text: `Version ${data.report.versionNumber}.0`, fontSize: 8.5 },
+                      { text: formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy'), fontSize: 8.5 },
+                      { text: leadAuditorName, fontSize: 8.5 },
+                      { text: 'Audit review updates and formal approval', fontSize: 8.5 },
+                    ],
+                  ]
+                : []),
+            ],
+          },
+          layout: borderedTableLayout,
+          margin: pad(0, 0, 0, 8),
+        },
+        { text: 'Distribution List', bold: true, fontSize: 9.5, color: primary, margin: pad(0, 2, 0, 2) },
+        {
+          table: {
+            headerRows: 1,
+            widths: ['*', 85, 75],
+            body: [
+              ['Name', 'Version', 'Date'].map(
+                (h): PdfTableCell => ({ text: h, bold: true, fillColor: '#F1F5F9', color: primary, fontSize: 8.5 }),
+              ),
+              [
+                { text: 'Board Audit Committee & Executive Management', fontSize: 8.5 },
+                { text: `Version ${data.report.versionNumber}.0`, fontSize: 8.5 },
+                { text: formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy'), fontSize: 8.5 },
+              ],
+              [
+                { text: `Audited Entity (${data.engagement.universe.name})`, fontSize: 8.5 },
+                { text: `Version ${data.report.versionNumber}.0`, fontSize: 8.5 },
+                { text: formatDate(data.report.issuedAt || new Date(), 'dd/MM/yyyy'), fontSize: 8.5 },
+              ],
+            ],
+          },
+          layout: borderedTableLayout,
+          margin: pad(0, 0, 0, 8),
+        },
+        { text: 'Approval List', bold: true, fontSize: 9.5, color: primary, margin: pad(0, 2, 0, 2) },
+        {
+          table: {
+            headerRows: 1,
+            widths: [110, 110, 130, '*'],
+            body: [
+              ['Name', 'Position', 'Signature', 'Date'].map(
+                (h): PdfTableCell => ({ text: h, bold: true, fillColor: '#F1F5F9', color: primary, fontSize: 8.5 }),
+              ),
+              ...approvalListPdfRows,
+            ],
+          },
+          layout: borderedTableLayout,
+          margin: pad(0, 0, 0, 8),
+        },
+        {
+          text: [
+            { text: 'Change Control: ', bold: true },
+            { text: 'The contents of this document are subject to change control. Any proposed amendments should be submitted to the Document Owner for review and approval prior to implementation.', italics: true },
+          ],
+          fontSize: 8,
+          color: '#475569',
+          margin: pad(0, 0, 0, 8),
+        },
+        {
+          stack: [
+            { text: 'Table of Contents', bold: true, fontSize: 9.5, color: primary, margin: pad(0, 2, 0, 2) },
+            { text: '1. Executive Summary', fontSize: 8.5, margin: pad(4, 1, 0, 1) },
+            { text: '2. Audit Scope', fontSize: 8.5, margin: pad(4, 1, 0, 1) },
+            { text: '3. Methodology', fontSize: 8.5, margin: pad(4, 1, 0, 1) },
+            { text: '4. Findings Summary Table', fontSize: 8.5, margin: pad(4, 1, 0, 1) },
+            { text: '5. Detailed Findings', fontSize: 8.5, margin: pad(4, 1, 0, 1) },
+            ...(data.assetsInScope.length > 0 ? [{ text: '6. Assets in Scope', fontSize: 8.5, margin: pad(4, 1, 0, 1) }] : []),
+            { text: `${data.assetsInScope.length > 0 ? 7 : 6}. Validity and Document Management`, fontSize: 8.5, margin: pad(4, 1, 0, 1) },
+          ],
+          margin: pad(0, 0, 0, 10),
+          pageBreak: 'after' as const,
         },
         ...sectionsContent,
-        signatureColumns,
+        {
+          text: `${data.assetsInScope.length > 0 ? config.template.sections.length + 2 : config.template.sections.length + 1}. Validity and Document Management`,
+          style: 'sectionTitle',
+          margin: pad(0, 18, 0, 8),
+        },
+        {
+          text: `This document was last reviewed on ${formatDate(data.report.issuedAt || new Date(), 'dd MMMM yyyy')}. This document remains valid and binding until superseded by a subsequent version approved through the Galaxy Backbone Limited internal approval matrix.`,
+          fontSize: 10,
+          lineHeight: 1.3,
+        },
       ],
       styles: {
         orgName: { fontSize: 14, bold: true, color: primary },

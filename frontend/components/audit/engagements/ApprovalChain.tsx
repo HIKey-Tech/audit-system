@@ -31,15 +31,29 @@ export const ApprovalChain = ({ entityType, entityId }: { entityType: string; en
 
   return (
     <ol className="space-y-1.5">
-      {data.levels.map((lvl) => (
-        <li key={lvl.level} className="flex items-start gap-2 text-sm">
-          <span className="mt-0.5 shrink-0">{statusIcon(lvl.status)}</span>
-          <span className="min-w-0 font-medium text-text-primary">{peopleLabel(lvl)}</span>
-          {lvl.status === 'pending' && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[11px] text-primary">· awaiting</span>}
-          {lvl.status === 'approved' && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[11px] text-emerald-600">· signed</span>}
-          {lvl.status === 'rejected' && <span className="mt-0.5 shrink-0 whitespace-nowrap text-[11px] text-danger">· rejected</span>}
-        </li>
-      ))}
+      {data.levels.map((lvl) => {
+        const approver = lvl.resolvedApprover || (lvl.candidates.length === 1 ? lvl.candidates[0] : null);
+        return (
+          <li key={lvl.level} className="flex items-center gap-2 text-sm">
+            <span className="shrink-0">{statusIcon(lvl.status)}</span>
+            <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+              {approver ? (
+                <>
+                  <span className="font-semibold text-text-primary">{approver.displayName}</span>
+                  {approver.jobTitle && (
+                    <span className="text-xs text-text-secondary">({approver.jobTitle})</span>
+                  )}
+                </>
+              ) : (
+                <span className="font-medium text-text-primary">{peopleLabel(lvl)}</span>
+              )}
+            </div>
+            {lvl.status === 'pending' && <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-primary">· awaiting</span>}
+            {lvl.status === 'approved' && <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-emerald-600">· signed</span>}
+            {lvl.status === 'rejected' && <span className="shrink-0 whitespace-nowrap text-[11px] font-medium text-danger">· rejected</span>}
+          </li>
+        );
+      })}
     </ol>
   );
 };

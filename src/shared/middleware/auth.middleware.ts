@@ -182,7 +182,7 @@ export const requirePermission = (...requiredPermissions: string[]) =>
       return next(AppError.unauthorized());
     }
 
-    if (req.user.isSuperAdmin) {
+    if (req.user.permissions.includes('*') || req.user.isSuperAdmin) {
       return next();
     }
 
@@ -199,9 +199,9 @@ export const requirePermission = (...requiredPermissions: string[]) =>
 
 /**
  * Passes when the user holds AT LEAST ONE of the listed permissions (super admin
- * always passes). Use for reference-data endpoints reachable from more than one
- * screen — e.g. the permission catalogue, viewed both by permission admins and
- * by role managers.
+ * or wildcard permission holder always passes). Use for reference-data endpoints
+ * reachable from more than one screen — e.g. the permission catalogue, viewed both
+ * by permission admins and by role managers.
  */
 export const requireAnyPermission = (...anyOf: string[]) =>
   (req: Request, _res: Response, next: NextFunction): void => {
@@ -209,7 +209,7 @@ export const requireAnyPermission = (...anyOf: string[]) =>
       return next(AppError.unauthorized());
     }
 
-    if (req.user.isSuperAdmin) {
+    if (req.user.permissions.includes('*') || req.user.isSuperAdmin) {
       return next();
     }
 

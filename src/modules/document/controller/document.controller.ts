@@ -230,18 +230,16 @@ export class DocumentController {
      */
     this.router.get(
       '/:id',
-      requirePermission('document:read'),
       this._getById.bind(this),
     );
 
     /**
      * @route  GET /documents/:id/download
      * @desc   Get a download URL for a document
-     * @access Private — document:read
+     * @access Private — document:read or authorized entity/workflow participant
      */
     this.router.get(
       '/:id/download',
-      requirePermission('document:read'),
       this._getDownloadUrl.bind(this),
     );
 
@@ -347,6 +345,13 @@ export class DocumentController {
 
   private async _getById(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      if (!req.user!.permissions.includes('document:read') && !req.user!.permissions.includes('*')) {
+        const allowed = await this.documentService.canReadWithoutDocumentPermission(
+          req.params.id,
+          req.user!,
+        );
+        if (!allowed) throw AppError.forbidden('Insufficient permissions');
+      }
       const document = await this.documentService.getById(req.params.id, req.user!);
       res.status(200).json(buildResponse(document));
     } catch (err) {
@@ -356,6 +361,13 @@ export class DocumentController {
 
   private async _getDownloadUrl(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
+      if (!req.user!.permissions.includes('document:read') && !req.user!.permissions.includes('*')) {
+        const allowed = await this.documentService.canReadWithoutDocumentPermission(
+          req.params.id,
+          req.user!,
+        );
+        if (!allowed) throw AppError.forbidden('Insufficient permissions');
+      }
       await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
       res.status(200).json(buildResponse({ downloadUrl }));
@@ -414,7 +426,7 @@ export class DocumentController {
       // that were created for them: signature images, their own uploads, signed
       // copies of approvals they take part in, and (oversight roles) engagement
       // material. The per-document ACL below runs for everyone.
-      if (!req.user!.isSuperAdmin && !req.user!.permissions.includes('document:read')) {
+      if (!req.user!.permissions.includes('document:read') && !req.user!.permissions.includes('*')) {
         const allowed = await this.documentService.canReadWithoutDocumentPermission(
           req.params.id,
           req.user!,

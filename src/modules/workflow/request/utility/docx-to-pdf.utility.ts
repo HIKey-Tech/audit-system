@@ -18,6 +18,8 @@ export function isDocx(filename: string, mimeType?: string): boolean {
 
 /**
  * Converts a Word (.docx) document into a PDF buffer while preserving:
+ * - Cover pages and structured tags (w:sdt)
+ * - Embedded logos and images (w:drawing -> a:blip)
  * - Text justification (w:jc val="both" / "justify")
  * - Centered and right-aligned text
  * - Bold, italic, underline, and relative font sizes
@@ -30,6 +32,24 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
 
     if (!documentXmlFile) {
       throw new Error('word/document.xml not found in docx archive');
+    }
+
+    // Parse relationships for embedded media/images
+    const relsMap = new Map<string, string>();
+    const relsFile = zip.file('word/_rels/document.xml.rels');
+    if (relsFile) {
+      try {
+        const relsXml = relsFile.asText();
+        const relsDom = new DOMParser().parseFromString(relsXml, 'application/xml');
+        const relNodes = relsDom.getElementsByTagName('Relationship');
+        for (let r = 0; r < relNodes.length; r++) {
+          const id = relNodes[r].getAttribute('Id');
+          const target = relNodes[r].getAttribute('Target');
+          if (id && target) relsMap.set(id, target);
+        }
+      } catch {
+        /* ignore rels parse error */
+      }
     }
 
     const xmlStr = documentXmlFile.asText();
@@ -53,7 +73,6 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
         const bottomDxa = parseInt(pgMar.getAttribute('w:bottom') || '1440', 10);
         const leftDxa = parseInt(pgMar.getAttribute('w:left') || '1440', 10);
         if (!isNaN(topDxa) && !isNaN(rightDxa) && !isNaN(bottomDxa) && !isNaN(leftDxa)) {
-          // 20 dxa = 1 pt. Clamp between 36 and 72pt.
           pageMargins = [
             Math.max(36, Math.min(72, Math.round(leftDxa / 20))),
             Math.max(36, Math.min(72, Math.round(topDxa / 20))),
@@ -64,8 +83,17 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
       }
     }
 
-    for (let i = 0; i < body.childNodes.length; i++) {
-      const node = body.childNodes[i] as any;
+    const processNode = (node: any) => {
+      if (node.nodeName === 'w:sdt') {
+        const sdtContent = node.getElementsByTagName('w:sdtContent')[0];
+        if (sdtContent) {
+          for (let i = 0; i < sdtContent.childNodes.length; i++) {
+            processNode(sdtContent.childNodes[i]);
+          }
+        }
+        return;
+      }
+
       if (node.nodeName === 'w:p') {
         let alignment: 'left' | 'center' | 'right' | 'justify' = 'left';
         const jcNodes = node.getElementsByTagName('w:jc');
@@ -74,6 +102,39 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
           if (val === 'both' || val === 'justify') alignment = 'justify';
           else if (val === 'center') alignment = 'center';
           else if (val === 'right') alignment = 'right';
+        }
+
+        // Check for embedded drawing/images
+        const blipNodes = node.getElementsByTagName('a:blip');
+        if (blipNodes.length > 0) {
+          for (let b = 0; b < blipNodes.length; b++) {
+            const embedId = blipNodes[b].getAttribute('r:embed');
+            if (embedId && relsMap.has(embedId)) {
+              let target = relsMap.get(embedId)!;
+              if (target.startsWith('../')) target = target.replace(/^\.\.\//, '');
+              const zipPath = target.startsWith('word/') ? target : `word/${target}`;
+              const imgFile = zip.file(zipPath);
+              if (imgFile) {
+                const imgBuf = Buffer.from(imgFile.asArrayBuffer());
+                const mime = target.endsWith('.png') ? 'image/png' : 'image/jpeg';
+                const dataUrl = `data:${mime};base64,${imgBuf.toString('base64')}`;
+                content.push({
+                  image: dataUrl,
+                  fit: [140, 95],
+                  alignment: 'center',
+                  margin: [0, 8, 0, 12],
+                });
+              }
+            }
+          }
+        }
+
+        // Check for explicit page breaks
+        const brNodes = node.getElementsByTagName('w:br');
+        for (let b = 0; b < brNodes.length; b++) {
+          if (brNodes[b].getAttribute('w:type') === 'page') {
+            content.push({ text: '', pageBreak: 'after' });
+          }
         }
 
         const runs: Array<{
@@ -136,7 +197,7 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
           });
         } else {
           // Empty paragraph spacing
-          content.push({ text: ' ', margin: [0, 4, 0, 4] });
+          content.push({ text: ' ', margin: [0, 3, 0, 3] });
         }
       } else if (node.nodeName === 'w:tbl') {
         const rows: PdfTableCell[][] = [];
@@ -157,7 +218,7 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
                 t += tNodes[k].textContent || '';
               }
               if (t) {
-                cellText.push({ text: t, bold: isBold, fontSize: 10 });
+                cellText.push({ text: t, bold: isBold, fontSize: 9 });
               }
             }
             rowCells.push({ text: cellText.length > 0 ? (cellText as any) : ' ' });
@@ -171,10 +232,24 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
               widths: Array(colCount).fill('*'),
               body: rows,
             },
-            margin: [0, 8, 0, 8],
+            layout: {
+              hLineWidth: () => 0.5,
+              vLineWidth: () => 0.5,
+              hLineColor: () => '#cbd5e1',
+              vLineColor: () => '#cbd5e1',
+              paddingLeft: () => 6,
+              paddingRight: () => 6,
+              paddingTop: () => 4,
+              paddingBottom: () => 4,
+            },
+            margin: [0, 6, 0, 6],
           });
         }
       }
+    };
+
+    for (let i = 0; i < body.childNodes.length; i++) {
+      processNode(body.childNodes[i]);
     }
 
     if (content.length === 0) {
@@ -187,7 +262,7 @@ export async function convertDocxToPdf(docxBuffer: Buffer): Promise<Buffer> {
       pageMargins,
       defaultStyle: {
         font: 'Helvetica',
-        fontSize: 11,
+        fontSize: 10,
         color: '#0f172a',
       },
     };

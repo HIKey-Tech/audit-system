@@ -24,8 +24,8 @@ export type AppRole =
 /** Returns true if the user has the specific permission string (super_admin always passes). */
 export const userHasPermission = (user: SessionUser | null, permission: string): boolean => {
   if (!user) return false;
-  if (user.roles.includes('super_admin')) return true;
-  return user.permissions.includes(permission);
+  if (user.permissions.includes('*') || user.permissions.includes(permission)) return true;
+  return user.roles.includes('super_admin');
 };
 
 /** Convenience: is this user an admin-level role? (super_admin, audit_admin, audit_manager, cae) */

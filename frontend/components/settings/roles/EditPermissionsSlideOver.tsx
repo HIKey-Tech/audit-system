@@ -10,6 +10,7 @@ import { Button } from '@/components/ui/Button';
 import { Badge } from '@/components/ui/Badge';
 import { rolesApi, permissionsApi } from '@/lib/api/settings';
 import type { RoleListDto, PermissionDto } from '@/lib/types/domain';
+import { getPermissionExplanation } from '@/lib/utils/permission-descriptions';
 import { cn } from '@/lib/utils/cn';
 
 interface Props {
@@ -195,19 +196,17 @@ export const EditPermissionsSlideOver = ({ open, onClose, role }: Props): JSX.El
                           className="mt-0.5 h-4 w-4 rounded border-border text-primary focus:ring-primary/40"
                         />
                         <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium text-text-primary">
-                              {humanizeAction(perm.action)}
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-sm font-semibold text-text-primary">
+                              {perm.name || humanizeAction(perm.action)}
                             </span>
-                            <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[10px] font-mono text-text-secondary">
-                              {perm.name}
+                            <code className="rounded bg-slate-100 px-1.5 py-0.5 text-[11px] font-mono font-medium text-slate-700 border border-slate-200">
+                              {perm.slug}
                             </code>
                           </div>
-                          {perm.description && (
-                            <p className="mt-0.5 text-xs text-text-secondary">
-                              {perm.description}
-                            </p>
-                          )}
+                          <p className="mt-1 text-xs text-text-secondary leading-relaxed">
+                            {getPermissionExplanation(perm.slug).summary}
+                          </p>
                         </div>
                       </label>
                     ))}

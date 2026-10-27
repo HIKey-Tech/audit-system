@@ -267,10 +267,34 @@ export class DocumentService implements IDocumentService {
 
     if (doc.entity_type === 'user_signature') return true;
     if (doc.uploaded_by_id === actor.id) return true;
+    if (this._isOversight(actor)) return true;
 
-    if (doc.entity_type === 'workflow_approval_signed' && doc.entity_id) {
-      // Signed copies are shown to everyone who took part in the approval chain.
-      if (this._isOversight(actor)) return true;
+    // Workflow requests (both uploaded attachments and generated signed documents)
+    if (
+      (doc.entity_type === 'workflow_request' || doc.entity_type === 'workflow_request_signed') &&
+      doc.entity_id
+    ) {
+      if (actor.permissions.includes('request:admin') || actor.permissions.includes('request:read')) return true;
+      const request = await prisma.workflow_Request.findUnique({
+        where: { id: doc.entity_id },
+        select: {
+          initiator_id: true,
+          steps: { select: { recipient_id: true } },
+        },
+      });
+      if (!request) return false;
+      return (
+        request.initiator_id === actor.id ||
+        request.steps.some((step) => step.recipient_id === actor.id)
+      );
+    }
+
+    // Workflow approvals (both active review material and signed copies)
+    if (
+      (doc.entity_type === 'workflow_approval' || doc.entity_type === 'workflow_approval_signed') &&
+      doc.entity_id
+    ) {
+      if (actor.permissions.includes('approval:read')) return true;
       const approval = await prisma.workflow_Approval.findUnique({
         where: { id: doc.entity_id },
         select: {
@@ -289,8 +313,35 @@ export class DocumentService implements IDocumentService {
       );
     }
 
-    // Oversight roles (CAE / Director) may read all engagement material.
-    return this._isOversight(actor) && this._isEngagementScopedEntityType(doc.entity_type ?? '');
+    // Engagement-scoped entities (reports, working papers, evidence, checklists, etc.)
+    if (this._isEngagementScopedEntityType(doc.entity_type ?? '')) {
+      const engagementId = doc.entity_id
+        ? await this._resolveEngagementId(doc.entity_type!, doc.entity_id)
+        : null;
+      if (engagementId && (await this._isEngagementMember(engagementId, actor.id))) {
+        return true;
+      }
+      // Or an approver on an approval chain for this entity
+      if (doc.entity_id) {
+        const approval = await prisma.workflow_Approval.findFirst({
+          where: {
+            entity_id: doc.entity_id,
+            steps: {
+              some: {
+                OR: [
+                  { approver_id: actor.id },
+                  ...(actor.permissions.length > 0 ? [{ required_permission: { in: actor.permissions } }] : []),
+                ],
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (approval) return true;
+      }
+    }
+
+    return false;
   }
 
   async getFileById(id: string): Promise<ServedFileDto> {
@@ -964,6 +1015,48 @@ export class DocumentService implements IDocumentService {
 
     if (doc.uploaded_by_id === actor.id || this._isOversight(actor)) return;
 
+    // Workflow requests
+    if (doc.entity_type === 'workflow_request' || doc.entity_type === 'workflow_request_signed') {
+      if (actor.permissions.includes('request:admin') || actor.permissions.includes('request:read')) return;
+      if (!doc.entity_id) return;
+      const req = await prisma.workflow_Request.findUnique({
+        where: { id: doc.entity_id },
+        select: {
+          initiator_id: true,
+          steps: { select: { recipient_id: true } },
+        },
+      });
+      if (req && (req.initiator_id === actor.id || req.steps.some((s) => s.recipient_id === actor.id))) {
+        return;
+      }
+      throw AppError.notFound('Document');
+    }
+
+    // Workflow approvals
+    if (doc.entity_type === 'workflow_approval' || doc.entity_type === 'workflow_approval_signed') {
+      if (actor.permissions.includes('approval:read')) return;
+      if (!doc.entity_id) return;
+      const approval = await prisma.workflow_Approval.findUnique({
+        where: { id: doc.entity_id },
+        select: {
+          submitted_by_id: true,
+          steps: { select: { approver_id: true, required_permission: true } },
+        },
+      });
+      if (
+        approval &&
+        (approval.submitted_by_id === actor.id ||
+          approval.steps.some(
+            (step) =>
+              step.approver_id === actor.id ||
+              (step.required_permission !== null && actor.permissions.includes(step.required_permission)),
+          ))
+      ) {
+        return;
+      }
+      throw AppError.notFound('Document');
+    }
+
     const engagementId = doc.entity_id
       ? await this._resolveEngagementId(doc.entity_type, doc.entity_id)
       : null;
@@ -972,12 +1065,30 @@ export class DocumentService implements IDocumentService {
     if (engagementId === null) return;
 
     if (!(await this._isEngagementMember(engagementId, actor.id))) {
+      // Also allow if the actor is an approver on an approval chain for this entity
+      if (doc.entity_id) {
+        const hasApprovalRole = await prisma.workflow_Approval.findFirst({
+          where: {
+            entity_id: doc.entity_id,
+            steps: {
+              some: {
+                OR: [
+                  { approver_id: actor.id },
+                  ...(actor.permissions.length > 0 ? [{ required_permission: { in: actor.permissions } }] : []),
+                ],
+              },
+            },
+          },
+          select: { id: true },
+        });
+        if (hasApprovalRole) return;
+      }
       throw AppError.notFound('Document');
     }
   }
 
   private _isOversight(actor: DocumentAccessActor): boolean {
-    return actor.isSuperAdmin || actor.permissions.includes('engagement:read_all');
+    return actor.permissions.includes('engagement:read_all') || actor.permissions.includes('*');
   }
 
   /**
