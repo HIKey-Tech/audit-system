@@ -159,11 +159,16 @@ export class RequestService implements IRequestService {
     actor: WorkflowActorContext,
   ): Promise<RequestAttachmentDto> {
     const request = await this._loadRequest(requestId);
-    if (request.initiator_id !== actor.id) {
-      throw AppError.forbidden('Only the initiator can attach files to this request');
+    const isParticipant =
+      request.initiator_id === actor.id ||
+      request.steps.some((s) => s.recipient_id === actor.id) ||
+      actor.permissions.includes(ADMIN_PERMISSION);
+
+    if (!isParticipant) {
+      throw AppError.forbidden('Only request participants can attach files to this request');
     }
-    if (request.status !== RequestStatus.Pending || request.locked_at) {
-      throw AppError.badRequest('Attachments can only be added before the first recipient acts');
+    if (request.status !== RequestStatus.Pending) {
+      throw AppError.badRequest('Attachments can only be added while the request is pending');
     }
 
     const document = await this.documentService.upload({
@@ -177,6 +182,22 @@ export class RequestService implements IRequestService {
       entityId: requestId,
     });
 
+    // Record an action comment in the activity ledger so everyone sees the upload in the timeline
+    try {
+      const currentStep = request.steps.find((s) => s.level === request.current_level);
+      await prisma.workflow_Request_Action.create({
+        data: {
+          request_id: requestId,
+          step_id: currentStep?.id ?? null,
+          actor_id: actor.id,
+          action_type: RequestActionType.Comment,
+          comment: `Uploaded document: ${document.originalName}`,
+        },
+      });
+    } catch (actionErr) {
+      logger.warn('Failed to record action for workflow request attachment', { requestId, err: actionErr });
+    }
+
     logger.info('Workflow request attachment added', { requestId, documentId: document.id, actorId: actor.id });
     auditLogService.logAsync({
       userId: actor.id,
@@ -186,6 +207,26 @@ export class RequestService implements IRequestService {
       entityId: requestId,
       newValues: { documentId: document.id, originalName: document.originalName },
     });
+
+    // Notify the other party about the newly attached document
+    const targetUserId =
+      request.initiator_id === actor.id
+        ? request.steps.find((s) => s.level === request.current_level)?.recipient_id
+        : request.initiator_id;
+
+    if (targetUserId) {
+      void this._notifyRequestEvent(request, targetUserId, {
+        title: 'New document attached to request',
+        body: `A document "${document.originalName}" was attached to request "${request.title}".`,
+        type: 'info',
+        eventKey: 'workflow.request.commented',
+        extraVariables: {
+          requestTitle: request.title,
+          requestReference: request.reference_number,
+          documentName: document.originalName,
+        },
+      });
+    }
 
     return {
       documentId: document.id,

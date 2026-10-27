@@ -102,6 +102,12 @@ export declare class ReportGenerationService implements IReportGenerationService
     fetchTemplateAndConfig(templateId?: string | null): Promise<TemplateConfig>;
     generateDocx(reportId: string): Promise<Buffer>;
     private _buildDocxDocument;
+    private _buildDocxCoverHeader;
+    private _buildDocxDocumentInfoTable;
+    private _buildDocxChangeHistoryTable;
+    private _buildDocxDistributionTable;
+    private _buildDocxApprovalListTable;
+    private _buildDocxChangeControlAndToc;
     private _buildDocxHeader;
     private _buildDocxMetadataTable;
     private _docxMetadataRow;

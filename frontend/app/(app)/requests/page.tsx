@@ -15,8 +15,56 @@ import {
   FileText,
   CheckCircle2,
   Search,
+  FileSpreadsheet,
+  Presentation,
+  FileCheck2,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+function getFileBadge(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (['xlsx', 'xls', 'csv'].includes(ext)) {
+    return {
+      Icon: FileSpreadsheet,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+    };
+  }
+  if (['pptx', 'ppt'].includes(ext)) {
+    return {
+      Icon: Presentation,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+    };
+  }
+  if (['docx', 'doc'].includes(ext)) {
+    return {
+      Icon: FileText,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+    };
+  }
+  if (ext === 'pdf') {
+    return {
+      Icon: FileCheck2,
+      label: 'PDF',
+      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+    };
+  }
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) {
+    return {
+      Icon: ImageIcon,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+    };
+  }
+  return {
+    Icon: Paperclip,
+    label: ext.toUpperCase() || 'FILE',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+  };
+}
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -501,13 +549,13 @@ const CreateRequestSlideOver = ({
           <FormField label="Attachments (optional)">
             <label
               className={cn(
-                'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-6 text-center transition-colors hover:border-primary hover:bg-surface-alt',
+                'flex cursor-pointer flex-col items-center justify-center gap-1.5 rounded-lg border border-dashed border-border px-4 py-5 text-center transition-colors hover:border-primary hover:bg-surface-alt',
                 submit.isPending && 'pointer-events-none opacity-60',
               )}
             >
               <Paperclip className="h-5 w-5 text-text-secondary" />
               <span className="text-sm font-medium text-text-primary">Click to attach files or images</span>
-              <span className="text-xs text-text-secondary">PDF, images, Office docs — up to 50 MB each</span>
+              <span className="text-xs text-text-secondary">Excel (.xlsx), PowerPoint (.pptx), Word (.docx), PDF, CSV, images — up to 50 MB each</span>
               <input
                 type="file"
                 multiple
@@ -523,24 +571,37 @@ const CreateRequestSlideOver = ({
 
             {files.length > 0 && (
               <ul className="mt-2 space-y-1.5">
-                {files.map((f, i) => (
-                  <li
-                    key={`${f.name}-${i}`}
-                    className="flex items-center gap-2 rounded-md border border-border bg-surface px-3 py-2"
-                  >
-                    <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
-                    <span className="min-w-0 flex-1 truncate text-sm text-text-primary">{f.name}</span>
-                    <span className="text-xs text-text-secondary">{formatFileSize(f.size)}</span>
-                    <button
-                      type="button"
-                      aria-label="Remove file"
-                      onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
-                      className="rounded p-1 text-text-secondary hover:bg-red-50 hover:text-danger cursor-pointer"
+                {files.map((f, i) => {
+                  const badge = getFileBadge(f.name);
+                  const IconComp = badge.Icon;
+                  return (
+                    <li
+                      key={`${f.name}-${i}`}
+                      className="flex items-center gap-2.5 rounded-md border border-border bg-surface px-3 py-2"
                     >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </li>
-                ))}
+                      <div className={cn('flex h-7 w-7 shrink-0 items-center justify-center rounded border', badge.badgeClass)}>
+                        <IconComp className="h-3.5 w-3.5" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-medium text-text-primary">{f.name}</span>
+                          <span className={cn('rounded px-1.5 py-0.2 text-[9px] font-bold border', badge.badgeClass)}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <span className="text-xs text-text-secondary">{formatFileSize(f.size)}</span>
+                      </div>
+                      <button
+                        type="button"
+                        aria-label="Remove file"
+                        onClick={() => setFiles((prev) => prev.filter((_, idx) => idx !== i))}
+                        className="rounded p-1 text-text-secondary hover:bg-red-50 hover:text-danger cursor-pointer"
+                      >
+                        <X className="h-3.5 w-3.5" />
+                      </button>
+                    </li>
+                  );
+                })}
               </ul>
             )}
           </FormField>

@@ -1,6 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import multer from 'multer';
-import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission, requireAnyPermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import { AppError } from '../../../../shared/errors/app.error';
@@ -60,10 +60,15 @@ export class RequestController {
 
     /**
      * @route  POST /workflow/requests/:id/attachments
-     * @desc   Attach a file/image (initiator only, before first action)
-     * @access Private - request:create
+     * @desc   Attach a file/document/image (initiator, recipient, or participant while request is pending)
+     * @access Private - request:create, request:act, request:read, or request:admin
      */
-    this.router.post('/:id/attachments', requirePermission('request:create'), upload.single('file'), this._addAttachment.bind(this));
+    this.router.post(
+      '/:id/attachments',
+      requireAnyPermission('request:create', 'request:act', 'request:read', 'request:admin'),
+      upload.single('file'),
+      this._addAttachment.bind(this),
+    );
 
     /**
      * @route  GET /workflow/requests/:id

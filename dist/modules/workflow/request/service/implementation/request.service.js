@@ -103,11 +103,14 @@ class RequestService {
     }
     async addAttachment(requestId, file, actor) {
         const request = await this._loadRequest(requestId);
-        if (request.initiator_id !== actor.id) {
-            throw app_error_1.AppError.forbidden('Only the initiator can attach files to this request');
+        const isParticipant = request.initiator_id === actor.id ||
+            request.steps.some((s) => s.recipient_id === actor.id) ||
+            actor.permissions.includes(ADMIN_PERMISSION);
+        if (!isParticipant) {
+            throw app_error_1.AppError.forbidden('Only request participants can attach files to this request');
         }
-        if (request.status !== request_enum_1.RequestStatus.Pending || request.locked_at) {
-            throw app_error_1.AppError.badRequest('Attachments can only be added before the first recipient acts');
+        if (request.status !== request_enum_1.RequestStatus.Pending) {
+            throw app_error_1.AppError.badRequest('Attachments can only be added while the request is pending');
         }
         const document = await this.documentService.upload({
             uploadedById: actor.id,
@@ -119,6 +122,22 @@ class RequestService {
             entityType: ATTACHMENT_ENTITY_TYPE,
             entityId: requestId,
         });
+        // Record an action comment in the activity ledger so everyone sees the upload in the timeline
+        try {
+            const currentStep = request.steps.find((s) => s.level === request.current_level);
+            await prisma_client_1.prisma.workflow_Request_Action.create({
+                data: {
+                    request_id: requestId,
+                    step_id: currentStep?.id ?? null,
+                    actor_id: actor.id,
+                    action_type: request_enum_1.RequestActionType.Comment,
+                    comment: `Uploaded document: ${document.originalName}`,
+                },
+            });
+        }
+        catch (actionErr) {
+            logger_util_1.logger.warn('Failed to record action for workflow request attachment', { requestId, err: actionErr });
+        }
         logger_util_1.logger.info('Workflow request attachment added', { requestId, documentId: document.id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
             userId: actor.id,
@@ -128,6 +147,23 @@ class RequestService {
             entityId: requestId,
             newValues: { documentId: document.id, originalName: document.originalName },
         });
+        // Notify the other party about the newly attached document
+        const targetUserId = request.initiator_id === actor.id
+            ? request.steps.find((s) => s.level === request.current_level)?.recipient_id
+            : request.initiator_id;
+        if (targetUserId) {
+            void this._notifyRequestEvent(request, targetUserId, {
+                title: 'New document attached to request',
+                body: `A document "${document.originalName}" was attached to request "${request.title}".`,
+                type: 'info',
+                eventKey: 'workflow.request.commented',
+                extraVariables: {
+                    requestTitle: request.title,
+                    requestReference: request.reference_number,
+                    documentName: document.originalName,
+                },
+            });
+        }
         return {
             documentId: document.id,
             originalName: document.originalName,

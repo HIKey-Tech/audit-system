@@ -624,6 +624,21 @@ class ApprovalService {
                     resolvedApprover: manager ? (0, approval_response_dto_1.mapWorkflowUserBrief)(manager) : null, candidates: [],
                 });
             }
+            else if (typeof entry === 'string' && entry.startsWith('user:')) {
+                const parts = entry.split(':');
+                const userId = parts[1];
+                const permission = parts.slice(2).join(':') || null;
+                const user = await prisma_client_1.prisma.user.findUnique({
+                    where: { id: userId },
+                    select: workflowUserSelect,
+                });
+                levels.push({
+                    level, kind: 'person', status: 'upcoming',
+                    requiredPermission: permission,
+                    resolvedApprover: user ? (0, approval_response_dto_1.mapWorkflowUserBrief)(user) : null,
+                    candidates: user ? [(0, approval_response_dto_1.mapWorkflowUserBrief)(user)] : [],
+                });
+            }
             else {
                 levels.push({
                     level, kind: 'permission', status: 'upcoming',
@@ -668,6 +683,31 @@ class ApprovalService {
                 }
                 // Pinned to the engagement's manager, who must still hold the permission to act.
                 specs.push({ approverId: engagementManagerId, requiredPermission: managerPermission });
+                continue;
+            }
+            // Check if level pins a specific user: user:<userId>:<permission> or user:<userId>
+            if (typeof level === 'string' && level.startsWith('user:')) {
+                const parts = level.split(':');
+                const userId = parts[1];
+                const permission = parts.slice(2).join(':') || null;
+                const user = await db.user.findFirst({
+                    where: { id: userId, is_active: true, deleted_at: null },
+                    select: { id: true },
+                });
+                if (!user) {
+                    throw app_error_1.AppError.badRequest(`Designated approver in approval matrix was not found or is inactive`);
+                }
+                if (submittedById && userId === submittedById) {
+                    if (permission) {
+                        const hasOtherHolder = await this._hasActiveUserWithPermission(db, permission, submittedById);
+                        if (!hasOtherHolder) {
+                            throw app_error_1.AppError.badRequest(`You submitted this ${entityType.replace(/_/g, ' ')} and are its designated approver. Another user holding '${permission}' must be available to approve it (segregation of duties).`);
+                        }
+                        specs.push({ approverId: null, requiredPermission: permission });
+                        continue;
+                    }
+                }
+                specs.push({ approverId: userId, requiredPermission: permission ?? 'approval:approve' });
                 continue;
             }
             // `level` is a permission slug: any active holder may act — except the
@@ -758,7 +798,15 @@ class ApprovalService {
             is_active: true,
             user_roles: {
                 some: {
-                    role: { role_permissions: { some: { permission: { slug: permissionSlug } } } },
+                    role: {
+                        role_permissions: {
+                            some: {
+                                permission: {
+                                    slug: { in: [permissionSlug, '*'] },
+                                },
+                            },
+                        },
+                    },
                 },
             },
         };
@@ -799,7 +847,9 @@ class ApprovalService {
         // A step always requires its permission. A pinned step additionally requires
         // the actor to be that specific user (the engagement's manager); a pool step
         // is open to any holder of the permission.
-        const holdsPermission = !step.required_permission || actor.permissions.includes(step.required_permission);
+        const holdsPermission = !step.required_permission ||
+            actor.permissions.includes(step.required_permission) ||
+            actor.permissions.includes('*');
         const isPinnedApprover = step.approver_id === null || step.approver_id === actor.id;
         if (!holdsPermission || !isPinnedApprover) {
             throw app_error_1.AppError.forbidden('You are not authorized to act on the current approval step');
@@ -807,18 +857,20 @@ class ApprovalService {
         return step;
     }
     async _assertCanViewApproval(approval, actor) {
-        if (actor.permissions.includes('engagement:read_all'))
+        if (actor.permissions.includes('engagement:read_all') || actor.permissions.includes('*'))
             return;
         if (approval.submitted_by_id === actor.id)
             return;
         if (approval.steps.some((step) => step.approver_id === actor.id ||
-            (step.approver_id === null && !!step.required_permission && actor.permissions.includes(step.required_permission)))) {
+            (step.approver_id === null &&
+                !!step.required_permission &&
+                (actor.permissions.includes(step.required_permission) || actor.permissions.includes('*'))))) {
             return;
         }
         await this._assertCanViewApprovalEntity(approval.entity_type, approval.entity_id, actor);
     }
     async _assertCanViewApprovalEntity(entityType, entityId, actor) {
-        if (actor.permissions.includes('engagement:read_all'))
+        if (actor.permissions.includes('engagement:read_all') || actor.permissions.includes('*'))
             return;
         const teamWhere = {
             OR: [

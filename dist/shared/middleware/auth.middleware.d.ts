@@ -45,9 +45,9 @@ export declare const requireEnrollmentContext: (req: Request, _res: Response, ne
 export declare const requirePermission: (...requiredPermissions: string[]) => (req: Request, _res: Response, next: NextFunction) => void;
 /**
  * Passes when the user holds AT LEAST ONE of the listed permissions (super admin
- * always passes). Use for reference-data endpoints reachable from more than one
- * screen — e.g. the permission catalogue, viewed both by permission admins and
- * by role managers.
+ * or wildcard permission holder always passes). Use for reference-data endpoints
+ * reachable from more than one screen — e.g. the permission catalogue, viewed both
+ * by permission admins and by role managers.
  */
 export declare const requireAnyPermission: (...anyOf: string[]) => (req: Request, _res: Response, next: NextFunction) => void;
 //# sourceMappingURL=auth.middleware.d.ts.map

@@ -384,22 +384,47 @@ class UserService {
         if (roles.length !== dto.roleIds.length) {
             throw app_error_1.AppError.badRequest('One or more role IDs are invalid');
         }
-        await this._assertCanGrantRoles(dto.roleIds, actor);
-        // Upsert each role assignment
-        await prisma_client_1.prisma.$transaction(dto.roleIds.map((roleId) => prisma_client_1.prisma.user_Role.upsert({
-            where: { user_id_role_id: { user_id: userId, role_id: roleId } },
-            create: {
-                user_id: userId,
-                role_id: roleId,
-                assigned_by: actorId,
-                expires_at: dto.expiresAt ? new Date(dto.expiresAt) : null,
-            },
-            update: {
-                assigned_by: actorId,
-                expires_at: dto.expiresAt ? new Date(dto.expiresAt) : null,
-            },
-        })));
-        logger_util_1.logger.info('Roles assigned', { userId, roleIds: dto.roleIds, actorId });
+        // Identify current roles so we can remove unselected ones
+        const currentRoles = await prisma_client_1.prisma.user_Role.findMany({
+            where: { user_id: userId },
+            select: { role_id: true },
+        });
+        const currentRoleIds = currentRoles.map((r) => r.role_id);
+        const rolesToRemove = currentRoleIds.filter((id) => !dto.roleIds.includes(id));
+        // Verify actor can grant the new roles and remove unselected roles
+        await this._assertCanGrantRoles([...dto.roleIds, ...rolesToRemove], actor);
+        // Reconcile role assignments in a single transaction
+        await prisma_client_1.prisma.$transaction([
+            ...(rolesToRemove.length > 0
+                ? [
+                    prisma_client_1.prisma.user_Role.deleteMany({
+                        where: {
+                            user_id: userId,
+                            role_id: { in: rolesToRemove },
+                        },
+                    }),
+                ]
+                : []),
+            ...dto.roleIds.map((roleId) => prisma_client_1.prisma.user_Role.upsert({
+                where: { user_id_role_id: { user_id: userId, role_id: roleId } },
+                create: {
+                    user_id: userId,
+                    role_id: roleId,
+                    assigned_by: actorId,
+                    expires_at: dto.expiresAt ? new Date(dto.expiresAt) : null,
+                },
+                update: {
+                    assigned_by: actorId,
+                    expires_at: dto.expiresAt ? new Date(dto.expiresAt) : null,
+                },
+            })),
+        ]);
+        logger_util_1.logger.info('Roles assigned and reconciled', {
+            userId,
+            roleIds: dto.roleIds,
+            removedRoleIds: rolesToRemove,
+            actorId,
+        });
         await this._syncUserSuperAdminFlag(userId);
         // Force the next request to pick up the new authority: the current access
         // token (with stale permissions) is rejected and silently refreshed.

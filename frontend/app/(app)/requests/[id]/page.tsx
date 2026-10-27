@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -20,6 +20,10 @@ import {
   Download,
   FileCheck2,
   Eye,
+  FileSpreadsheet,
+  Presentation,
+  Upload,
+  Image as ImageIcon,
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -44,12 +48,66 @@ import { useSession } from '@/components/providers/AuthProvider';
 import { cn } from '@/lib/utils/cn';
 import type { RequestAction, SignatureVerification, WorkflowRequest } from '@/lib/types/domain';
 
+function getFileBadge(fileName: string) {
+  const ext = fileName.split('.').pop()?.toLowerCase() ?? '';
+  if (['xlsx', 'xls', 'csv'].includes(ext)) {
+    return {
+      Icon: FileSpreadsheet,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+      iconColor: 'text-emerald-600',
+    };
+  }
+  if (['pptx', 'ppt'].includes(ext)) {
+    return {
+      Icon: Presentation,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+      iconColor: 'text-amber-600',
+    };
+  }
+  if (['docx', 'doc'].includes(ext)) {
+    return {
+      Icon: FileText,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+      iconColor: 'text-blue-600',
+    };
+  }
+  if (ext === 'pdf') {
+    return {
+      Icon: FileCheck2,
+      label: 'PDF',
+      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+      iconColor: 'text-rose-600',
+    };
+  }
+  if (['png', 'jpg', 'jpeg', 'webp', 'gif', 'bmp', 'svg'].includes(ext)) {
+    return {
+      Icon: ImageIcon,
+      label: ext.toUpperCase(),
+      badgeClass: 'bg-purple-50 text-purple-700 border-purple-200',
+      iconColor: 'text-purple-600',
+    };
+  }
+  return {
+    Icon: Paperclip,
+    label: ext.toUpperCase() || 'FILE',
+    badgeClass: 'bg-slate-100 text-slate-700 border-slate-200',
+    iconColor: 'text-slate-600',
+  };
+}
+
 export default function RequestDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const session = useSession();
   const qc = useQueryClient();
   const router = useRouter();
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadingFiles, setUploadingFiles] = useState(false);
+  const [isDragging, setIsDragging] = useState(false);
 
   const [rejecting, setRejecting] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
@@ -66,6 +124,26 @@ export default function RequestDetailPage(): JSX.Element {
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['request', id] });
     qc.invalidateQueries({ queryKey: ['requests'] });
+  };
+
+  const handleFileUpload = async (filesToUpload: FileList | File[]) => {
+    const list = Array.from(filesToUpload);
+    if (list.length === 0) return;
+    setUploadingFiles(true);
+    let successCount = 0;
+    for (const file of list) {
+      try {
+        await requestsApi.addAttachment(id, file);
+        successCount++;
+      } catch (e) {
+        toast.error(`Failed to upload ${file.name}: ${e instanceof Error ? e.message : 'Upload failed'}`);
+      }
+    }
+    setUploadingFiles(false);
+    if (successCount > 0) {
+      toast.success(`${successCount} file(s) attached successfully`);
+      invalidate();
+    }
   };
 
   const approve = useMutation({
@@ -170,8 +248,8 @@ export default function RequestDetailPage(): JSX.Element {
           {/* Action panel */}
           {isMyTurn && (
             <Card className="border-primary/30 bg-primary/5">
-              <CardHeader title="It's your turn" subtitle="Approve, sign, or reject this request." />
-              <div className="flex flex-wrap gap-2">
+              <CardHeader title="It's your turn" subtitle="Approve, upload requested documents, sign, or reject this request." />
+              <div className="flex flex-wrap items-center gap-2">
                 <Button
                   variant="success"
                   leftIcon={<Check className="h-4 w-4" />}
@@ -179,6 +257,14 @@ export default function RequestDetailPage(): JSX.Element {
                   onClick={() => approve.mutate()}
                 >
                   Approve
+                </Button>
+                <Button
+                  variant="secondary"
+                  leftIcon={<Upload className="h-4 w-4" />}
+                  isLoading={uploadingFiles}
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  Upload Document
                 </Button>
                 <Button
                   leftIcon={<PenLine className="h-4 w-4" />}
@@ -203,6 +289,9 @@ export default function RequestDetailPage(): JSX.Element {
                   Reject
                 </Button>
               </div>
+              <p className="mt-2.5 text-xs text-text-secondary">
+                💡 Asked to provide or send a document? Click <strong className="text-text-primary">Upload Document</strong> to attach your Excel spreadsheet (.xlsx), presentation (.pptx), Word document, or PDF.
+              </p>
               {rejecting && (
                 <div className="mt-3 rounded-md border border-border bg-white p-3">
                   <FormField label="Reason for rejection" required>
@@ -247,55 +336,126 @@ export default function RequestDetailPage(): JSX.Element {
             <CardHeader
               title="Attachments"
               subtitle={`${req.attachments?.length ?? 0} file(s)`}
+              action={
+                isParticipant && req.status === 'pending' ? (
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    leftIcon={<Upload className="h-3.5 w-3.5" />}
+                    isLoading={uploadingFiles}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    Upload file
+                  </Button>
+                ) : undefined
+              }
             />
+
+            <input
+              type="file"
+              ref={fileInputRef}
+              multiple
+              className="hidden"
+              onChange={(e) => {
+                if (e.target.files) handleFileUpload(e.target.files);
+                e.target.value = '';
+              }}
+            />
+
             {req.attachments && req.attachments.length > 0 ? (
-              <ul className="space-y-1.5">
+              <ul className="space-y-2">
                 {req.attachments.map((a) => {
                   const isSignable = /\.(pdf|docx?|doc)$/i.test(a.originalName);
+                  const badge = getFileBadge(a.originalName);
+                  const IconComp = badge.Icon;
                   return (
                     <li
                       key={a.documentId}
-                      className="flex items-center gap-2 rounded-md border border-border px-3 py-2 bg-white"
+                      className="flex items-center gap-2.5 rounded-lg border border-border px-3 py-2 bg-white hover:bg-slate-50/50 transition-colors shadow-2xs"
                     >
-                      <FileText className="h-4 w-4 shrink-0 text-text-secondary" />
-                      <span className="min-w-0 flex-1 truncate text-sm font-medium text-text-primary">
-                        {a.originalName}
-                      </span>
-                      <span className="text-xs text-text-secondary">{formatFileSize(a.fileSize)}</span>
-                      {isSignable && (
-                        <button
-                          type="button"
-                          onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: false })}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline px-2 py-0.5 rounded hover:bg-slate-100"
+                      <div className={cn('flex h-8 w-8 shrink-0 items-center justify-center rounded-md border', badge.badgeClass)}>
+                        <IconComp className="h-4 w-4" />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="truncate text-sm font-semibold text-text-primary">
+                            {a.originalName}
+                          </span>
+                          <span className={cn('rounded px-1.5 py-0.2 text-[10px] font-bold border', badge.badgeClass)}>
+                            {badge.label}
+                          </span>
+                        </div>
+                        <span className="text-xs text-text-secondary">{formatFileSize(a.fileSize)}</span>
+                      </div>
+
+                      <div className="flex items-center gap-1 shrink-0">
+                        {isSignable && (
+                          <button
+                            type="button"
+                            onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: false })}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:underline px-2 py-1 rounded hover:bg-slate-100"
+                          >
+                            <Eye className="h-3.5 w-3.5" /> View
+                          </button>
+                        )}
+                        {isSignable && isMyTurn && (
+                          <button
+                            type="button"
+                            onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: true })}
+                            className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline px-2.5 py-1 rounded bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200"
+                          >
+                            <PenLine className="h-3.5 w-3.5" /> View & Sign
+                          </button>
+                        )}
+                        <a
+                          href={`/api/proxy/documents/${a.documentId}/file`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center gap-1 text-xs font-medium text-slate-700 hover:text-primary hover:underline px-2 py-1 rounded bg-slate-100 hover:bg-slate-200"
                         >
-                          <Eye className="h-3.5 w-3.5" /> View
-                        </button>
-                      )}
-                      {isSignable && isMyTurn && (
-                        <button
-                          type="button"
-                          onClick={() => setViewerDoc({ id: a.documentId, name: a.originalName, isSignable: true })}
-                          className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-700 hover:text-emerald-800 hover:underline px-2.5 py-0.5 rounded bg-emerald-50 hover:bg-emerald-100/70 border border-emerald-200"
-                        >
-                          <PenLine className="h-3.5 w-3.5" /> View & Sign
-                        </button>
-                      )}
-                      <a
-                        href={`/api/proxy/documents/${a.documentId}/file`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="text-xs font-medium text-text-secondary hover:text-text-primary hover:underline px-1"
-                      >
-                        Download
-                      </a>
+                          <Download className="h-3.5 w-3.5" /> Download
+                        </a>
+                      </div>
                     </li>
                   );
                 })}
               </ul>
             ) : (
               <p className="flex items-center gap-1.5 text-sm text-text-secondary">
-                <Paperclip className="h-4 w-4" /> No attachments.
+                <Paperclip className="h-4 w-4" /> No attachments yet.
               </p>
+            )}
+
+            {/* Dropzone for participants when request is pending */}
+            {isParticipant && req.status === 'pending' && (
+              <div
+                onClick={() => fileInputRef.current?.click()}
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  setIsDragging(true);
+                }}
+                onDragLeave={() => setIsDragging(false)}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  setIsDragging(false);
+                  if (e.dataTransfer.files) handleFileUpload(e.dataTransfer.files);
+                }}
+                className={cn(
+                  'mt-3 flex cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border-2 border-dashed px-4 py-4 text-center transition-all',
+                  isDragging
+                    ? 'border-primary bg-primary/5 ring-2 ring-primary/20'
+                    : 'border-border hover:border-primary/60 hover:bg-slate-50/80',
+                  uploadingFiles && 'pointer-events-none opacity-60',
+                )}
+              >
+                <Upload className="h-5 w-5 text-text-secondary" />
+                <p className="text-xs font-semibold text-text-primary">
+                  {uploadingFiles ? 'Uploading documents…' : 'Click to browse or drag & drop files here'}
+                </p>
+                <p className="text-[11px] text-text-secondary">
+                  Supports Excel (.xlsx, .xls), PowerPoint (.pptx, .ppt), Word (.docx), PDF, CSV, images — up to 50 MB
+                </p>
+              </div>
             )}
           </Card>
 
@@ -434,22 +594,32 @@ const ActivityTimeline = ({ actions }: { actions: RequestAction[] }): JSX.Elemen
     return <p className="text-sm text-text-secondary">No activity yet.</p>;
   }
 
-  const iconFor = (t: string): JSX.Element => {
-    if (t === 'sign') return <PenLine className="h-3.5 w-3.5 text-primary" />;
-    if (t === 'approve') return <Check className="h-3.5 w-3.5 text-success" />;
-    if (t === 'reject') return <X className="h-3.5 w-3.5 text-danger" />;
+  const iconFor = (a: RequestAction): JSX.Element => {
+    if (a.actionType === 'sign') return <PenLine className="h-3.5 w-3.5 text-primary" />;
+    if (a.actionType === 'approve') return <Check className="h-3.5 w-3.5 text-success" />;
+    if (a.actionType === 'reject') return <X className="h-3.5 w-3.5 text-danger" />;
+    if (a.comment?.toLowerCase().includes('uploaded document') || a.comment?.toLowerCase().includes('attached document')) {
+      return <Upload className="h-3.5 w-3.5 text-emerald-600" />;
+    }
     return <MessageSquare className="h-3.5 w-3.5 text-text-secondary" />;
   };
 
-  const verbFor = (t: string): string =>
-    t === 'sign' ? 'signed' : t === 'approve' ? 'approved' : t === 'reject' ? 'rejected' : 'commented';
+  const verbFor = (a: RequestAction): string => {
+    if (a.actionType === 'sign') return 'signed';
+    if (a.actionType === 'approve') return 'approved';
+    if (a.actionType === 'reject') return 'rejected';
+    if (a.comment?.toLowerCase().includes('uploaded document') || a.comment?.toLowerCase().includes('attached document')) {
+      return 'uploaded a document';
+    }
+    return 'commented';
+  };
 
   return (
     <ol className="relative space-y-4 border-l border-border pl-5">
       {actions.map((a) => (
         <li key={a.id} className="relative">
           <span className="absolute -left-[27px] flex h-6 w-6 items-center justify-center rounded-full bg-surface ring-1 ring-border">
-            {iconFor(a.actionType)}
+            {iconFor(a)}
           </span>
           <div className="flex items-center gap-2">
             <Avatar
@@ -460,7 +630,7 @@ const ActivityTimeline = ({ actions }: { actions: RequestAction[] }): JSX.Elemen
             <div className="min-w-0 flex-1">
               <p className="text-sm text-text-primary">
                 <span className="font-medium">{a.actor?.displayName ?? 'Someone'}</span>{' '}
-                <span className="text-text-secondary">{verbFor(a.actionType)}</span>
+                <span className="text-text-secondary">{verbFor(a)}</span>
               </p>
               <p className="text-[11px] text-text-secondary">{formatDateTime(a.createdAt)}</p>
             </div>

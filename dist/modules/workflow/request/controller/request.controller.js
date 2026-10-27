@@ -50,10 +50,10 @@ class RequestController {
         this.router.post('/', (0, auth_middleware_1.requirePermission)('request:create'), (0, validate_middleware_1.validate)(request_request_dto_1.CreateRequestSchema), this._create.bind(this));
         /**
          * @route  POST /workflow/requests/:id/attachments
-         * @desc   Attach a file/image (initiator only, before first action)
-         * @access Private - request:create
+         * @desc   Attach a file/document/image (initiator, recipient, or participant while request is pending)
+         * @access Private - request:create, request:act, request:read, or request:admin
          */
-        this.router.post('/:id/attachments', (0, auth_middleware_1.requirePermission)('request:create'), upload.single('file'), this._addAttachment.bind(this));
+        this.router.post('/:id/attachments', (0, auth_middleware_1.requireAnyPermission)('request:create', 'request:act', 'request:read', 'request:admin'), upload.single('file'), this._addAttachment.bind(this));
         /**
          * @route  GET /workflow/requests/:id
          * @desc   Request detail (steps, action ledger, attachments)
