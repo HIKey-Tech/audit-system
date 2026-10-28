@@ -252,7 +252,11 @@ export const NewFindingSlideOver = ({
           {canReadRisk && (
             <FormField
               label="Related risk"
-              hint="Link the register risk this finding relates to — closes the risk ↔ finding loop."
+              hint={
+                !risks.isLoading && (risks.data?.items ?? []).length === 0
+                  ? 'No risks are visible to you. You can only link risks you own (or all risks if you hold risk:read_all). Ask the audit manager to link it from the finding afterwards.'
+                  : 'Link the register risk this finding relates to — closes the risk ↔ finding loop.'
+              }
             >
               <Select {...register('riskId')}>
                 <option value="">None</option>

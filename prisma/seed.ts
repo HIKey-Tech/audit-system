@@ -323,7 +323,7 @@ export const ROLES: Array<{
       'finding:export', 'log:export',
       'approval:read', 'approval:approve', 'approval:reject',
       'assignment:read',
-      'escalation:read',
+      'escalation:read', 'escalation:acknowledge',
       'document:read', 'document:write',
       'dashboard:read',
       'notification:read', 'notification:update',

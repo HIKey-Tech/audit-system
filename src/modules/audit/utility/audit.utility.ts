@@ -1,5 +1,5 @@
 import { Prisma } from '@prisma/client';
-import { AppError } from '../../../shared/errors/app.error';
+import { AppError, PERMISSION_DENIED_MESSAGE } from '../../../shared/errors/app.error';
 import {
   AuditType,
   ChecklistResult,
@@ -25,7 +25,7 @@ export const auditTypeLabel = (auditType: string): string =>
 export const assertHasPermission = (
   permissions: string[],
   required: string,
-  message = 'Insufficient permission for this action',
+  message = PERMISSION_DENIED_MESSAGE,
 ): void => {
   if (!permissions.includes(required)) {
     throw AppError.forbidden(message);

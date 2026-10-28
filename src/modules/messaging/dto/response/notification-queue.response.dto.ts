@@ -3,5 +3,6 @@ export interface NotificationQueueStatsResponseDto {
   processing: number;
   sent: number;
   failed: number;
+  skipped: number;
   total: number;
 }

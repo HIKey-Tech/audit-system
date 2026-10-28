@@ -111,13 +111,13 @@ function buildBlockers(
         : (wp?.total ?? 0) === 0 || (wp?.approved ?? 0) < (wp?.total ?? 0);
 
       if (checklistGateActive) {
-        out.push({ text: `${lead} to finish testing controls (${tested}/${cp?.total ?? 0} done).` });
+        out.push({ text: `The audit team to finish testing controls (${tested}/${cp?.total ?? 0} done).` });
       }
       if (workingPaperGateActive) {
         if ((wp?.total ?? 0) === 0) {
-          out.push({ text: `${lead} to create at least one working paper.` });
+          out.push({ text: 'An auditor on the team to create at least one working paper.' });
         } else if ((wp?.rejected ?? 0) > 0) {
-          out.push({ text: `${lead} to revise and resubmit ${wp?.rejected} rejected working paper${wp?.rejected === 1 ? '' : 's'}.`, });
+          out.push({ text: `The audit team to revise and resubmit ${wp?.rejected} rejected working paper${wp?.rejected === 1 ? '' : 's'}.`, });
         } else {
           out.push({ text: `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).` });
         }

@@ -715,6 +715,7 @@ export interface AssetLink {
   assetId: string;
   linkedEntityType: string;
   linkedEntityId: string;
+  linkedEntityName?: string;
   scopeRole?: string;
   scopeReason?: string | null;
   impactSummary?: string | null;
@@ -1104,6 +1105,7 @@ export interface NotificationQueueStats {
   processing: number;
   sent: number;
   failed: number;
+  skipped?: number;
   total: number;
 }
 

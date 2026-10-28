@@ -115,7 +115,7 @@ export class FindingController {
   private async _closeFinding(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
       const finding = await this.findingService.closeFinding(req.params.id, req.user!);
-      res.status(200).json(buildResponse(finding, 'Finding closed'));
+      res.status(200).json(buildResponse(finding, 'Finding closure sent for approval'));
     } catch (err) {
       next(err);
     }

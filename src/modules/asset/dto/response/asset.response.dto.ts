@@ -89,6 +89,8 @@ export interface AssetLinkResponseDto {
   assetId: string;
   linkedEntityType: string;
   linkedEntityId: string;
+  /** Human-readable name of the linked record (entity name, engagement reference, finding/risk title, file name). */
+  linkedEntityName?: string;
   scopeRole?: string;
   scopeReason?: string | null;
   impactSummary?: string | null;

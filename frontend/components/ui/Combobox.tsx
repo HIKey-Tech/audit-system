@@ -83,6 +83,12 @@ export const Combobox = ({
       const opt = filtered[activeIndex];
       if (opt) choose(opt);
     } else if (e.key === 'Escape') {
+      // An open list consumes Esc so a surrounding SlideOver does not also close
+      // and offer to discard the user's edits.
+      if (open) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
       setOpen(false);
     }
   };

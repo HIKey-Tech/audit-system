@@ -70,11 +70,14 @@ export class AssignmentService implements IAssignmentService {
           sla_deadline: true,
           planned_start_date: true,
           planned_end_date: true,
+          lead_auditor_id: true,
+          audit_manager_id: true,
+          auditee_id: true,
         },
       }),
       prisma.user.findFirst({
         where: { id: dto.userId, deleted_at: null, is_active: true },
-        select: { id: true, email: true, display_name: true, first_name: true, last_name: true, max_concurrent_engagements: true },
+        select: { id: true, email: true, display_name: true, first_name: true, last_name: true, max_concurrent_engagements: true, is_super_admin: true },
       }),
       prisma.workflow_Assignment.findFirst({
         where: {
@@ -91,6 +94,16 @@ export class AssignmentService implements IAssignmentService {
       throw AppError.badRequest('Cannot change the team of a closed engagement');
     }
     if (!user) throw AppError.notFound('User');
+    // Super admin holds every permission, so the permission-based staff test below
+    // would always admit them; platform administrators are not audit staff.
+    if (user.is_super_admin) {
+      throw AppError.badRequest('A platform administrator cannot be assigned to an audit team');
+    }
+    // Segregation of duties: the engagement's own lead, manager and auditee already
+    // hold a role on it and cannot also be added to the team.
+    if ([engagement.lead_auditor_id, engagement.audit_manager_id, engagement.auditee_id].includes(dto.userId)) {
+      throw AppError.badRequest('This user already holds the lead auditor, audit manager or auditee role on this engagement');
+    }
     const isAuditStaff = await prisma.user_Role.count({
       where: { user_id: dto.userId, role: auditStaffRoleFilter },
     });
@@ -375,7 +388,7 @@ export class AssignmentService implements IAssignmentService {
     // Need the engagement's audit type + priority to score skill fit and weight workload.
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
-      select: { id: true, audit_type: true, priority: true },
+      select: { id: true, audit_type: true, priority: true, lead_auditor_id: true, audit_manager_id: true, auditee_id: true },
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
 
@@ -387,7 +400,13 @@ export class AssignmentService implements IAssignmentService {
       where: { engagement_id: engagementId },
       select: { user_id: true },
     });
-    const assignedIds = existingAssignments.map(a => a.user_id);
+    // The engagement's own lead / manager / auditee never appear as team candidates.
+    const assignedIds = [
+      ...existingAssignments.map(a => a.user_id),
+      ...[engagement.lead_auditor_id, engagement.audit_manager_id, engagement.auditee_id].filter(
+        (id): id is string => Boolean(id),
+      ),
+    ];
 
     // ponytail: skill ranking is over the loaded page (search filter + `take: limit`),
     // not the whole directory — `skills` is JSON we can't rank in SQL, and loading every
@@ -395,6 +414,8 @@ export class AssignmentService implements IAssignmentService {
     const userWhere: Prisma.UserWhereInput = {
       deleted_at: null,
       is_active: true,
+      // Platform administrators hold every permission but are not audit staff.
+      is_super_admin: false,
       id: { notIn: assignedIds },
       // Only audit staff can be assigned to the audit team — the auditee, CAE,
       // directors, committee and viewers participate in other ways.

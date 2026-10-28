@@ -21,6 +21,13 @@ export class ApiError extends Error {
   }
 }
 
+/** Shown for any 403 that has no more specific explanation from the server. */
+export const PERMISSION_DENIED_MESSAGE =
+  "You don't have permission to do this. Please contact your system administrator.";
+
+const isGenericForbidden = (message: string | undefined): boolean =>
+  !message || /^(forbidden|insufficient permissions?( for this action)?)\.?$/i.test(message.trim());
+
 type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
 
 interface RequestOptions {
@@ -142,7 +149,9 @@ const handleApiResponse = <T>(raw: RawResponse): { data: T; meta?: PaginationMet
   }
 
   throw new ApiError(
-    json.message || text || `Request failed with status ${status}`,
+    status === 403 && isGenericForbidden(json.message)
+      ? PERMISSION_DENIED_MESSAGE
+      : json.message || text || `Request failed with status ${status}`,
     status,
     json.errors,
     json.requestId,

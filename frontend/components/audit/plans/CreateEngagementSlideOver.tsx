@@ -142,6 +142,7 @@ export const CreateEngagementSlideOver = ({
             value={lead}
             onChange={(v) => setValue('leadAuditorId', v, { shouldValidate: true })}
             error={errors.leadAuditorId?.message}
+            excludeIds={[manager, auditee].filter(Boolean)}
           />
         </FormField>
         <FormField label="Audit manager" required error={errors.auditManagerId?.message}>
@@ -150,6 +151,7 @@ export const CreateEngagementSlideOver = ({
             value={manager}
             onChange={(v) => setValue('auditManagerId', v, { shouldValidate: true })}
             error={errors.auditManagerId?.message}
+            excludeIds={[lead, auditee].filter(Boolean)}
           />
         </FormField>
         <FormField label="Auditee" required error={errors.auditeeId?.message}>
@@ -157,6 +159,7 @@ export const CreateEngagementSlideOver = ({
             value={auditee}
             onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })}
             error={errors.auditeeId?.message}
+            excludeIds={[lead, manager].filter(Boolean)}
           />
         </FormField>
 

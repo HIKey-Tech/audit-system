@@ -467,13 +467,14 @@ const AuditContextTab = ({ links, isLoading }: { links: AssetLink[]; isLoading: 
     { key: 'type', header: 'Entity type', width: '180px', render: (link) => <Badge tone="gray">{assetLabel(link.linkedEntityType)}</Badge> },
     {
       key: 'entity',
-      header: 'Entity ID',
+      header: 'Linked record',
       render: (link) => {
         const href = linkHref(link);
+        const label = link.linkedEntityName ?? link.linkedEntityId;
         return href ? (
-          <Link href={href} className="font-mono text-xs text-primary hover:underline">{link.linkedEntityId}</Link>
+          <Link href={href} className="text-sm text-primary hover:underline">{label}</Link>
         ) : (
-          <span className="font-mono text-xs text-text-secondary">{link.linkedEntityId}</span>
+          <span className="text-sm text-text-secondary">{label}</span>
         );
       },
     },

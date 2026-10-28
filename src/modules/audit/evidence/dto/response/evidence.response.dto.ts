@@ -9,6 +9,10 @@ export interface EvidenceResponseDto {
   fileName: string;
   fileType: string;
   uploadedById: string;
+  /** Uploader's display name — present on list responses. */
+  uploadedByName?: string;
+  /** File size in bytes — present on list responses. */
+  fileSize?: number;
   isDisputed: boolean;
   disputeReason: string | null;
   uploadedAt: string;
@@ -28,6 +32,8 @@ export const mapEvidenceToResponse = (evidence: {
   dispute_reason: string | null;
   uploaded_at: Date;
   created_at: Date;
+  uploaded_by?: { first_name: string; last_name: string; display_name: string | null } | null;
+  document?: { file_size: number } | null;
 }): EvidenceResponseDto => ({
   id: evidence.id,
   engagementId: evidence.engagement_id,
@@ -37,6 +43,10 @@ export const mapEvidenceToResponse = (evidence: {
   fileName: evidence.file_name,
   fileType: evidence.file_type,
   uploadedById: evidence.uploaded_by_id,
+  uploadedByName: evidence.uploaded_by
+    ? evidence.uploaded_by.display_name?.trim() || `${evidence.uploaded_by.first_name} ${evidence.uploaded_by.last_name}`.trim()
+    : undefined,
+  fileSize: evidence.document?.file_size,
   isDisputed: evidence.is_disputed,
   disputeReason: evidence.dispute_reason,
   uploadedAt: evidence.uploaded_at.toISOString(),

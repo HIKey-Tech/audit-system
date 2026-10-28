@@ -368,6 +368,12 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
       }
 
       if (event.key === 'Escape') {
+        // An open list consumes Esc so a surrounding panel (SlideOver) does not
+        // also close and offer to discard the user's edits.
+        if (open) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
         setOpen(false);
         emitBlur();
       }

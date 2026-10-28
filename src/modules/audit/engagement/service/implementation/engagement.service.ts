@@ -79,6 +79,7 @@ export class EngagementService implements IEngagementService {
   private async _assertManagerCanApprove(managerId: string): Promise<void> {
     const manager = await this.userService.getUserById(managerId);
     if (!manager.isActive) throw AppError.badRequest('Assigned audit manager account is deactivated');
+    if (manager.isSuperAdmin) throw AppError.badRequest('A platform administrator cannot be assigned as audit manager');
     const missing = MANAGER_APPROVAL_PERMISSIONS.filter((slug) => !manager.permissions.includes(slug));
     if (missing.length > 0) {
       throw AppError.badRequest(
@@ -90,6 +91,7 @@ export class EngagementService implements IEngagementService {
   private async _assertLeadAuditorEligible(leadAuditorId: string): Promise<void> {
     const lead = await this.userService.getUserById(leadAuditorId);
     if (!lead.isActive) throw AppError.badRequest('Assigned lead auditor account is deactivated');
+    if (lead.isSuperAdmin) throw AppError.badRequest('A platform administrator cannot be assigned as lead auditor');
     const missing = LEAD_AUDITOR_PERMISSIONS.filter((slug) => !lead.permissions.includes(slug));
     if (missing.length > 0) {
       throw AppError.badRequest(
@@ -268,7 +270,9 @@ export class EngagementService implements IEngagementService {
     const priority = query.priority ?? 'medium';
 
     return users
-      .filter((u) => u.isActive && requiredPermissions.every((p) => u.permissions.includes(p)))
+      // Super admins hold every permission slug, so the permission test alone would
+      // always admit them; they administer the platform and are not audit staff.
+      .filter((u) => u.isActive && !u.isSuperAdmin && requiredPermissions.every((p) => u.permissions.includes(p)))
       .map((u) => {
         const activeEngagementCount = workloadMap.get(u.id) ?? 0;
         const matchedSkills = getMatchedSkills(u.skills, auditType);

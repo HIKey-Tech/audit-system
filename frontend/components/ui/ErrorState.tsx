@@ -31,7 +31,7 @@ const describeError = (
     if (error.status === 403) {
       return {
         title: 'Access denied',
-        message: 'Your role does not have permission to view this.',
+        message: "You don't have permission to view this. Please contact your system administrator.",
       };
     }
     if (error.status === 404) {

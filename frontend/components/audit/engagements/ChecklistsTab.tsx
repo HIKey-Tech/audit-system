@@ -10,6 +10,8 @@ import { Paperclip, Check, Download } from 'lucide-react';
 
 import { Card } from '@/components/ui/Card';
 import { Select, Input } from '@/components/ui/Input';
+import { Button } from '@/components/ui/Button';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { checklistsApi, evidenceApi, findingsApi } from '@/lib/api/audit';
@@ -43,6 +45,10 @@ function normalizeChecklists(
 export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const qc = useQueryClient();
   const canRaiseFinding = usePermission('finding:create');
+  const canUpdateChecklist = usePermission('checklist:update');
+  const [bulkResult, setBulkResult] = useState<'passed' | 'not_applicable'>('not_applicable');
+  const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
+  const [bulkRunning, setBulkRunning] = useState(false);
   const [findingPrefill, setFindingPrefill] = useState<FindingPrefill | null>(null);
 
   const list = useQuery({
@@ -132,6 +138,28 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
 
   const { flat, grouped } = useMemo(() => normalizeChecklists(list.data), [list.data]);
 
+  // Bulk-record one result for every control not yet tested. Each row is saved
+  // through the same endpoint as a single test, so audit logging and the
+  // engagement status reconcile behave exactly as for individual updates.
+  const untested = flat.filter((c) => c.result === 'not_tested');
+  const runBulk = async (): Promise<void> => {
+    setBulkRunning(true);
+    let done = 0;
+    try {
+      for (const item of untested) {
+        await checklistsApi.update(item.id, { result: bulkResult });
+        done += 1;
+      }
+      toast.success(`${done} control${done === 1 ? '' : 's'} marked ${humanizeStatus(bulkResult).toLowerCase()}`);
+    } catch (e) {
+      toast.error(`Stopped after ${done} of ${untested.length}: ${e instanceof Error ? e.message : 'Failed'}`);
+    } finally {
+      setBulkRunning(false);
+      setBulkConfirmOpen(false);
+      await qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+    }
+  };
+
   const total = flat.length;
   const tested = flat.filter((c) => c.result !== 'not_tested').length;
   const passed = flat.filter((c) => c.result === 'passed').length;
@@ -174,7 +202,34 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
                 <span><span className="font-semibold text-text-muted">{total - tested}</span> not tested</span>
               </div>
             </div>
+            {canUpdateChecklist && untested.length > 0 && (
+              <div className="mt-3 flex flex-wrap items-center gap-2 border-t border-border pt-3 text-xs">
+                <span className="text-text-secondary">Bulk update the {untested.length} untested controls:</span>
+                <Select
+                  className="w-44"
+                  value={bulkResult}
+                  onChange={(e) => setBulkResult(e.target.value as 'passed' | 'not_applicable')}
+                  aria-label="Bulk result"
+                >
+                  <option value="not_applicable">Not applicable</option>
+                  <option value="passed">Passed</option>
+                </Select>
+                <Button size="sm" variant="secondary" onClick={() => setBulkConfirmOpen(true)}>
+                  Apply to all untested
+                </Button>
+              </div>
+            )}
           </Card>
+          <ConfirmDialog
+            open={bulkConfirmOpen}
+            title={`Mark ${untested.length} controls as ${humanizeStatus(bulkResult).toLowerCase()}?`}
+            description="This records a result for every control you have not individually tested. Only do this where the testing has genuinely been done or the controls do not apply. You can still change any single control afterwards."
+            confirmLabel="Apply to all"
+            variant="primary"
+            isLoading={bulkRunning}
+            onConfirm={() => void runBulk()}
+            onCancel={() => setBulkConfirmOpen(false)}
+          />
 
           {grouped.map(([type, items]) => (
             <Card key={type} className="mb-4" padded={false}>

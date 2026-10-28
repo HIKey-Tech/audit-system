@@ -29,6 +29,10 @@ export enum ErrorCode {
   INVALID_STATE = 'INVALID_STATE',
 }
 
+/** Shown to users whenever a permission check fails — points them to who can fix it. */
+export const PERMISSION_DENIED_MESSAGE =
+  "You don't have permission to do this. Please contact your system administrator.";
+
 export class AppError extends Error {
   public readonly statusCode: number;
   public readonly errorCode: ErrorCode;
@@ -55,7 +59,7 @@ export class AppError extends Error {
     return new AppError(message, 401, ErrorCode.UNAUTHORIZED);
   }
 
-  static forbidden(message = 'Forbidden'): AppError {
+  static forbidden(message = PERMISSION_DENIED_MESSAGE): AppError {
     return new AppError(message, 403, ErrorCode.FORBIDDEN);
   }
 

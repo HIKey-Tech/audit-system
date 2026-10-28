@@ -440,7 +440,7 @@ model Email_Log {
   from_address String
   subject      String
   template     String?
-  status       String    @default("pending") // pending | sent | failed | bounced
+  status       String    @default("pending") // pending | sent | failed | bounced | skipped
   error        String?
   sent_at      DateTime?
   created_at   DateTime  @default(now())

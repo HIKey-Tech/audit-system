@@ -2,7 +2,7 @@
 import { Request, Response, NextFunction } from 'express';
 import jwt from 'jsonwebtoken';
 import { config } from '../config/app.config';
-import { AppError } from '../errors/app.error';
+import { AppError, PERMISSION_DENIED_MESSAGE } from '../errors/app.error';
 import { assertSessionValid } from '../security/session-guard';
 
 export interface AuthenticatedUser {
@@ -191,7 +191,7 @@ export const requirePermission = (...requiredPermissions: string[]) =>
     );
 
     if (!hasAll) {
-      return next(AppError.forbidden('Insufficient permissions'));
+      return next(AppError.forbidden(PERMISSION_DENIED_MESSAGE));
     }
 
     next();
@@ -216,7 +216,7 @@ export const requireAnyPermission = (...anyOf: string[]) =>
     const hasAny = anyOf.some((perm) => req.user!.permissions.includes(perm));
 
     if (!hasAny) {
-      return next(AppError.forbidden('Insufficient permissions'));
+      return next(AppError.forbidden(PERMISSION_DENIED_MESSAGE));
     }
 
     next();

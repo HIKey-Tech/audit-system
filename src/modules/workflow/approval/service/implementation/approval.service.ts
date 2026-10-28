@@ -408,7 +408,10 @@ export class ApprovalService implements IApprovalService {
         const reconcileEntityType = approval.entity_type === WorkflowEntityType.AuditWorkingPaper
           ? 'audit_working_paper'
           : 'audit_finding_closure';
-        void import('../../../../audit/engagement/service/implementation/engagement-status.reconciler')
+        // Awaited (a few quick, bounded steps) so the engagement status is already
+        // up to date when the approver's next screen loads. A failure here must never
+        // fail the approval itself — the hourly reconcile job is the safety net.
+        await import('../../../../audit/engagement/service/implementation/engagement-status.reconciler')
           .then((m) => m.reconcileEngagementForApprovalEntity(reconcileEntityType, approval.entity_id, actor.id))
           .catch((err: unknown) => logger.warn('Engagement reconcile after approval failed', { approvalId, err }));
       }

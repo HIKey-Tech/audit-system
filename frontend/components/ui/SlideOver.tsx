@@ -77,6 +77,8 @@ export const SlideOver = ({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
+        // Already handled by an inner control (e.g. an open Select list).
+        if (e.defaultPrevented) return;
         requestCloseRef.current();
         return;
       }

@@ -5,7 +5,7 @@ import multer from 'multer';
 import { authenticate, requirePermission } from '../../../shared/middleware/auth.middleware';
 import { validate } from '../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../shared/types/api-response.type';
-import { AppError } from '../../../shared/errors/app.error';
+import { AppError, PERMISSION_DENIED_MESSAGE } from '../../../shared/errors/app.error';
 import { IDocumentService } from '../service/interface/document.service.interface';
 import {
   UploadDocumentMetadataSchema,
@@ -350,7 +350,7 @@ export class DocumentController {
           req.params.id,
           req.user!,
         );
-        if (!allowed) throw AppError.forbidden('Insufficient permissions');
+        if (!allowed) throw AppError.forbidden(PERMISSION_DENIED_MESSAGE);
       }
       const document = await this.documentService.getById(req.params.id, req.user!);
       res.status(200).json(buildResponse(document));
@@ -366,7 +366,7 @@ export class DocumentController {
           req.params.id,
           req.user!,
         );
-        if (!allowed) throw AppError.forbidden('Insufficient permissions');
+        if (!allowed) throw AppError.forbidden(PERMISSION_DENIED_MESSAGE);
       }
       await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
@@ -431,7 +431,7 @@ export class DocumentController {
           req.params.id,
           req.user!,
         );
-        if (!allowed) throw AppError.forbidden('Insufficient permissions');
+        if (!allowed) throw AppError.forbidden(PERMISSION_DENIED_MESSAGE);
       }
       await this.documentService.assertCanUserAccess(req.params.id, req.user!);
       let file = await this.documentService.getFileById(req.params.id);

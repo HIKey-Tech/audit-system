@@ -34,9 +34,9 @@ export const ApprovalChain = ({ entityType, entityId }: { entityType: string; en
       {data.levels.map((lvl) => {
         const approver = lvl.resolvedApprover || (lvl.candidates.length === 1 ? lvl.candidates[0] : null);
         return (
-          <li key={lvl.level} className="flex items-center gap-2 text-sm">
-            <span className="shrink-0">{statusIcon(lvl.status)}</span>
-            <div className="min-w-0 flex items-center gap-1.5 flex-wrap">
+          <li key={lvl.level} className="flex items-start gap-2 text-sm">
+            <span className="mt-0.5 shrink-0">{statusIcon(lvl.status)}</span>
+            <div className="min-w-0 flex-1 flex items-center gap-1.5 flex-wrap break-words">
               {approver ? (
                 <>
                   <span className="font-semibold text-text-primary">{approver.displayName}</span>

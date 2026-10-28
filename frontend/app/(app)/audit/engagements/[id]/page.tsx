@@ -69,7 +69,16 @@ export default function EngagementDetailPage(): JSX.Element {
 
   // Tab lives in the URL so refreshes keep their place and other screens can
   // deep-link straight to e.g. ?tab=report.
-  const tabParam = searchParams?.get('tab');
+  // Friendly aliases: the tab labelled "Review" is keyed `report`, and the
+  // "Evidence Requests" tab is keyed `requests`.
+  const TAB_ALIASES: Record<string, TabKey> = {
+    review: 'report',
+    'evidence-requests': 'requests',
+    'working-paper': 'working-papers',
+    followup: 'follow-up',
+  };
+  const rawTab = searchParams?.get('tab') ?? null;
+  const tabParam = rawTab ? (TAB_ALIASES[rawTab] ?? rawTab) : null;
   const tab: TabKey = TAB_DEFS.some((t) => t.key === tabParam) ? (tabParam as TabKey) : 'overview';
   const setTab = useCallback(
     (k: TabKey) => {

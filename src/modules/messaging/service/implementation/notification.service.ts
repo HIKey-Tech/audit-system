@@ -1,6 +1,6 @@
 // src/modules/messaging/service/implementation/notification.service.ts
 import { Prisma } from '@prisma/client';
-import { AppError } from '../../../../shared/errors/app.error';
+import { AppError, ErrorCode } from '../../../../shared/errors/app.error';
 import nodemailer from 'nodemailer';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../shared/utils/logger.util';
@@ -20,6 +20,22 @@ import {
   NotificationResponseDto,
   mapNotificationToResponse,
 } from '../../dto/response/notification.response.dto';
+
+/**
+ * Raised when no mail server has been configured. It is a deployment state, not
+ * a delivery failure, so the queue parks the item as `skipped` instead of
+ * retrying it to exhaustion.
+ */
+export class SmtpNotConfiguredError extends AppError {
+  constructor() {
+    super('SMTP is not configured', 503, ErrorCode.SERVICE_UNAVAILABLE);
+    this.name = 'SmtpNotConfiguredError';
+  }
+}
+
+/** The shipped default host is a placeholder: with it and no credentials every send would bounce. */
+export const isSmtpConfigured = (): boolean =>
+  !(!config.email.user && config.email.host === 'smtp.gmail.com');
 
 export class NotificationService implements INotificationService {
   private readonly transporter: nodemailer.Transporter;
@@ -43,11 +59,24 @@ export class NotificationService implements INotificationService {
   async sendEmail(dto: SendEmailDto): Promise<void> {
     // The shipped default host is a placeholder: without credentials every send
     // would only bounce off Gmail with "530 Authentication Required". Fail fast.
-    if (!config.email.user && config.email.host === 'smtp.gmail.com') {
+    if (!isSmtpConfigured()) {
       logger.warn('Email not sent: SMTP is not configured (set SMTP_HOST / SMTP_USER / SMTP_PASSWORD)', {
         subject: dto.subject,
       });
-      throw AppError.serviceUnavailable('SMTP is not configured');
+      // Leave an audit trail of what was not sent, so the Email Log is complete.
+      await prisma.email_Log
+        .create({
+          data: {
+            to_address: Array.isArray(dto.to) ? dto.to.join(', ') : dto.to,
+            from_address: config.email.from,
+            subject: dto.subject,
+            template: dto.template,
+            status: 'skipped',
+            error: 'SMTP is not configured',
+          },
+        })
+        .catch((err: unknown) => logger.error('Skipped-email log write failed', { err }));
+      throw new SmtpNotConfiguredError();
     }
 
     const logEntry = await prisma.email_Log.create({

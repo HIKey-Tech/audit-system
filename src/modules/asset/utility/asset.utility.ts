@@ -1,4 +1,4 @@
-import { AppError } from '../../../shared/errors/app.error';
+import { AppError, PERMISSION_DENIED_MESSAGE } from '../../../shared/errors/app.error';
 import { AssetActorContext } from '../domain/entity/asset.entity';
 import {
   AssetLifecycleState,
@@ -10,7 +10,7 @@ import {
 export const assertHasPermission = (
   actor: AssetActorContext,
   required: string,
-  message = 'Insufficient permission for this action',
+  message = PERMISSION_DENIED_MESSAGE,
 ): void => {
   if (actor.isSuperAdmin) return;
   if (!actor.permissions.includes(required)) {

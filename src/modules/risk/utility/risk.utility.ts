@@ -1,11 +1,11 @@
-import { AppError } from '../../../shared/errors/app.error';
+import { AppError, PERMISSION_DENIED_MESSAGE } from '../../../shared/errors/app.error';
 import { RiskScoreBand } from '../domain/enum/risk.enum';
 
 /** Permission-based authorization gate (see audit.utility for rationale). */
 export const assertHasPermission = (
   permissions: string[],
   required: string,
-  message = 'Insufficient permission for this action',
+  message = PERMISSION_DENIED_MESSAGE,
 ): void => {
   if (!permissions.includes(required)) {
     throw AppError.forbidden(message);

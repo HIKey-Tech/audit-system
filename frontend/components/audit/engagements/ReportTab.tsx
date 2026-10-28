@@ -208,6 +208,15 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     setValue('templateId', def.id);
   }, [reportTemplates.data, setValue]);
 
+  // Must stay above the early returns below: a hook declared after them changes
+  // the hook count once the report loads and crashes the tab (Rules of Hooks).
+  const reportId = report.data?.id;
+  const approvalChain = useQuery({
+    queryKey: ['approval-chain', 'audit_report', reportId],
+    queryFn: () => workflowApi.getApprovalChain('audit_report', reportId as string),
+    enabled: Boolean(reportId),
+  });
+
   if (report.isLoading) {
     return (
       <Card>
@@ -303,12 +312,6 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   const canActOnCurrentApproval =
     approval.data?.status === 'pending' &&
     currentStep?.approverId === session.id;
-
-  const approvalChain = useQuery({
-    queryKey: ['approval-chain', 'audit_report', r.id],
-    queryFn: () => workflowApi.getApprovalChain('audit_report', r.id),
-    enabled: Boolean(r?.id),
-  });
 
   const finalApproverName = (() => {
     if (approval.data?.steps && approval.data.steps.length > 0) {

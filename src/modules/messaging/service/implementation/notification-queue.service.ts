@@ -13,7 +13,7 @@ import {
   NotificationQueuePayloadByType,
   NotificationQueueType,
 } from '../interface/notification-queue.service.interface';
-import { notificationService } from './notification.service';
+import { notificationService, SmtpNotConfiguredError } from './notification.service';
 import { templateService } from './template.service';
 import { plainTextToEmailHtml, renderTemplate } from '../../utility/template.utility';
 import { NotificationQueueStatsResponseDto } from '../../dto/response/notification-queue.response.dto';
@@ -23,6 +23,7 @@ const PENDING_STATUS = 'pending';
 const PROCESSING_STATUS = 'processing';
 const SENT_STATUS = 'sent';
 const FAILED_STATUS = 'failed';
+const SKIPPED_STATUS = 'skipped';
 
 // Exponential backoff between retries: 2^attempts minutes, capped. Keeps a
 // flapping SMTP relay or a single bad recipient from being hammered every tick.
@@ -54,7 +55,8 @@ const computeRetryDelayMs = (attempts: number): number => {
 type QueueStatus = typeof PENDING_STATUS
   | typeof PROCESSING_STATUS
   | typeof SENT_STATUS
-  | typeof FAILED_STATUS;
+  | typeof FAILED_STATUS
+  | typeof SKIPPED_STATUS;
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -78,7 +80,8 @@ const isQueueStatus = (status: string): status is QueueStatus =>
   status === PENDING_STATUS
   || status === PROCESSING_STATUS
   || status === SENT_STATUS
-  || status === FAILED_STATUS;
+  || status === FAILED_STATUS
+  || status === SKIPPED_STATUS;
 
 const parseEmailPayload = (payload: string): SendEmailDto => {
   const parsed: unknown = JSON.parse(payload);
@@ -363,6 +366,18 @@ export class NotificationQueueService implements INotificationQueueService {
           type: item.type,
         });
       } catch (err) {
+        // No mail server configured: park the item instead of burning its retries.
+        if (err instanceof SmtpNotConfiguredError) {
+          await prisma.notification_Queue
+            .update({
+              where: { id: item.id },
+              data: { status: SKIPPED_STATUS, last_error: err.message, processed_at: new Date() },
+            })
+            .catch((updateErr: unknown) => {
+              logger.error('Notification queue skip update failed', { err: updateErr, queueId: item.id });
+            });
+          continue;
+        }
         if (err instanceof Error && /timed out/.test(err.message)) {
           logger.error('Queued notification timed out', { queueId: item.id, type: item.type, message: err.message });
         }
@@ -449,6 +464,7 @@ export class NotificationQueueService implements INotificationQueueService {
       processing: 0,
       sent: 0,
       failed: 0,
+      skipped: 0,
       total: 0,
     };
 
