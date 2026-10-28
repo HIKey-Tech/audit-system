@@ -68,7 +68,7 @@ const GROUPS: GroupDef[] = [
 
 // Structured settings that live in the Audit Customization tab — never shown as raw JSON here.
 const STRUCTURED_KEYS = new Set([
-  // Legacy standalone SLA numbers — superseded by `audit_sla_rules` (Audit Customization).
+  // Legacy standalone OLA numbers — superseded by `audit_sla_rules` (Audit Customization).
   'default_sla_days',
   'finding_due_days',
   'audit_lifecycle_rules',
@@ -168,7 +168,7 @@ export const SystemConfigTab = (): JSX.Element => {
         <SlidersHorizontal className="mt-0.5 h-4 w-4 shrink-0 text-text-secondary" />
         <p className="text-xs leading-relaxed text-text-secondary">
           Edit your organisation details and default timeframes below. Advanced rules — approval
-          chains, lifecycle gates, SLA matrices, audit taxonomy, and checklist templates — are
+          chains, lifecycle gates, OLA matrices, audit taxonomy, and checklist templates — are
           managed in the{' '}
           <span className="inline-flex items-center gap-0.5 font-medium text-text-primary">
             Audit Customization <ArrowRight className="h-3 w-3" />

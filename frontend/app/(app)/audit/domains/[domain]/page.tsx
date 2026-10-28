@@ -115,7 +115,7 @@ export default function AuditDomainPage(): JSX.Element {
     },
     {
       key: 'sla_deadline',
-      header: 'SLA Deadline',
+      header: 'OLA Deadline',
       sortable: true,
       render: (e) => {
         const overdue = new Date(e.slaDeadline) < new Date() && !['reported', 'closed'].includes(e.status);

@@ -122,7 +122,7 @@ export const summaryLabel = (key: string): string =>
     .replace(/^./, (c) => c.toUpperCase())
     .replace(/\bSod\b/, 'SoD')
     .replace(/\bMfa\b/, 'MFA')
-    .replace(/\bSla\b/, 'SLA');
+    .replace(/\bSla\b/, 'OLA');
 
 export const SummaryTable = ({ summary }: { summary: Record<string, unknown> }): JSX.Element => (
   <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2 lg:grid-cols-3">

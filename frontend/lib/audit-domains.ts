@@ -3,7 +3,7 @@ import { Cpu, Banknote, ShieldCheck, type LucideIcon } from 'lucide-react';
 /**
  * The audit domains GBB commissioned as "dedicated modules". Each shares the
  * single audit engine but presents a dedicated workspace with its own control
- * framework, templates, and SLAs.
+ * framework, templates, and OLAs.
  *
  * GBB merged the former separate "IT" and "Systems" modules into one
  * System/IT Audit domain, so `systems` is retired as a selectable type. The

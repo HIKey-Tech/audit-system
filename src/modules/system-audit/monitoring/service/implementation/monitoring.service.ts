@@ -84,8 +84,8 @@ export const MONITORING_CHECKS: CheckDefinition[] = [
   },
   {
     key: 'imoc_incidents',
-    label: 'IMOC incident SLA',
-    description: 'IMOC tickets opened in the look-back window: SLA breaches and aged open incidents.',
+    label: 'IMOC incident OLA',
+    description: 'IMOC tickets opened in the look-back window: OLA breaches and aged open incidents.',
     analysisType: AnalysisType.IncidentLog,
     source: AnalysisSource.Imoc,
     lookback: 'incidentLookbackDays',

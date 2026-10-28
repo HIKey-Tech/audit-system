@@ -22,7 +22,7 @@ const CUSTOMIZATION_KEYS = [
   },
   {
     key: 'audit_sla_rules',
-    title: 'SLA Rules',
+    title: 'OLA Rules',
     description: 'Default due windows for engagements, findings, and high-priority actions.',
   },
   {

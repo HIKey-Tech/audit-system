@@ -168,7 +168,7 @@ export const CreateEngagementSlideOver = ({
             <Input type="date" error={errors.plannedEndDate?.message} {...register('plannedEndDate')} />
           </FormField>
         </div>
-        <FormField label="SLA deadline" required error={errors.slaDeadline?.message}>
+        <FormField label="OLA deadline" required error={errors.slaDeadline?.message}>
           <Input type="date" error={errors.slaDeadline?.message} {...register('slaDeadline')} />
         </FormField>
       </form>

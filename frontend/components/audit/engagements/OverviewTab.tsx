@@ -139,7 +139,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
             <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.plannedEndDate)}</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">SLA deadline</dt>
+            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">OLA deadline</dt>
             <dd className="mt-1 text-sm text-text-primary">{formatDate(engagement.slaDeadline)}</dd>
           </div>
           {engagement.adhocReason && (

@@ -86,8 +86,8 @@ export const ANALYSIS_META: Record<AnalysisType, AnalysisMeta> = {
     hint: 'An incident export from the ITSM/SIEM tool — or run it live on IMOC tickets.',
     headline: [
       { key: 'incidents', label: 'Incidents' },
-      { key: 'slaCompliance', label: 'SLA compliance', suffix: '%' },
-      { key: 'resolutionSlaBreaches', label: 'SLA breaches', bad: true },
+      { key: 'slaCompliance', label: 'OLA compliance', suffix: '%' },
+      { key: 'resolutionSlaBreaches', label: 'OLA breaches', bad: true },
       { key: 'agedOpenIncidents', label: 'Aged open', bad: true },
     ],
   },
@@ -179,7 +179,7 @@ export const DOC_TYPE_LABELS: Record<SystemDocumentType, string> = {
   drp: 'Disaster recovery plan',
   incident_response_plan: 'Incident response plan',
   contract: 'IT contract',
-  sla: 'Service level agreement',
+  sla: 'Operational level agreement (OLA)',
   other: 'Other',
 };
 
@@ -262,7 +262,7 @@ export const SYSTEM_AUDIT_ACTIVITIES: SystemAuditActivity[] = [
     privilege: 'Access to audit logs and event monitoring tools',
     links: [
       { label: 'Framework coverage (ISO, NDPR, GDPR, SOX ITGC, COBIT)', href: '/audit/compliance', icon: ShieldCheck, permission: 'control:read' },
-      { label: 'IT contracts & SLAs (expiry tracking)', href: '/system-audit/documentation?docType=contract', icon: FileText, permission: 'sysdoc:read' },
+      { label: 'IT contracts & OLAs (expiry tracking)', href: '/system-audit/documentation?docType=contract', icon: FileText, permission: 'sysdoc:read' },
       { label: 'Audit trail', href: '/logs', icon: ScrollText, permission: 'log:read' },
     ],
   },

@@ -94,7 +94,7 @@ export const scoreEngagementDeliveryRisk = (
     score += weight;
     rationale.push({
       code: 'sla_overdue',
-      label: 'SLA deadline has passed',
+      label: 'OLA deadline has passed',
       value: `${Math.abs(daysToDeadline)} day${Math.abs(daysToDeadline) === 1 ? '' : 's'} overdue`,
       weight,
     });
@@ -102,7 +102,7 @@ export const scoreEngagementDeliveryRisk = (
     score += 18;
     rationale.push({
       code: 'sla_due_soon',
-      label: 'SLA deadline is close',
+      label: 'OLA deadline is close',
       value: `Due in ${daysToDeadline} day${daysToDeadline === 1 ? '' : 's'}`,
       weight: 18,
     });
@@ -110,7 +110,7 @@ export const scoreEngagementDeliveryRisk = (
     score += 8;
     rationale.push({
       code: 'sla_approaching',
-      label: 'SLA deadline is approaching',
+      label: 'OLA deadline is approaching',
       value: `Due in ${daysToDeadline} days`,
       weight: 8,
     });

@@ -126,7 +126,7 @@ export default function EngagementsListPage(): JSX.Element {
     },
     {
       key: 'sla_deadline',
-      header: 'SLA Deadline',
+      header: 'OLA Deadline',
       sortable: true,
       render: (e) => {
         const overdue = new Date(e.slaDeadline) < new Date() && !['reported', 'closed'].includes(e.status);
@@ -233,7 +233,7 @@ export default function EngagementsListPage(): JSX.Element {
                 ? 'Create your first engagement to start auditing.'
                 : tab === 'mine'
                   ? 'Engagements you lead will show up here.'
-                  : 'All audits are within their SLA.'
+                  : 'All audits are within their OLA.'
             }
             action={
               canWrite && tab === 'all' ? (

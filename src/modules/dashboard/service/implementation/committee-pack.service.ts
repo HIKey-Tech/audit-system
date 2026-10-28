@@ -279,7 +279,7 @@ export class CommitteePackService {
           table: {
             widths: ['auto', '*', 'auto', 'auto', 'auto'],
             body: [
-              ['Reference', 'Title', 'Type', 'Status', 'SLA deadline'].map((text) => ({ text, bold: true })),
+              ['Reference', 'Title', 'Type', 'Status', 'OLA deadline'].map((text) => ({ text, bold: true })),
               ...engagementRows,
             ],
           },

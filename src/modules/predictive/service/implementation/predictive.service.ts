@@ -133,7 +133,7 @@ export class PredictiveService implements IPredictiveService {
         entityId: engagement.id,
         severity: risk.severity,
         score: risk.score,
-        title: `Engagement may miss its SLA: ${engagement.referenceNumber}`,
+        title: `Engagement may miss its OLA: ${engagement.referenceNumber}`,
         summary: 'This early warning is based on live progress, deadline, evidence, and budget signals. Review the factors below before deciding what to do.',
         rationale: risk.rationale,
       });

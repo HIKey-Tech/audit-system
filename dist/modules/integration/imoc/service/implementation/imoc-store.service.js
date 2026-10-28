@@ -265,7 +265,7 @@ class ImocStoreService {
             { header: 'Title / Order Name', value: (row) => row.order_name || '' },
             { header: 'Category', value: (row) => row.category || 'Uncategorised' },
             { header: 'Status', value: (row) => row.order_status || '' },
-            { header: 'SLA Status', value: (row) => row.sla_status || '' },
+            { header: 'OLA Status', value: (row) => row.sla_status || '' },
             { header: 'Priority', value: (row) => row.priority || '' },
             { header: 'Model Name', value: (row) => row.model_name || '' },
             { header: 'Current Handler', value: (row) => row.current_handler || '' },

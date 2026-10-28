@@ -131,8 +131,8 @@ export const NOTIFICATION_TEMPLATES: Array<{
     eventKey: 'audit.escalation.level_1',
     channel: 'email',
     name: 'Audit Escalation Level 1 — Email',
-    subject: 'Reminder: Audit Engagement SLA Approaching — {{engagementReference}}',
-    body: 'Dear {{recipientName}},\n\nThis is a reminder that the following audit engagement requires attention.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\nCurrent Status: {{currentStatus}}\n\nPlease log in to IAMS and take action.\n\nRegards,\nIAMS — Internal Audit System',
+    subject: 'Reminder: Audit Engagement OLA Approaching — {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nThis is a reminder that the following audit engagement requires attention.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nOLA Deadline: {{slaDeadline}}\nCurrent Status: {{currentStatus}}\n\nPlease log in to IAMS and take action.\n\nRegards,\nIAMS — Internal Audit System',
     description:
       'Level-1 escalation reminder for an overdue audit engagement. Variables: recipientName, engagementTitle, engagementReference, slaDeadline, currentStatus.',
   },
@@ -141,7 +141,7 @@ export const NOTIFICATION_TEMPLATES: Array<{
     channel: 'in_app',
     name: 'Audit Escalation Level 1 — In-App',
     subject: null,
-    body: "Reminder: Engagement '{{engagementTitle}}' ({{engagementReference}}) SLA deadline is {{slaDeadline}}.",
+    body: "Reminder: Engagement '{{engagementTitle}}' ({{engagementReference}}) OLA deadline is {{slaDeadline}}.",
     description:
       'In-app variant of level-1 escalation. Variables: engagementTitle, engagementReference, slaDeadline.',
   },
@@ -290,20 +290,20 @@ export const NOTIFICATION_TEMPLATES: Array<{
   {
     eventKey: 'audit.sla.reminder',
     channel: 'email',
-    name: 'SLA Reminder — Email',
-    subject: 'SLA Deadline Approaching: {{engagementReference}}',
-    body: 'Dear {{recipientName}},\n\nThe following audit engagement SLA deadline is approaching in {{daysRemaining}} day(s).\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nSLA Deadline: {{slaDeadline}}\n\nPlease ensure the audit is completed on time.\n\nRegards,\nIAMS — Internal Audit System',
+    name: 'OLA Reminder — Email',
+    subject: 'OLA Deadline Approaching: {{engagementReference}}',
+    body: 'Dear {{recipientName}},\n\nThe following audit engagement OLA deadline is approaching in {{daysRemaining}} day(s).\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nOLA Deadline: {{slaDeadline}}\n\nPlease ensure the audit is completed on time.\n\nRegards,\nIAMS — Internal Audit System',
     description:
-      'Reminder sent before an audit engagement SLA deadline. Variables: recipientName, daysRemaining, engagementTitle, engagementReference, slaDeadline.',
+      'Reminder sent before an audit engagement OLA deadline. Variables: recipientName, daysRemaining, engagementTitle, engagementReference, slaDeadline.',
   },
   {
     eventKey: 'audit.sla.reminder',
     channel: 'in_app',
-    name: 'SLA Reminder — In-App',
+    name: 'OLA Reminder — In-App',
     subject: null,
-    body: "SLA reminder: Engagement '{{engagementTitle}}' ({{engagementReference}}) deadline in {{daysRemaining}} day(s).",
+    body: "OLA reminder: Engagement '{{engagementTitle}}' ({{engagementReference}}) deadline in {{daysRemaining}} day(s).",
     description:
-      'In-app variant of SLA reminder. Variables: engagementTitle, engagementReference, daysRemaining.',
+      'In-app variant of OLA reminder. Variables: engagementTitle, engagementReference, daysRemaining.',
   },
 
   // user.mfa.grace_reminder
@@ -1046,7 +1046,7 @@ const WORKING_PAPER_TEMPLATES: Array<{
     isDefault: false,
     sections: [
       { title: 'Condition', description: 'Describe what was found', placeholder: 'Factual condition supported by evidence...', required: true },
-      { title: 'Criteria', description: 'Document the expected policy, standard, regulation, or control', placeholder: 'Policy clause, ISO/COBIT/NIST/PCI requirement, procedure, SLA...', required: true },
+      { title: 'Criteria', description: 'Document the expected policy, standard, regulation, or control', placeholder: 'Policy clause, ISO/COBIT/NIST/PCI requirement, procedure, OLA...', required: true },
       { title: 'Cause', description: 'Assess why the condition occurred', placeholder: 'Process gap, control failure, system limitation, oversight, resource issue...', required: true },
       { title: 'Effect/Risk', description: 'Describe the impact or exposure', placeholder: 'Operational, financial, compliance, security, reputational, or service impact...', required: true },
       { title: 'Recommendation', description: 'Propose corrective action', placeholder: 'Specific, practical recommendation and responsible owner...', required: true },
@@ -1281,7 +1281,7 @@ const SYSTEM_CONFIGS: Array<{
   { key: 'org_phone', value: '+234 9 291 5555', description: 'Organisation contact phone number.', isPublic: true },
   { key: 'org_website', value: 'https://galaxybackbone.com.ng', description: 'Organisation website URL.', isPublic: true },
   { key: 'audit_dept_name', value: 'Internal Audit Department', description: 'Name of the internal audit department.', isPublic: true },
-  { key: 'default_sla_days', value: '30', description: 'Default SLA days for audit engagements.', isPublic: false },
+  { key: 'default_sla_days', value: '30', description: 'Default OLA days for audit engagements.', isPublic: false },
   { key: 'finding_due_days', value: '90', description: 'Default due days assigned to audit findings.', isPublic: false },
   { key: 'report_footer_notice', value: 'This report is confidential and intended solely for the use of Galaxy Backbone Limited Internal Audit Department.', description: 'Default confidentiality notice displayed in audit report footers.', isPublic: false },
   {
@@ -1315,7 +1315,7 @@ const SYSTEM_CONFIGS: Array<{
       highRiskFindingDueDays: 60,
       criticalFindingDueDays: 30,
     }, null, 2),
-    description: 'Default SLA windows used by audit planning, findings, and analytics.',
+    description: 'Default OLA windows used by audit planning, findings, and analytics.',
     isPublic: false,
   },
   {

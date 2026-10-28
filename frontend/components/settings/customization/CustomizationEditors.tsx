@@ -102,7 +102,7 @@ const KPI_LABELS: Record<string, FieldMeta> = {
   followUp: { label: 'Follow-up', description: 'Remediation and verification progress.' },
 };
 
-// ───────────────────────── SLA numeric rules ─────────────────────────
+// ───────────────────────── OLA numeric rules ─────────────────────────
 
 const SLA_LABELS: Record<string, FieldMeta> = {
   defaultEngagementSlaDays: { label: 'Default engagement turnaround', description: 'Target time to complete an engagement.' },

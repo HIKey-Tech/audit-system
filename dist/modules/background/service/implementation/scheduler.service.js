@@ -336,7 +336,7 @@ const registerAllJobs = () => {
             logger_util_1.logger.info('Expired tokens cleaned up', { count: result.count });
         },
     });
-    // BG:AUDIT:REMINDER:DAILY — send reminders for audit engagement SLA deadlines
+    // BG:AUDIT:REMINDER:DAILY — send reminders for audit engagement OLA deadlines
     exports.schedulerService.register({
         key: exports.JOB_KEYS.AUDIT_REMINDER_DAILY,
         name: 'Audit Due Date Reminder',
@@ -385,8 +385,8 @@ const registerAllJobs = () => {
                     try {
                         await notification_queue_service_1.notificationQueueService.enqueue('in_app', {
                             userId: recipient.id,
-                            title: 'Audit SLA deadline approaching',
-                            body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                            title: 'Audit OLA deadline approaching',
+                            body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an OLA deadline of ${slaDeadline}.`,
                             type: 'warning',
                             referenceType: 'audit_engagement',
                             referenceId: engagement.id,
@@ -400,8 +400,8 @@ const registerAllJobs = () => {
                         });
                         await notification_queue_service_1.notificationQueueService.enqueue('email', {
                             to: recipient.email,
-                            subject: `SLA Deadline Approaching: ${engagement.reference_number}`,
-                            text: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                            subject: `OLA Deadline Approaching: ${engagement.reference_number}`,
+                            text: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an OLA deadline of ${slaDeadline}.`,
                             eventKey: 'audit.sla.reminder',
                             variables: slaVariables,
                         });

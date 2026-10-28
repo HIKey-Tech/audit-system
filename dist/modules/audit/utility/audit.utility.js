@@ -121,7 +121,7 @@ exports.CONTROL_SETS = {
         {
             controlReference: 'ISO27001-A.8.8',
             controlDescription: 'Vulnerabilities in systems, software, and packages are proactively scanned, analyzed, and patched according to risk ratings.',
-            testProcedure: 'Inspect recent vulnerability scan reports, review patch management schedules, and trace high-risk vulnerabilities to evidence of mitigation within SLA limits.',
+            testProcedure: 'Inspect recent vulnerability scan reports, review patch management schedules, and trace high-risk vulnerabilities to evidence of mitigation within OLA limits.',
         },
         {
             controlReference: 'ISO27001-A.8.25',
@@ -211,7 +211,7 @@ exports.CONTROL_SETS = {
         {
             controlReference: 'ISO27001-A.5.26',
             controlDescription: 'Information security incidents are responded to in accordance with documented procedures and resolved within agreed timelines.',
-            testProcedure: 'Analyse the incident log for response and resolution times against SLA, sample incidents for root-cause analysis and lessons learned, and confirm unresolved incidents are escalated.',
+            testProcedure: 'Analyse the incident log for response and resolution times against OLA, sample incidents for root-cause analysis and lessons learned, and confirm unresolved incidents are escalated.',
         },
         {
             controlReference: 'ISO27001-A.5.30',
@@ -241,12 +241,12 @@ exports.CONTROL_SETS = {
         {
             controlReference: 'ISO27001-A.5.20',
             controlDescription: 'IT contracts and supplier agreements contain the relevant information security, confidentiality, service-level, and right-to-audit requirements.',
-            testProcedure: 'Sample IT contracts from the System Documentation library, check for security, confidentiality, SLA, and right-to-audit clauses, and flag expired or soon-to-expire contracts.',
+            testProcedure: 'Sample IT contracts from the System Documentation library, check for security, confidentiality, OLA, and right-to-audit clauses, and flag expired or soon-to-expire contracts.',
         },
         {
             controlReference: 'ISO27001-A.5.22',
             controlDescription: 'Supplier service delivery and changes to supplier services are regularly monitored, reviewed, and evaluated.',
-            testProcedure: 'Review supplier performance reports against contracted SLAs, confirm service reviews took place, and verify changes to supplier services were risk-assessed.',
+            testProcedure: 'Review supplier performance reports against contracted OLAs, confirm service reviews took place, and verify changes to supplier services were risk-assessed.',
         },
         {
             controlReference: 'PCIDSS-11.4',
@@ -406,13 +406,13 @@ exports.CONTROL_SETS = {
         },
         {
             controlReference: 'ISO20000-8.6.1',
-            controlDescription: 'Incident and service request management procedures ensure timely recording, prioritization, and resolution against agreed SLAs (ISO 20000 Service Management).',
-            testProcedure: 'Sample incident and service-request tickets from the ITSM system, verify SLA timers and prioritization, and confirm resolution and closure evidence.',
+            controlDescription: 'Incident and service request management procedures ensure timely recording, prioritization, and resolution against agreed OLAs (ISO 20000 Service Management).',
+            testProcedure: 'Sample incident and service-request tickets from the ITSM system, verify OLA timers and prioritization, and confirm resolution and closure evidence.',
         },
         {
             controlReference: 'ISO20000-8.7.1',
-            controlDescription: 'Service level agreements are defined, documented, and reviewed against actual service performance (ISO 20000 Service Level Management).',
-            testProcedure: 'Inspect the SLA catalogue, review the latest service performance reports against SLA targets, and confirm evidence of management review of breaches.',
+            controlDescription: 'Operational level agreements (OLAs) are defined, documented, and reviewed against actual service performance (ISO 20000 Service Level Management).',
+            testProcedure: 'Inspect the OLA catalogue, review the latest service performance reports against OLA targets, and confirm evidence of management review of breaches.',
         },
         {
             controlReference: 'COBIT-APO13',

@@ -226,9 +226,9 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows unassigning or reallocating tasks. For personnel managing workload distribution.',
   },
   'escalation:read': {
-    what: 'Track overdue workflows, SLA deadline breaches, and triggered escalation notices',
+    what: 'Track overdue workflows, OLA deadline breaches, and triggered escalation notices',
     who: 'Personnel responsible for monitoring timeline adherence and operational milestones',
-    summary: 'Allows tracking workflow escalations and SLA breaches. For personnel monitoring deadlines.',
+    summary: 'Allows tracking workflow escalations and OLA breaches. For personnel monitoring deadlines.',
   },
   'escalation:acknowledge': {
     what: 'Formally acknowledge and record action plans on escalated workflow alerts',
@@ -236,14 +236,14 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows acknowledging escalated alerts. For personnel responsible for resolving overdue tasks.',
   },
   'escalation_policy:read': {
-    what: 'View escalation tiers, breach response windows, and SLA notification policies',
-    who: 'Personnel reviewing operational response policies and SLA rules',
-    summary: 'Allows viewing escalation rules and policies. For personnel reviewing SLA governance.',
+    what: 'View escalation tiers, breach response windows, and OLA notification policies',
+    who: 'Personnel reviewing operational response policies and OLA rules',
+    summary: 'Allows viewing escalation rules and policies. For personnel reviewing OLA governance.',
   },
   'escalation_policy:update': {
     what: 'Configure escalation thresholds, breach time limits, and notification recipients',
-    who: 'Personnel responsible for governing workflow SLA policies and escalation pathways',
-    summary: 'Allows editing escalation policies. For personnel configuring workflow SLA pathways.',
+    who: 'Personnel responsible for governing workflow OLA policies and escalation pathways',
+    summary: 'Allows editing escalation policies. For personnel configuring workflow OLA pathways.',
   },
   'request:create': {
     what: 'Initiate and dispatch ad-hoc document review, approval, and signature requests',
@@ -659,7 +659,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows viewing integration health and configs. For personnel monitoring external data pipelines.',
   },
   'imoc:read': {
-    what: 'View ingested IT service management tickets, incident logs, and SLA metrics',
+    what: 'View ingested IT service management tickets, incident logs, and OLA metrics',
     who: 'Anyone referencing IT support incidents and service tickets during audits',
     summary: 'Allows viewing ingested IT service tickets. For anyone referencing IT incidents during audits.',
   },
@@ -679,7 +679,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows triggering ticket synchronization. For personnel refreshing operational IT data.',
   },
   'imoc:rules': {
-    what: 'Configure automated rules determining which IT tickets (SLA breaches, critical incidents) are ingested',
+    what: 'Configure automated rules determining which IT tickets (OLA breaches, critical incidents) are ingested',
     who: 'Personnel responsible for establishing automated ticket ingestion criteria',
     summary: 'Allows configuring automated ticket ingestion rules. For personnel setting incident capture criteria.',
   },
@@ -689,7 +689,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows executing ticket ingestion runs. For personnel running automated incident capture.',
   },
   'imoc:export': {
-    what: 'Export ingested ticket records and SLA metrics to CSV or spreadsheet format',
+    what: 'Export ingested ticket records and OLA metrics to CSV or spreadsheet format',
     who: 'Personnel extracting ticket logs for IT audit analysis and compliance reporting',
     summary: 'Allows exporting IT tickets to spreadsheets. For personnel extracting incident records.',
   },
@@ -748,12 +748,12 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
 
   // ── General Settings ──
   'settings:read': {
-    what: 'View system configuration parameters, SLA rules, and organizational settings',
+    what: 'View system configuration parameters, OLA rules, and organizational settings',
     who: 'Anyone needing visibility into organization parameters and workflow configuration',
     summary: 'Allows viewing system settings and configurations. For anyone referencing platform settings.',
   },
   'settings:manage': {
-    what: 'Update organizational details, SLA rules, approval matrices, and system parameters',
+    what: 'Update organizational details, OLA rules, approval matrices, and system parameters',
     who: 'Personnel authorized to administer organizational parameters and governance policies',
     summary: 'Allows managing system settings and approval matrices. For personnel governing platform parameters.',
   },

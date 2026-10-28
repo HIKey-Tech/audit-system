@@ -52,8 +52,8 @@ exports.MONITORING_CHECKS = [
     },
     {
         key: 'imoc_incidents',
-        label: 'IMOC incident SLA',
-        description: 'IMOC tickets opened in the look-back window: SLA breaches and aged open incidents.',
+        label: 'IMOC incident OLA',
+        description: 'IMOC tickets opened in the look-back window: OLA breaches and aged open incidents.',
         analysisType: system_audit_enum_1.AnalysisType.IncidentLog,
         source: system_audit_enum_1.AnalysisSource.Imoc,
         lookback: 'incidentLookbackDays',

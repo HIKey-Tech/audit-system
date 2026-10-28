@@ -189,7 +189,7 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
                             <span className="text-text-secondary">{st.orderName}</span>
                             <div className="text-[11px] text-text-muted mt-0.5">
                               {st.category ?? 'Uncategorised'} · {st.orderStatus}
-                              {st.slaStatus ? ` · SLA: ${st.slaStatus}` : ''}
+                              {st.slaStatus ? ` · OLA: ${st.slaStatus}` : ''}
                             </div>
                           </div>
                           <Button
@@ -225,7 +225,7 @@ export const ImocTicketsTab = ({ engagement }: { engagement: AuditEngagementDeta
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-mono text-sm font-semibold text-text-primary">{ticket.orderNumber}</p>
                     {ticket.lastStatus && <Badge tone="blue">{ticket.lastStatus}</Badge>}
-                    {ticket.lastSlaStatus && <Badge tone={toneForSla(ticket.lastSlaStatus)}>SLA: {ticket.lastSlaStatus}</Badge>}
+                    {ticket.lastSlaStatus && <Badge tone={toneForSla(ticket.lastSlaStatus)}>OLA: {ticket.lastSlaStatus}</Badge>}
                   </div>
                   <p className="mt-1 truncate text-sm text-text-secondary">{ticket.orderName ?? 'Untitled IMOC ticket'}</p>
                   <p className="mt-1 text-xs text-text-muted">

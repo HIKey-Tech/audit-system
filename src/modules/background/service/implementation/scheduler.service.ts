@@ -343,7 +343,7 @@ export const registerAllJobs = (): void => {
     },
   });
 
-  // BG:AUDIT:REMINDER:DAILY — send reminders for audit engagement SLA deadlines
+  // BG:AUDIT:REMINDER:DAILY — send reminders for audit engagement OLA deadlines
   schedulerService.register({
     key: JOB_KEYS.AUDIT_REMINDER_DAILY,
     name: 'Audit Due Date Reminder',
@@ -403,8 +403,8 @@ export const registerAllJobs = (): void => {
               'in_app',
               {
                 userId: recipient.id,
-                title: 'Audit SLA deadline approaching',
-                body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                title: 'Audit OLA deadline approaching',
+                body: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an OLA deadline of ${slaDeadline}.`,
                 type: 'warning',
                 referenceType: 'audit_engagement',
                 referenceId: engagement.id,
@@ -421,8 +421,8 @@ export const registerAllJobs = (): void => {
               'email',
               {
                 to: recipient.email,
-                subject: `SLA Deadline Approaching: ${engagement.reference_number}`,
-                text: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an SLA deadline of ${slaDeadline}.`,
+                subject: `OLA Deadline Approaching: ${engagement.reference_number}`,
+                text: `Audit engagement ${engagement.reference_number} - "${engagement.title}" has an OLA deadline of ${slaDeadline}.`,
                 eventKey: 'audit.sla.reminder',
                 variables: slaVariables,
               },

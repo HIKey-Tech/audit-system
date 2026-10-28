@@ -101,7 +101,7 @@ export const StartAuditWizard = ({
     if (open) reset();
   }, [open]);
 
-  // SLA prefills to the end date until the user edits it.
+  // OLA prefills to the end date until the user edits it.
   useEffect(() => {
     if (!slaTouched && end) setSla(end);
   }, [end, slaTouched]);
@@ -327,7 +327,7 @@ export const StartAuditWizard = ({
       return;
     }
     if (step === 2 && !teamValid) {
-      toast.error('Complete the team and a valid schedule (end and SLA on/after start)');
+      toast.error('Complete the team and a valid schedule (end and OLA on/after start)');
       return;
     }
     setStep((s) => s + 1);
@@ -493,7 +493,7 @@ export const StartAuditWizard = ({
                 <FormField
                   label="Priority"
                   required
-                  tooltip="Drives scheduling and SLA expectations. Critical/High engagements escalate faster when overdue."
+                  tooltip="Drives scheduling and OLA expectations. Critical/High engagements escalate faster when overdue."
                 >
                   <Select value={priority} onChange={(e) => setPriority(e.target.value as Priority)}>
                     <option value="critical">Critical</option>
@@ -600,7 +600,7 @@ export const StartAuditWizard = ({
             <FormField label="Planned end" required>
               <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />
             </FormField>
-            <FormField label="SLA deadline" required tooltip="Target completion date. Breaching it triggers the escalation workflow. Defaults to the end date.">
+            <FormField label="OLA deadline" required tooltip="Target completion date. Breaching it triggers the escalation workflow. Defaults to the end date.">
               <Input
                 type="date"
                 value={sla}
@@ -640,7 +640,7 @@ export const StartAuditWizard = ({
               label="Supporting auditors"
               value={supportingIds.length > 0 ? supportingIds.map(userName).join(', ') : 'None'}
             />
-            <Row label="Schedule" value={`${start} → ${end} (SLA ${sla})`} />
+            <Row label="Schedule" value={`${start} → ${end} (OLA ${sla})`} />
           </dl>
 
           {/* Per-engagement checklist controls */}
