@@ -112,9 +112,9 @@ export const NOTIFICATION_TEMPLATES: Array<{
     channel: 'email',
     name: 'Audit Assignment — Email',
     subject: 'New Audit Assignment: {{engagementTitle}}',
-    body: 'Dear {{assigneeName}},\n\nYou have been assigned to an audit engagement.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nRole: {{assignmentRole}}\nSLA Deadline: {{slaDeadline}}\n\nPlease log in to IAMS to begin your work.\n\nRegards,\nIAMS — Internal Audit System',
+    body: 'Dear {{assigneeName}},\n\nYou have been assigned to an audit engagement.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nRole: {{assignmentRole}}\nOLA Deadline: {{olaDeadline}}\n\nPlease log in to IAMS to begin your work.\n\nRegards,\nIAMS — Internal Audit System',
     description:
-      'Sent to a user when assigned to an audit engagement. Variables: assigneeName, engagementTitle, engagementReference, assignmentRole, slaDeadline.',
+      'Sent to a user when assigned to an audit engagement. Variables: assigneeName, engagementTitle, engagementReference, assignmentRole, olaDeadline.',
   },
   {
     eventKey: 'workflow.assignment.created',
@@ -124,6 +124,66 @@ export const NOTIFICATION_TEMPLATES: Array<{
     body: "You have been assigned to engagement '{{engagementTitle}}' ({{engagementReference}}) as {{assignmentRole}}.",
     description:
       'In-app variant of assignment notification. Variables: engagementTitle, engagementReference, assignmentRole.',
+  },
+
+  // audit.engagement.auditee_assigned
+  {
+    eventKey: 'audit.engagement.auditee_assigned',
+    channel: 'email',
+    name: 'Auditee Audit Scheduled — Email',
+    subject: 'Internal Audit Notification: {{entityName}} — {{engagementTitle}}',
+    body: 'Dear {{auditeeName}},\n\nPlease be informed that your department / entity ({{entityName}}) has been scheduled for an internal audit engagement.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nAudit Type: {{auditType}}\nPlanned Schedule: {{plannedStartDate}} to {{plannedEndDate}}\nLead Auditor: {{leadAuditorName}}\nAudit Manager: {{managerName}}\n\nAs the primary auditee contact, you will be required to provide information, documentation, and operational access as requested by the audit team.\n\nPlease log in to IAMS to review the engagement details and track upcoming document requests.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the primary auditee contact when an engagement is created or reassigned. Variables: auditeeName, entityName, engagementTitle, engagementReference, auditType, plannedStartDate, plannedEndDate, leadAuditorName, managerName.',
+  },
+  {
+    eventKey: 'audit.engagement.auditee_assigned',
+    channel: 'in_app',
+    name: 'Auditee Audit Scheduled — In-App',
+    subject: null,
+    body: "Your entity '{{entityName}}' is scheduled for audit engagement '{{engagementTitle}}' ({{engagementReference}}). Planned: {{plannedStartDate}} to {{plannedEndDate}}.",
+    description:
+      'In-app notification for the auditee when an engagement is scheduled. Variables: entityName, engagementTitle, engagementReference, plannedStartDate, plannedEndDate.',
+  },
+
+  // audit.engagement.lead_assigned
+  {
+    eventKey: 'audit.engagement.lead_assigned',
+    channel: 'email',
+    name: 'Lead Auditor Assignment — Email',
+    subject: 'Lead Auditor Assignment: {{engagementTitle}}',
+    body: 'Dear {{leadAuditorName}},\n\nYou have been assigned as the Lead Auditor for an audit engagement.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nAudit Universe: {{entityName}}\nAudit Type: {{auditType}}\nPlanned Schedule: {{plannedStartDate}} to {{plannedEndDate}}\nOLA Deadline: {{olaDeadline}}\nAudit Manager: {{managerName}}\nAuditee: {{auditeeName}}\n\nPlease log in to IAMS to review the scope, initialize the fieldwork checklist, and begin audit planning.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the lead auditor when assigned to an engagement. Variables: leadAuditorName, engagementTitle, engagementReference, entityName, auditType, plannedStartDate, plannedEndDate, olaDeadline, managerName, auditeeName.',
+  },
+  {
+    eventKey: 'audit.engagement.lead_assigned',
+    channel: 'in_app',
+    name: 'Lead Auditor Assignment — In-App',
+    subject: null,
+    body: "You have been assigned as Lead Auditor for engagement '{{engagementTitle}}' ({{engagementReference}}). Schedule: {{plannedStartDate}} to {{plannedEndDate}}.",
+    description:
+      'In-app notification for the lead auditor when assigned to an engagement. Variables: engagementTitle, engagementReference, plannedStartDate, plannedEndDate.',
+  },
+
+  // audit.engagement.manager_assigned
+  {
+    eventKey: 'audit.engagement.manager_assigned',
+    channel: 'email',
+    name: 'Audit Manager Assignment — Email',
+    subject: 'Audit Manager Assignment: {{engagementTitle}}',
+    body: 'Dear {{managerName}},\n\nYou have been assigned as the Audit Manager overseeing an audit engagement.\n\nEngagement: {{engagementTitle}}\nReference: {{engagementReference}}\nAudit Universe: {{entityName}}\nAudit Type: {{auditType}}\nPlanned Schedule: {{plannedStartDate}} to {{plannedEndDate}}\nOLA Deadline: {{olaDeadline}}\nLead Auditor: {{leadAuditorName}}\nAuditee: {{auditeeName}}\n\nPlease log in to IAMS to oversee the engagement lifecycle and track upcoming approval gates.\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Sent to the audit manager when assigned to an engagement. Variables: managerName, engagementTitle, engagementReference, entityName, auditType, plannedStartDate, plannedEndDate, olaDeadline, leadAuditorName, auditeeName.',
+  },
+  {
+    eventKey: 'audit.engagement.manager_assigned',
+    channel: 'in_app',
+    name: 'Audit Manager Assignment — In-App',
+    subject: null,
+    body: "You have been assigned as Audit Manager for engagement '{{engagementTitle}}' ({{engagementReference}}). Lead: {{leadAuditorName}}.",
+    description:
+      'In-app notification for the audit manager when assigned to an engagement. Variables: engagementTitle, engagementReference, leadAuditorName.',
   },
 
   // audit.escalation.level_1

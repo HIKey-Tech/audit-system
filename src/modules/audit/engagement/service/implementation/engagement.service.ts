@@ -1,9 +1,11 @@
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
+import { config } from '../../../../../shared/config/app.config';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../../../shared/types/api-response.type';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { ActorContext, ChecklistProgress, FindingSeverityCount, FindingStats, WorkingPaperStats } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus, PlanStatus } from '../../../domain/enum/audit.enum';
 import {
@@ -53,7 +55,10 @@ const MANAGER_APPROVAL_PERMISSIONS = ['working_paper:approve', 'report:approve',
  */
 const LEAD_AUDITOR_PERMISSIONS = ['working_paper:create'] as const;
 
-const userNameSelect = { select: { id: true, first_name: true, last_name: true, display_name: true } };
+const userNameSelect = { select: { id: true, first_name: true, last_name: true, display_name: true, email: true } };
+
+const formatUserName = (user?: { first_name: string; last_name: string; display_name: string | null } | null): string =>
+  user?.display_name?.trim() || (user ? `${user.first_name} ${user.last_name}`.trim() : '') || 'User';
 
 const engagementInclude = {
   universe: true,
@@ -117,6 +122,130 @@ export class EngagementService implements IEngagementService {
     if (!auditeeId) return;
     const auditee = await this.userService.getUserById(auditeeId);
     if (!auditee.isActive) throw AppError.badRequest('Assigned auditee account is deactivated');
+  }
+
+  private async _notifyEngagementParties(
+    engagement: {
+      id: string;
+      reference_number: string;
+      title: string;
+      audit_type: string;
+      planned_start_date: Date;
+      planned_end_date: Date;
+      sla_deadline: Date;
+      lead_auditor_id: string;
+      audit_manager_id: string;
+      auditee_id: string;
+      universe?: { name: string } | null;
+      lead_auditor?: { id: string; first_name: string; last_name: string; display_name: string | null; email?: string | null } | null;
+      audit_manager?: { id: string; first_name: string; last_name: string; display_name: string | null; email?: string | null } | null;
+      auditee?: { id: string; first_name: string; last_name: string; display_name: string | null; email?: string | null } | null;
+    },
+    targets: { notifyAuditee?: boolean; notifyLead?: boolean; notifyManager?: boolean } = {
+      notifyAuditee: true,
+      notifyLead: true,
+      notifyManager: true,
+    },
+  ): Promise<void> {
+    try {
+      const entityName = engagement.universe?.name || 'Department / Auditable Entity';
+      const startDate = new Date(engagement.planned_start_date).toISOString().slice(0, 10);
+      const endDate = new Date(engagement.planned_end_date).toISOString().slice(0, 10);
+      const olaDeadline = new Date(engagement.sla_deadline).toISOString().slice(0, 10);
+      const leadAuditorName = formatUserName(engagement.lead_auditor);
+      const managerName = formatUserName(engagement.audit_manager);
+      const auditeeName = formatUserName(engagement.auditee);
+      const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${engagement.id}`;
+
+      const commonVars: Record<string, string> = {
+        entityName,
+        engagementTitle: engagement.title,
+        engagementReference: engagement.reference_number,
+        auditType: engagement.audit_type,
+        plannedStartDate: startDate,
+        plannedEndDate: endDate,
+        olaDeadline,
+        slaDeadline: olaDeadline,
+        leadAuditorName,
+        managerName,
+        auditeeName,
+        actionUrl,
+      };
+
+      // 1. Notify Auditee
+      if (targets.notifyAuditee && engagement.auditee_id) {
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: engagement.auditee_id,
+          title: `Audit Scheduled: ${engagement.title}`,
+          body: `Your department / entity '${entityName}' has been scheduled for audit engagement '${engagement.title}' (${engagement.reference_number}). Planned schedule: ${startDate} to ${endDate}.`,
+          type: 'info',
+          referenceType: 'audit_engagement',
+          referenceId: engagement.id,
+          eventKey: 'audit.engagement.auditee_assigned',
+          variables: commonVars,
+        });
+
+        if (engagement.auditee?.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: engagement.auditee.email,
+            subject: `Internal Audit Notification: ${entityName} — ${engagement.title}`,
+            text: `Dear ${auditeeName},\n\nPlease be informed that your department / entity (${entityName}) has been scheduled for an internal audit engagement.\n\nEngagement: ${engagement.title}\nReference: ${engagement.reference_number}\nAudit Type: ${engagement.audit_type}\nPlanned Schedule: ${startDate} to ${endDate}\nLead Auditor: ${leadAuditorName}\nAudit Manager: ${managerName}\n\nAs the primary auditee contact, you will be required to provide information, documentation, and operational access as requested by the audit team.\n\nPlease log in to IAMS to review the engagement details and track upcoming document requests.\n\nRegards,\nIAMS — Internal Audit System`,
+            eventKey: 'audit.engagement.auditee_assigned',
+            variables: commonVars,
+          });
+        }
+      }
+
+      // 2. Notify Lead Auditor
+      if (targets.notifyLead && engagement.lead_auditor_id) {
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: engagement.lead_auditor_id,
+          title: `Lead Auditor Assignment: ${engagement.title}`,
+          body: `You have been assigned as Lead Auditor for engagement '${engagement.title}' (${engagement.reference_number}). Schedule: ${startDate} to ${endDate}.`,
+          type: 'info',
+          referenceType: 'audit_engagement',
+          referenceId: engagement.id,
+          eventKey: 'audit.engagement.lead_assigned',
+          variables: commonVars,
+        });
+
+        if (engagement.lead_auditor?.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: engagement.lead_auditor.email,
+            subject: `Lead Auditor Assignment: ${engagement.title}`,
+            text: `Dear ${leadAuditorName},\n\nYou have been assigned as the Lead Auditor for an audit engagement.\n\nEngagement: ${engagement.title}\nReference: ${engagement.reference_number}\nAudit Universe: ${entityName}\nAudit Type: ${engagement.audit_type}\nPlanned Schedule: ${startDate} to ${endDate}\nOLA Deadline: ${olaDeadline}\nAudit Manager: ${managerName}\nAuditee: ${auditeeName}\n\nPlease log in to IAMS to review the scope, initialize the fieldwork checklist, and begin audit planning.\n\nRegards,\nIAMS — Internal Audit System`,
+            eventKey: 'audit.engagement.lead_assigned',
+            variables: commonVars,
+          });
+        }
+      }
+
+      // 3. Notify Audit Manager
+      if (targets.notifyManager && engagement.audit_manager_id) {
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: engagement.audit_manager_id,
+          title: `Audit Manager Assignment: ${engagement.title}`,
+          body: `You have been assigned as Audit Manager for engagement '${engagement.title}' (${engagement.reference_number}). Lead: ${leadAuditorName}.`,
+          type: 'info',
+          referenceType: 'audit_engagement',
+          referenceId: engagement.id,
+          eventKey: 'audit.engagement.manager_assigned',
+          variables: commonVars,
+        });
+
+        if (engagement.audit_manager?.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: engagement.audit_manager.email,
+            subject: `Audit Manager Assignment: ${engagement.title}`,
+            text: `Dear ${managerName},\n\nYou have been assigned as the Audit Manager overseeing an audit engagement.\n\nEngagement: ${engagement.title}\nReference: ${engagement.reference_number}\nAudit Universe: ${entityName}\nAudit Type: ${engagement.audit_type}\nPlanned Schedule: ${startDate} to ${endDate}\nOLA Deadline: ${olaDeadline}\nLead Auditor: ${leadAuditorName}\nAuditee: ${auditeeName}\n\nPlease log in to IAMS to oversee the engagement lifecycle and track upcoming approval gates.\n\nRegards,\nIAMS — Internal Audit System`,
+            eventKey: 'audit.engagement.manager_assigned',
+            variables: commonVars,
+          });
+        }
+      }
+    } catch (err) {
+      logger.error('Failed to notify engagement parties', { err, engagementId: engagement.id });
+    }
   }
 
   async getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]> {
@@ -218,6 +347,7 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Audit engagement created from plan item', { engagementId: engagement.id, planItemId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_from_plan', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
+    await this._notifyEngagementParties(engagement);
     return mapEngagementToResponse(engagement);
   }
 
@@ -255,6 +385,7 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Ad-hoc audit engagement created', { engagementId: engagement.id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_adhoc', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
+    await this._notifyEngagementParties(engagement);
     return mapEngagementToResponse(engagement);
   }
 
@@ -315,6 +446,18 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Audit engagement updated', { engagementId: id, actorId: actor.id, managerChanged });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.update', module: 'audit', entityType: 'audit_engagement', entityId: id, oldValues: existing, newValues: mapEngagementToResponse(engagement) });
+
+    const auditeeChanged = dto.auditeeId !== undefined && dto.auditeeId !== existing.auditee_id;
+    const leadChanged = dto.leadAuditorId !== undefined && dto.leadAuditorId !== existing.lead_auditor_id;
+
+    if (auditeeChanged || leadChanged || managerChanged) {
+      await this._notifyEngagementParties(engagement, {
+        notifyAuditee: auditeeChanged,
+        notifyLead: leadChanged,
+        notifyManager: managerChanged,
+      });
+    }
+
     return mapEngagementToResponse(engagement);
   }
 

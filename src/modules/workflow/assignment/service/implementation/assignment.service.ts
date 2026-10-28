@@ -128,12 +128,14 @@ export class AssignmentService implements IAssignmentService {
     }
 
     const assigneeName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+    const olaDeadlineFormatted = engagement.sla_deadline.toISOString().slice(0, 10);
     const assignmentVariables = {
       assigneeName,
       engagementTitle: engagement.title,
       engagementReference: engagement.reference_number,
       assignmentRole: dto.role,
-      slaDeadline: engagement.sla_deadline.toISOString(),
+      olaDeadline: olaDeadlineFormatted,
+      slaDeadline: olaDeadlineFormatted,
     };
 
     // Transactional outbox: the assignment row and its notifications commit
@@ -168,8 +170,8 @@ export class AssignmentService implements IAssignmentService {
         'email',
         {
           to: user.email,
-          subject: 'Audit assignment',
-          text: `You have been assigned to ${engagement.title} as ${dto.role}.`,
+          subject: `Audit Assignment: ${engagement.title}`,
+          text: `Dear ${assigneeName},\n\nYou have been assigned to an audit engagement.\n\nEngagement: ${engagement.title}\nReference: ${engagement.reference_number}\nRole: ${dto.role}\nOLA Deadline: ${olaDeadlineFormatted}\n\nPlease log in to IAMS to begin your work.\n\nRegards,\nIAMS — Internal Audit System`,
           eventKey: 'workflow.assignment.created',
           variables: assignmentVariables,
         },

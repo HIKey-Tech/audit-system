@@ -19,6 +19,7 @@ export declare class EngagementService implements IEngagementService {
     private _assertUniverseActive;
     private _assertDistinctRoles;
     private _assertAuditeeActive;
+    private _notifyEngagementParties;
     getEligibleUsers(query: EligibleUsersQueryDto): Promise<EligibleUserDto[]>;
     createFromPlanItem(planItemId: string, dto: CreateEngagementFromPlanRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;
     createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto>;
