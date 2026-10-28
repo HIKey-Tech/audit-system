@@ -155,10 +155,15 @@ const FollowUpRow = ({
               </Button>
             </>
           )}
-          {canVerify && (
+          {/* Verify only makes sense once the auditee has acted — before that there is
+              no follow-up record to verify. */}
+          {canVerify && ['management_response_received', 'in_remediation'].includes(finding.status) && (
             <Button size="sm" onClick={() => setVerifyOpen((o) => !o)}>
               Verify
             </Button>
+          )}
+          {canVerify && finding.status === 'open' && (
+            <span className="self-center text-xs text-text-muted">Waiting for the auditee&apos;s response</span>
           )}
         </div>
       </div>

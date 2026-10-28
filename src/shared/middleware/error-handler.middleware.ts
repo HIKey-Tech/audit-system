@@ -36,9 +36,18 @@ export const errorHandlerMiddleware = (
     const prismaErr = err as unknown as { code: string; meta?: Record<string, unknown> };
     logger.error( 'Prisma error', { prismaCode: prismaErr.code, meta: prismaErr.meta, path: req.path });
 
-    res.status(400).json({
+    // Translate the common codes into something a user can act on; everything else keeps the
+    // generic message (the real cause is in the logs, tied to the requestId).
+    const friendly: Record<string, { status: number; message: string }> = {
+      P2025: { status: 404, message: 'This item no longer exists, or the step before it has not been completed yet.' },
+      P2002: { status: 409, message: 'This already exists — it cannot be created twice.' },
+      P2003: { status: 409, message: 'This is linked to other records and cannot be changed or removed right now.' },
+    };
+    const mapped = friendly[prismaErr.code];
+
+    res.status(mapped?.status ?? 400).json({
       success: false,
-      message: 'Database operation failed',
+      message: mapped?.message ?? 'Database operation failed',
       timestamp: new Date().toISOString(),
       requestId,
     } as ApiResponse);

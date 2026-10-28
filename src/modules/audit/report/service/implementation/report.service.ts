@@ -1,3 +1,4 @@
+import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
 import { format } from 'date-fns';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
@@ -435,56 +436,7 @@ export class ReportService implements IReportService {
 
   /** One in-app + email summary per responder of the findings assigned to them on this engagement. */
   private async _notifyFindingResponders(engagementId: string, engagementReference: string): Promise<void> {
-    try {
-      const userSelect = { id: true, email: true };
-      const findings = await prisma.audit_Finding.findMany({
-        where: { engagement_id: engagementId, deleted_at: null },
-        select: {
-          id: true,
-          title: true,
-          due_date: true,
-          auditee: { select: userSelect },
-          responders: { select: { user: { select: userSelect } } },
-        },
-      });
-
-      const byUser = new Map<string, { email: string; findings: Array<{ id: string; title: string; dueDate: string }> }>();
-      for (const finding of findings) {
-        const users = [finding.auditee, ...finding.responders.map((r) => r.user)];
-        for (const user of users) {
-          const entry = byUser.get(user.id) ?? { email: user.email, findings: [] };
-          if (!entry.findings.some((f) => f.id === finding.id)) {
-            entry.findings.push({ id: finding.id, title: finding.title, dueDate: finding.due_date.toISOString().slice(0, 10) });
-          }
-          byUser.set(user.id, entry);
-        }
-      }
-
-      for (const [userId, entry] of byUser) {
-        const single = entry.findings.length === 1 ? entry.findings[0] : null;
-        const body = single
-          ? `Finding "${single.title}" (${engagementReference}) has been assigned to you. Due ${single.dueDate}.`
-          : `${entry.findings.length} findings from audit ${engagementReference} have been assigned to you. Please review them and submit your management responses.`;
-
-        await notificationQueueService.enqueueSafe('in_app', {
-          userId,
-          title: 'Audit findings assigned',
-          body,
-          type: 'warning',
-          referenceType: single ? 'audit_finding' : 'audit_engagement',
-          referenceId: single ? single.id : engagementId,
-        });
-        if (entry.email) {
-          await notificationQueueService.enqueueSafe('email', {
-            to: entry.email,
-            subject: `Audit findings assigned: ${engagementReference}`,
-            text: body,
-          });
-        }
-      }
-    } catch (err) {
-      logger.warn('Finding responder notification failed', { engagementId, err });
-    }
+    await notifyFindingResponders(engagementId, engagementReference, 'issued');
   }
 
   private async _getReport(id: string) {

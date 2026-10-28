@@ -5,7 +5,7 @@ import { auditLogService } from '../../../../logging/service/implementation/audi
 import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
 import { IDocumentService } from '../../../../document/service/interface/document.service.interface';
 import { ActorContext } from '../../../domain/entity/audit.entity';
-import { EngagementStatus, FindingStatus, VerificationStatus } from '../../../domain/enum/audit.enum';
+import { EngagementStatus, FindingStatus, VerificationStatus, AUDITEE_RESPONSE_ENGAGEMENT_STATUSES } from '../../../domain/enum/audit.enum';
 import { assertHasPermission } from '../../../utility/audit.utility';
 import {
   ManagementResponseRequestDto,
@@ -195,6 +195,18 @@ export class FollowUpService implements IFollowUpService {
         },
       }) > 0;
       if (!allowed) throw AppError.forbidden('Only the assigned audit team can verify remediation');
+    }
+
+    // The follow-up record is created when the auditee first responds or uploads evidence.
+    // Verifying before that would otherwise fail with a raw database "record not found".
+    const existingFollowUp = await prisma.audit_Follow_Up.findUnique({
+      where: { finding_id: findingId },
+      select: { id: true },
+    });
+    if (!existingFollowUp) {
+      throw AppError.badRequest(
+        'The auditee has not responded to this finding yet — there is nothing to verify. Ask them to submit a management response and remediation evidence first.',
+      );
     }
 
     const followUp = await prisma.$transaction(async (tx) => {
@@ -470,8 +482,12 @@ export class FollowUpService implements IFollowUpService {
    * issued and while the finding is still being worked — not on closed/verified findings.
    */
   private _assertAcceptsAuditeeAction(finding: Awaited<ReturnType<FollowUpService['_getFinding']>>): void {
-    if (finding.engagement.status !== EngagementStatus.Reported) {
-      throw AppError.badRequest('Findings can only be responded to after the audit report has been issued');
+    // The management response is collected at the draft stage (Quality Assurance) so it can
+    // go into the issued report; it stays open after issue for remediation follow-up.
+    if (!(AUDITEE_RESPONSE_ENGAGEMENT_STATUSES as readonly string[]).includes(finding.engagement.status)) {
+      throw AppError.badRequest(
+        'Findings can be responded to once fieldwork is complete and the engagement is in Quality Assurance',
+      );
     }
     const open: string[] = [FindingStatus.Open, FindingStatus.ManagementResponseReceived, FindingStatus.InRemediation];
     if (!open.includes(finding.status)) {

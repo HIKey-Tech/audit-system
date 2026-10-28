@@ -119,3 +119,21 @@ export enum ChecklistResult {
   NotApplicable = 'not_applicable',
   NotTested = 'not_tested',
 }
+
+/**
+ * Engagement stages in which the auditee can see their findings: from Quality
+ * Assurance (fieldwork finished, draft report being prepared) onward. The
+ * management response is collected *before* the report is issued so it can be
+ * included in the issued report.
+ */
+export const AUDITEE_VISIBLE_ENGAGEMENT_STATUSES = [
+  EngagementStatus.UnderReview,
+  EngagementStatus.Reported,
+  EngagementStatus.Closed,
+] as const;
+
+/** Stages in which the auditee may still respond to a finding / submit remediation evidence. */
+export const AUDITEE_RESPONSE_ENGAGEMENT_STATUSES = [
+  EngagementStatus.UnderReview,
+  EngagementStatus.Reported,
+] as const;

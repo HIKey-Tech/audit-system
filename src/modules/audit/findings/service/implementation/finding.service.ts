@@ -14,7 +14,7 @@ import { IApprovalService } from '../../../../workflow/approval/service/interfac
 import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
-import { EngagementStatus, FindingStatus } from '../../../domain/enum/audit.enum';
+import { EngagementStatus, FindingStatus, AUDITEE_VISIBLE_ENGAGEMENT_STATUSES } from '../../../domain/enum/audit.enum';
 import { FINDING_TRANSITIONS, assertHasPermission, assertTransition, isFindingAuditee, isFindingOversight } from '../../../utility/audit.utility';
 import { resolveViewerContext } from '../../../engagement/utility/engagement-visibility.util';
 import {
@@ -232,12 +232,12 @@ export class FindingService implements IFindingService {
       where: {
         id,
         deleted_at: null,
-        // An auditee only sees findings once the report is issued (engagement reported/closed),
-        // matching the list endpoints.
+        // An auditee sees findings from Quality Assurance onward (fieldwork done), so they can
+        // respond before the report is issued — matching the list endpoints.
         ...(isAuditee && {
           AND: [
             this._auditeeMatch(actor.id),
-            { engagement: { status: { in: [EngagementStatus.Reported, EngagementStatus.Closed] } } },
+            { engagement: { status: { in: [...AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } } },
           ],
         }),
       },
@@ -338,10 +338,10 @@ export class FindingService implements IFindingService {
     if (!eng) throw AppError.notFound('Audit engagement');
     const viewer = await resolveViewerContext(engagementId, eng, actor);
 
-    // A pure auditee only sees findings once the report has been issued
-    // (engagement is reported/closed); before that, findings are still draft/internal.
-    const reportIssued = eng.status === EngagementStatus.Reported || eng.status === EngagementStatus.Closed;
-    if (viewer.role === 'auditee' && !reportIssued) {
+    // A pure auditee sees findings from Quality Assurance onward; during fieldwork
+    // (planned / in progress) findings are still being drafted and stay internal.
+    const visibleToAuditee = (AUDITEE_VISIBLE_ENGAGEMENT_STATUSES as readonly string[]).includes(eng.status);
+    if (viewer.role === 'auditee' && !visibleToAuditee) {
       return [];
     }
 
@@ -376,12 +376,12 @@ export class FindingService implements IFindingService {
     }
     if (isAuditee) {
       // A responder sees a finding whether they are the primary auditee or a co-responder,
-      // but — exactly like the engagement Findings tab — only once the engagement's report
-      // has been issued (reported/closed). Before that, findings are draft/internal, so this
-      // gate stops the standalone Findings page leaking pre-issue findings to the auditee.
+      // but — exactly like the engagement Findings tab — only from Quality Assurance onward.
+      // During fieldwork findings are draft/internal, so this gate stops the standalone
+      // Findings page leaking them to the auditee.
       and.push(this._auditeeMatch(actor.id));
       and.push({
-        engagement: { status: { in: [EngagementStatus.Reported, EngagementStatus.Closed] } },
+        engagement: { status: { in: [...AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } },
       });
     } else if (!isOversight) {
       and.push({

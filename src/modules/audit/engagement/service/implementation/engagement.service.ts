@@ -1,3 +1,4 @@
+import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { config } from '../../../../../shared/config/app.config';
@@ -511,6 +512,9 @@ export class EngagementService implements IEngagementService {
 
     if (newStatus === EngagementStatus.InProgress) {
       await this.checklistService.populateChecklists(id, actor.id);
+    }
+    if (newStatus === EngagementStatus.UnderReview) {
+      await notifyFindingResponders(id, engagement.reference_number, 'draft');
     }
 
     logger.info('Audit engagement status updated', { engagementId: id, status: newStatus, actorId: actor.id });

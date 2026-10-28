@@ -2,6 +2,7 @@ import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
+import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
 import { canClose, canEnterReported, canEnterUnderReview } from './engagement-gates';
 
 type ApprovalEntityType = 'audit_working_paper' | 'audit_finding_closure';
@@ -34,7 +35,7 @@ export const reconcileEngagementStatus = async (engagementId: string, actorId: s
   for (let hop = 0; hop < 3; hop += 1) {
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
-      select: { id: true, status: true, universe_id: true },
+      select: { id: true, status: true, universe_id: true, reference_number: true },
     });
     if (!engagement) return;
 
@@ -56,6 +57,11 @@ export const reconcileEngagementStatus = async (engagementId: string, actorId: s
         });
       }
     });
+
+    if (target === EngagementStatus.UnderReview) {
+      // Fieldwork is complete: ask the auditee to respond to their findings before the report is issued.
+      await notifyFindingResponders(engagementId, engagement.reference_number, 'draft');
+    }
 
     logger.info('Audit engagement auto-advanced', { engagementId, from: engagement.status, to: target, actorId });
     auditLogService.logAsync({
