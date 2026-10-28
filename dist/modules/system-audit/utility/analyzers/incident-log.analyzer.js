@@ -113,7 +113,7 @@ const analyse = (records, params, context) => {
             exceptions.push({
                 ruleCode: 'SLA_BREACHED',
                 severity: breachSeverity,
-                title: `Incident ${label} is marked "${slaStatus}" against its OLA in the source system`,
+                title: `Incident ${label} is marked "${slaStatus}" against its SLA in the source system`,
                 recordRef: id,
                 details: { ...base, slaStatus },
             });
@@ -163,7 +163,7 @@ const analyse = (records, params, context) => {
 exports.incidentLogAnalyzer = {
     type: system_audit_enum_1.AnalysisType.IncidentLog,
     label: 'Incident management review',
-    description: 'Examines security and service incident records — response and resolution against OLA, aged open incidents, and closures without resolution notes. Works on an ITSM export or live read-only IMOC tickets.',
+    description: 'Examines security and service incident records — response and resolution against SLA, aged open incidents, and closures without resolution notes. Works on an ITSM export or live read-only IMOC tickets.',
     controls: ['ISO27001-A.5.26', 'ISO27001-A.5.24', 'ISO20000-8.6.1', 'GDPR-ART33', 'SOX-ITGC-CO'],
     fields: [
         { key: 'incident_id', label: 'Incident ID', kind: 'text', required: true, synonyms: ['incident', 'incident number', 'number', 'ticket', 'ticket id', 'ticket number', 'id', 'reference', 'order number'] },
@@ -176,13 +176,13 @@ exports.incidentLogAnalyzer = {
         { key: 'status', label: 'Status', kind: 'text', required: false, synonyms: ['state', 'incident status', 'order status'] },
         { key: 'resolution', label: 'Resolution notes', kind: 'text', required: false, synonyms: ['resolution', 'close notes', 'closure notes', 'root cause', 'resolution code'] },
         { key: 'assignee', label: 'Assigned to', kind: 'text', required: false, synonyms: ['owner', 'resolver', 'assignment group', 'current user'] },
-        { key: 'sla_status', label: 'OLA status', kind: 'text', required: false, synonyms: ['sla', 'ola', 'made sla', 'made ola', 'sla breached', 'ola breached', 'breached'] },
+        { key: 'sla_status', label: 'SLA status', kind: 'text', required: false, synonyms: ['sla', 'made sla', 'sla breached', 'breached'] },
     ],
     parametersSchema: ParametersSchema,
     rules: [
-        { code: 'RESPONSE_SLA_BREACH', label: 'First response later than OLA', severity: system_audit_enum_1.ExceptionSeverity.Medium },
-        { code: 'RESOLUTION_SLA_BREACH', label: 'Resolved later than OLA', severity: 'varies' },
-        { code: 'SLA_BREACHED', label: 'Source system reports OLA breach', severity: 'varies' },
+        { code: 'RESPONSE_SLA_BREACH', label: 'First response later than SLA', severity: system_audit_enum_1.ExceptionSeverity.Medium },
+        { code: 'RESOLUTION_SLA_BREACH', label: 'Resolved later than SLA', severity: 'varies' },
+        { code: 'SLA_BREACHED', label: 'Source system reports SLA breach', severity: 'varies' },
         { code: 'UNRESOLVED_AGED', label: 'Open longer than threshold', severity: 'varies' },
         { code: 'CLOSED_WITHOUT_RESOLUTION', label: 'Closed without resolution notes', severity: system_audit_enum_1.ExceptionSeverity.Low },
     ],

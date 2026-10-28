@@ -307,7 +307,7 @@ export default function IntegrationsPage(): JSX.Element {
   const openRiskModal = (ticket: StoredTicketDetail) => {
     setRiskForm({
       title: `Service disruption: ${ticket.orderName || ticket.orderNumber}`,
-      description: `Raised from IMOC ticket #${ticket.orderNumber} (${ticket.category || 'Uncategorised'}). Status: ${ticket.orderStatus}, OLA: ${ticket.slaStatus ?? 'N/A'}.`,
+      description: `Raised from IMOC ticket #${ticket.orderNumber} (${ticket.category || 'Uncategorised'}). Status: ${ticket.orderStatus}, SLA: ${ticket.slaStatus ?? 'N/A'}.`,
       categoryId: '',
       likelihood: ticket.slaStatus === 'BREAK' ? 4 : 3,
       impact: ticket.priority === 'HIGH' || ticket.priority === 'P1' ? 4 : 3,
@@ -413,7 +413,7 @@ export default function IntegrationsPage(): JSX.Element {
 
             <Card>
               <div className="flex items-center justify-between">
-                <span className="text-xs font-medium text-text-muted">OLA Breached (BREAK)</span>
+                <span className="text-xs font-medium text-text-muted">SLA Breached (BREAK)</span>
                 <ShieldAlert className="h-4 w-4 text-danger" />
               </div>
               <p className="mt-2 text-2xl font-bold text-danger">
@@ -493,7 +493,7 @@ export default function IntegrationsPage(): JSX.Element {
                     ))}
                 </select>
 
-                {/* OLA Filter */}
+                {/* SLA Filter */}
                 <select
                   value={selectedSla}
                   onChange={(e) => {
@@ -502,7 +502,7 @@ export default function IntegrationsPage(): JSX.Element {
                   }}
                   className="h-9 rounded-md border border-border bg-surface px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
                 >
-                  <option value="">All OLAs</option>
+                  <option value="">All SLAs</option>
                   <option value="BREAK">BREAK (Breached)</option>
                   <option value="NORMAL">NORMAL</option>
                 </select>
@@ -587,7 +587,7 @@ export default function IntegrationsPage(): JSX.Element {
                       <th className="px-4 py-3 font-semibold">Title</th>
                       <th className="px-4 py-3 font-semibold">Category</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
-                      <th className="px-4 py-3 font-semibold">OLA</th>
+                      <th className="px-4 py-3 font-semibold">SLA</th>
                       <th className="px-4 py-3 font-semibold">Current Handler</th>
                       <th className="px-4 py-3 font-semibold">Created In IMOC</th>
                       <th className="px-4 py-3 font-semibold">Audit Context</th>
@@ -616,7 +616,7 @@ export default function IntegrationsPage(): JSX.Element {
                           </td>
                           <td className="whitespace-nowrap px-4 py-3">
                             <Badge tone={isBreached ? 'red' : ticket.slaStatus ? 'green' : 'gray'}>
-                              {ticket.slaStatus ? `OLA: ${ticket.slaStatus}` : 'N/A'}
+                              {ticket.slaStatus ? `SLA: ${ticket.slaStatus}` : 'N/A'}
                             </Badge>
                           </td>
                           <td className="whitespace-nowrap px-4 py-3 text-text-muted">
@@ -896,7 +896,7 @@ export default function IntegrationsPage(): JSX.Element {
               <Badge tone="gray">{ticketDetailQuery.data.orderStatus}</Badge>
               {ticketDetailQuery.data.slaStatus && (
                 <Badge tone={ticketDetailQuery.data.slaStatus === 'BREAK' ? 'red' : 'green'}>
-                  OLA: {ticketDetailQuery.data.slaStatus}
+                  SLA: {ticketDetailQuery.data.slaStatus}
                 </Badge>
               )}
               {ticketDetailQuery.data.priority && (
@@ -1025,7 +1025,7 @@ export default function IntegrationsPage(): JSX.Element {
             <Input
               value={ruleForm.name}
               onChange={(e) => setRuleForm({ ...ruleForm, name: e.target.value })}
-              placeholder="e.g. OLA Breached Core Incidents"
+              placeholder="e.g. SLA Breached Core Incidents"
               required
             />
           </div>
@@ -1107,7 +1107,7 @@ export default function IntegrationsPage(): JSX.Element {
             </div>
 
             <div>
-              <span className="font-medium text-text-primary block mb-1">OLA Statuses:</span>
+              <span className="font-medium text-text-primary block mb-1">SLA Statuses:</span>
               <div className="flex flex-wrap gap-3">
                 <label className="flex items-center gap-1.5 cursor-pointer">
                   <input
@@ -1188,7 +1188,7 @@ export default function IntegrationsPage(): JSX.Element {
                       </span>
                       <span>{t.orderName}</span>
                       <span className="text-text-muted ml-1">
-                        ({t.orderStatus}, OLA: {t.slaStatus ?? 'None'})
+                        ({t.orderStatus}, SLA: {t.slaStatus ?? 'None'})
                       </span>
                     </li>
                   ))}

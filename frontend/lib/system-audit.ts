@@ -86,8 +86,8 @@ export const ANALYSIS_META: Record<AnalysisType, AnalysisMeta> = {
     hint: 'An incident export from the ITSM/SIEM tool — or run it live on IMOC tickets.',
     headline: [
       { key: 'incidents', label: 'Incidents' },
-      { key: 'slaCompliance', label: 'OLA compliance', suffix: '%' },
-      { key: 'resolutionSlaBreaches', label: 'OLA breaches', bad: true },
+      { key: 'slaCompliance', label: 'SLA compliance', suffix: '%' },
+      { key: 'resolutionSlaBreaches', label: 'SLA breaches', bad: true },
       { key: 'agedOpenIncidents', label: 'Aged open', bad: true },
     ],
   },

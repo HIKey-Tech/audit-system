@@ -659,7 +659,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows viewing integration health and configs. For personnel monitoring external data pipelines.',
   },
   'imoc:read': {
-    what: 'View ingested IT service management tickets, incident logs, and OLA metrics',
+    what: 'View ingested IT service management tickets, incident logs, and SLA metrics',
     who: 'Anyone referencing IT support incidents and service tickets during audits',
     summary: 'Allows viewing ingested IT service tickets. For anyone referencing IT incidents during audits.',
   },
@@ -679,7 +679,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows triggering ticket synchronization. For personnel refreshing operational IT data.',
   },
   'imoc:rules': {
-    what: 'Configure automated rules determining which IT tickets (OLA breaches, critical incidents) are ingested',
+    what: 'Configure automated rules determining which IT tickets (SLA breaches, critical incidents) are ingested',
     who: 'Personnel responsible for establishing automated ticket ingestion criteria',
     summary: 'Allows configuring automated ticket ingestion rules. For personnel setting incident capture criteria.',
   },
@@ -689,7 +689,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows executing ticket ingestion runs. For personnel running automated incident capture.',
   },
   'imoc:export': {
-    what: 'Export ingested ticket records and OLA metrics to CSV or spreadsheet format',
+    what: 'Export ingested ticket records and SLA metrics to CSV or spreadsheet format',
     who: 'Personnel extracting ticket logs for IT audit analysis and compliance reporting',
     summary: 'Allows exporting IT tickets to spreadsheets. For personnel extracting incident records.',
   },
