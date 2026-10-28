@@ -38,7 +38,8 @@ const DOCUMENT_TEMPLATES: Array<{
 // ─────────────────────────────────────────────────────────────
 // Notification templates (event-driven body + subject)
 // ─────────────────────────────────────────────────────────────
-export { NOTIFICATION_TEMPLATES } from '../src/modules/messaging/constants/notification-templates.constant';
+import { NOTIFICATION_TEMPLATES } from '../src/modules/messaging/constants/notification-templates.constant';
+export { NOTIFICATION_TEMPLATES };
 
 // ─────────────────────────────────────────────────────────────
 // Permissions
