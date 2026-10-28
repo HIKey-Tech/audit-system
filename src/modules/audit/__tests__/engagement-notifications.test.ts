@@ -1,4 +1,4 @@
-import { NOTIFICATION_TEMPLATES } from '../../../../prisma/seed';
+import { NOTIFICATION_TEMPLATES } from '../../messaging/constants/notification-templates.constant';
 
 describe('engagement assignment notification templates', () => {
   it('contains email and in_app templates for auditee_assigned', () => {
