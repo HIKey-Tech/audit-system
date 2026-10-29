@@ -22,7 +22,7 @@ import { useSearchInput } from '@/lib/hooks/useSearchInput';
 import { formatDate } from '@/lib/utils/format';
 import type { AuditFinding } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
-import { auditTypeLabel } from '@/lib/audit-domains';
+import { SELECTABLE_AUDIT_TYPES, auditTypeLabel } from '@/lib/audit-domains';
 
 export default function FindingsListPage(): JSX.Element {
   const router = useRouter();
@@ -201,10 +201,11 @@ export default function FindingsListPage(): JSX.Element {
             onChange={(e) => set({ category: e.target.value, page: '1' })}
           >
             <option value="">All categories</option>
-            <option value="it">System/IT</option>
-            <option value="financial">Financial</option>
-            <option value="compliance">Compliance</option>
-            <option value="operational">Operational</option>
+            {SELECTABLE_AUDIT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.shortLabel}
+              </option>
+            ))}
           </Select>
         </div>
       </Card>

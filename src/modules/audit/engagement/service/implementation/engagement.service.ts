@@ -1,4 +1,6 @@
 import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
+import { ensureAuditeeRoleAssigned } from '../../../utility/auditee-role.utility';
+import { notifyEngagementLifecycleChange } from '../../../utility/lifecycle-notify.utility';
 import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { config } from '../../../../../shared/config/app.config';
@@ -352,7 +354,9 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Audit engagement created from plan item', { engagementId: engagement.id, planItemId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_from_plan', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
+    await ensureAuditeeRoleAssigned([engagement.auditee_id], actor.id);
     await this._notifyEngagementParties(engagement);
+    await notifyEngagementLifecycleChange(engagement.id, null, engagement.status, actor.id);
     return mapEngagementToResponse(engagement);
   }
 
@@ -390,7 +394,9 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Ad-hoc audit engagement created', { engagementId: engagement.id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_adhoc', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
+    await ensureAuditeeRoleAssigned([engagement.auditee_id], actor.id);
     await this._notifyEngagementParties(engagement);
+    await notifyEngagementLifecycleChange(engagement.id, null, engagement.status, actor.id);
     return mapEngagementToResponse(engagement);
   }
 
@@ -455,6 +461,10 @@ export class EngagementService implements IEngagementService {
     const auditeeChanged = dto.auditeeId !== undefined && dto.auditeeId !== existing.auditee_id;
     const leadChanged = dto.leadAuditorId !== undefined && dto.leadAuditorId !== existing.lead_auditor_id;
 
+    if (auditeeChanged) {
+      await ensureAuditeeRoleAssigned([engagement.auditee_id], actor.id);
+    }
+
     if (auditeeChanged || leadChanged || managerChanged) {
       await this._notifyEngagementParties(engagement, {
         notifyAuditee: auditeeChanged,
@@ -516,6 +526,8 @@ export class EngagementService implements IEngagementService {
     if (newStatus === EngagementStatus.UnderReview) {
       await notifyFindingResponders(id, engagement.reference_number, 'draft');
     }
+
+    await notifyEngagementLifecycleChange(id, engagement.status, newStatus, actor.id);
 
     logger.info('Audit engagement status updated', { engagementId: id, status: newStatus, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, oldValues: { status: engagement.status }, newValues: { status: newStatus } });

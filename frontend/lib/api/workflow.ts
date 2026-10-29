@@ -64,6 +64,22 @@ export const workflowApi = {
   // assignments
   createAssignment: (dto: { engagementId: string; userId: string; role: WorkflowAssignmentRole }) =>
     api.post<WorkflowAssignment>('/workflow/assignments', dto),
+  substituteStaff: (dto: {
+    engagementId: string;
+    role: 'supporting_auditor' | 'lead_auditor' | 'audit_manager';
+    outgoingUserId?: string;
+    incomingUserId: string;
+    reason: string;
+  }) =>
+    api.post<{
+      engagementId: string;
+      role: 'supporting_auditor' | 'lead_auditor' | 'audit_manager';
+      outgoingUserId: string | null;
+      outgoingUserName: string | null;
+      incomingUserId: string;
+      incomingUserName: string;
+      reason: string;
+    }>('/workflow/assignments/substitute', dto),
   listMine: () => api.get<WorkflowAssignment[]>('/workflow/assignments/mine'),
   /** Assignments the caller can manage (oversight: all; lead/manager: their engagements). */
   listManageable: () => api.get<WorkflowAssignment[]>('/workflow/assignments'),

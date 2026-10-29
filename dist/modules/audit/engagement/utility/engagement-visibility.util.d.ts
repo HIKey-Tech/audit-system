@@ -26,7 +26,7 @@ export declare const repositoryEngagementScope: (actor: ActorContext) => Prisma.
  * privileged `team` role for an unrecognised viewer.
  */
 export declare const resolveViewerContext: (engagementId: string, parties: EngagementParties, actor: ActorContext) => Promise<ViewerContext>;
-/** Throws 403 for a pure auditee trying to read internal engagement artifacts. */
+/** Throws 403 for a restricted viewer lacking internal artifact visibility. */
 export declare const assertCanViewInternalArtifacts: (engagementId: string, actor: ActorContext) => Promise<void>;
 export {};
 //# sourceMappingURL=engagement-visibility.util.d.ts.map

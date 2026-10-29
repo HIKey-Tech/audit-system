@@ -1,4 +1,11 @@
 import { FindingResponseDto, mapFindingToResponse } from '../../../findings/dto/response/finding.response.dto';
+export interface ReportCommentDto {
+    id: string;
+    authorId: string;
+    authorName: string;
+    body: string;
+    createdAt: string;
+}
 export interface ReportResponseDto {
     id: string;
     engagementId: string;
@@ -12,6 +19,8 @@ export interface ReportResponseDto {
     versionNumber: number;
     documentId: string | null;
     templateId: string | null;
+    signOffMode?: 'cae_only' | 'cae_and_dg';
+    comments?: ReportCommentDto[];
     issuedAt: string | null;
     rejectionReason: string | null;
     createdById: string;
@@ -39,5 +48,8 @@ export declare const mapReportToResponse: (report: {
     created_by_id: string;
     created_at: Date;
     updated_at: Date;
+}, extra?: {
+    signOffMode?: "cae_only" | "cae_and_dg";
+    comments?: ReportCommentDto[];
 }) => ReportResponseDto;
 //# sourceMappingURL=report.response.dto.d.ts.map

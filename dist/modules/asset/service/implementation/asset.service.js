@@ -595,19 +595,37 @@ class AssetService {
                 orderBy: { created_at: 'desc' },
             }),
         ]);
+        // Resolve readable names in one batched lookup per type, so the table shows
+        // "TRAINING 2 - Procurement" rather than a raw UUID.
+        const [universeNames, engagementNames, findingNames, riskNames, evidenceNames] = await Promise.all([
+            prisma_client_1.prisma.audit_Universe.findMany({ where: { id: { in: universeLinks.map((l) => l.universe_id) } }, select: { id: true, name: true } }),
+            prisma_client_1.prisma.audit_Engagement.findMany({ where: { id: { in: engagementLinks.map((l) => l.engagement_id) } }, select: { id: true, reference_number: true, title: true } }),
+            prisma_client_1.prisma.audit_Finding.findMany({ where: { id: { in: findingLinks.map((l) => l.finding_id) } }, select: { id: true, title: true } }),
+            prisma_client_1.prisma.risk_Register.findMany({ where: { id: { in: riskLinks.map((l) => l.risk_id) } }, select: { id: true, title: true } }),
+            prisma_client_1.prisma.audit_Evidence.findMany({ where: { id: { in: evidenceLinks.map((l) => l.evidence_id) } }, select: { id: true, file_name: true } }),
+        ]);
+        const nameOf = (rows, label) => new Map(rows.map((row) => [row.id, label(row)]));
+        const universeLabel = nameOf(universeNames, (r) => r.name);
+        const engagementLabel = nameOf(engagementNames, (r) => `${r.reference_number} — ${r.title}`);
+        const findingLabel = nameOf(findingNames, (r) => r.title);
+        const riskLabel = nameOf(riskNames, (r) => r.title);
+        const evidenceLabel = nameOf(evidenceNames, (r) => r.file_name);
         return {
-            universeLinks: universeLinks.map((link) => this._mapLink(link.id, assetId, 'audit_universe', link.universe_id, link.created_by_id, link.created_at)),
+            universeLinks: universeLinks.map((link) => this._mapLink(link.id, assetId, 'audit_universe', link.universe_id, link.created_by_id, link.created_at, { linkedEntityName: universeLabel.get(link.universe_id) })),
             engagementLinks: engagementLinks.map((link) => this._mapLink(link.id, assetId, 'audit_engagement', link.engagement_id, link.created_by_id, link.created_at, {
+                linkedEntityName: engagementLabel.get(link.engagement_id),
                 scopeRole: link.scope_role,
                 scopeReason: link.scope_reason,
             })),
             findingLinks: findingLinks.map((link) => this._mapLink(link.id, assetId, 'audit_finding', link.finding_id, link.created_by_id, link.created_at, {
+                linkedEntityName: findingLabel.get(link.finding_id),
                 impactSummary: link.impact_summary,
             })),
             riskLinks: riskLinks.map((link) => this._mapLink(link.id, assetId, 'risk_register', link.risk_id, link.created_by_id, link.created_at, {
+                linkedEntityName: riskLabel.get(link.risk_id),
                 linkReason: link.link_reason,
             })),
-            evidenceLinks: evidenceLinks.map((link) => this._mapLink(link.id, assetId, 'audit_evidence', link.evidence_id, link.created_by_id, link.created_at)),
+            evidenceLinks: evidenceLinks.map((link) => this._mapLink(link.id, assetId, 'audit_evidence', link.evidence_id, link.created_by_id, link.created_at, { linkedEntityName: evidenceLabel.get(link.evidence_id) })),
         };
     }
     _engagementLinkScope(actor) {

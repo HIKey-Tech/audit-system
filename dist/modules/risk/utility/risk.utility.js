@@ -4,7 +4,7 @@ exports.toIso = exports.getRiskScoreBand = exports.calculateRiskScore = exports.
 const app_error_1 = require("../../../shared/errors/app.error");
 const risk_enum_1 = require("../domain/enum/risk.enum");
 /** Permission-based authorization gate (see audit.utility for rationale). */
-const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
+const assertHasPermission = (permissions, required, message = app_error_1.PERMISSION_DENIED_MESSAGE) => {
     if (!permissions.includes(required)) {
         throw app_error_1.AppError.forbidden(message);
     }

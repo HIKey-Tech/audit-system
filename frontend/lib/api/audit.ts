@@ -439,6 +439,10 @@ export const findingsApi = {
     api.patch<AuditFinding>(`/audit/findings/${id}/status`, { status }),
   close: (id: string) =>
     api.post<AuditFinding>(`/audit/findings/${id}/close`),
+  listComments: (id: string) =>
+    api.get<Array<{ id: string; findingId: string; authorId: string; authorName: string; body: string; createdAt: string }>>(`/audit/findings/${id}/comments`),
+  addComment: (id: string, body: string) =>
+    api.post<{ id: string; findingId: string; authorId: string; authorName: string; body: string; createdAt: string }>(`/audit/findings/${id}/comments`, { body }),
   /** Fix 4: no DELETE /audit/findings — stub that throws */
   remove: (_id: string): Promise<void> => {
     throw new Error('Not supported: findings cannot be deleted via API');

@@ -11,6 +11,9 @@ export declare class ChecklistController {
     private _getChecklists;
     private _getChecklistProgress;
     private _createChecklistItem;
+    private _bulkCreateChecklistItems;
+    private _importFrameworkControls;
+    private _importDocumentControls;
     private _updateChecklistItem;
     private _linkEvidenceToChecklistItem;
 }

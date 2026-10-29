@@ -8,6 +8,10 @@ export interface EvidenceResponseDto {
     fileName: string;
     fileType: string;
     uploadedById: string;
+    /** Uploader's display name — present on list responses. */
+    uploadedByName?: string;
+    /** File size in bytes — present on list responses. */
+    fileSize?: number;
     isDisputed: boolean;
     disputeReason: string | null;
     uploadedAt: string;
@@ -26,6 +30,14 @@ export declare const mapEvidenceToResponse: (evidence: {
     dispute_reason: string | null;
     uploaded_at: Date;
     created_at: Date;
+    uploaded_by?: {
+        first_name: string;
+        last_name: string;
+        display_name: string | null;
+    } | null;
+    document?: {
+        file_size: number;
+    } | null;
 }) => EvidenceResponseDto;
 /**
  * Join shape for the centralized evidence repository — pulls the context an

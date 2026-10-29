@@ -5,7 +5,7 @@ const app_error_1 = require("../../../shared/errors/app.error");
 const prisma_client_1 = require("../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../shared/utils/logger.util");
 /** Permission-based authorization gate (see audit.utility for rationale). */
-const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
+const assertHasPermission = (permissions, required, message = app_error_1.PERMISSION_DENIED_MESSAGE) => {
     if (!permissions.includes(required)) {
         throw app_error_1.AppError.forbidden(message);
     }

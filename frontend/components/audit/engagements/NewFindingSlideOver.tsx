@@ -18,6 +18,7 @@ import { checklistsApi, findingsApi, workingPapersApi } from '@/lib/api/audit';
 import { riskApi } from '@/lib/api/risk';
 import { usersApi } from '@/lib/api/users';
 import { usePermission } from '@/hooks/usePermission';
+import { SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
 import type { AuditChecklistItem, AuditEngagementDetail } from '@/lib/types/domain';
 
 /** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
@@ -25,10 +26,23 @@ function toISODatetime(dateStr: string): string {
   return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
 }
 
+const FINDING_CATEGORIES = [
+  'it',
+  'systems',
+  'financial',
+  'compliance',
+  'operational',
+  'pension',
+  'procurement',
+  'hr_payroll',
+  'project',
+  'special',
+] as const;
+
 const Schema = z.object({
   title: z.string().min(2).max(200),
   description: z.string().min(1),
-  category: z.enum(['it', 'financial', 'compliance', 'operational']),
+  category: z.enum(FINDING_CATEGORIES),
   severity: z.enum(['critical', 'high', 'medium', 'low', 'informational']),
   rootCause: z.string().min(1, 'Root cause is required'),
   riskImplication: z.string().min(1, 'Risk implication is required'),
@@ -73,7 +87,9 @@ export const NewFindingSlideOver = ({
     description: prefill?.description ?? '',
     // Default to the engagement's audit domain so findings stay attributable
     // to the module they were raised in (overridable, e.g. cross-domain "operational").
-    category: (engagement.auditType as FormValues['category']) ?? 'compliance',
+    category: (FINDING_CATEGORIES.includes(engagement.auditType as FormValues['category'])
+      ? (engagement.auditType as FormValues['category'])
+      : 'compliance'),
     severity: 'medium',
     rootCause: '',
     riskImplication: '',
@@ -208,10 +224,11 @@ export const NewFindingSlideOver = ({
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Category" required error={errors.category?.message}>
             <Select error={errors.category?.message} {...register('category')}>
-              <option value="it">System/IT</option>
-              <option value="financial">Financial</option>
-              <option value="compliance">Compliance</option>
-              <option value="operational">Operational</option>
+              {SELECTABLE_AUDIT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>
+                  {t.shortLabel}
+                </option>
+              ))}
             </Select>
           </FormField>
           <FormField label="Severity" required error={errors.severity?.message}>

@@ -21,6 +21,7 @@ import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDoc
 import { formatRelative } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
+import { useSession } from '@/components/providers/AuthProvider';
 
 /** Where to inspect the record awaiting approval before signing off on it. */
 const entityHref = (a: WorkflowApproval): string | null => {
@@ -34,6 +35,7 @@ const submitterName = (a: WorkflowApproval): string => a.submittedBy?.displayNam
 
 export default function ApprovalsPage(): JSX.Element {
   const qc = useQueryClient();
+  const session = useSession();
   const [view, setView] = useState<'inbox' | 'history'>('inbox');
   const [rejectingId, setRejectingId] = useState<string | null>(null);
   const [rejectReason, setRejectReason] = useState('');
@@ -287,26 +289,32 @@ export default function ApprovalsPage(): JSX.Element {
                       {days}d waiting
                     </span>
                     <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="success"
-                        onClick={() => {
-                          setApprovingId((cur) => (cur === a.id ? null : a.id));
-                          setRejectingId(null);
-                        }}
-                      >
-                        Approve &amp; Sign
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="danger"
-                        onClick={() => {
-                          setRejectingId(a.id);
-                          setApprovingId(null);
-                        }}
-                      >
-                        Reject
-                      </Button>
+                      {session?.id && (a.submittedById === session.id || a.submittedBy?.id === session.id) ? (
+                        <Badge tone="amber">Submitted by you (Awaiting peer sign-off)</Badge>
+                      ) : (
+                        <>
+                          <Button
+                            size="sm"
+                            variant="success"
+                            onClick={() => {
+                              setApprovingId((cur) => (cur === a.id ? null : a.id));
+                              setRejectingId(null);
+                            }}
+                          >
+                            Approve &amp; Sign
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="danger"
+                            onClick={() => {
+                              setRejectingId(a.id);
+                              setApprovingId(null);
+                            }}
+                          >
+                            Reject
+                          </Button>
+                        </>
+                      )}
                     </div>
                   </div>
                   {approvingId === a.id && (

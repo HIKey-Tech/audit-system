@@ -10,13 +10,13 @@ import { Button } from '@/components/ui/Button';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { checklistsApi } from '@/lib/api/audit';
+import { SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
 import type { ChecklistTemplateConfig, ChecklistTemplateControl } from '@/lib/types/domain';
 
-const AUDIT_TYPES: { key: string; label: string }[] = [
-  { key: 'it', label: 'IT' },
-  { key: 'financial', label: 'Financial' },
-  { key: 'compliance', label: 'Compliance' },
-];
+const AUDIT_TYPES: { key: string; label: string }[] = SELECTABLE_AUDIT_TYPES.map((t) => ({
+  key: t.value,
+  label: t.shortLabel,
+}));
 
 const emptyControl = (): ChecklistTemplateControl => ({
   controlReference: '',

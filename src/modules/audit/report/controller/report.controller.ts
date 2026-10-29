@@ -3,6 +3,7 @@ import { authenticate, requirePermission } from '../../../../shared/middleware/a
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
+  AddReportCommentRequestSchema,
   ExportReportQuerySchema,
   GenerateReportRequestSchema,
   ReportQuerySchema,
@@ -84,6 +85,20 @@ export class ReportController {
      * @access Private - audit:admin
      */
     this.router.post('/reports/:id/issue', requirePermission('report:issue'), this._issueReport.bind(this));
+
+    /**
+     * @route  GET /audit/reports/:id/comments
+     * @desc   List review comments on an audit report
+     * @access Private - report:read
+     */
+    this.router.get('/reports/:id/comments', requirePermission('report:read'), this._listComments.bind(this));
+
+    /**
+     * @route  POST /audit/reports/:id/comments
+     * @desc   Add a review comment to an audit report
+     * @access Private - report:read
+     */
+    this.router.post('/reports/:id/comments', requirePermission('report:read'), validate(AddReportCommentRequestSchema), this._addComment.bind(this));
 
     /**
      * @route  GET /audit/reports/:id/export
@@ -169,6 +184,24 @@ export class ReportController {
     try {
       const { reports, meta } = await this.reportService.listReports(req.query as never, req.user!);
       res.status(200).json(buildResponse(reports, 'Audit reports retrieved', meta));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listComments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const comments = await this.reportService.listComments(req.params.id, req.user!);
+      res.status(200).json(buildResponse(comments, 'Report comments retrieved'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _addComment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const comment = await this.reportService.addComment(req.params.id, req.body.body, req.user!);
+      res.status(201).json(buildResponse(comment, 'Comment added to audit report'));
     } catch (err) {
       next(err);
     }

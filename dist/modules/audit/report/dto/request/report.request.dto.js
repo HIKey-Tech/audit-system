@@ -1,13 +1,15 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ReportQuerySchema = exports.ExportReportQuerySchema = exports.RejectReportRequestSchema = exports.UpdateReportRequestSchema = exports.GenerateReportRequestSchema = void 0;
+exports.ReportQuerySchema = exports.ExportReportQuerySchema = exports.AddReportCommentRequestSchema = exports.RejectReportRequestSchema = exports.UpdateReportRequestSchema = exports.GenerateReportRequestSchema = exports.ReportSignOffModeSchema = void 0;
 const zod_1 = require("zod");
+exports.ReportSignOffModeSchema = zod_1.z.enum(['cae_only', 'cae_and_dg']);
 exports.GenerateReportRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
     executiveSummary: zod_1.z.string().min(1).optional(),
     scope: zod_1.z.string().min(1).optional(),
     methodology: zod_1.z.string().min(1).optional(),
     templateId: zod_1.z.string().uuid().optional(),
+    signOffMode: exports.ReportSignOffModeSchema.optional(),
 });
 exports.UpdateReportRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
@@ -15,9 +17,13 @@ exports.UpdateReportRequestSchema = zod_1.z.object({
     scope: zod_1.z.string().min(1).optional(),
     methodology: zod_1.z.string().min(1).optional(),
     templateId: zod_1.z.string().uuid().optional(),
+    signOffMode: exports.ReportSignOffModeSchema.optional(),
 });
 exports.RejectReportRequestSchema = zod_1.z.object({
     reason: zod_1.z.string().min(1).max(5000),
+});
+exports.AddReportCommentRequestSchema = zod_1.z.object({
+    body: zod_1.z.string().trim().min(1).max(5000),
 });
 exports.ExportReportQuerySchema = zod_1.z.object({
     format: zod_1.z.enum(['docx', 'pdf']).optional(),

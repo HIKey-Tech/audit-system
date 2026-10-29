@@ -1,11 +1,19 @@
 "use strict";
+var __importDefault = (this && this.__importDefault) || function (mod) {
+    return (mod && mod.__esModule) ? mod : { "default": mod };
+};
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.ComplianceController = void 0;
 const express_1 = require("express");
+const multer_1 = __importDefault(require("multer"));
 const auth_middleware_1 = require("../../../../shared/middleware/auth.middleware");
 const validate_middleware_1 = require("../../../../shared/middleware/validate.middleware");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const compliance_request_dto_1 = require("../dto/request/compliance.request.dto");
+const documentUpload = (0, multer_1.default)({
+    storage: multer_1.default.memoryStorage(),
+    limits: { fileSize: 15 * 1024 * 1024 },
+});
 class ComplianceController {
     complianceService;
     router;
@@ -53,11 +61,23 @@ class ComplianceController {
          */
         this.router.delete('/compliance/controls/:id/risks/:riskId', (0, auth_middleware_1.requirePermission)('control:manage'), this._unlinkRisk.bind(this));
         /**
+         * @route  POST /audit/compliance/extract-preview
+         * @desc   Extract and preview controls from an uploaded Act/Policy/Framework document
+         * @access Private
+         */
+        this.router.post('/compliance/extract-preview', (0, auth_middleware_1.requireAnyPermission)('settings:update', 'settings:manage', 'engagement:create', 'checklist:update', 'checklist:create', 'control:manage'), documentUpload.single('file'), this._extractPreview.bind(this));
+        /**
+         * @route  POST /audit/compliance/frameworks/upload-document
+         * @desc   Create/update a compliance framework and bulk-import controls from an uploaded Act/Policy/Framework document
+         * @access Private
+         */
+        this.router.post('/compliance/frameworks/upload-document', (0, auth_middleware_1.requireAnyPermission)('settings:update', 'settings:manage', 'engagement:create', 'checklist:update', 'checklist:create', 'control:manage'), documentUpload.single('file'), this._uploadFrameworkDocument.bind(this));
+        /**
          * @route  GET /audit/compliance/frameworks
          * @desc   List compliance frameworks
          * @access Private - control:read
          */
-        this.router.get('/compliance/frameworks', (0, auth_middleware_1.requirePermission)('control:read'), this._listFrameworks.bind(this));
+        this.router.get('/compliance/frameworks', (0, auth_middleware_1.requireAnyPermission)('control:read', 'engagement:create', 'checklist:read', 'checklist:update'), this._listFrameworks.bind(this));
         /**
          * @route  POST /audit/compliance/frameworks
          * @desc   Create a compliance framework
@@ -75,7 +95,7 @@ class ComplianceController {
          * @desc   List compliance controls
          * @access Private - control:read
          */
-        this.router.get('/compliance/controls', (0, auth_middleware_1.requirePermission)('control:read'), (0, validate_middleware_1.validate)(compliance_request_dto_1.ControlQuerySchema, 'query'), this._listControls.bind(this));
+        this.router.get('/compliance/controls', (0, auth_middleware_1.requireAnyPermission)('control:read', 'engagement:create', 'checklist:read', 'checklist:update'), (0, validate_middleware_1.validate)(compliance_request_dto_1.ControlQuerySchema, 'query'), this._listControls.bind(this));
         /**
          * @route  POST /audit/compliance/controls
          * @desc   Create a compliance control
@@ -207,6 +227,43 @@ class ComplianceController {
         try {
             await this.complianceService.deleteControl(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(null, 'Compliance control retired'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _extractPreview(req, res, next) {
+        try {
+            const prefix = typeof req.body?.prefix === 'string' ? req.body.prefix : undefined;
+            const result = await this.complianceService.extractDocumentPreview(req.file, prefix);
+            res.status(200).json((0, api_response_type_1.buildResponse)(result, 'Document controls extracted'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _uploadFrameworkDocument(req, res, next) {
+        try {
+            let parsedControls = req.body?.controls;
+            if (typeof parsedControls === 'string' && parsedControls.trim()) {
+                try {
+                    parsedControls = JSON.parse(parsedControls);
+                }
+                catch {
+                    parsedControls = undefined;
+                }
+            }
+            const result = await this.complianceService.uploadFrameworkDocument(req.file, {
+                frameworkId: req.body?.frameworkId || undefined,
+                code: req.body?.code || undefined,
+                name: req.body?.name || undefined,
+                category: req.body?.category || undefined,
+                description: req.body?.description || undefined,
+                auditType: req.body?.auditType || undefined,
+                prefix: req.body?.prefix || undefined,
+                controls: Array.isArray(parsedControls) ? parsedControls : undefined,
+            }, req.user);
+            res.status(201).json((0, api_response_type_1.buildResponse)(result, 'Framework and controls imported'));
         }
         catch (err) {
             next(err);

@@ -2,7 +2,23 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, FileText, Send, Check, X, Eye, Upload, Wand2, Download, FlaskConical, FileType2, ChevronDown, Loader2 } from 'lucide-react';
+import {
+  Plus,
+  FileText,
+  Send,
+  Check,
+  X,
+  Eye,
+  Upload,
+  Wand2,
+  Download,
+  FlaskConical,
+  FileType2,
+  ChevronDown,
+  Loader2,
+  ListChecks,
+  Save,
+} from 'lucide-react';
 import { toast } from 'sonner';
 
 import { Card } from '@/components/ui/Card';
@@ -10,14 +26,20 @@ import { Button } from '@/components/ui/Button';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { SlideOver } from '@/components/ui/SlideOver';
+import { DocumentWorkspaceModal } from '@/components/ui/DocumentWorkspaceModal';
 import { FormField } from '@/components/ui/FormField';
 import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
+import {
+  WordDocumentEditor,
+  sectionsToWordHtml,
+  legacyContentToWordHtml,
+  plainOrMarkdownToHtml,
+} from '@/components/ui/WordDocumentEditor';
 import { checklistsApi, evidenceApi, workingPapersApi } from '@/lib/api/audit';
 import { wpTemplatesApi } from '@/lib/api/settings';
 import { documentsApi } from '@/lib/api/documents';
-import { WorkingPaperDocument } from './WorkingPaperDocument';
 import { SamplingToolSlideOver } from './SamplingToolSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
@@ -32,9 +54,6 @@ import type {
   WorkingPaperImportPreview,
 } from '@/lib/types/domain';
 
-const MARKDOWN_HINT =
-  'Markdown supported: # headings, **bold**, *italic*, - lists, | tables |.';
-
 /** Small Write / Preview segmented toggle shared by the create and view/edit forms. */
 const WritePreviewToggle = ({
   previewing,
@@ -43,20 +62,20 @@ const WritePreviewToggle = ({
   previewing: boolean;
   onChange: (v: boolean) => void;
 }): JSX.Element => (
-  <div className="inline-flex rounded-md border border-border p-0.5 text-xs font-medium">
+  <div className="inline-flex shrink-0 rounded-md border border-border p-0.5 text-xs font-medium">
     <button
       type="button"
       onClick={() => onChange(false)}
-      className={`rounded px-2.5 py-1 transition-colors ${!previewing ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+      className={`whitespace-nowrap shrink-0 rounded px-2.5 py-1 transition-colors ${!previewing ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
     >
-      Write
+      Word Editor
     </button>
     <button
       type="button"
       onClick={() => onChange(true)}
-      className={`rounded px-2.5 py-1 transition-colors ${previewing ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
+      className={`whitespace-nowrap shrink-0 rounded px-2.5 py-1 transition-colors ${previewing ? 'bg-primary text-white' : 'text-text-secondary hover:text-text-primary'}`}
     >
-      Preview
+      Print Preview
     </button>
   </div>
 );
@@ -96,6 +115,7 @@ const WorkingPaperExportButton = ({
       link.click();
       link.remove();
       URL.revokeObjectURL(url);
+      toast.success(`Exported ${fileName}`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Export failed');
     } finally {
@@ -167,21 +187,36 @@ const WorkingPaperExportButton = ({
   );
 };
 
-/** Plain-text snapshot of the engagement's control test results, for embedding
- * into a working paper so the tester doesn't transcribe their own system's data. */
-function buildTestResultsText(items: AuditChecklistItem[]): string {
+/** HTML snapshot of the engagement's control test results, for embedding
+ * into a working paper inside the Word editor. */
+function buildTestResultsHtml(items: AuditChecklistItem[]): string {
   const tested = items.filter((c) => c.result !== 'not_tested');
   const count = (r: string): number => items.filter((c) => c.result === r).length;
-  const lines = [
-    `Summary: ${tested.length} of ${items.length} controls tested — ${count('passed')} passed, ${count('failed')} failed, ${count('not_applicable')} N/A.`,
-    '',
-    ...items.map((c) => {
-      const label = c.result.replace('_', ' ').toUpperCase();
-      const notes = c.notes ? ` — Notes: ${c.notes}` : '';
-      return `[${label}] ${c.controlReference} — ${c.controlDescription}${notes}`;
-    }),
-  ];
-  return lines.join('\n');
+  const rows = items
+    .map((c) => {
+      const label = c.result.replace(/_/g, ' ').toUpperCase();
+      return `<tr>
+        <td style="border:1px solid #cbd5e1;padding:6px 8px;font-weight:600;">${c.controlReference}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px 8px;">${c.controlDescription}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px 8px;font-weight:700;">${label}</td>
+        <td style="border:1px solid #cbd5e1;padding:6px 8px;">${c.notes ?? '—'}</td>
+      </tr>`;
+    })
+    .join('');
+
+  return `<h2 style="color:#000000;border-bottom:1px solid #e2e8f0;padding-bottom:4px;margin-top:18px;margin-bottom:8px;font-size:15px;font-weight:700;">Control Test Results Summary</h2>
+<p style="color:#000000;"><strong>Summary:</strong> ${tested.length} of ${items.length} controls tested — ${count('passed')} passed, ${count('failed')} failed, ${count('not_applicable')} N/A.</p>
+<table style="width:100%;border-collapse:collapse;margin:10px 0;font-size:12px;">
+  <thead>
+    <tr>
+      <th style="border:1px solid #94a3b8;background:#f8fafc;padding:6px 8px;text-align:left;color:#000000;">Ref</th>
+      <th style="border:1px solid #94a3b8;background:#f8fafc;padding:6px 8px;text-align:left;color:#000000;">Control Description</th>
+      <th style="border:1px solid #94a3b8;background:#f8fafc;padding:6px 8px;text-align:left;color:#000000;">Result</th>
+      <th style="border:1px solid #94a3b8;background:#f8fafc;padding:6px 8px;text-align:left;color:#000000;">Auditor Notes</th>
+    </tr>
+  </thead>
+  <tbody>${rows}</tbody>
+</table>`;
 }
 
 interface Props {
@@ -243,7 +278,9 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
       <div className="mb-4 flex items-center justify-between">
         <div>
           <h2 className="text-base font-semibold text-text-primary">Working papers</h2>
-          <p className="text-xs text-text-secondary">Drafted, reviewed, and locked alongside the engagement.</p>
+          <p className="text-xs text-text-secondary">
+            Author working papers in the built-in Word-style document editor with template headers, tables, and inline images.
+          </p>
         </div>
         {canCreate && (
           <div className="flex flex-wrap gap-2">
@@ -275,7 +312,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
             description={
               engagement.status !== 'in_progress'
                 ? 'Working papers can be created once the engagement is in progress.'
-                : 'Capture audit testing notes, samples and observations.'
+                : 'Capture audit testing notes, samples and observations using the Word-style document editor.'
             }
             action={
               canCreate ? (
@@ -312,7 +349,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <Button size="sm" variant="ghost" leftIcon={<Eye className="h-3.5 w-3.5" />} onClick={() => setEditing(wp)}>
-                      View
+                      {wp.createdById === session.id && (wp.status === 'draft' || wp.status === 'rejected') ? 'Open in Editor' : 'View'}
                     </Button>
                     <WorkingPaperExportButton
                       paperId={wp.id}
@@ -408,8 +445,10 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
         paper={editing}
         engagement={engagement}
         canEdit={canUpdateWP}
+        canApprove={canApproveWP}
         onClose={() => setEditing(null)}
         onSaved={refresh}
+        onPreviewPdf={(url, name) => setPdfPreview({ url, name })}
       />
       <ReasonDialog
         open={Boolean(rejecting)}
@@ -462,25 +501,11 @@ const CreateOrEditPaperSlideOver = ({
   const engagementId = engagement.id;
   const auditType = engagement.auditType;
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [sectionContents, setSectionContents] = useState<string[]>([]);
+  const [editorHtml, setEditorHtml] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
-  const [includeTestResults, setIncludeTestResults] = useState(false);
   const [touched, setTouched] = useState(false);
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
-
-  // Prefill from the caller (sampling tool). Prefilled papers start in blank
-  // (free-text) mode so the provided markdown is immediately visible.
-  useEffect(() => {
-    if (open && initialContent !== undefined) {
-      setContent(initialContent);
-      if (initialTitle) setTitle(initialTitle);
-      setSelectedTemplateId('');
-      setTouched(true);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [open, initialContent, initialTitle]);
 
   const templatesQuery = useQuery({
     queryKey: ['settings', 'working-paper-templates', 'list'],
@@ -489,8 +514,6 @@ const CreateOrEditPaperSlideOver = ({
     retry: false,
   });
 
-  // Control test outcomes already recorded on the Checklists tab — offered as an
-  // auto-generated section so the paper documents them without re-typing.
   const checklistsQuery = useQuery({
     queryKey: ['engagements', engagementId, 'checklists'],
     queryFn: () => checklistsApi.listByEngagement(engagementId),
@@ -502,27 +525,81 @@ const CreateOrEditPaperSlideOver = ({
 
   const templates = templatesQuery.data ?? [];
   const defaultTemplate =
-    templates.find((t) => t.isDefault && t.auditType === auditType) ?? null;
+    templates.find((t) => t.isDefault && t.auditType === auditType) ??
+    templates.find((t) => t.isDefault) ??
+    null;
 
-  // Preselect the audit-type default once templates load (unless the user already chose).
+  // Prefill from the caller (sampling tool)
+  useEffect(() => {
+    if (open && initialContent !== undefined) {
+      setEditorHtml(`<!-- page-margin:normal -->\n${plainOrMarkdownToHtml(initialContent)}`);
+      if (initialTitle) setTitle(initialTitle);
+      setSelectedTemplateId('');
+      setTouched(true);
+    }
+  }, [open, initialContent, initialTitle]);
+
+  // Preselect the audit-type default once templates load (unless the user already chose)
   useEffect(() => {
     if (!open || touched || templatesQuery.isLoading) return;
-    setSelectedTemplateId(defaultTemplate ? defaultTemplate.id : '');
+    if (defaultTemplate) {
+      setSelectedTemplateId(defaultTemplate.id);
+      setEditorHtml(
+        sectionsToWordHtml(
+          defaultTemplate.sections.map((s) => ({
+            title: s.title,
+            description: s.description,
+            placeholder: s.placeholder,
+            content: '',
+          })),
+        ),
+      );
+    } else {
+      setSelectedTemplateId('');
+      setEditorHtml(
+        sectionsToWordHtml([
+          { title: 'Objective', description: 'State the audit test objective and control being evaluated.' },
+          { title: 'Scope & Population', description: 'Describe the population, period covered, and sample size.' },
+          { title: 'Test Procedures Performed', description: 'Document the step-by-step audit procedures executed.' },
+          { title: 'Results & Exceptions', description: 'Summarize test outcomes, exceptions noted, and root causes.' },
+          { title: 'Conclusion', description: 'State the overall conclusion on control effectiveness.' },
+        ]),
+      );
+    }
+    setTouched(true);
   }, [open, touched, templatesQuery.isLoading, defaultTemplate]);
 
-  const selectedTemplate = templates.find((t) => t.id === selectedTemplateId) ?? null;
+  const handleSelectTemplate = (tplId: string) => {
+    setTouched(true);
+    setSelectedTemplateId(tplId);
+    const chosen = templates.find((t) => t.id === tplId);
+    if (chosen) {
+      setEditorHtml(
+        sectionsToWordHtml(
+          chosen.sections.map((s) => ({
+            title: s.title,
+            description: s.description,
+            placeholder: s.placeholder,
+            content: '',
+          })),
+        ),
+      );
+    } else {
+      setEditorHtml('<!-- page-margin:normal -->\n<p><br /></p>');
+    }
+  };
 
-  // Reset section inputs when the chosen template changes.
-  useEffect(() => {
-    setSectionContents(selectedTemplate ? selectedTemplate.sections.map(() => '') : []);
-  }, [selectedTemplate]);
+  const handleAppendChecklistResults = () => {
+    if (checklistItems.length === 0) return;
+    const block = buildTestResultsHtml(checklistItems);
+    setEditorHtml((prev) => `${prev}\n${block}`);
+    toast.success('Control test results table appended to document');
+  };
 
   const reset = () => {
     setTitle('');
-    setContent('');
-    setSectionContents([]);
+    setEditorHtml('');
     setSelectedTemplateId('');
-    setIncludeTestResults(false);
     setTouched(false);
     setPreviewing(false);
   };
@@ -532,71 +609,30 @@ const CreateOrEditPaperSlideOver = ({
     onClose();
   };
 
-  const updateSectionContent = (index: number, value: string) => {
-    setSectionContents((current) => {
-      const next = [...current];
-      next[index] = value;
-      return next;
-    });
-  };
-
-  const testResultsSection =
-    includeTestResults && checklistItems.length > 0
-      ? { title: 'Control Test Results (auto-generated)', content: buildTestResultsText(checklistItems) }
-      : null;
-
-  // Exactly what will be saved — so the preview is the document, not a guess.
-  const previewSections: PaperSection[] = [
-    ...(selectedTemplate
-      ? selectedTemplate.sections.map((section, index) => ({
-          title: section.title,
-          content: sectionContents[index] ?? '',
-        }))
-      : [{ title: '', content }]),
-    ...(testResultsSection ? [testResultsSection] : []),
-  ];
-
   const submit = async (alsoSubmit: boolean) => {
     const trimmedTitle = title.trim();
     if (!trimmedTitle) {
-      toast.error('Title required');
+      toast.error('Title is required');
       return;
     }
 
-    let payloadContent: string;
-    if (selectedTemplate) {
-      const missing = selectedTemplate.sections.find(
-        (section, index) => section.required && !sectionContents[index]?.trim(),
-      );
-      if (missing) {
-        toast.error(`${missing.title} required`);
-        return;
-      }
-      payloadContent = JSON.stringify({
-        sections: [
-          ...selectedTemplate.sections.map((section, index) => ({
-            title: section.title,
-            content: sectionContents[index] ?? '',
-          })),
-          ...(testResultsSection ? [testResultsSection] : []),
-        ],
-      });
-    } else {
-      if (!content.trim() && !testResultsSection) {
-        toast.error('Content required');
-        return;
-      }
-      payloadContent = testResultsSection
-        ? `${content.trim()}\n\n${testResultsSection.title}\n${'-'.repeat(40)}\n${testResultsSection.content}`.trim()
-        : content;
+    const plainText = editorHtml
+      .replace(/<!--[\s\S]*?-->/g, '')
+      .replace(/<[^>]+>/g, ' ')
+      .replace(/&nbsp;/g, ' ')
+      .trim();
+
+    if (!plainText && !/<img\b/i.test(editorHtml)) {
+      toast.error('Working paper content is required');
+      return;
     }
 
     setSaving(true);
     try {
       const created = await workingPapersApi.create(engagementId, {
         title: trimmedTitle,
-        content: payloadContent,
-        templateId: selectedTemplate?.id,
+        content: editorHtml,
+        templateId: selectedTemplateId || undefined,
       });
       if (alsoSubmit) {
         await workingPapersApi.submit(created.id);
@@ -612,131 +648,109 @@ const CreateOrEditPaperSlideOver = ({
     }
   };
 
-  const isDirty =
-    title.trim().length > 0 ||
-    content.trim().length > 0 ||
-    sectionContents.some((s) => s.trim().length > 0);
+  const isDirty = title.trim().length > 0;
 
   return (
-    <SlideOver
+    <DocumentWorkspaceModal
       open={open}
       onClose={handleClose}
       dirty={isDirty}
-      title="New working paper"
-      width="xl"
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" size="sm" onClick={handleClose}>
-            Cancel
+      title={
+        <div className="flex items-center gap-2 max-w-md w-full">
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="Working Paper Title (e.g. WP-01 Access Control Review)"
+            className="h-8 text-xs font-semibold"
+          />
+        </div>
+      }
+      subtitle={`${engagement.referenceNumber} · ${engagement.title}`}
+      badge={<Badge status="draft">Draft</Badge>}
+      headerCenter={
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 text-xs">
+            <span className="text-slate-500 font-medium whitespace-nowrap">Template:</span>
+            <select
+              value={selectedTemplateId}
+              onChange={(e) => handleSelectTemplate(e.target.value)}
+              className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:border-[#1E3A8A] focus:outline-none"
+            >
+              <option value="">Blank Document</option>
+              {templates.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.name}
+                  {t.isDefault && t.auditType === auditType ? ' (default)' : ''}
+                </option>
+              ))}
+            </select>
+          </div>
+          {checklistItems.length > 0 && !previewing && (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              leftIcon={<ListChecks className="h-3.5 w-3.5" />}
+              onClick={handleAppendChecklistResults}
+              title={`Append test results table for ${checklistItems.length} checklist controls`}
+            >
+              Insert Controls ({checklistItems.length})
+            </Button>
+          )}
+        </div>
+      }
+      headerRight={
+        <div className="flex items-center gap-2">
+          <WritePreviewToggle previewing={previewing} onChange={setPreviewing} />
+          <Button
+            variant="secondary"
+            size="sm"
+            leftIcon={<Save className="h-3.5 w-3.5" />}
+            onClick={() => submit(false)}
+            isLoading={saving}
+            disabled={templatesQuery.isLoading}
+          >
+            Save as Draft
           </Button>
-          <Button variant="secondary" size="sm" onClick={() => submit(false)} isLoading={saving} disabled={templatesQuery.isLoading}>
-            Save as draft
-          </Button>
-          <Button size="sm" onClick={() => submit(true)} isLoading={saving} disabled={templatesQuery.isLoading}>
-            Submit for review
+          <Button
+            size="sm"
+            leftIcon={<Send className="h-3.5 w-3.5" />}
+            onClick={() => submit(true)}
+            isLoading={saving}
+            disabled={templatesQuery.isLoading}
+          >
+            Submit for Review
           </Button>
         </div>
       }
     >
       {templatesQuery.isLoading ? (
-        <div className="space-y-5">
+        <div className="p-8 space-y-5">
           <Skeleton className="h-10 w-full" />
           <Skeleton className="h-10 w-full" />
-          <Skeleton className="h-28 w-full" />
+          <Skeleton className="h-96 w-full" />
         </div>
       ) : (
-        <div className="space-y-4">
-          <div className="flex items-end justify-between gap-3">
-            <FormField
-              label="Template"
-              tooltip="Pick a structured template for this audit type, or Blank to write free-form notes. Templates standardize what every working paper captures."
-              className="flex-1"
-            >
-              <Select
-                value={selectedTemplateId}
-                onChange={(e) => {
-                  setTouched(true);
-                  setSelectedTemplateId(e.target.value);
-                }}
-              >
-                <option value="">Blank (free text)</option>
-                {templates.map((t) => (
-                  <option key={t.id} value={t.id}>
-                    {t.name}
-                    {t.isDefault && t.auditType === auditType ? ' (default)' : ''}
-                  </option>
-                ))}
-              </Select>
-            </FormField>
-            <div className="pb-1">
-              <WritePreviewToggle previewing={previewing} onChange={setPreviewing} />
-            </div>
-          </div>
-
-          {!previewing && (
-            <FormField label="Title" required>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. WP-01 Sample Selection" />
-            </FormField>
-          )}
-
-          {previewing ? (
-            <WorkingPaperDocument
-              title={title}
-              sections={previewSections}
-              engagementReference={engagement.referenceNumber}
-              engagementTitle={engagement.title}
-              preparedBy={engagement.leadAuditorName ?? undefined}
-            />
-          ) : selectedTemplate ? (
-            selectedTemplate.sections.map((section, index) => {
-              const fieldId = `working-paper-section-${index}`;
-              return (
-                <FormField
-                  key={`${section.title}-${index}`}
-                  label={section.title}
-                  required={section.required}
-                  htmlFor={fieldId}
-                  description={section.description}
-                  hint={index === 0 ? MARKDOWN_HINT : undefined}
-                >
-                  <Textarea
-                    id={fieldId}
-                    rows={4}
-                    value={sectionContents[index] ?? ''}
-                    placeholder={section.placeholder}
-                    onChange={(e) => updateSectionContent(index, e.target.value)}
-                  />
-                </FormField>
-              );
-            })
-          ) : (
-            <FormField label="Content" hint={MARKDOWN_HINT}>
-              <Textarea rows={14} value={content} onChange={(e) => setContent(e.target.value)} className="font-mono text-xs" />
-            </FormField>
-          )}
-
-          {checklistItems.length > 0 && (
-            <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-surface-alt p-3">
-              <input
-                type="checkbox"
-                checked={includeTestResults}
-                onChange={(e) => setIncludeTestResults(e.target.checked)}
-                className="mt-0.5"
-              />
-              <span className="text-xs">
-                <span className="font-medium text-text-primary">
-                  Append &quot;Control Test Results&quot; section
-                </span>
-                <span className="block text-text-secondary">
-                  Auto-generated snapshot of this engagement&apos;s {checklistItems.length} checklist
-                  result{checklistItems.length === 1 ? '' : 's'} — no re-typing from the Checklists tab.
-                </span>
-              </span>
-            </label>
-          )}
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <WordDocumentEditor
+            value={editorHtml}
+            onChange={(html) => {
+              setTouched(true);
+              setEditorHtml(html);
+            }}
+            documentTitle={title || 'Audit Working Paper'}
+            engagementReference={engagement.referenceNumber}
+            engagementTitle={engagement.title}
+            preparedBy={engagement.leadAuditorName ?? undefined}
+            status="draft"
+            version={1}
+            readOnly={previewing}
+            onSaveDraft={() => submit(false)}
+            savingDraft={saving}
+          />
         </div>
       )}
-    </SlideOver>
+    </DocumentWorkspaceModal>
   );
 };
 
@@ -754,8 +768,7 @@ const ImportPaperSlideOver = ({
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<WorkingPaperImportPreview | null>(null);
   const [title, setTitle] = useState('');
-  const [sectionContents, setSectionContents] = useState<string[]>([]);
-  const [freeformContent, setFreeformContent] = useState('');
+  const [editorHtml, setEditorHtml] = useState('');
   const [workingPaperType, setWorkingPaperType] = useState('imported');
   const [parsing, setParsing] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -764,8 +777,7 @@ const ImportPaperSlideOver = ({
     setFile(null);
     setPreview(null);
     setTitle('');
-    setSectionContents([]);
-    setFreeformContent('');
+    setEditorHtml('');
     setWorkingPaperType('imported');
   };
 
@@ -786,9 +798,20 @@ const ImportPaperSlideOver = ({
       setPreview(result);
       setTitle(result.suggestedTitle);
       setWorkingPaperType(result.workingPaperType);
-      setSectionContents(result.mappedSections.map((section) => section.content));
-      setFreeformContent(result.mappedSections.length === 0 ? result.content : '');
-      toast.success('Import preview ready');
+      if (result.mappedSections.length > 0) {
+        setEditorHtml(
+          sectionsToWordHtml(
+            result.mappedSections.map((s) => ({
+              title: s.title,
+              description: s.description,
+              content: s.content,
+            })),
+          ),
+        );
+      } else {
+        setEditorHtml(legacyContentToWordHtml(result.content || result.extractedText));
+      }
+      toast.success('Import loaded into Word Editor');
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to parse working paper');
     } finally {
@@ -803,20 +826,9 @@ const ImportPaperSlideOver = ({
       toast.error('Title required');
       return;
     }
-    const hasMappedContent = preview.mappedSections.length > 0
-      && sectionContents.some((value) => value.trim().length > 0);
 
-    const content = preview.mappedSections.length > 0
-      ? JSON.stringify({
-          sections: preview.mappedSections.map((section, index) => ({
-            title: section.title,
-            content: sectionContents[index] ?? '',
-          })),
-        })
-      : freeformContent.trim();
-
-    if ((preview.mappedSections.length > 0 && !hasMappedContent) || !content) {
-      toast.error('No content has been added yet. Review the extracted text and fill at least one section before saving.');
+    if (!editorHtml.trim()) {
+      toast.error('No content has been added yet.');
       return;
     }
 
@@ -824,7 +836,7 @@ const ImportPaperSlideOver = ({
     try {
       await workingPapersApi.create(engagementId, {
         title: trimmedTitle,
-        content,
+        content: editorHtml,
         templateId: preview.templateId ?? undefined,
         sourceDocumentId: preview.documentId,
         workingPaperType,
@@ -836,7 +848,7 @@ const ImportPaperSlideOver = ({
           warnings: preview.warnings,
         },
       });
-      toast.success('Imported as draft');
+      toast.success('Imported working paper saved as draft');
       onSaved();
       reset();
       onClose();
@@ -848,205 +860,171 @@ const ImportPaperSlideOver = ({
   };
 
   return (
-    <SlideOver
+    <DocumentWorkspaceModal
       open={open}
       onClose={handleClose}
-      title="Import working paper"
-      description="Upload an existing DOCX, XLSX, CSV, PDF, or text work paper and review the extracted draft before saving."
-      width="xl"
-      footer={
-        <div className="flex justify-end gap-2">
-          <Button variant="secondary" size="sm" onClick={handleClose}>
-            Cancel
-          </Button>
+      dirty={Boolean(preview)}
+      title={
+        preview ? (
+          <div className="flex items-center gap-2 max-w-md w-full">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Working Paper Title"
+              className="h-8 text-xs font-semibold"
+            />
+          </div>
+        ) : (
+          'Import Working Paper'
+        )
+      }
+      subtitle={
+        preview
+          ? `${preview.templateName ?? 'Free-form document'} · mapping confidence ${Math.round(preview.confidence * 100)}%`
+          : 'Upload an existing DOCX, XLSX, CSV, PDF, or text working paper and edit it in the Word Document Editor.'
+      }
+      headerRight={
+        <div className="flex items-center gap-2">
           {!preview ? (
-            <Button size="sm" leftIcon={<Wand2 className="h-3.5 w-3.5" />} onClick={parseFile} isLoading={parsing}>
-              Generate preview
+            <Button
+              size="sm"
+              leftIcon={<Wand2 className="h-3.5 w-3.5" />}
+              onClick={parseFile}
+              isLoading={parsing}
+              disabled={!file}
+            >
+              Load into Editor
             </Button>
           ) : (
-            <Button size="sm" onClick={saveDraft} isLoading={saving}>
-              Save draft
+            <Button
+              size="sm"
+              leftIcon={<Save className="h-3.5 w-3.5" />}
+              onClick={saveDraft}
+              isLoading={saving}
+            >
+              Save as Draft
             </Button>
           )}
         </div>
       }
     >
-      <div className="space-y-4">
-        <FormField label="Working paper type">
-          <Input
-            value={workingPaperType}
-            onChange={(e) => setWorkingPaperType(e.target.value)}
-            placeholder="imported"
-            disabled={Boolean(preview)}
-          />
-        </FormField>
-        <FormField label="Source file" required>
-          <input
-            type="file"
-            accept=".docx,.xlsx,.xls,.csv,.pdf,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            onChange={(e) => setFile(e.target.files?.[0] ?? null)}
-            disabled={Boolean(preview)}
-            className="block w-full rounded-md border border-border bg-white px-3 py-2 text-sm text-text-primary file:mr-3 file:rounded-md file:border-0 file:bg-primary file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white"
-          />
-        </FormField>
-
-        {preview && (
-          <>
-            <div className="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-text-secondary">
-              <p className="font-medium text-text-primary">
-                {preview.templateName ?? 'No template matched'} · confidence {Math.round(preview.confidence * 100)}%
-              </p>
-              {preview.warnings.length > 0 && (
-                <ul className="mt-2 list-disc space-y-1 pl-4">
-                  {preview.warnings.map((warning) => (
-                    <li key={warning}>{warning}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-
-            <FormField label="Title" required>
-              <Input value={title} onChange={(e) => setTitle(e.target.value)} />
-            </FormField>
-
-            {preview.mappedSections.length > 0 ? (
-              <>
-                {preview.confidence < 0.5 && (
-                  <div className="rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
-                    <p className="font-semibold">Auto-fill needs review</p>
-                    <p className="mt-1">
-                      The importer looks for section headings that match the selected template. For best results, uploaded files should use headings such as Objective, Test Steps, Evidence, Results, Exceptions, and Conclusion.
-                    </p>
-                  </div>
-                )}
-
-                {preview.mappedSections.map((section, index) => (
-                <div key={`${section.title}-${index}`} className="space-y-1.5">
-                  <label className="block text-xs font-semibold text-text-primary">
-                    {section.title}
-                    {section.required && <span className="ml-0.5 text-danger">*</span>}
-                    <span className="ml-2 font-normal text-text-muted">
-                      {Math.round(section.confidence * 100)}%
-                    </span>
-                  </label>
-                  <p className="text-xs text-text-muted">{section.description}</p>
-                  <Textarea
-                    rows={5}
-                    value={sectionContents[index] ?? ''}
-                    placeholder={section.confidence === 0 ? 'No matching content was detected. Copy the relevant text from the extracted source below.' : undefined}
-                    onChange={(e) => {
-                      const next = [...sectionContents];
-                      next[index] = e.target.value;
-                      setSectionContents(next);
-                    }}
-                  />
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {!preview ? (
+          <div className="flex-1 overflow-y-auto p-6 sm:p-12 flex items-center justify-center bg-slate-100">
+            <div className="w-full max-w-lg rounded-xl border border-slate-300 bg-white p-6 shadow-md space-y-4">
+              <div className="flex items-center gap-3 border-b border-slate-100 pb-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-[#1E3A8A]">
+                  <Upload className="h-5 w-5" />
                 </div>
-                ))}
+                <div>
+                  <h3 className="text-sm font-semibold text-slate-900">
+                    Import Document into Word Editor
+                  </h3>
+                  <p className="text-xs text-slate-500">
+                    Upload DOCX, XLSX, CSV, PDF, or Markdown files.
+                  </p>
+                </div>
+              </div>
 
-                <details className="rounded-md border border-border bg-surface-alt px-3 py-2">
-                  <summary className="cursor-pointer text-xs font-semibold text-text-primary">
-                    Extracted source text
-                  </summary>
-                  <Textarea
-                    rows={10}
-                    value={preview.extractedText || 'No text could be extracted from this file.'}
-                    readOnly
-                    className="mt-2 font-mono text-xs"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <FormField label="Working paper type">
+                  <Input
+                    value={workingPaperType}
+                    onChange={(e) => setWorkingPaperType(e.target.value)}
+                    placeholder="imported"
                   />
-                </details>
-              </>
-            ) : (
-              <FormField label="Extracted content">
-                <Textarea
-                  rows={16}
-                  value={freeformContent}
-                  onChange={(e) => setFreeformContent(e.target.value)}
-                  className="font-mono text-xs"
-                />
-              </FormField>
+                </FormField>
+                <FormField label="Source file" required>
+                  <input
+                    type="file"
+                    accept=".docx,.xlsx,.xls,.csv,.pdf,.txt,.md,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                    onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+                    className="block w-full rounded-md border border-border bg-white px-3 py-1.5 text-xs text-text-primary file:mr-2 file:rounded-md file:border-0 file:bg-primary file:px-2.5 file:py-1 file:text-xs file:font-medium file:text-white"
+                  />
+                </FormField>
+              </div>
+
+              <div className="pt-2 flex justify-end">
+                <Button
+                  size="sm"
+                  leftIcon={<Wand2 className="h-3.5 w-3.5" />}
+                  onClick={parseFile}
+                  isLoading={parsing}
+                  disabled={!file}
+                >
+                  Load into Word Editor
+                </Button>
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex-1 flex flex-col overflow-hidden">
+            {preview.warnings.length > 0 && (
+              <div className="bg-amber-50 border-b border-amber-200 px-4 py-2 text-xs text-amber-800">
+                <span className="font-semibold">Import Notes: </span>
+                {preview.warnings.join(' · ')}
+              </div>
             )}
-          </>
+            <WordDocumentEditor
+              value={editorHtml}
+              onChange={setEditorHtml}
+              documentTitle={title || 'Imported Working Paper'}
+              onSaveDraft={saveDraft}
+              savingDraft={saving}
+            />
+          </div>
         )}
       </div>
-    </SlideOver>
+    </DocumentWorkspaceModal>
   );
-};
-
-interface PaperSection {
-  title: string;
-  content: string;
-}
-
-const parsePaperSections = (raw: string | null | undefined): PaperSection[] | null => {
-  if (!raw) return null;
-  try {
-    const parsed = JSON.parse(raw);
-    if (
-      parsed &&
-      Array.isArray(parsed.sections) &&
-      parsed.sections.every(
-        (s: unknown) =>
-          typeof s === 'object' && s !== null && typeof (s as PaperSection).title === 'string',
-      )
-    ) {
-      return (parsed.sections as PaperSection[]).map((s) => ({
-        title: s.title,
-        content: typeof s.content === 'string' ? s.content : '',
-      }));
-    }
-  } catch {
-    /* not JSON — treat as free text */
-  }
-  return null;
 };
 
 const ViewPaperSlideOver = ({
   paper,
   engagement,
   canEdit,
+  canApprove,
   onClose,
   onSaved,
+  onPreviewPdf,
 }: {
   paper: AuditWorkingPaper | null;
   engagement: AuditEngagementDetail;
   canEdit: boolean;
+  canApprove: boolean;
   onClose: () => void;
   onSaved: () => void;
+  onPreviewPdf?: (url: string, name: string) => void;
 }): JSX.Element => {
+  const session = useSession();
   const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [sections, setSections] = useState<PaperSection[]>([]);
-  const [isStructured, setIsStructured] = useState(false);
+  const [editorHtml, setEditorHtml] = useState('');
   const [saving, setSaving] = useState(false);
   const [previewing, setPreviewing] = useState(false);
+  const [reviewerEditing, setReviewerEditing] = useState(false);
 
-  const editable = canEdit && Boolean(paper) && (paper?.status === 'draft' || paper?.status === 'rejected');
-  // Non-editable papers always show the rendered document; editable ones can toggle.
-  const showRendered = !editable || previewing;
+  const isAuthorEditable =
+    canEdit &&
+    Boolean(paper) &&
+    paper?.createdById === session.id &&
+    (paper?.status === 'draft' || paper?.status === 'rejected');
 
-  // Sync local state whenever the viewed paper changes.
+  const isReviewerSubmitted =
+    canApprove &&
+    Boolean(paper) &&
+    paper?.status === 'submitted' &&
+    paper?.createdById !== session.id;
+
+  const editable = isAuthorEditable || (isReviewerSubmitted && reviewerEditing);
+  const showReadOnly = !editable || previewing;
+
   useEffect(() => {
     if (!paper) return;
-    const parsed = parsePaperSections(paper.content);
     setTitle(paper.title);
-    if (parsed) {
-      setIsStructured(true);
-      setSections(parsed);
-      setContent('');
-    } else {
-      setIsStructured(false);
-      setContent(paper.content ?? '');
-      setSections([]);
-    }
+    setEditorHtml(legacyContentToWordHtml(paper.content));
+    setPreviewing(false);
+    setReviewerEditing(false);
   }, [paper]);
-
-  const updateSection = (index: number, value: string) => {
-    setSections((current) => {
-      const next = [...current];
-      next[index] = { ...next[index], content: value };
-      return next;
-    });
-  };
 
   const handleSave = async () => {
     if (!paper) return;
@@ -1056,26 +1034,10 @@ const ViewPaperSlideOver = ({
       return;
     }
 
-    let payloadContent: string;
-    if (isStructured) {
-      const missing = sections.find((s) => !s.content.trim());
-      if (missing) {
-        toast.error(`${missing.title} is empty`);
-        return;
-      }
-      payloadContent = JSON.stringify({ sections });
-    } else {
-      if (!content.trim()) {
-        toast.error('Content required');
-        return;
-      }
-      payloadContent = content;
-    }
-
     setSaving(true);
     try {
-      await workingPapersApi.update(paper.id, { title: trimmedTitle, content: payloadContent });
-      toast.success('Saved');
+      await workingPapersApi.update(paper.id, { title: trimmedTitle, content: editorHtml });
+      toast.success('Working paper saved as draft');
       onSaved();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : 'Failed to save');
@@ -1084,116 +1046,127 @@ const ViewPaperSlideOver = ({
     }
   };
 
-  // Compare against what was loaded, so simply opening a paper isn't "dirty".
-  const isDirty =
-    editable &&
-    Boolean(paper) &&
-    (title !== paper!.title ||
-      (isStructured
-        ? JSON.stringify({ sections }) !== JSON.stringify({ sections: parsePaperSections(paper!.content) })
-        : content !== (paper!.content ?? '')));
+  const isDirty = Boolean(
+    isAuthorEditable &&
+      paper &&
+      (title !== paper.title || editorHtml !== legacyContentToWordHtml(paper.content)),
+  );
 
   return (
-    <SlideOver
+    <DocumentWorkspaceModal
       open={Boolean(paper)}
       onClose={onClose}
       dirty={isDirty}
-      title={paper?.title ?? 'Working paper'}
-      description={paper ? `Version ${paper.version ?? paper.versionNumber ?? 1} · ${paper.status}` : undefined}
-      width="xl"
-      footer={
-        editable ? (
-          <div className="flex justify-end gap-2">
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              Close
-            </Button>
-            <Button size="sm" onClick={handleSave} isLoading={saving}>
-              Save changes
-            </Button>
+      title={
+        isAuthorEditable ? (
+          <div className="flex items-center gap-2 max-w-md w-full">
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Working Paper Title"
+              className="h-8 text-xs font-semibold"
+            />
           </div>
         ) : (
-          <div className="flex justify-end">
-            <Button variant="secondary" size="sm" onClick={onClose}>
-              Close
-            </Button>
-          </div>
+          paper?.title ?? 'Working paper'
         )
+      }
+      subtitle={
+        paper
+          ? `${engagement.referenceNumber} · ${engagement.title} · Version v${paper.version ?? paper.versionNumber ?? 1}.0`
+          : undefined
+      }
+      badge={
+        paper && (
+          <Badge status={paper.status}>
+            {paper.status.toUpperCase()}
+          </Badge>
+        )
+      }
+      headerRight={
+        <div className="flex items-center gap-2">
+          {paper && <WorkingPaperExportButton paperId={paper.id} onPreviewPdf={onPreviewPdf} />}
+          {isReviewerSubmitted && (
+            <Button
+              size="sm"
+              variant={reviewerEditing ? 'primary' : 'secondary'}
+              onClick={() => setReviewerEditing((v) => !v)}
+            >
+              {reviewerEditing ? 'Editing Mode' : 'Edit in Word Mode'}
+            </Button>
+          )}
+          {editable && <WritePreviewToggle previewing={previewing} onChange={setPreviewing} />}
+          {isAuthorEditable && (
+            <Button
+              size="sm"
+              onClick={handleSave}
+              isLoading={saving}
+              leftIcon={<Save className="h-3.5 w-3.5" />}
+            >
+              Save as Draft
+            </Button>
+          )}
+        </div>
       }
     >
       {paper && (
-        <div className="space-y-4">
-          {editable && (
-            <div className="flex justify-end">
-              <WritePreviewToggle previewing={previewing} onChange={setPreviewing} />
-            </div>
-          )}
-
-          {showRendered ? (
-            <WorkingPaperDocument
-              title={title}
-              sections={isStructured ? sections : [{ title: '', content }]}
+        <div className="flex-1 flex flex-col overflow-y-auto">
+          <div className="flex-1 min-h-[640px] flex flex-col">
+            <WordDocumentEditor
+              value={editorHtml}
+              onChange={setEditorHtml}
+              documentTitle={title || paper.title}
               engagementReference={engagement.referenceNumber}
               engagementTitle={engagement.title}
-              workingPaperType={paper.workingPaperType}
               preparedBy={paper.createdByName}
               status={paper.status}
-              version={paper.version}
-              reviewerName={paper.reviewerName}
-              reviewedAt={paper.reviewedAt}
+              version={paper.version ?? paper.versionNumber ?? 1}
+              readOnly={showReadOnly}
+              onSaveDraft={isAuthorEditable ? handleSave : undefined}
+              savingDraft={saving}
             />
-          ) : (
-            <>
-              <FormField label="Title">
-                <Input value={title} onChange={(e) => setTitle(e.target.value)} disabled={!editable} />
+          </div>
+
+          <div className="border-t border-slate-200 bg-white p-4 sm:p-6 space-y-4">
+            {isReviewerSubmitted && (
+              <ApproveSignPanel
+                entityType="audit_working_paper"
+                showComment={false}
+                wpContent={editorHtml}
+                approveFn={(edits) =>
+                  workingPapersApi.approve(
+                    paper.id,
+                    edits ?? (editorHtml !== (paper.content ?? '') ? { content: editorHtml } : undefined),
+                  )
+                }
+                onDone={() => {
+                  onSaved();
+                  onClose();
+                }}
+              />
+            )}
+
+            {paper.reviewComment && (
+              <FormField label="Reviewer comment">
+                <p className="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-text-secondary whitespace-pre-wrap">
+                  {paper.reviewComment}
+                </p>
               </FormField>
+            )}
 
-              {isStructured ? (
-                sections.map((section, index) => (
-                  <FormField key={`${section.title}-${index}`} label={section.title} hint={MARKDOWN_HINT}>
-                    <Textarea
-                      rows={4}
-                      value={section.content}
-                      onChange={(e) => updateSection(index, e.target.value)}
-                      disabled={!editable}
-                    />
-                  </FormField>
-                ))
-              ) : (
-                <FormField label="Content" hint={MARKDOWN_HINT}>
-                  <Textarea
-                    rows={20}
-                    value={content}
-                    onChange={(e) => setContent(e.target.value)}
-                    className="font-mono text-xs"
-                    disabled={!editable}
-                  />
-                </FormField>
-              )}
-            </>
-          )}
+            <PaperEvidenceLinks paperId={paper.id} engagementId={paper.engagementId} />
 
-          {paper.reviewComment && (
-            <FormField label="Reviewer comment">
-              <p className="rounded-md border border-border bg-surface-alt px-3 py-2 text-xs text-text-secondary whitespace-pre-wrap">
-                {paper.reviewComment}
-              </p>
-            </FormField>
-          )}
-
-          <PaperEvidenceLinks paperId={paper.id} engagementId={paper.engagementId} />
-
-          <PaperComments paperId={paper.id} />
+            <PaperComments paperId={paper.id} />
+          </div>
         </div>
       )}
-    </SlideOver>
+    </DocumentWorkspaceModal>
   );
 };
 
 /**
  * Linked evidence — attaches engagement evidence to this specific working paper,
- * so the paper cites the exact files that support its testing. Reads and writes
- * the same evidence cache as the Evidence tab (`['engagements', id, 'evidence']`),
- * so a link/unlink here shows up on the Evidence tab too, and vice-versa.
+ * so the paper cites the exact files that support its testing.
  */
 const PaperEvidenceLinks = ({
   paperId,
@@ -1311,8 +1284,7 @@ const PaperEvidenceLinks = ({
 
 /**
  * Review-comment thread — lets a reviewer point at specific problems (and the
- * preparer reply) without rejecting the paper, replacing the Word-tracked-
- * changes email loop.
+ * preparer reply) without rejecting the paper.
  */
 const PaperComments = ({ paperId }: { paperId: string }): JSX.Element => {
   const qc = useQueryClient();

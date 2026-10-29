@@ -244,7 +244,7 @@ class DocumentController {
             if (!req.user.permissions.includes('document:read') && !req.user.permissions.includes('*')) {
                 const allowed = await this.documentService.canReadWithoutDocumentPermission(req.params.id, req.user);
                 if (!allowed)
-                    throw app_error_1.AppError.forbidden('Insufficient permissions');
+                    throw app_error_1.AppError.forbidden(app_error_1.PERMISSION_DENIED_MESSAGE);
             }
             const document = await this.documentService.getById(req.params.id, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(document));
@@ -258,7 +258,7 @@ class DocumentController {
             if (!req.user.permissions.includes('document:read') && !req.user.permissions.includes('*')) {
                 const allowed = await this.documentService.canReadWithoutDocumentPermission(req.params.id, req.user);
                 if (!allowed)
-                    throw app_error_1.AppError.forbidden('Insufficient permissions');
+                    throw app_error_1.AppError.forbidden(app_error_1.PERMISSION_DENIED_MESSAGE);
             }
             await this.documentService.assertCanUserAccess(req.params.id, req.user);
             const downloadUrl = await this.documentService.getDownloadUrl(req.params.id);
@@ -314,7 +314,7 @@ class DocumentController {
             if (!req.user.permissions.includes('document:read') && !req.user.permissions.includes('*')) {
                 const allowed = await this.documentService.canReadWithoutDocumentPermission(req.params.id, req.user);
                 if (!allowed)
-                    throw app_error_1.AppError.forbidden('Insufficient permissions');
+                    throw app_error_1.AppError.forbidden(app_error_1.PERMISSION_DENIED_MESSAGE);
             }
             await this.documentService.assertCanUserAccess(req.params.id, req.user);
             let file = await this.documentService.getFileById(req.params.id);

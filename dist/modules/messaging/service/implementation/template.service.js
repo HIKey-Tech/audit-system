@@ -6,6 +6,7 @@ const app_error_1 = require("../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../shared/types/api-response.type");
 const template_response_dto_1 = require("../../dto/response/template.response.dto");
+const notification_templates_constant_1 = require("../../constants/notification-templates.constant");
 class TemplateService {
     async createTemplate(dto, createdBy) {
         const existing = await prisma_client_1.prisma.notification_Template.findUnique({
@@ -117,6 +118,40 @@ class TemplateService {
             templates: templates.map(template_response_dto_1.mapTemplateToResponse),
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
+    }
+    /**
+     * Idempotently syncs default notification templates to the database at server
+     * startup so updated wording (e.g. OLA vs SLA, new event keys) takes effect
+     * on deployment without requiring a manual `prisma db seed` run.
+     */
+    async syncDefaultTemplates() {
+        for (const tpl of notification_templates_constant_1.NOTIFICATION_TEMPLATES) {
+            await prisma_client_1.prisma.notification_Template.upsert({
+                where: {
+                    event_key_channel: { event_key: tpl.eventKey, channel: tpl.channel },
+                },
+                create: {
+                    event_key: tpl.eventKey,
+                    channel: tpl.channel,
+                    name: tpl.name,
+                    subject: tpl.subject,
+                    body: tpl.body,
+                    description: tpl.description,
+                    is_active: true,
+                },
+                update: {
+                    name: tpl.name,
+                    subject: tpl.subject,
+                    body: tpl.body,
+                    description: tpl.description,
+                    is_active: true,
+                    deleted_at: null,
+                },
+            });
+        }
+        logger_util_1.logger.info('Default notification templates synchronized', {
+            count: notification_templates_constant_1.NOTIFICATION_TEMPLATES.length,
+        });
     }
     async _assertTemplateExists(id) {
         const template = await prisma_client_1.prisma.notification_Template.findUnique({

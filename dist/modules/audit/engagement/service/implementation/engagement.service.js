@@ -1,6 +1,9 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.EngagementService = void 0;
+const finding_responder_notify_utility_1 = require("../../../utility/finding-responder-notify.utility");
+const auditee_role_utility_1 = require("../../../utility/auditee-role.utility");
+const lifecycle_notify_utility_1 = require("../../../utility/lifecycle-notify.utility");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_config_1 = require("../../../../../shared/config/app.config");
 const app_error_1 = require("../../../../../shared/errors/app.error");
@@ -53,6 +56,8 @@ class EngagementService {
         const manager = await this.userService.getUserById(managerId);
         if (!manager.isActive)
             throw app_error_1.AppError.badRequest('Assigned audit manager account is deactivated');
+        if (manager.isSuperAdmin)
+            throw app_error_1.AppError.badRequest('A platform administrator cannot be assigned as audit manager');
         const missing = MANAGER_APPROVAL_PERMISSIONS.filter((slug) => !manager.permissions.includes(slug));
         if (missing.length > 0) {
             throw app_error_1.AppError.badRequest(`Assigned audit manager must hold approval permissions: ${missing.join(', ')}`);
@@ -62,6 +67,8 @@ class EngagementService {
         const lead = await this.userService.getUserById(leadAuditorId);
         if (!lead.isActive)
             throw app_error_1.AppError.badRequest('Assigned lead auditor account is deactivated');
+        if (lead.isSuperAdmin)
+            throw app_error_1.AppError.badRequest('A platform administrator cannot be assigned as lead auditor');
         const missing = LEAD_AUDITOR_PERMISSIONS.filter((slug) => !lead.permissions.includes(slug));
         if (missing.length > 0) {
             throw app_error_1.AppError.badRequest(`Assigned lead auditor must hold fieldwork permissions: ${missing.join(', ')}`);
@@ -204,7 +211,9 @@ class EngagementService {
         const auditType = query.auditType ?? '';
         const priority = query.priority ?? 'medium';
         return users
-            .filter((u) => u.isActive && requiredPermissions.every((p) => u.permissions.includes(p)))
+            // Super admins hold every permission slug, so the permission test alone would
+            // always admit them; they administer the platform and are not audit staff.
+            .filter((u) => u.isActive && !u.isSuperAdmin && requiredPermissions.every((p) => u.permissions.includes(p)))
             .map((u) => {
             const activeEngagementCount = workloadMap.get(u.id) ?? 0;
             const matchedSkills = (0, assignment_matching_util_1.getMatchedSkills)(u.skills, auditType);
@@ -273,7 +282,9 @@ class EngagementService {
         });
         logger_util_1.logger.info('Audit engagement created from plan item', { engagementId: engagement.id, planItemId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_from_plan', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
+        await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([engagement.auditee_id], actor.id);
         await this._notifyEngagementParties(engagement);
+        await (0, lifecycle_notify_utility_1.notifyEngagementLifecycleChange)(engagement.id, null, engagement.status, actor.id);
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement);
     }
     async createAdhoc(dto, actor) {
@@ -309,7 +320,9 @@ class EngagementService {
         });
         logger_util_1.logger.info('Ad-hoc audit engagement created', { engagementId: engagement.id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_adhoc', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
+        await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([engagement.auditee_id], actor.id);
         await this._notifyEngagementParties(engagement);
+        await (0, lifecycle_notify_utility_1.notifyEngagementLifecycleChange)(engagement.id, null, engagement.status, actor.id);
         return (0, engagement_response_dto_1.mapEngagementToResponse)(engagement);
     }
     async updateEngagement(id, dto, actor) {
@@ -359,6 +372,9 @@ class EngagementService {
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.update', module: 'audit', entityType: 'audit_engagement', entityId: id, oldValues: existing, newValues: (0, engagement_response_dto_1.mapEngagementToResponse)(engagement) });
         const auditeeChanged = dto.auditeeId !== undefined && dto.auditeeId !== existing.auditee_id;
         const leadChanged = dto.leadAuditorId !== undefined && dto.leadAuditorId !== existing.lead_auditor_id;
+        if (auditeeChanged) {
+            await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([engagement.auditee_id], actor.id);
+        }
         if (auditeeChanged || leadChanged || managerChanged) {
             await this._notifyEngagementParties(engagement, {
                 notifyAuditee: auditeeChanged,
@@ -411,6 +427,10 @@ class EngagementService {
         if (newStatus === audit_enum_1.EngagementStatus.InProgress) {
             await this.checklistService.populateChecklists(id, actor.id);
         }
+        if (newStatus === audit_enum_1.EngagementStatus.UnderReview) {
+            await (0, finding_responder_notify_utility_1.notifyFindingResponders)(id, engagement.reference_number, 'draft');
+        }
+        await (0, lifecycle_notify_utility_1.notifyEngagementLifecycleChange)(id, engagement.status, newStatus, actor.id);
         logger_util_1.logger.info('Audit engagement status updated', { engagementId: id, status: newStatus, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.status.update', module: 'audit', entityType: 'audit_engagement', entityId: id, oldValues: { status: engagement.status }, newValues: { status: newStatus } });
         return this._withMetrics(updated, actor);

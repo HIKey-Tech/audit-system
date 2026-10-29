@@ -1,11 +1,15 @@
 import { z } from 'zod';
 
+export const ReportSignOffModeSchema = z.enum(['cae_only', 'cae_and_dg']);
+export type ReportSignOffMode = z.infer<typeof ReportSignOffModeSchema>;
+
 export const GenerateReportRequestSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   executiveSummary: z.string().min(1).optional(),
   scope: z.string().min(1).optional(),
   methodology: z.string().min(1).optional(),
   templateId: z.string().uuid().optional(),
+  signOffMode: ReportSignOffModeSchema.optional(),
 });
 
 export const UpdateReportRequestSchema = z.object({
@@ -14,10 +18,15 @@ export const UpdateReportRequestSchema = z.object({
   scope: z.string().min(1).optional(),
   methodology: z.string().min(1).optional(),
   templateId: z.string().uuid().optional(),
+  signOffMode: ReportSignOffModeSchema.optional(),
 });
 
 export const RejectReportRequestSchema = z.object({
   reason: z.string().min(1).max(5000),
+});
+
+export const AddReportCommentRequestSchema = z.object({
+  body: z.string().trim().min(1).max(5000),
 });
 
 export const ExportReportQuerySchema = z.object({
@@ -36,5 +45,6 @@ export const ReportQuerySchema = z.object({
 export type GenerateReportRequestDto = z.infer<typeof GenerateReportRequestSchema>;
 export type UpdateReportRequestDto = z.infer<typeof UpdateReportRequestSchema>;
 export type RejectReportRequestDto = z.infer<typeof RejectReportRequestSchema>;
+export type AddReportCommentRequestDto = z.infer<typeof AddReportCommentRequestSchema>;
 export type ExportReportQueryDto = z.infer<typeof ExportReportQuerySchema>;
 export type ReportQueryDto = z.infer<typeof ReportQuerySchema>;

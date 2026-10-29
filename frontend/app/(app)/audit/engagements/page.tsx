@@ -21,7 +21,7 @@ import { formatDate } from '@/lib/utils/format';
 import { StartAuditWizard } from '@/components/audit/engagements/StartAuditWizard';
 import type { AuditEngagement } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
-import { auditTypeLabel } from '@/lib/audit-domains';
+import { SELECTABLE_AUDIT_TYPES, auditTypeLabel } from '@/lib/audit-domains';
 
 type TabKey = 'all' | 'mine' | 'overdue';
 
@@ -193,9 +193,11 @@ export default function EngagementsListPage(): JSX.Element {
             onChange={(e) => set({ auditType: e.target.value, page: '1' })}
           >
             <option value="">All types</option>
-            <option value="it">System/IT</option>
-            <option value="financial">Financial</option>
-            <option value="compliance">Compliance</option>
+            {SELECTABLE_AUDIT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.shortLabel}
+              </option>
+            ))}
           </Select>
           <Select
             value={values.priority}

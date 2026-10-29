@@ -130,7 +130,7 @@ const requirePermission = (...requiredPermissions) => (req, _res, next) => {
     }
     const hasAll = requiredPermissions.every((perm) => req.user.permissions.includes(perm));
     if (!hasAll) {
-        return next(app_error_1.AppError.forbidden('Insufficient permissions'));
+        return next(app_error_1.AppError.forbidden(app_error_1.PERMISSION_DENIED_MESSAGE));
     }
     next();
 };
@@ -150,7 +150,7 @@ const requireAnyPermission = (...anyOf) => (req, _res, next) => {
     }
     const hasAny = anyOf.some((perm) => req.user.permissions.includes(perm));
     if (!hasAny) {
-        return next(app_error_1.AppError.forbidden('Insufficient permissions'));
+        return next(app_error_1.AppError.forbidden(app_error_1.PERMISSION_DENIED_MESSAGE));
     }
     next();
 };

@@ -410,6 +410,7 @@ export interface ViewerContext {
   canViewInternalEvidence: boolean;
   canViewChecklists: boolean;
   canViewDraftFindings: boolean;
+  canViewReports?: boolean;
 }
 
 export interface ApprovalUserBrief {
@@ -1018,7 +1019,18 @@ export interface DocumentTemplateDto {
 // ============================================================
 // Settings
 // ============================================================
-export type SettingsAuditType = 'it' | 'financial' | 'compliance' | 'all';
+export type SettingsAuditType =
+  | 'it'
+  | 'systems'
+  | 'financial'
+  | 'compliance'
+  | 'operational'
+  | 'pension'
+  | 'procurement'
+  | 'hr_payroll'
+  | 'project'
+  | 'special'
+  | 'all';
 
 export interface WorkingPaperTemplateSection {
   title: string;

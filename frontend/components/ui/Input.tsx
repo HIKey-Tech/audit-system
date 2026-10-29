@@ -239,8 +239,22 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
         }
       };
 
+      const handleCaptureKeyDown = (event: globalThis.KeyboardEvent): void => {
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          event.stopPropagation();
+          event.stopImmediatePropagation();
+          setOpen(false);
+          emitBlur();
+        }
+      };
+
       document.addEventListener('mousedown', handlePointerDown);
-      return () => document.removeEventListener('mousedown', handlePointerDown);
+      document.addEventListener('keydown', handleCaptureKeyDown, true);
+      return () => {
+        document.removeEventListener('mousedown', handlePointerDown);
+        document.removeEventListener('keydown', handleCaptureKeyDown, true);
+      };
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
 
@@ -380,7 +394,7 @@ export const Select = forwardRef<HTMLSelectElement, SelectProps>(
     };
 
     return (
-      <div ref={rootRef} className={cn('relative w-full', wrapperClassName)}>
+      <div ref={rootRef} data-dropdown-open={open ? 'true' : undefined} className={cn('relative w-full', wrapperClassName)}>
         <select
           ref={(node) => {
             selectRef.current = node;

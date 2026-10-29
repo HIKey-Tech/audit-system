@@ -18,6 +18,8 @@ export declare enum ErrorCode {
     OPERATION_FAILED = "OPERATION_FAILED",
     INVALID_STATE = "INVALID_STATE"
 }
+/** Shown to users whenever a permission check fails — points them to who can fix it. */
+export declare const PERMISSION_DENIED_MESSAGE = "You don't have permission to do this. Please contact your system administrator.";
 export declare class AppError extends Error {
     readonly statusCode: number;
     readonly errorCode: ErrorCode;

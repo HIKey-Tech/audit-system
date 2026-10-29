@@ -156,10 +156,7 @@ const tokensToContent = (tokens) => {
                 });
                 break;
             case 'hr':
-                content.push({
-                    canvas: [{ type: 'line', x1: 0, y1: 0, x2: 493, y2: 0, lineWidth: 0.5, lineColor: '#CBD5E1' }],
-                    margin: [0, 6, 0, 6],
-                });
+                content.push({ text: '', pageBreak: 'before', margin: [0, 0, 0, 0] });
                 break;
             case 'space':
                 break;

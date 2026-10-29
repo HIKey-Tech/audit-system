@@ -69,6 +69,13 @@ class UserController {
          */
         this.router.get('/directory', (0, auth_middleware_1.requireAnyPermission)('user:directory', 'user:read'), this._listDirectory.bind(this));
         /**
+         * @route  POST /users/provision-auditee
+         * @desc   Pre-provision an AD / corporate user by email before their first login
+         *         and grant them the `auditee` role so they immediately receive notifications.
+         * @access Private — user:directory OR user:read OR engagement:create OR finding:create
+         */
+        this.router.post('/provision-auditee', (0, auth_middleware_1.requireAnyPermission)('user:directory', 'user:read', 'engagement:create', 'finding:create', 'user:create'), (0, validate_middleware_1.validate)(user_request_dto_1.ProvisionAuditeeRequestSchema), this._provisionAuditee.bind(this));
+        /**
          * @route  GET /users/:id
          * @desc   Get user by ID
          * @access Private — user:read
@@ -151,6 +158,15 @@ class UserController {
         try {
             const users = await this.userService.listDirectory();
             res.status(200).json((0, api_response_type_1.buildResponse)(users));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _provisionAuditee(req, res, next) {
+        try {
+            const user = await this.userService.provisionDirectoryUser(req.body, req.user.id);
+            res.status(201).json((0, api_response_type_1.buildResponse)(user, 'Staff member provisioned and assigned auditee access'));
         }
         catch (err) {
             next(err);

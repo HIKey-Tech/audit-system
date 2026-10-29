@@ -50,7 +50,10 @@ export const FollowUpTab = ({ engagement }: { engagement: AuditEngagementDetail 
           key={f.id}
           finding={f}
           evidence={evidence.data ?? []}
-          isAuditee={f.auditeeId === session.id}
+          isAuditee={
+            f.auditeeId === session.id ||
+            (f.additionalAuditees ?? []).some((a) => a.id === session.id)
+          }
           canVerify={canVerify}
           onChange={() => {
             qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
@@ -78,11 +81,29 @@ const FollowUpRow = ({
   const [responseOpen, setResponseOpen] = useState(false);
   const [evidenceOpen, setEvidenceOpen] = useState(false);
   const [verifyOpen, setVerifyOpen] = useState(false);
+  const [commentsOpen, setCommentsOpen] = useState(false);
+  const [commentBody, setCommentBody] = useState('');
   const [response, setResponse] = useState('');
   const [evidenceId, setEvidenceId] = useState('');
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [verification, setVerification] = useState<'verified' | 'rejected'>('verified');
   const [notes, setNotes] = useState('');
+
+  const commentsQuery = useQuery({
+    queryKey: ['findings', finding.id, 'comments'],
+    queryFn: () => findingsApi.listComments(finding.id),
+    enabled: commentsOpen,
+  });
+
+  const postComment = useMutation({
+    mutationFn: () => findingsApi.addComment(finding.id, commentBody),
+    onSuccess: () => {
+      toast.success('Comment posted — participants notified');
+      setCommentBody('');
+      commentsQuery.refetch();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
 
   const submitResponse = useMutation({
     mutationFn: () => followUpApi.submitResponse(finding.id, { managementResponse: response }),
@@ -165,6 +186,9 @@ const FollowUpRow = ({
           {canVerify && finding.status === 'open' && (
             <span className="self-center text-xs text-text-muted">Waiting for the auditee&apos;s response</span>
           )}
+          <Button size="sm" variant="ghost" onClick={() => setCommentsOpen((o) => !o)}>
+            Discussion
+          </Button>
         </div>
       </div>
 
@@ -284,6 +308,45 @@ const FollowUpRow = ({
             </Button>
             <Button size="sm" onClick={() => submitVerify.mutate()} isLoading={submitVerify.isPending}>
               Save verification
+            </Button>
+          </div>
+        </div>
+      )}
+
+      {commentsOpen && (
+        <div className="mt-4 rounded-md border border-border bg-surface-alt p-3 space-y-2 text-xs">
+          <p className="font-semibold text-text-primary">Discussion Trail</p>
+          {(commentsQuery.data ?? []).length === 0 ? (
+            <p className="text-text-muted">No comments yet.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-48 overflow-y-auto">
+              {(commentsQuery.data ?? []).map((c) => (
+                <div key={c.id} className="rounded border border-border bg-white p-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-text-primary">{c.authorName}</span>
+                    <span className="text-[10px] text-text-muted">{new Date(c.createdAt).toLocaleString()}</span>
+                  </div>
+                  <p className="mt-0.5 whitespace-pre-wrap text-text-primary">{c.body}</p>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2 pt-1">
+            <Textarea
+              rows={2}
+              value={commentBody}
+              onChange={(e) => setCommentBody(e.target.value)}
+              placeholder="Leave a comment (notifies auditee & audit team)…"
+            />
+            <Button
+              size="sm"
+              onClick={() => {
+                if (!commentBody.trim()) return;
+                postComment.mutate();
+              }}
+              isLoading={postComment.isPending}
+            >
+              Send
             </Button>
           </div>
         </div>

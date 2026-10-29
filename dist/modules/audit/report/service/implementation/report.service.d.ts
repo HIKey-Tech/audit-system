@@ -4,9 +4,8 @@ import { IApprovalService } from '../../../../workflow/approval/service/interfac
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
 import { IReportTemplateService } from '../../../../settings/service/interface/report-template.service.interface';
-import { GenerateReportRequestDto } from '../../dto/request/report.request.dto';
-import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
-import { ReportResponseDto } from '../../dto/response/report.response.dto';
+import { GenerateReportRequestDto, ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
+import { ReportCommentDto, ReportResponseDto } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
 export declare class ReportService implements IReportService {
@@ -29,9 +28,15 @@ export declare class ReportService implements IReportService {
         reports: ReportResponseDto[];
         meta: PaginationMeta;
     }>;
+    listComments(reportId: string, actor: ActorContext): Promise<ReportCommentDto[]>;
+    addComment(reportId: string, body: string, actor: ActorContext): Promise<ReportCommentDto>;
     exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile>;
     /** One in-app + email summary per responder of the findings assigned to them on this engagement. */
     private _notifyFindingResponders;
+    private _saveSignOffMode;
+    private _readSignOffMode;
+    private _readComments;
+    private _decorateReport;
     private _getReport;
     private _assertSubmittedReportHasNoApproval;
 }

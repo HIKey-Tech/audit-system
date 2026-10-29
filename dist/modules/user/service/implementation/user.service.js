@@ -10,6 +10,7 @@ const notification_queue_service_interface_1 = require("../../../messaging/servi
 const notification_queue_service_1 = require("../../../messaging/service/implementation/notification-queue.service");
 const directory_mapping_service_1 = require("../../../integration/service/implementation/directory-mapping.service");
 const graph_client_1 = require("../../../integration/service/client/graph.client");
+const auditee_role_utility_1 = require("../../../audit/utility/auditee-role.utility");
 const user_response_dto_1 = require("../../dto/response/user.response.dto");
 const token_utility_1 = require("../../utility/token.utility");
 const prisma_types_1 = require("../../../../shared/prisma/prisma.types");
@@ -160,6 +161,76 @@ class UserService {
             take: 500,
         });
         return users.map(user_response_dto_1.mapUserToDirectory);
+    }
+    async provisionDirectoryUser(dto, actorId) {
+        const email = dto.email.trim().toLowerCase();
+        const existing = await prisma_client_1.prisma.user.findFirst({
+            where: { email, deleted_at: null },
+            select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                display_name: true,
+                department: true,
+                job_title: true,
+                is_active: true,
+            },
+        });
+        if (existing) {
+            if (!existing.is_active) {
+                await prisma_client_1.prisma.user.update({ where: { id: existing.id }, data: { is_active: true } });
+                existing.is_active = true;
+            }
+            await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([existing.id], actorId);
+            return (0, user_response_dto_1.mapUserToDirectory)(existing);
+        }
+        const localPart = email.split('@')[0] ?? 'staff';
+        const nameTokens = localPart
+            .split(/[._-]+/)
+            .filter(Boolean)
+            .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+        const firstName = dto.firstName?.trim() || nameTokens[0] || 'Staff';
+        const lastName = dto.lastName?.trim() || nameTokens.slice(1).join(' ') || 'Member';
+        const displayName = dto.displayName?.trim() || `${firstName} ${lastName}`.trim();
+        const created = await prisma_client_1.prisma.user.create({
+            data: {
+                email,
+                first_name: firstName,
+                last_name: lastName,
+                display_name: displayName,
+                department: dto.department?.trim() || null,
+                job_title: dto.jobTitle?.trim() || null,
+                email_verified: true,
+                is_active: true,
+            },
+            select: {
+                id: true,
+                first_name: true,
+                last_name: true,
+                display_name: true,
+                department: true,
+                job_title: true,
+                is_active: true,
+            },
+        });
+        await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([created.id], actorId);
+        const loginUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/login`;
+        await this.notificationQueue.enqueueSafe('email', {
+            to: email,
+            subject: `IAMS Access Provisioned — ${app_config_1.config.app.name}`,
+            text: [
+                `Dear ${displayName},`,
+                '',
+                `Your corporate account (${email}) has been registered on ${app_config_1.config.app.name} (Internal Audit Management System) so you can receive audit notifications, review assigned audit items, and submit responses.`,
+                '',
+                `You can sign in using your corporate Active Directory credentials at: ${loginUrl}`,
+                '',
+                'Regards,',
+                'IAMS — Internal Audit System',
+            ].join('\n'),
+        });
+        logger_util_1.logger.info('Pre-provisioned AD / directory user as auditee', { userId: created.id, email, actorId });
+        return (0, user_response_dto_1.mapUserToDirectory)(created);
     }
     async listRoles(query) {
         const { skip, take, page, pageSize } = (0, api_response_type_1.parsePagination)(query);

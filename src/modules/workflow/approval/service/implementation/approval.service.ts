@@ -580,7 +580,9 @@ export class ApprovalService implements IApprovalService {
     const candidateSteps = await prisma.workflow_Approval_Step.findMany({
       where: {
         status: WorkflowApprovalStepStatus.Pending,
-        approval: { status: WorkflowApprovalStatus.Pending },
+        // Segregation of duties: a submitter may never approve their own submission,
+        // so exclude items submitted by the current actor from their actionable inbox.
+        approval: { status: WorkflowApprovalStatus.Pending, submitted_by_id: { not: actor.id } },
         OR: orConditions,
       },
       include: { approval: { include: approvalInclude } },
@@ -744,7 +746,7 @@ export class ApprovalService implements IApprovalService {
     // Case B: no approval yet — render the prospective chain from the matrix.
     if (actor) await this._assertCanViewApprovalEntity(entityType, entityId, actor);
     const matrix = await getApprovalMatrix();
-    const chain = this._chainForEntity(matrix, entityType);
+    const chain = await this._resolveEntityChain(prisma, matrix, entityType, entityId);
     const managerId = await this._resolveEngagementManager(prisma, entityType, entityId).catch(() => null);
     const levels: ResolvedApprovalLevelDto[] = [];
     let level = 1;
@@ -791,7 +793,7 @@ export class ApprovalService implements IApprovalService {
     submittedById?: string,
   ): Promise<ApproverLevelSpec[]> {
     const matrix = await getApprovalMatrix();
-    const chain = this._chainForEntity(matrix, entityType);
+    const chain = await this._resolveEntityChain(db, matrix, entityType, entityId);
     if (chain.length === 0) return [];
 
     // Engagement-bound entities pin levels marked ENGAGEMENT_MANAGER_APPROVER to
@@ -883,6 +885,62 @@ export class ApprovalService implements IApprovalService {
       default:
         return [];
     }
+  }
+
+  /**
+   * Resolves the approval chain for a specific entity, applying per-report
+   * sign-off mode (`cae_only` vs `cae_and_dg`) when configured on an Audit Report.
+   * - `cae_only` (1 executive signature): terminates at Head of Internal Audit
+   *   (`report:approve:oversight`), omitting the DG (`report:approve:final`) step.
+   * - `cae_and_dg` (2 executive signatures): includes both Head of Internal Audit
+   *   (`report:approve:oversight`) and DG (`report:approve:final`).
+   */
+  private async _resolveEntityChain(
+    db: Prisma.TransactionClient | typeof prisma,
+    matrix: ApprovalMatrix,
+    entityType: WorkflowEntityType,
+    entityId: string,
+  ): Promise<string[]> {
+    const baseChain = [...this._chainForEntity(matrix, entityType)];
+    if (entityType !== WorkflowEntityType.AuditReport || !entityId) {
+      return baseChain;
+    }
+
+    try {
+      const modeRow = await db.system_Config.findUnique({
+        where: { key: `report.sign_off_mode.${entityId}` },
+        select: { value: true },
+      });
+      const signOffMode = modeRow?.value?.trim();
+      if (signOffMode === 'cae_only') {
+        const withoutFinal = baseChain.filter(
+          (entry) => entry !== 'report:approve:final' && !entry.endsWith(':report:approve:final'),
+        );
+        // Ensure Head of Internal Audit (`report:approve:oversight`) is present as the final step
+        const hasOversight = withoutFinal.some(
+          (entry) => entry === 'report:approve:oversight' || entry.endsWith(':report:approve:oversight'),
+        );
+        if (!hasOversight) {
+          withoutFinal.push('report:approve:oversight');
+        }
+        return withoutFinal;
+      }
+      if (signOffMode === 'cae_and_dg') {
+        const hasOversight = baseChain.some(
+          (entry) => entry === 'report:approve:oversight' || entry.endsWith(':report:approve:oversight'),
+        );
+        const hasFinal = baseChain.some(
+          (entry) => entry === 'report:approve:final' || entry.endsWith(':report:approve:final'),
+        );
+        const result = [...baseChain];
+        if (!hasOversight) result.push('report:approve:oversight');
+        if (!hasFinal) result.push('report:approve:final');
+        return result;
+      }
+    } catch {
+      // Fall back to default matrix if system_Config lookup fails in unit tests
+    }
+    return baseChain;
   }
 
   private async _resolveEngagementManager(
@@ -1094,7 +1152,15 @@ export class ApprovalService implements IApprovalService {
 
     const recipientName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
     const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/workflow/approvals`;
-    const variables = { recipientName, actionUrl, ...context.variables };
+    // Default `approverName` to `recipientName` for `workflow.approval.created`
+    // (where the recipient is the approver); `approved`/`rejected` pass an
+    // explicit `approverName` in `context.variables` which overrides this.
+    const variables = {
+      recipientName,
+      approverName: recipientName,
+      actionUrl,
+      ...context.variables,
+    };
 
     await notificationQueueService.enqueue(
       'in_app',

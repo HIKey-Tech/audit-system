@@ -71,6 +71,7 @@ class FollowUpService {
             body: `A management response was submitted for finding "${finding.title}" (${finding.engagement.reference_number}).`,
             type: 'info',
             eventKey: 'audit.followup.response.submitted',
+            actorId: actor.id,
         });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
@@ -111,6 +112,7 @@ class FollowUpService {
             body: `Remediation evidence was submitted for finding "${finding.title}" (${finding.engagement.reference_number}) and is awaiting your verification.`,
             type: 'info',
             eventKey: 'audit.followup.evidence.submitted',
+            actorId: actor.id,
         });
         return (0, follow_up_response_dto_1.mapFollowUpToResponse)(followUp);
     }
@@ -171,6 +173,15 @@ class FollowUpService {
             }) > 0;
             if (!allowed)
                 throw app_error_1.AppError.forbidden('Only the assigned audit team can verify remediation');
+        }
+        // The follow-up record is created when the auditee first responds or uploads evidence.
+        // Verifying before that would otherwise fail with a raw database "record not found".
+        const existingFollowUp = await prisma_client_1.prisma.audit_Follow_Up.findUnique({
+            where: { finding_id: findingId },
+            select: { id: true },
+        });
+        if (!existingFollowUp) {
+            throw app_error_1.AppError.badRequest('The auditee has not responded to this finding yet — there is nothing to verify. Ask them to submit a management response and remediation evidence first.');
         }
         const followUp = await prisma_client_1.prisma.$transaction(async (tx) => {
             if (dto.verificationStatus === audit_enum_1.VerificationStatus.Verified) {
@@ -391,6 +402,7 @@ class FollowUpService {
                 engagement_id: true,
                 auditee_id: true,
                 title: true,
+                severity: true,
                 status: true,
                 auditee: { select: responderSelect },
                 responders: { select: { user: { select: responderSelect } } },
@@ -420,8 +432,10 @@ class FollowUpService {
      * issued and while the finding is still being worked — not on closed/verified findings.
      */
     _assertAcceptsAuditeeAction(finding) {
-        if (finding.engagement.status !== audit_enum_1.EngagementStatus.Reported) {
-            throw app_error_1.AppError.badRequest('Findings can only be responded to after the audit report has been issued');
+        // The management response is collected at the draft stage (Quality Assurance) so it can
+        // go into the issued report; it stays open after issue for remediation follow-up.
+        if (!audit_enum_1.AUDITEE_RESPONSE_ENGAGEMENT_STATUSES.includes(finding.engagement.status)) {
+            throw app_error_1.AppError.badRequest('Findings can be responded to once fieldwork is complete and the engagement is in Quality Assurance');
         }
         const open = [audit_enum_1.FindingStatus.Open, audit_enum_1.FindingStatus.ManagementResponseReceived, audit_enum_1.FindingStatus.InRemediation];
         if (!open.includes(finding.status)) {
@@ -443,9 +457,16 @@ class FollowUpService {
         if (!lead)
             return;
         const recipientName = lead.display_name ?? `${lead.first_name} ${lead.last_name}`.trim();
+        const responders = this._responders(finding);
+        const actingResponder = (notification.actorId ? responders.find((r) => r.id === notification.actorId) : undefined) ??
+            finding.auditee;
+        const auditeeName = actingResponder.display_name ?? `${actingResponder.first_name} ${actingResponder.last_name}`.trim();
         const variables = {
             recipientName,
+            auditorName: recipientName,
+            auditeeName,
             findingTitle: finding.title,
+            severity: finding.severity,
             engagementReference: finding.engagement.reference_number,
         };
         await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {

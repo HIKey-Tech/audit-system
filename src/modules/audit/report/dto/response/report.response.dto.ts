@@ -1,5 +1,13 @@
 import { FindingResponseDto, mapFindingToResponse } from '../../../findings/dto/response/finding.response.dto';
 
+export interface ReportCommentDto {
+  id: string;
+  authorId: string;
+  authorName: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface ReportResponseDto {
   id: string;
   engagementId: string;
@@ -13,6 +21,8 @@ export interface ReportResponseDto {
   versionNumber: number;
   documentId: string | null;
   templateId: string | null;
+  signOffMode?: 'cae_only' | 'cae_and_dg';
+  comments?: ReportCommentDto[];
   issuedAt: string | null;
   rejectionReason: string | null;
   createdById: string;
@@ -43,6 +53,10 @@ export const mapReportToResponse = (
     created_at: Date;
     updated_at: Date;
   },
+  extra?: {
+    signOffMode?: 'cae_only' | 'cae_and_dg';
+    comments?: ReportCommentDto[];
+  },
 ): ReportResponseDto => ({
   id: report.id,
   engagementId: report.engagement_id,
@@ -56,6 +70,8 @@ export const mapReportToResponse = (
   versionNumber: report.version_number,
   documentId: report.document_id,
   templateId: report.template_id ?? null,
+  ...(extra?.signOffMode !== undefined && { signOffMode: extra.signOffMode }),
+  ...(extra?.comments !== undefined && { comments: extra.comments }),
   issuedAt: report.issued_at?.toISOString() ?? null,
   rejectionReason: report.rejection_reason,
   createdById: report.created_by_id,

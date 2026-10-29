@@ -25,7 +25,9 @@ import {
   CreateRoleRequestDto,
   UpdateRoleRequestDto,
   ReplaceRolePermissionsRequestDto,
+  ProvisionAuditeeRequestDto,
 } from '../../dto/request/user.request.dto';
+import { ensureAuditeeRoleAssigned } from '../../../audit/utility/auditee-role.utility';
 import {
   UserResponseDto,
   UserDirectoryDto,
@@ -214,6 +216,87 @@ export class UserService implements IUserService {
       take: 500,
     });
     return users.map(mapUserToDirectory);
+  }
+
+  async provisionDirectoryUser(
+    dto: ProvisionAuditeeRequestDto,
+    actorId: string,
+  ): Promise<UserDirectoryDto> {
+    const email = dto.email.trim().toLowerCase();
+    const existing = await prisma.user.findFirst({
+      where: { email, deleted_at: null },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        display_name: true,
+        department: true,
+        job_title: true,
+        is_active: true,
+      },
+    });
+
+    if (existing) {
+      if (!existing.is_active) {
+        await prisma.user.update({ where: { id: existing.id }, data: { is_active: true } });
+        existing.is_active = true;
+      }
+      await ensureAuditeeRoleAssigned([existing.id], actorId);
+      return mapUserToDirectory(existing);
+    }
+
+    const localPart = email.split('@')[0] ?? 'staff';
+    const nameTokens = localPart
+      .split(/[._-]+/)
+      .filter(Boolean)
+      .map((part) => part.charAt(0).toUpperCase() + part.slice(1));
+
+    const firstName = dto.firstName?.trim() || nameTokens[0] || 'Staff';
+    const lastName = dto.lastName?.trim() || nameTokens.slice(1).join(' ') || 'Member';
+    const displayName = dto.displayName?.trim() || `${firstName} ${lastName}`.trim();
+
+    const created = await prisma.user.create({
+      data: {
+        email,
+        first_name: firstName,
+        last_name: lastName,
+        display_name: displayName,
+        department: dto.department?.trim() || null,
+        job_title: dto.jobTitle?.trim() || null,
+        email_verified: true,
+        is_active: true,
+      },
+      select: {
+        id: true,
+        first_name: true,
+        last_name: true,
+        display_name: true,
+        department: true,
+        job_title: true,
+        is_active: true,
+      },
+    });
+
+    await ensureAuditeeRoleAssigned([created.id], actorId);
+
+    const loginUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/login`;
+    await this.notificationQueue.enqueueSafe('email', {
+      to: email,
+      subject: `IAMS Access Provisioned — ${config.app.name}`,
+      text: [
+        `Dear ${displayName},`,
+        '',
+        `Your corporate account (${email}) has been registered on ${config.app.name} (Internal Audit Management System) so you can receive audit notifications, review assigned audit items, and submit responses.`,
+        '',
+        `You can sign in using your corporate Active Directory credentials at: ${loginUrl}`,
+        '',
+        'Regards,',
+        'IAMS — Internal Audit System',
+      ].join('\n'),
+    });
+
+    logger.info('Pre-provisioned AD / directory user as auditee', { userId: created.id, email, actorId });
+    return mapUserToDirectory(created);
   }
 
   async listRoles(

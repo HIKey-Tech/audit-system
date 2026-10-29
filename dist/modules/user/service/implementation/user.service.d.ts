@@ -1,7 +1,7 @@
 import { PaginationMeta } from '../../../../shared/types/api-response.type';
 import { INotificationQueueService } from '../../../messaging/service/interface/notification-queue.service.interface';
 import { IUserService, AzureAdProfile, LdapUserProfile, RoleManagementActor } from '../interface/user.service.interface';
-import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto } from '../../dto/request/user.request.dto';
+import { CreateUserRequestDto, UpdateUserRequestDto, AssignRoleRequestDto, ChangePasswordRequestDto, UserQueryDto, RoleQueryDto, CreateRoleRequestDto, UpdateRoleRequestDto, ReplaceRolePermissionsRequestDto, ProvisionAuditeeRequestDto } from '../../dto/request/user.request.dto';
 import { UserResponseDto, UserDirectoryDto, UserAccessEntitlementDto, RoleListResponseDto, PermissionListResponseDto, PermissionGroupResponseDto } from '../../dto/response/user.response.dto';
 export declare class UserService implements IUserService {
     private readonly notificationQueue;
@@ -15,6 +15,7 @@ export declare class UserService implements IUserService {
     }>;
     listAccessEntitlements(): Promise<UserAccessEntitlementDto[]>;
     listDirectory(): Promise<UserDirectoryDto[]>;
+    provisionDirectoryUser(dto: ProvisionAuditeeRequestDto, actorId: string): Promise<UserDirectoryDto>;
     listRoles(query: RoleQueryDto): Promise<{
         roles: RoleListResponseDto[];
         meta: PaginationMeta;

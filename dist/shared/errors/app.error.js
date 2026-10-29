@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.AppError = exports.ErrorCode = void 0;
+exports.AppError = exports.PERMISSION_DENIED_MESSAGE = exports.ErrorCode = void 0;
 // src/shared/errors/app.error.ts
 var ErrorCode;
 (function (ErrorCode) {
@@ -28,6 +28,8 @@ var ErrorCode;
     ErrorCode["OPERATION_FAILED"] = "OPERATION_FAILED";
     ErrorCode["INVALID_STATE"] = "INVALID_STATE";
 })(ErrorCode || (exports.ErrorCode = ErrorCode = {}));
+/** Shown to users whenever a permission check fails — points them to who can fix it. */
+exports.PERMISSION_DENIED_MESSAGE = "You don't have permission to do this. Please contact your system administrator.";
 class AppError extends Error {
     statusCode;
     errorCode;
@@ -45,7 +47,7 @@ class AppError extends Error {
     static unauthorized(message = 'Unauthorized') {
         return new AppError(message, 401, ErrorCode.UNAUTHORIZED);
     }
-    static forbidden(message = 'Forbidden') {
+    static forbidden(message = exports.PERMISSION_DENIED_MESSAGE) {
         return new AppError(message, 403, ErrorCode.FORBIDDEN);
     }
     static notFound(resource) {

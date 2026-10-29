@@ -6,6 +6,7 @@ export declare class AssignmentController {
     constructor(assignmentService: IAssignmentService);
     private _registerRoutes;
     private _assignStaff;
+    private _substituteStaff;
     private _getAssignments;
     private _getMyAssignments;
     private _getVisibleAssignments;

@@ -32,4 +32,6 @@ export interface ITemplateService {
   listTemplates(
     query: TemplateQueryDto,
   ): Promise<{ templates: NotificationTemplateResponseDto[]; meta: PaginationMeta }>;
+
+  syncDefaultTemplates(): Promise<void>;
 }

@@ -1,11 +1,17 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.ChecklistResult = exports.VerificationStatus = exports.ReportStatus = exports.FindingStatus = exports.FindingSeverity = exports.SELECTABLE_FINDING_CATEGORIES = exports.FindingCategory = exports.WorkingPaperStatus = exports.EngagementStatus = exports.PlanStatus = exports.UniverseStatus = exports.UniverseCategory = exports.AuditFrequency = exports.AuditPriority = exports.SELECTABLE_AUDIT_TYPES = exports.AuditType = void 0;
+exports.AUDITEE_RESPONSE_ENGAGEMENT_STATUSES = exports.AUDITEE_VISIBLE_ENGAGEMENT_STATUSES = exports.ChecklistResult = exports.VerificationStatus = exports.ReportStatus = exports.FindingStatus = exports.FindingSeverity = exports.SELECTABLE_FINDING_CATEGORIES = exports.FindingCategory = exports.WorkingPaperStatus = exports.EngagementStatus = exports.PlanStatus = exports.UniverseStatus = exports.UniverseCategory = exports.AuditFrequency = exports.AuditPriority = exports.selectableAuditTypes = exports.SELECTABLE_AUDIT_TYPES = exports.AuditType = void 0;
 var AuditType;
 (function (AuditType) {
     AuditType["It"] = "it";
     AuditType["Financial"] = "financial";
     AuditType["Compliance"] = "compliance";
+    AuditType["Operational"] = "operational";
+    AuditType["Pension"] = "pension";
+    AuditType["Procurement"] = "procurement";
+    AuditType["HrPayroll"] = "hr_payroll";
+    AuditType["Project"] = "project";
+    AuditType["Special"] = "special";
     /** @deprecated Merged into `It` as the System/IT domain. Kept so records
      *  created before the merge still resolve; never offer it as a choice. */
     AuditType["Systems"] = "systems";
@@ -15,9 +21,17 @@ var AuditType;
  *  new record while existing rows still read correctly. */
 exports.SELECTABLE_AUDIT_TYPES = [
     AuditType.It,
+    AuditType.Systems,
     AuditType.Financial,
     AuditType.Compliance,
+    AuditType.Operational,
+    AuditType.Pension,
+    AuditType.Procurement,
+    AuditType.HrPayroll,
+    AuditType.Project,
+    AuditType.Special,
 ];
+exports.selectableAuditTypes = exports.SELECTABLE_AUDIT_TYPES;
 var AuditPriority;
 (function (AuditPriority) {
     AuditPriority["Critical"] = "critical";
@@ -72,16 +86,26 @@ var FindingCategory;
     FindingCategory["It"] = "it";
     FindingCategory["Financial"] = "financial";
     FindingCategory["Compliance"] = "compliance";
-    /** @deprecated Merged into `It`. See AuditType.Systems. */
     FindingCategory["Systems"] = "systems";
     FindingCategory["Operational"] = "operational";
+    FindingCategory["Pension"] = "pension";
+    FindingCategory["Procurement"] = "procurement";
+    FindingCategory["HrPayroll"] = "hr_payroll";
+    FindingCategory["Project"] = "project";
+    FindingCategory["Special"] = "special";
 })(FindingCategory || (exports.FindingCategory = FindingCategory = {}));
-/** Finding categories a user may pick — `systems` is retired, see AuditType. */
+/** Finding categories a user may pick across all audit domains. */
 exports.SELECTABLE_FINDING_CATEGORIES = [
     FindingCategory.It,
+    FindingCategory.Systems,
     FindingCategory.Financial,
     FindingCategory.Compliance,
     FindingCategory.Operational,
+    FindingCategory.Pension,
+    FindingCategory.Procurement,
+    FindingCategory.HrPayroll,
+    FindingCategory.Project,
+    FindingCategory.Special,
 ];
 var FindingSeverity;
 (function (FindingSeverity) {
@@ -121,4 +145,20 @@ var ChecklistResult;
     ChecklistResult["NotApplicable"] = "not_applicable";
     ChecklistResult["NotTested"] = "not_tested";
 })(ChecklistResult || (exports.ChecklistResult = ChecklistResult = {}));
+/**
+ * Engagement stages in which the auditee can see their findings: from Quality
+ * Assurance (fieldwork finished, draft report being prepared) onward. The
+ * management response is collected *before* the report is issued so it can be
+ * included in the issued report.
+ */
+exports.AUDITEE_VISIBLE_ENGAGEMENT_STATUSES = [
+    EngagementStatus.UnderReview,
+    EngagementStatus.Reported,
+    EngagementStatus.Closed,
+];
+/** Stages in which the auditee may still respond to a finding / submit remediation evidence. */
+exports.AUDITEE_RESPONSE_ENGAGEMENT_STATUSES = [
+    EngagementStatus.UnderReview,
+    EngagementStatus.Reported,
+];
 //# sourceMappingURL=audit.enum.js.map

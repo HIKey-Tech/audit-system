@@ -370,7 +370,7 @@ const registerAllJobs = () => {
             });
             let notificationsSent = 0;
             for (const engagement of engagements) {
-                const slaDeadline = engagement.sla_deadline.toISOString();
+                const slaDeadline = engagement.sla_deadline.toISOString().slice(0, 10);
                 const daysRemaining = Math.max(0, Math.ceil((engagement.sla_deadline.getTime() - now.getTime()) / 86_400_000));
                 const recipients = [engagement.lead_auditor, engagement.audit_manager];
                 for (const recipient of recipients) {
@@ -379,6 +379,7 @@ const registerAllJobs = () => {
                         recipientName,
                         engagementTitle: engagement.title,
                         engagementReference: engagement.reference_number,
+                        olaDeadline: slaDeadline,
                         slaDeadline,
                         daysRemaining: String(daysRemaining),
                     };

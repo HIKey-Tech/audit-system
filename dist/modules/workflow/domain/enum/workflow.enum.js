@@ -43,6 +43,12 @@ var EscalationPolicyAuditType;
     EscalationPolicyAuditType["Financial"] = "financial";
     EscalationPolicyAuditType["Compliance"] = "compliance";
     EscalationPolicyAuditType["Systems"] = "systems";
+    EscalationPolicyAuditType["Operational"] = "operational";
+    EscalationPolicyAuditType["Pension"] = "pension";
+    EscalationPolicyAuditType["Procurement"] = "procurement";
+    EscalationPolicyAuditType["HrPayroll"] = "hr_payroll";
+    EscalationPolicyAuditType["Project"] = "project";
+    EscalationPolicyAuditType["Special"] = "special";
     EscalationPolicyAuditType["All"] = "all";
 })(EscalationPolicyAuditType || (exports.EscalationPolicyAuditType = EscalationPolicyAuditType = {}));
 //# sourceMappingURL=workflow.enum.js.map

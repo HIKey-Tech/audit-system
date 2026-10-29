@@ -468,12 +468,14 @@ class EscalationService {
             if (engagement) {
                 const now = new Date();
                 const daysOverdue = Math.max(0, Math.ceil((now.getTime() - engagement.sla_deadline.getTime()) / 86_400_000));
+                const olaDeadline = engagement.sla_deadline.toISOString().slice(0, 10);
                 eventKey = `audit.escalation.level_${level}`;
                 variables = {
                     recipientName,
                     engagementTitle: engagement.title,
                     engagementReference: engagement.reference_number,
-                    slaDeadline: engagement.sla_deadline.toISOString(),
+                    olaDeadline,
+                    slaDeadline: olaDeadline,
                     currentStatus: engagement.status,
                     daysOverdue: String(daysOverdue),
                 };

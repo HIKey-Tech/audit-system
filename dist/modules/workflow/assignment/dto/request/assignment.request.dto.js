@@ -1,12 +1,19 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.MyAssignmentsQuerySchema = exports.AssignStaffRequestSchema = void 0;
+exports.MyAssignmentsQuerySchema = exports.SubstituteStaffRequestSchema = exports.AssignStaffRequestSchema = void 0;
 const zod_1 = require("zod");
 const workflow_enum_1 = require("../../../domain/enum/workflow.enum");
 exports.AssignStaffRequestSchema = zod_1.z.object({
     engagementId: zod_1.z.string().uuid(),
     userId: zod_1.z.string().uuid(),
     role: zod_1.z.nativeEnum(workflow_enum_1.WorkflowAssignmentRole),
+});
+exports.SubstituteStaffRequestSchema = zod_1.z.object({
+    engagementId: zod_1.z.string().uuid(),
+    role: zod_1.z.enum(['supporting_auditor', 'lead_auditor', 'audit_manager']),
+    outgoingUserId: zod_1.z.string().uuid().optional(),
+    incomingUserId: zod_1.z.string().uuid(),
+    reason: zod_1.z.string().trim().min(3).max(1000),
 });
 exports.MyAssignmentsQuerySchema = zod_1.z.object({
     page: zod_1.z.coerce.number().int().positive().default(1),

@@ -1,22 +1,27 @@
 import { z } from 'zod';
+export declare const ReportSignOffModeSchema: z.ZodEnum<["cae_only", "cae_and_dg"]>;
+export type ReportSignOffMode = z.infer<typeof ReportSignOffModeSchema>;
 export declare const GenerateReportRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
     executiveSummary: z.ZodOptional<z.ZodString>;
     scope: z.ZodOptional<z.ZodString>;
     methodology: z.ZodOptional<z.ZodString>;
     templateId: z.ZodOptional<z.ZodString>;
+    signOffMode: z.ZodOptional<z.ZodEnum<["cae_only", "cae_and_dg"]>>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
     executiveSummary?: string | undefined;
     templateId?: string | undefined;
+    signOffMode?: "cae_only" | "cae_and_dg" | undefined;
 }, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
     executiveSummary?: string | undefined;
     templateId?: string | undefined;
+    signOffMode?: "cae_only" | "cae_and_dg" | undefined;
 }>;
 export declare const UpdateReportRequestSchema: z.ZodObject<{
     title: z.ZodOptional<z.ZodString>;
@@ -24,18 +29,21 @@ export declare const UpdateReportRequestSchema: z.ZodObject<{
     scope: z.ZodOptional<z.ZodString>;
     methodology: z.ZodOptional<z.ZodString>;
     templateId: z.ZodOptional<z.ZodString>;
+    signOffMode: z.ZodOptional<z.ZodEnum<["cae_only", "cae_and_dg"]>>;
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
     executiveSummary?: string | undefined;
     templateId?: string | undefined;
+    signOffMode?: "cae_only" | "cae_and_dg" | undefined;
 }, {
     title?: string | undefined;
     scope?: string | undefined;
     methodology?: string | undefined;
     executiveSummary?: string | undefined;
     templateId?: string | undefined;
+    signOffMode?: "cae_only" | "cae_and_dg" | undefined;
 }>;
 export declare const RejectReportRequestSchema: z.ZodObject<{
     reason: z.ZodString;
@@ -43,6 +51,13 @@ export declare const RejectReportRequestSchema: z.ZodObject<{
     reason: string;
 }, {
     reason: string;
+}>;
+export declare const AddReportCommentRequestSchema: z.ZodObject<{
+    body: z.ZodString;
+}, "strip", z.ZodTypeAny, {
+    body: string;
+}, {
+    body: string;
 }>;
 export declare const ExportReportQuerySchema: z.ZodObject<{
     format: z.ZodOptional<z.ZodEnum<["docx", "pdf"]>>;
@@ -76,6 +91,7 @@ export declare const ReportQuerySchema: z.ZodObject<{
 export type GenerateReportRequestDto = z.infer<typeof GenerateReportRequestSchema>;
 export type UpdateReportRequestDto = z.infer<typeof UpdateReportRequestSchema>;
 export type RejectReportRequestDto = z.infer<typeof RejectReportRequestSchema>;
+export type AddReportCommentRequestDto = z.infer<typeof AddReportCommentRequestSchema>;
 export type ExportReportQueryDto = z.infer<typeof ExportReportQuerySchema>;
 export type ReportQueryDto = z.infer<typeof ReportQuerySchema>;
 //# sourceMappingURL=report.request.dto.d.ts.map

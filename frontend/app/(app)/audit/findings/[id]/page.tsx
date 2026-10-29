@@ -69,6 +69,23 @@ export default function FindingDetailPage(): JSX.Element {
   const [evidenceFile, setEvidenceFile] = useState<File | null>(null);
   const [verification, setVerification] = useState<'verified' | 'rejected'>('verified');
   const [notes, setNotes] = useState('');
+  const [commentBody, setCommentBody] = useState('');
+
+  const commentsQuery = useQuery({
+    queryKey: ['findings', params?.id, 'comments'],
+    queryFn: () => findingsApi.listComments(params!.id),
+    enabled: Boolean(params?.id),
+  });
+
+  const postComment = useMutation({
+    mutationFn: () => findingsApi.addComment(params!.id, commentBody),
+    onSuccess: () => {
+      toast.success('Comment posted — participants notified');
+      setCommentBody('');
+      qc.invalidateQueries({ queryKey: ['findings', params!.id, 'comments'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to post comment'),
+  });
 
   const submitResponse = useMutation({
     mutationFn: () => followUpApi.submitResponse(params!.id, { managementResponse: response }),
@@ -397,6 +414,54 @@ export default function FindingDetailPage(): JSX.Element {
         </Card>
 
         <LinkedAssetsCard scope="finding" id={params!.id} />
+
+        <Card className="lg:col-span-3">
+          <CardHeader
+            title="Discussion & Comment Trail"
+            subtitle="Two-way audit trail between the audit team, auditee, and oversight."
+          />
+          <div className="space-y-3 text-xs">
+            {(commentsQuery.data ?? []).length === 0 ? (
+              <p className="text-text-muted">No comments posted yet on this finding.</p>
+            ) : (
+              <div className="space-y-2 max-h-72 overflow-y-auto pr-1">
+                {(commentsQuery.data ?? []).map((c) => (
+                  <div key={c.id} className="rounded-md border border-border bg-surface-alt p-3">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-text-primary">{c.authorName}</span>
+                      <span className="text-[11px] text-text-muted">{formatDate(c.createdAt)}</span>
+                    </div>
+                    <p className="mt-1 whitespace-pre-wrap text-text-primary">{c.body}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-2 border-t border-border space-y-2">
+              <Textarea
+                rows={2}
+                value={commentBody}
+                onChange={(e) => setCommentBody(e.target.value)}
+                placeholder="Write a comment or clarification question (notifies auditee & audit team)…"
+              />
+              <div className="flex justify-end">
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (!commentBody.trim()) {
+                      toast.error('Comment cannot be empty');
+                      return;
+                    }
+                    postComment.mutate();
+                  }}
+                  isLoading={postComment.isPending}
+                >
+                  Post Comment
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
     </div>
   );

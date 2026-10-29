@@ -1,10 +1,11 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
-import { AssignStaffRequestDto, MyAssignmentsQueryDto } from '../../dto/request/assignment.request.dto';
+import { AssignStaffRequestDto, MyAssignmentsQueryDto, SubstituteStaffRequestDto } from '../../dto/request/assignment.request.dto';
 import { AssignmentResponseDto, WorkloadResponseDto, AssignmentCandidateDto } from '../../dto/response/assignment.response.dto';
-import { IAssignmentService } from '../interface/assignment.service.interface';
+import { IAssignmentService, SubstituteStaffResultDto } from '../interface/assignment.service.interface';
 export declare class AssignmentService implements IAssignmentService {
     assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto>;
+    substituteStaff(dto: SubstituteStaffRequestDto, actor: WorkflowActorContext): Promise<SubstituteStaffResultDto>;
     removeAssignment(assignmentId: string, removedBy: WorkflowActorContext): Promise<void>;
     getAssignments(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentResponseDto[]>;
     /**

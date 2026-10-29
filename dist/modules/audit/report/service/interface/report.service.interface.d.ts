@@ -1,7 +1,7 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { GenerateReportRequestDto, ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
-import { ReportResponseDto } from '../../dto/response/report.response.dto';
+import { ReportCommentDto, ReportResponseDto } from '../../dto/response/report.response.dto';
 export interface IReportService {
     generateReport(engagementId: string, dto: GenerateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
     updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto>;
@@ -16,5 +16,7 @@ export interface IReportService {
         meta: PaginationMeta;
     }>;
     exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile>;
+    listComments(reportId: string, actor: ActorContext): Promise<ReportCommentDto[]>;
+    addComment(reportId: string, body: string, actor: ActorContext): Promise<ReportCommentDto>;
 }
 //# sourceMappingURL=report.service.interface.d.ts.map

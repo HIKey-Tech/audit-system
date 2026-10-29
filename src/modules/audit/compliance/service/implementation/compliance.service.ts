@@ -11,6 +11,7 @@ import {
   CreateFrameworkRequestDto,
   UpdateControlRequestDto,
   UpdateFrameworkRequestDto,
+  UploadFrameworkDocumentDto,
 } from '../../dto/request/compliance.request.dto';
 import {
   ComplianceCoverageDto,
@@ -22,6 +23,11 @@ import {
   mapControlToResponse,
   mapFrameworkToResponse,
 } from '../../dto/response/compliance.response.dto';
+import {
+  ExtractedDocumentResult,
+  deriveFrameworkMetaFromFilename,
+  extractControlsFromDocument,
+} from '../../utility/document-control-extractor.utility';
 import { IComplianceService } from '../interface/compliance.service.interface';
 
 const frameworkSelect = { code: true, name: true } as const;
@@ -391,6 +397,147 @@ export class ComplianceService implements IComplianceService {
       totalRisks: items.length,
       coveredRisks,
       uncoveredRisks: items.length - coveredRisks,
+    };
+  }
+
+  async extractDocumentPreview(
+    file: { buffer: Buffer; mimetype: string; originalname: string },
+    prefix?: string,
+  ): Promise<ExtractedDocumentResult> {
+    if (!file || !file.buffer) {
+      throw AppError.badRequest('A document file is required');
+    }
+    return extractControlsFromDocument(file.buffer, file.mimetype, file.originalname, prefix);
+  }
+
+  async uploadFrameworkDocument(
+    file: { buffer: Buffer; mimetype: string; originalname: string } | undefined,
+    dto: UploadFrameworkDocumentDto,
+    actor: ActorContext,
+  ): Promise<{
+    framework: FrameworkResponseDto;
+    controlsCreated: number;
+    controls: ControlResponseDto[];
+  }> {
+    let extractedControls = Array.isArray(dto.controls)
+      ? dto.controls
+          .map((c) => ({
+            controlReference: String(c.controlReference ?? '').trim(),
+            controlDescription: String(c.controlDescription ?? '').trim(),
+            testProcedure: String(c.testProcedure ?? '').trim(),
+          }))
+          .filter((c) => c.controlReference && c.controlDescription && c.testProcedure)
+      : [];
+
+    let suggestedCode = dto.code?.trim() || '';
+    let suggestedName = dto.name?.trim() || '';
+
+    if (file && file.buffer) {
+      const extracted = await extractControlsFromDocument(
+        file.buffer,
+        file.mimetype,
+        file.originalname,
+        dto.prefix || dto.code,
+      );
+      if (!suggestedCode) suggestedCode = extracted.suggestedCode;
+      if (!suggestedName) suggestedName = extracted.suggestedName;
+      if (extractedControls.length === 0) {
+        extractedControls = extracted.controls;
+      }
+    } else if (!suggestedCode || !suggestedName) {
+      const derived = deriveFrameworkMetaFromFilename(dto.name || 'Policy Framework', dto.prefix || dto.code);
+      if (!suggestedCode) suggestedCode = derived.suggestedCode;
+      if (!suggestedName) suggestedName = derived.suggestedName;
+    }
+
+    if (extractedControls.length === 0) {
+      throw AppError.badRequest('No controls could be extracted from the provided document');
+    }
+
+    let frameworkRecord;
+    if (dto.frameworkId) {
+      frameworkRecord = await prisma.compliance_Framework.findFirst({
+        where: { id: dto.frameworkId, deleted_at: null },
+      });
+      if (!frameworkRecord) throw AppError.notFound('Compliance framework');
+    } else {
+      const code = (dto.code?.trim() || suggestedCode || 'DOC-001')
+        .replace(/[^A-Za-z0-9.\-]/g, '-')
+        .slice(0, 40);
+      const name = (dto.name?.trim() || suggestedName || code).slice(0, 160);
+      const category = (dto.category?.trim() || 'regulatory').slice(0, 50);
+
+      const existing = await prisma.compliance_Framework.findFirst({
+        where: { code },
+      });
+
+      if (existing) {
+        frameworkRecord = await prisma.compliance_Framework.update({
+          where: { id: existing.id },
+          data: {
+            name: dto.name?.trim() || existing.name,
+            description: dto.description?.trim() ?? existing.description,
+            category: dto.category?.trim() || existing.category,
+            is_active: true,
+            deleted_at: null,
+          },
+        });
+      } else {
+        frameworkRecord = await prisma.compliance_Framework.create({
+          data: {
+            code,
+            name,
+            description: dto.description?.trim() || null,
+            category,
+            is_active: true,
+            created_by_id: actor.id,
+          },
+        });
+      }
+    }
+
+    const existingRefs = new Set(
+      (
+        await prisma.compliance_Control.findMany({
+          where: { framework_id: frameworkRecord.id, deleted_at: null },
+          select: { control_reference: true },
+        })
+      ).map((r) => r.control_reference.toUpperCase()),
+    );
+
+    const auditType = dto.auditType?.trim() || 'compliance';
+    const createdRows: ControlResponseDto[] = [];
+
+    for (const item of extractedControls) {
+      const ref = item.controlReference.trim().slice(0, 80);
+      if (!ref || existingRefs.has(ref.toUpperCase())) continue;
+      existingRefs.add(ref.toUpperCase());
+
+      const created = await prisma.compliance_Control.create({
+        data: {
+          framework_id: frameworkRecord.id,
+          control_reference: ref,
+          control_description: item.controlDescription.trim(),
+          test_procedure: item.testProcedure.trim(),
+          audit_type: auditType,
+          is_active: true,
+          created_by_id: actor.id,
+        },
+        include: { framework: { select: frameworkSelect } },
+      });
+      createdRows.push(mapControlToResponse(created));
+    }
+
+    logger.info('Compliance framework document uploaded', {
+      actorId: actor.id,
+      frameworkId: frameworkRecord.id,
+      controlsCreated: createdRows.length,
+    });
+
+    return {
+      framework: mapFrameworkToResponse(frameworkRecord),
+      controlsCreated: createdRows.length,
+      controls: createdRows,
     };
   }
 }

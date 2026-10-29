@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Award, Check, Plus, Trash2, ListChecks } from 'lucide-react';
+import { Award, Check, Plus, Trash2, ListChecks, Upload, Library } from 'lucide-react';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -15,14 +15,16 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { Badge } from '@/components/ui/Badge';
 import { UserSelect } from '@/components/common/UserSelect';
 import { ScoredUserSelect } from '@/components/common/ScoredUserSelect';
-import { checklistsApi, engagementsApi, plansApi, universeApi } from '@/lib/api/audit';
+import { api } from '@/lib/api-client';
+import { checklistsApi, complianceApi, engagementsApi, plansApi, universeApi } from '@/lib/api/audit';
 import { workflowApi } from '@/lib/api/workflow';
 import { usersApi } from '@/lib/api/users';
+import { auditTypeLabel, SELECTABLE_AUDIT_TYPES, type SelectableAuditTypeKey } from '@/lib/audit-domains';
 import { getMatchScore, isRelevantSkill } from './assignment-matching';
 import type { AuditEngagement, ChecklistTemplateControl } from '@/lib/types/domain';
 
 type Mode = 'plan' | 'ad_hoc';
-type AuditType = 'it' | 'financial' | 'compliance';
+type AuditType = SelectableAuditTypeKey;
 type Priority = 'low' | 'medium' | 'high' | 'critical';
 
 const toISO = (d: string): string => (d ? `${d}T00:00:00.000Z` : d);
@@ -70,6 +72,7 @@ export const StartAuditWizard = ({
   // per-engagement checklist controls (customisable, pre-filled from the template)
   const [checklistControls, setChecklistControls] = useState<ChecklistTemplateControl[]>([]);
   const [checklistTouched, setChecklistTouched] = useState(false);
+  const [selectedFrameworkId, setSelectedFrameworkId] = useState('');
   // created
   const [created, setCreated] = useState<AuditEngagement | null>(null);
 
@@ -94,6 +97,7 @@ export const StartAuditWizard = ({
     setSlaTouched(false);
     setChecklistControls([]);
     setChecklistTouched(false);
+    setSelectedFrameworkId('');
     setCreated(null);
   };
 
@@ -160,9 +164,24 @@ export const StartAuditWizard = ({
     staleTime: 5 * 60_000,
     enabled: open,
   });
+  const directoryQuery = useQuery({
+    queryKey: ['users', 'directory'],
+    queryFn: () => usersApi.directory(),
+    staleTime: 5 * 60_000,
+    enabled: open,
+  });
   const userName = (userId: string): string => {
-    const u = usersQuery.data?.items.find((x) => x.id === userId);
-    return u ? (u.displayName || `${u.firstName} ${u.lastName}`) : userId;
+    if (!userId) return '—';
+    const u =
+      usersQuery.data?.items.find((x) => x.id === userId) ??
+      directoryQuery.data?.find((x) => x.id === userId);
+    if (u) return u.displayName || `${u.firstName} ${u.lastName}`.trim() || userId;
+    const eligible = auditStaffQuery.data?.find((x) => x.id === userId);
+    if (eligible?.displayName) return eligible.displayName;
+    if (created?.auditeeId === userId && created?.auditeeName) return created.auditeeName;
+    if (created?.leadAuditorId === userId && created?.leadAuditorName) return created.leadAuditorName;
+    if (created?.auditManagerId === userId && created?.auditManagerName) return created.auditManagerName;
+    return userId;
   };
 
   // Audit type drives skill matching — from the plan item (plan mode) or the picked type (ad-hoc).
@@ -216,6 +235,63 @@ export const StartAuditWizard = ({
     setChecklistControls((prev) => [...prev, { controlReference: '', controlDescription: '', testProcedure: '' }]);
   };
 
+  const frameworksQuery = useQuery({
+    queryKey: ['compliance', 'frameworks'],
+    queryFn: () => complianceApi.listFrameworks(),
+    enabled: open && step === 3,
+  });
+
+  const importFromFramework = useMutation({
+    mutationFn: async (fwId: string) => {
+      const res = await complianceApi.listControls({ frameworkId: fwId, pageSize: 200, isActive: true });
+      return res.items;
+    },
+    onSuccess: (items) => {
+      if (items.length === 0) {
+        toast.info('No active controls found in the selected framework');
+        return;
+      }
+      setChecklistTouched(true);
+      setChecklistControls((prev) => {
+        const existingRefs = new Set(prev.map((c) => c.controlReference.toUpperCase()));
+        const additions = items
+          .filter((c) => !existingRefs.has(c.controlReference.toUpperCase()))
+          .map((c) => ({
+            controlReference: c.controlReference,
+            controlDescription: c.controlDescription,
+            testProcedure: c.testProcedure,
+          }));
+        toast.success(`Imported ${additions.length} control(s) from framework`);
+        return [...prev, ...additions];
+      });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to load framework controls'),
+  });
+
+  const importFromDocument = useMutation({
+    mutationFn: async (file: File) => {
+      const fd = new FormData();
+      fd.append('file', file);
+      return api.upload<{
+        suggestedCode: string;
+        suggestedName: string;
+        controls: ChecklistTemplateControl[];
+      }>('/audit/compliance/extract-preview', fd);
+    },
+    onSuccess: (res) => {
+      setChecklistTouched(true);
+      setChecklistControls((prev) => {
+        const existingRefs = new Set(prev.map((c) => c.controlReference.toUpperCase()));
+        const additions = res.controls.filter(
+          (c) => !existingRefs.has(c.controlReference.toUpperCase()),
+        );
+        toast.success(`Extracted ${additions.length} control(s) from ${res.suggestedName}`);
+        return [...prev, ...additions];
+      });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to extract controls from document'),
+  });
+
   // Supporting-auditor candidates: active users (excluding the core roles), ranked by skill match.
   const supportingCandidates = useMemo(() => {
     const coreIds = [leadAuditorId, auditManagerId, auditeeId];
@@ -239,15 +315,25 @@ export const StartAuditWizard = ({
 
   const create = useMutation({
     mutationFn: async (): Promise<AuditEngagement> => {
-      // Only send controls that are fully filled in; an empty list lets the
-      // backend fall back to the global per-audit-type template.
+      // Preserve all non-blank checklist controls; auto-fill defaults if a user added a row
+      // and left one of the three fields blank so the count on Review matches the created engagement.
       const cleanedControls = checklistControls
-        .map((c) => ({
-          controlReference: c.controlReference.trim(),
-          controlDescription: c.controlDescription.trim(),
-          testProcedure: c.testProcedure.trim(),
-        }))
-        .filter((c) => c.controlReference && c.controlDescription && c.testProcedure);
+        .map((c, idx) => {
+          const ref = c.controlReference.trim();
+          const desc = c.controlDescription.trim();
+          const proc = c.testProcedure.trim();
+          if (!ref && !desc && !proc) return null;
+          const finalRef = ref || `CTRL-${String(idx + 1).padStart(3, '0')}`;
+          const finalDesc = desc || proc || `Control requirement ${finalRef}`;
+          const finalProc =
+            proc || `Verify compliance with ${finalRef}: inspect supporting records and evidence for "${finalDesc}".`;
+          return {
+            controlReference: finalRef,
+            controlDescription: finalDesc,
+            testProcedure: finalProc,
+          };
+        })
+        .filter((c): c is ChecklistTemplateControl => c !== null);
       const checklistControlsArg = cleanedControls.length > 0 ? cleanedControls : undefined;
 
       const eng = mode === 'plan'
@@ -301,7 +387,10 @@ export const StartAuditWizard = ({
 
   const startNow = useMutation({
     mutationFn: () => engagementsApi.updateStatus(created!.id, 'in_progress'),
-    onSuccess: () => finish(),
+    onSuccess: async () => {
+      await qc.invalidateQueries({ queryKey: ['engagements'] });
+      finish();
+    },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to start'),
   });
 
@@ -482,12 +571,14 @@ export const StartAuditWizard = ({
                 <FormField
                   label="Audit type"
                   required
-                  tooltip="IT: infrastructure & cybersecurity (ISO 27001/22301). Financial: transactions & controls. Compliance: ISO/NDPR adherence. Systems: configuration, change & continuity."
+                  tooltip="Select the audit domain or specialized audit type (e.g. System/IT, Financial, Compliance, Operational, Pension, Procurement, HR & Payroll, Project, or Special Investigation)."
                 >
                   <Select value={auditType} onChange={(e) => setAuditType(e.target.value as AuditType)}>
-                    <option value="it">System/IT</option>
-                    <option value="financial">Financial</option>
-                    <option value="compliance">Compliance</option>
+                    {SELECTABLE_AUDIT_TYPES.map((t) => (
+                      <option key={t.value} value={t.value}>
+                        {t.label}
+                      </option>
+                    ))}
                   </Select>
                 </FormField>
                 <FormField
@@ -630,7 +721,7 @@ export const StartAuditWizard = ({
           <dl className="space-y-3 text-sm">
             <Row label="Mode" value={mode === 'plan' ? 'From plan item' : 'Ad-hoc'} />
             {mode === 'ad_hoc' && <Row label="Entity" value={selectedEntity?.name ?? '—'} />}
-            {mode === 'ad_hoc' && <Row label="Audit type" value={auditType} />}
+            {mode === 'ad_hoc' && <Row label="Audit type" value={auditTypeLabel(auditType)} />}
             {mode === 'ad_hoc' && <Row label="Priority" value={priority} />}
             <Row label="Title" value={title} />
             <Row label="Lead auditor" value={userName(leadAuditorId)} />
@@ -645,21 +736,66 @@ export const StartAuditWizard = ({
 
           {/* Per-engagement checklist controls */}
           <div>
-            <div className="mb-1 flex items-center justify-between gap-2">
+            <div className="mb-1 flex flex-wrap items-center justify-between gap-2">
               <div className="flex items-center gap-1.5">
                 <ListChecks className="h-4 w-4 text-primary" />
                 <h3 className="text-sm font-semibold text-text-primary">
                   Checklist controls{checklistControls.length > 0 ? ` (${checklistControls.length})` : ''}
                 </h3>
               </div>
-              <Button type="button" size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={addControl}>
-                Add control
+              <div className="flex flex-wrap items-center gap-2">
+                <label className="inline-flex h-8 cursor-pointer items-center gap-1.5 rounded-md border border-border bg-white px-2.5 text-xs font-medium text-text-primary hover:bg-surface-alt">
+                  <Upload className="h-3.5 w-3.5" />
+                  {importFromDocument.isPending ? 'Extracting…' : 'Upload Act / Policy'}
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md"
+                    className="hidden"
+                    disabled={importFromDocument.isPending}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f) importFromDocument.mutate(f);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
+                <Button type="button" size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={addControl}>
+                  Add control
+                </Button>
+              </div>
+            </div>
+            <p className="mb-2 text-xs text-text-secondary">
+              Prefilled from the {auditTypeLabel(effectiveAuditType)} template. Upload an Act/Policy, import from a Control Library framework, or customize controls below.
+            </p>
+            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-alt p-2.5">
+              <Library className="h-4 w-4 text-text-secondary" />
+              <Select
+                value={selectedFrameworkId}
+                onChange={(e) => setSelectedFrameworkId(e.target.value)}
+                className="flex-1 min-w-[200px] h-8 text-xs"
+              >
+                <option value="">Import controls from Control Library framework…</option>
+                {(frameworksQuery.data ?? [])
+                  .filter((f) => f.isActive)
+                  .map((f) => (
+                    <option key={f.id} value={f.id}>
+                      {f.code} — {f.name}
+                    </option>
+                  ))}
+              </Select>
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                disabled={!selectedFrameworkId}
+                isLoading={importFromFramework.isPending}
+                onClick={() => {
+                  if (selectedFrameworkId) importFromFramework.mutate(selectedFrameworkId);
+                }}
+              >
+                Import Framework
               </Button>
             </div>
-            <p className="mb-3 text-xs text-text-secondary">
-              Prefilled from the {effectiveAuditType} template. Edit, add or remove controls — the audit team
-              will test exactly this list for this engagement. Leave empty to use the standard template.
-            </p>
 
             {controlsPreview.isLoading ? (
               <p className="text-xs text-text-muted">Loading template…</p>

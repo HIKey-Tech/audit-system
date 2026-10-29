@@ -52,11 +52,23 @@ export interface UserDirectoryEntry {
   isActive: boolean;
 }
 
+export interface ProvisionAuditeeDto {
+  email: string;
+  firstName?: string;
+  lastName?: string;
+  displayName?: string;
+  department?: string;
+  jobTitle?: string;
+}
+
 export const usersApi = {
   list: (query?: UsersListQuery) =>
     api.getPaginated<UserDto>('/users', query as Record<string, string | number | boolean | undefined>),
   /** Active-user directory for assign/owner pickers (needs user:directory or user:read). */
   directory: () => api.get<UserDirectoryEntry[]>('/users/directory'),
+  /** Pre-provision an AD / corporate user by email before their first login and assign them the `auditee` role. */
+  provisionAuditee: (dto: ProvisionAuditeeDto) =>
+    api.post<UserDirectoryEntry>('/users/provision-auditee', dto),
   get: (id: string) => api.get<UserDto>(`/users/${id}`),
   me: () => api.get<UserDto>('/users/me'),
   updateMe: (dto: UpdateUserDto) => api.patch<UserDto>('/users/me', dto),

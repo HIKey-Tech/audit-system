@@ -14,6 +14,7 @@ const PENDING_STATUS = 'pending';
 const PROCESSING_STATUS = 'processing';
 const SENT_STATUS = 'sent';
 const FAILED_STATUS = 'failed';
+const SKIPPED_STATUS = 'skipped';
 // Exponential backoff between retries: 2^attempts minutes, capped. Keeps a
 // flapping SMTP relay or a single bad recipient from being hammered every tick.
 const RETRY_BACKOFF_CAP_MINUTES = 60;
@@ -50,7 +51,8 @@ const optionalStringRecord = (value) => value === undefined || isStringRecord(va
 const isQueueStatus = (status) => status === PENDING_STATUS
     || status === PROCESSING_STATUS
     || status === SENT_STATUS
-    || status === FAILED_STATUS;
+    || status === FAILED_STATUS
+    || status === SKIPPED_STATUS;
 const parseEmailPayload = (payload) => {
     const parsed = JSON.parse(payload);
     if (!isRecord(parsed)) {
@@ -297,6 +299,18 @@ class NotificationQueueService {
                 });
             }
             catch (err) {
+                // No mail server configured: park the item instead of burning its retries.
+                if (err instanceof notification_service_1.SmtpNotConfiguredError) {
+                    await prisma_client_1.prisma.notification_Queue
+                        .update({
+                        where: { id: item.id },
+                        data: { status: SKIPPED_STATUS, last_error: err.message, processed_at: new Date() },
+                    })
+                        .catch((updateErr) => {
+                        logger_util_1.logger.error('Notification queue skip update failed', { err: updateErr, queueId: item.id });
+                    });
+                    continue;
+                }
                 if (err instanceof Error && /timed out/.test(err.message)) {
                     logger_util_1.logger.error('Queued notification timed out', { queueId: item.id, type: item.type, message: err.message });
                 }
@@ -375,6 +389,7 @@ class NotificationQueueService {
             processing: 0,
             sent: 0,
             failed: 0,
+            skipped: 0,
             total: 0,
         };
         for (const item of grouped) {

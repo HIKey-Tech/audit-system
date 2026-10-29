@@ -11,6 +11,7 @@ import {
   ChangePasswordRequestSchema,
   UserQuerySchema,
   RoleQuerySchema,
+  ProvisionAuditeeRequestSchema,
 } from '../dto/request/user.request.dto';
 
 export class UserController {
@@ -112,6 +113,19 @@ export class UserController {
       '/directory',
       requireAnyPermission('user:directory', 'user:read'),
       this._listDirectory.bind(this),
+    );
+
+    /**
+     * @route  POST /users/provision-auditee
+     * @desc   Pre-provision an AD / corporate user by email before their first login
+     *         and grant them the `auditee` role so they immediately receive notifications.
+     * @access Private — user:directory OR user:read OR engagement:create OR finding:create
+     */
+    this.router.post(
+      '/provision-auditee',
+      requireAnyPermission('user:directory', 'user:read', 'engagement:create', 'finding:create', 'user:create'),
+      validate(ProvisionAuditeeRequestSchema),
+      this._provisionAuditee.bind(this),
     );
 
     /**
@@ -238,6 +252,15 @@ export class UserController {
     try {
       const users = await this.userService.listDirectory();
       res.status(200).json(buildResponse(users));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _provisionAuditee(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const user = await this.userService.provisionDirectoryUser(req.body, req.user!.id);
+      res.status(201).json(buildResponse(user, 'Staff member provisioned and assigned auditee access'));
     } catch (err) {
       next(err);
     }

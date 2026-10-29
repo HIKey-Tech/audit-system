@@ -21,6 +21,7 @@ interface ReportFinding {
     recommendation: string;
     status: string;
     dueDate: Date;
+    controlReference?: string | null;
     auditee: {
         displayName: string | null;
         firstName: string;
@@ -56,6 +57,7 @@ interface ReportData {
         issuedAt: Date | null;
         createdById: string;
         templateId: string | null;
+        signOffMode?: 'cae_only' | 'cae_and_dg';
     };
     engagement: {
         id: string;
@@ -111,6 +113,9 @@ export declare class ReportGenerationService implements IReportGenerationService
     private _buildDocxHeader;
     private _buildDocxMetadataTable;
     private _docxMetadataRow;
+    private _htmlOrTextToDocxBlocks;
+    private _parseInlineBoldRuns;
+    private _htmlOrTextToPdfBlocks;
     private _buildDocxSectionContent;
     private _buildDocxFindingsSummaryTable;
     private _buildDocxAssetsInScopeTable;

@@ -71,6 +71,18 @@ class ReportController {
          */
         this.router.post('/reports/:id/issue', (0, auth_middleware_1.requirePermission)('report:issue'), this._issueReport.bind(this));
         /**
+         * @route  GET /audit/reports/:id/comments
+         * @desc   List review comments on an audit report
+         * @access Private - report:read
+         */
+        this.router.get('/reports/:id/comments', (0, auth_middleware_1.requirePermission)('report:read'), this._listComments.bind(this));
+        /**
+         * @route  POST /audit/reports/:id/comments
+         * @desc   Add a review comment to an audit report
+         * @access Private - report:read
+         */
+        this.router.post('/reports/:id/comments', (0, auth_middleware_1.requirePermission)('report:read'), (0, validate_middleware_1.validate)(report_request_dto_1.AddReportCommentRequestSchema), this._addComment.bind(this));
+        /**
          * @route  GET /audit/reports/:id/export
          * @desc   Export audit report
          * @access Private - audit:read
@@ -153,6 +165,24 @@ class ReportController {
         try {
             const { reports, meta } = await this.reportService.listReports(req.query, req.user);
             res.status(200).json((0, api_response_type_1.buildResponse)(reports, 'Audit reports retrieved', meta));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listComments(req, res, next) {
+        try {
+            const comments = await this.reportService.listComments(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(comments, 'Report comments retrieved'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _addComment(req, res, next) {
+        try {
+            const comment = await this.reportService.addComment(req.params.id, req.body.body, req.user);
+            res.status(201).json((0, api_response_type_1.buildResponse)(comment, 'Comment added to audit report'));
         }
         catch (err) {
             next(err);

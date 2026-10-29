@@ -17,7 +17,7 @@ import { usePermissions } from '@/lib/hooks/usePermissions';
 import { plansApi } from '@/lib/api/audit';
 import { formatDate, formatNumber } from '@/lib/utils/format';
 import { PlanFormSlideOver } from '@/components/audit/plans/PlanFormSlideOver';
-import { AUDIT_DOMAINS, auditTypeLabel } from '@/lib/audit-domains';
+import { SELECTABLE_AUDIT_TYPES, auditTypeLabel } from '@/lib/audit-domains';
 import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import type { AuditPlan } from '@/lib/types/domain';
 
@@ -144,8 +144,8 @@ export default function PlansListPage(): JSX.Element {
               }}
             >
               <option value="">All audit types</option>
-              {AUDIT_DOMAINS.map((d) => (
-                <option key={d.key} value={d.key}>
+              {SELECTABLE_AUDIT_TYPES.map((d) => (
+                <option key={d.value} value={d.value}>
                   {d.label}
                 </option>
               ))}

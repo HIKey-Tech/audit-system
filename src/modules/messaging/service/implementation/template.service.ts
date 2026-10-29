@@ -19,6 +19,7 @@ import {
   mapTemplateToResponse,
 } from '../../dto/response/template.response.dto';
 import { NotificationTemplateChannel } from '../../domain/enum/template.enum';
+import { NOTIFICATION_TEMPLATES } from '../../constants/notification-templates.constant';
 
 export class TemplateService implements ITemplateService {
   async createTemplate(
@@ -166,6 +167,41 @@ export class TemplateService implements ITemplateService {
       templates: templates.map(mapTemplateToResponse),
       meta: buildPaginationMeta(total, page, pageSize),
     };
+  }
+
+  /**
+   * Idempotently syncs default notification templates to the database at server
+   * startup so updated wording (e.g. OLA vs SLA, new event keys) takes effect
+   * on deployment without requiring a manual `prisma db seed` run.
+   */
+  async syncDefaultTemplates(): Promise<void> {
+    for (const tpl of NOTIFICATION_TEMPLATES) {
+      await prisma.notification_Template.upsert({
+        where: {
+          event_key_channel: { event_key: tpl.eventKey, channel: tpl.channel },
+        },
+        create: {
+          event_key: tpl.eventKey,
+          channel: tpl.channel,
+          name: tpl.name,
+          subject: tpl.subject,
+          body: tpl.body,
+          description: tpl.description,
+          is_active: true,
+        },
+        update: {
+          name: tpl.name,
+          subject: tpl.subject,
+          body: tpl.body,
+          description: tpl.description,
+          is_active: true,
+          deleted_at: null,
+        },
+      });
+    }
+    logger.info('Default notification templates synchronized', {
+      count: NOTIFICATION_TEMPLATES.length,
+    });
   }
 
   private async _assertTemplateExists(id: string): Promise<void> {

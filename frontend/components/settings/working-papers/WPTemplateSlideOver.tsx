@@ -14,6 +14,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { wpTemplatesApi } from '@/lib/api/settings';
+import { SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
 import type { WorkingPaperTemplateDto, SettingsAuditType } from '@/lib/types/domain';
 import { cn } from '@/lib/utils/cn';
 
@@ -27,7 +28,19 @@ const SectionSchema = z.object({
 const Schema = z.object({
   name: z.string().min(1, 'Name is required').max(200),
   description: z.string().max(1000).optional().or(z.literal('')),
-  auditType: z.enum(['it', 'financial', 'compliance', 'all'] as const),
+  auditType: z.enum([
+    'it',
+    'systems',
+    'financial',
+    'compliance',
+    'operational',
+    'pension',
+    'procurement',
+    'hr_payroll',
+    'project',
+    'special',
+    'all',
+  ] as const),
   sections: z.array(SectionSchema).min(1, 'At least one section required'),
 });
 
@@ -163,9 +176,11 @@ export const WPTemplateSlideOver = ({ open, onClose, template }: Props): JSX.Ele
         <FormField label="Audit type" required error={errors.auditType?.message}>
           <Select error={errors.auditType?.message} {...register('auditType')}>
             <option value="all">All types</option>
-            <option value="it">System/IT</option>
-            <option value="financial">Financial</option>
-            <option value="compliance">Compliance</option>
+            {SELECTABLE_AUDIT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>
+                {t.label}
+              </option>
+            ))}
           </Select>
         </FormField>
 

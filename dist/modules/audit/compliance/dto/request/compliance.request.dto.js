@@ -3,7 +3,23 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.LinkRiskRequestSchema = exports.ControlQuerySchema = exports.UpdateControlRequestSchema = exports.CreateControlRequestSchema = exports.UpdateFrameworkRequestSchema = exports.CreateFrameworkRequestSchema = exports.FrameworkCategory = void 0;
 const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
-exports.FrameworkCategory = zod_1.z.enum(['it', 'financial', 'compliance', 'systems', 'governance']);
+exports.FrameworkCategory = zod_1.z.enum([
+    'it',
+    'financial',
+    'compliance',
+    'systems',
+    'governance',
+    'regulatory',
+    'standard',
+    'policy',
+    'act',
+    'operational',
+    'pension',
+    'procurement',
+    'hr_payroll',
+    'project',
+    'special',
+]);
 exports.CreateFrameworkRequestSchema = zod_1.z.object({
     code: zod_1.z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9.\-]+$/, 'Code may contain letters, numbers, dot and hyphen only'),
     name: zod_1.z.string().trim().min(2).max(160),

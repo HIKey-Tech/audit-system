@@ -9,6 +9,16 @@ import {
 } from '../../dto/request/finding.request.dto';
 import { FindingResponseDto } from '../../dto/response/finding.response.dto';
 
+export interface FindingCommentDto {
+  id: string;
+  findingId: string;
+  authorId: string;
+  authorName: string;
+  authorRole: string;
+  body: string;
+  createdAt: string;
+}
+
 export interface IFindingService {
   createFinding(engagementId: string, dto: CreateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto>;
   updateFinding(id: string, dto: UpdateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto>;
@@ -18,4 +28,6 @@ export interface IFindingService {
   listAllFindings(query: FindingQueryDto, actor: ActorContext): Promise<{ findings: FindingResponseDto[]; meta: PaginationMeta }>;
   listFindings(engagementId: string, query: FindingQueryDto, actor: ActorContext): Promise<FindingResponseDto[]>;
   exportFindings(query: FindingQueryDto, format: ExportFormat, actor: ActorContext): Promise<TabularExportFile>;
+  listComments(findingId: string, actor: ActorContext): Promise<FindingCommentDto[]>;
+  addComment(findingId: string, body: string, actor: ActorContext): Promise<FindingCommentDto>;
 }

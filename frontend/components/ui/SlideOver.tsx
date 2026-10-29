@@ -77,8 +77,8 @@ export const SlideOver = ({
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
-        // Already handled by an inner control (e.g. an open Select list).
-        if (e.defaultPrevented) return;
+        // Already handled by an inner control (e.g. an open Select or Combobox list).
+        if (e.defaultPrevented || document.querySelector('[data-dropdown-open="true"]')) return;
         requestCloseRef.current();
         return;
       }

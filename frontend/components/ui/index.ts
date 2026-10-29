@@ -26,3 +26,4 @@ export type { Column } from './Table';
 export { Tabs } from './Tabs';
 export type { TabItem } from './Tabs';
 export { CopyButton } from './CopyButton';
+export { DocumentWorkspaceModal } from './DocumentWorkspaceModal';

@@ -33,7 +33,8 @@ import { createAssetModule } from './modules/asset';
 import { createAuditModule } from './modules/audit';
 import { createRiskModule } from './modules/risk';
 import { createWorkflowModule } from './modules/workflow';
-import { createMessagingModule } from './modules/messaging';
+import { createMessagingModule, templateService } from './modules/messaging';
+import { syncLifecycleNotificationPermission } from './modules/audit/utility/lifecycle-notify.utility';
 import { createDashboardModule } from './modules/dashboard';
 import { createSettingsModule } from './modules/settings';
 import { createIntegrationModule } from './modules/integration';
@@ -231,6 +232,13 @@ const startServer = async (): Promise<http.Server> => {
 
   registerAllJobs();
   await schedulerService.startAll();
+
+  void templateService.syncDefaultTemplates().catch((err: unknown) => {
+    logger.warn('Notification template startup sync failed', { err });
+  });
+  void syncLifecycleNotificationPermission().catch((err: unknown) => {
+    logger.warn('Lifecycle notification permission startup sync failed', { err });
+  });
 
   // Seed today's idempotent learning snapshot and early warnings immediately;
   // users should not have to wait for the next scheduled hour after deployment

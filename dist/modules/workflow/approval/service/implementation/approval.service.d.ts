@@ -42,6 +42,15 @@ export declare class ApprovalService implements IApprovalService {
     resolveChainForEntity(entityType: WorkflowEntityType, entityId: string, actor: ApprovalActor): Promise<ResolvedApprovalChainDto>;
     private _resolveApproverChain;
     private _chainForEntity;
+    /**
+     * Resolves the approval chain for a specific entity, applying per-report
+     * sign-off mode (`cae_only` vs `cae_and_dg`) when configured on an Audit Report.
+     * - `cae_only` (1 executive signature): terminates at Head of Internal Audit
+     *   (`report:approve:oversight`), omitting the DG (`report:approve:final`) step.
+     * - `cae_and_dg` (2 executive signatures): includes both Head of Internal Audit
+     *   (`report:approve:oversight`) and DG (`report:approve:final`).
+     */
+    private _resolveEntityChain;
     private _resolveEngagementManager;
     private _hasActiveUserWithPermission;
     /** All active users who currently hold a permission — the pool that can act on a pool level. */

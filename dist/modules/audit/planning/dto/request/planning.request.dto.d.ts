@@ -3,17 +3,17 @@ import { AuditPriority, AuditType, PlanStatus } from '../../../domain/enum/audit
 export declare const CreatePlanRequestSchema: z.ZodObject<{
     title: z.ZodString;
     year: z.ZodNumber;
-    auditType: z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>;
+    auditType: z.ZodEnum<[AuditType.It, AuditType.Systems, AuditType.Financial, AuditType.Compliance, AuditType.Operational, AuditType.Pension, AuditType.Procurement, AuditType.HrPayroll, AuditType.Project, AuditType.Special]>;
     description: z.ZodOptional<z.ZodString>;
 }, "strip", z.ZodTypeAny, {
     title: string;
     year: number;
-    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
+    auditType: AuditType;
     description?: string | undefined;
 }, {
     title: string;
     year: number;
-    auditType: AuditType.It | AuditType.Financial | AuditType.Compliance;
+    auditType: AuditType;
     description?: string | undefined;
 }>;
 export declare const UpdatePlanRequestSchema: z.ZodObject<{
@@ -60,7 +60,7 @@ export declare const PlanQuerySchema: z.ZodObject<{
     pageSize: z.ZodDefault<z.ZodNumber>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof PlanStatus>>;
     year: z.ZodOptional<z.ZodNumber>;
-    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Financial, AuditType.Compliance]>>;
+    auditType: z.ZodOptional<z.ZodEnum<[AuditType.It, AuditType.Systems, AuditType.Financial, AuditType.Compliance, AuditType.Operational, AuditType.Pension, AuditType.Procurement, AuditType.HrPayroll, AuditType.Project, AuditType.Special]>>;
     search: z.ZodOptional<z.ZodString>;
     sortBy: z.ZodDefault<z.ZodEnum<["year", "created_at", "updated_at"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
@@ -72,7 +72,7 @@ export declare const PlanQuerySchema: z.ZodObject<{
     search?: string | undefined;
     status?: PlanStatus | undefined;
     year?: number | undefined;
-    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
+    auditType?: AuditType | undefined;
 }, {
     search?: string | undefined;
     status?: PlanStatus | undefined;
@@ -81,7 +81,7 @@ export declare const PlanQuerySchema: z.ZodObject<{
     pageSize?: number | undefined;
     sortBy?: "created_at" | "updated_at" | "year" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
-    auditType?: AuditType.It | AuditType.Financial | AuditType.Compliance | undefined;
+    auditType?: AuditType | undefined;
 }>;
 export type CreatePlanRequestDto = z.infer<typeof CreatePlanRequestSchema>;
 export type UpdatePlanRequestDto = z.infer<typeof UpdatePlanRequestSchema>;

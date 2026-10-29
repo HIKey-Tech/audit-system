@@ -1,5 +1,6 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
+import multer from 'multer';
+import { authenticate, requireAnyPermission, requirePermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
@@ -11,6 +12,11 @@ import {
   UpdateFrameworkRequestSchema,
 } from '../dto/request/compliance.request.dto';
 import { IComplianceService } from '../service/interface/compliance.service.interface';
+
+const documentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
 
 export class ComplianceController {
   public readonly router: Router;
@@ -66,11 +72,35 @@ export class ComplianceController {
     this.router.delete('/compliance/controls/:id/risks/:riskId', requirePermission('control:manage'), this._unlinkRisk.bind(this));
 
     /**
+     * @route  POST /audit/compliance/extract-preview
+     * @desc   Extract and preview controls from an uploaded Act/Policy/Framework document
+     * @access Private
+     */
+    this.router.post(
+      '/compliance/extract-preview',
+      requireAnyPermission('settings:update', 'settings:manage', 'engagement:create', 'checklist:update', 'checklist:create', 'control:manage'),
+      documentUpload.single('file'),
+      this._extractPreview.bind(this),
+    );
+
+    /**
+     * @route  POST /audit/compliance/frameworks/upload-document
+     * @desc   Create/update a compliance framework and bulk-import controls from an uploaded Act/Policy/Framework document
+     * @access Private
+     */
+    this.router.post(
+      '/compliance/frameworks/upload-document',
+      requireAnyPermission('settings:update', 'settings:manage', 'engagement:create', 'checklist:update', 'checklist:create', 'control:manage'),
+      documentUpload.single('file'),
+      this._uploadFrameworkDocument.bind(this),
+    );
+
+    /**
      * @route  GET /audit/compliance/frameworks
      * @desc   List compliance frameworks
      * @access Private - control:read
      */
-    this.router.get('/compliance/frameworks', requirePermission('control:read'), this._listFrameworks.bind(this));
+    this.router.get('/compliance/frameworks', requireAnyPermission('control:read', 'engagement:create', 'checklist:read', 'checklist:update'), this._listFrameworks.bind(this));
 
     /**
      * @route  POST /audit/compliance/frameworks
@@ -91,7 +121,7 @@ export class ComplianceController {
      * @desc   List compliance controls
      * @access Private - control:read
      */
-    this.router.get('/compliance/controls', requirePermission('control:read'), validate(ControlQuerySchema, 'query'), this._listControls.bind(this));
+    this.router.get('/compliance/controls', requireAnyPermission('control:read', 'engagement:create', 'checklist:read', 'checklist:update'), validate(ControlQuerySchema, 'query'), this._listControls.bind(this));
 
     /**
      * @route  POST /audit/compliance/controls
@@ -227,6 +257,46 @@ export class ComplianceController {
     try {
       await this.complianceService.deleteControl(req.params.id, req.user!);
       res.status(200).json(buildResponse(null, 'Compliance control retired'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _extractPreview(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const prefix = typeof req.body?.prefix === 'string' ? req.body.prefix : undefined;
+      const result = await this.complianceService.extractDocumentPreview(req.file!, prefix);
+      res.status(200).json(buildResponse(result, 'Document controls extracted'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _uploadFrameworkDocument(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      let parsedControls = req.body?.controls;
+      if (typeof parsedControls === 'string' && parsedControls.trim()) {
+        try {
+          parsedControls = JSON.parse(parsedControls);
+        } catch {
+          parsedControls = undefined;
+        }
+      }
+      const result = await this.complianceService.uploadFrameworkDocument(
+        req.file,
+        {
+          frameworkId: req.body?.frameworkId || undefined,
+          code: req.body?.code || undefined,
+          name: req.body?.name || undefined,
+          category: req.body?.category || undefined,
+          description: req.body?.description || undefined,
+          auditType: req.body?.auditType || undefined,
+          prefix: req.body?.prefix || undefined,
+          controls: Array.isArray(parsedControls) ? parsedControls : undefined,
+        },
+        req.user!,
+      );
+      res.status(201).json(buildResponse(result, 'Framework and controls imported'));
     } catch (err) {
       next(err);
     }

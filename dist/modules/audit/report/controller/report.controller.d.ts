@@ -14,6 +14,8 @@ export declare class ReportController {
     private _getReport;
     private _getReportById;
     private _listReports;
+    private _listComments;
+    private _addComment;
     private _exportReport;
 }
 //# sourceMappingURL=report.controller.d.ts.map

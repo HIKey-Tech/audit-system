@@ -35,6 +35,7 @@ const audit_1 = require("./modules/audit");
 const risk_1 = require("./modules/risk");
 const workflow_1 = require("./modules/workflow");
 const messaging_1 = require("./modules/messaging");
+const lifecycle_notify_utility_1 = require("./modules/audit/utility/lifecycle-notify.utility");
 const dashboard_1 = require("./modules/dashboard");
 const settings_1 = require("./modules/settings");
 const integration_1 = require("./modules/integration");
@@ -198,6 +199,12 @@ const startServer = async () => {
     }
     (0, background_1.registerAllJobs)();
     await background_1.schedulerService.startAll();
+    void messaging_1.templateService.syncDefaultTemplates().catch((err) => {
+        logger_util_1.logger.warn('Notification template startup sync failed', { err });
+    });
+    void (0, lifecycle_notify_utility_1.syncLifecycleNotificationPermission)().catch((err) => {
+        logger_util_1.logger.warn('Lifecycle notification permission startup sync failed', { err });
+    });
     // Seed today's idempotent learning snapshot and early warnings immediately;
     // users should not have to wait for the next scheduled hour after deployment
     // or restart. Failure is isolated so intelligence never blocks the audit app.

@@ -100,6 +100,7 @@ export const NAV: NavItem[] = [
       { type: 'link', label: 'Sampling', href: '/audit/sampling', icon: FlaskConical, matchPrefix: '/audit/sampling', visKey: 'engagements', description: 'Draw a defensible, reproducible sample from a population CSV, stored as engagement evidence.' },
       { type: 'link', label: 'Findings', href: '/audit/findings', icon: AlertTriangle, matchPrefix: '/audit/findings', visKey: 'findings', description: 'Issues raised across audits, with severity and remediation status.' },
       { type: 'link', label: 'Reviews', href: '/audit/reports', icon: FileText, matchPrefix: '/audit/reports', visKey: 'reports', description: 'Issued and in-progress audit reviews.' },
+      { type: 'link', label: 'Periodic Reports', href: '/audit/periodic-reports', icon: BarChart3, matchPrefix: '/audit/periodic-reports', visKey: 'reports', description: 'Generate Monthly, Quarterly, Annual, or Custom period audit activity reports with Word and PDF export.' },
       { type: 'link', label: 'Control Library', href: '/audit/compliance', icon: Library, matchPrefix: '/audit/compliance', visKey: 'engagements', description: 'Control library and per-framework coverage (ISO, PCI DSS, NIST, COBIT, NDPR, GDPR, SOX).' },
       { type: 'link', label: 'Evidence Repository', href: '/audit/repository', icon: Archive, matchPrefix: '/audit/repository', visKey: 'engagements', description: 'Central, searchable store of all audit records, supporting documents, and evidence.' },
     ],

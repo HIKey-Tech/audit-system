@@ -79,6 +79,7 @@ export class FollowUpService implements IFollowUpService {
       body: `A management response was submitted for finding "${finding.title}" (${finding.engagement.reference_number}).`,
       type: 'info',
       eventKey: 'audit.followup.response.submitted',
+      actorId: actor.id,
     });
 
     return mapFollowUpToResponse(followUp);
@@ -124,6 +125,7 @@ export class FollowUpService implements IFollowUpService {
       body: `Remediation evidence was submitted for finding "${finding.title}" (${finding.engagement.reference_number}) and is awaiting your verification.`,
       type: 'info',
       eventKey: 'audit.followup.evidence.submitted',
+      actorId: actor.id,
     });
 
     return mapFollowUpToResponse(followUp);
@@ -453,6 +455,7 @@ export class FollowUpService implements IFollowUpService {
         engagement_id: true,
         auditee_id: true,
         title: true,
+        severity: true,
         status: true,
         auditee: { select: responderSelect },
         responders: { select: { user: { select: responderSelect } } },
@@ -508,15 +511,30 @@ export class FollowUpService implements IFollowUpService {
    */
   private async _notifyLeadAuditor(
     finding: Awaited<ReturnType<FollowUpService['_getFinding']>>,
-    notification: { title: string; body: string; type: 'info' | 'warning' | 'error' | 'success'; eventKey: string },
+    notification: {
+      title: string;
+      body: string;
+      type: 'info' | 'warning' | 'error' | 'success';
+      eventKey: string;
+      actorId?: string;
+    },
   ): Promise<void> {
     const lead = finding.engagement.lead_auditor;
     if (!lead) return;
 
     const recipientName = lead.display_name ?? `${lead.first_name} ${lead.last_name}`.trim();
+    const responders = this._responders(finding);
+    const actingResponder =
+      (notification.actorId ? responders.find((r) => r.id === notification.actorId) : undefined) ??
+      finding.auditee;
+    const auditeeName =
+      actingResponder.display_name ?? `${actingResponder.first_name} ${actingResponder.last_name}`.trim();
     const variables = {
       recipientName,
+      auditorName: recipientName,
+      auditeeName,
       findingTitle: finding.title,
+      severity: finding.severity,
       engagementReference: finding.engagement.reference_number,
     };
 

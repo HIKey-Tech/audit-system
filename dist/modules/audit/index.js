@@ -39,6 +39,8 @@ const evidence_request_service_1 = require("./evidence-request/service/implement
 const evidence_request_controller_1 = require("./evidence-request/controller/evidence-request.controller");
 const time_entry_service_1 = require("./time-entry/service/implementation/time-entry.service");
 const time_entry_controller_1 = require("./time-entry/controller/time-entry.controller");
+const periodic_report_service_1 = require("./periodic-report/service/periodic-report.service");
+const periodic_report_controller_1 = require("./periodic-report/controller/periodic-report.controller");
 const createAuditModule = () => {
     const router = (0, express_1.Router)();
     const documentService = new document_1.DocumentService();
@@ -81,6 +83,7 @@ const createAuditModule = () => {
     router.use('/audit', samplingController.router);
     router.use('/audit', new evidence_request_controller_1.EvidenceRequestController(new evidence_request_service_1.EvidenceRequestService(documentService)).router);
     router.use('/audit', new time_entry_controller_1.TimeEntryController(new time_entry_service_1.TimeEntryService()).router);
+    router.use('/audit', new periodic_report_controller_1.PeriodicReportController(new periodic_report_service_1.PeriodicReportService()).router);
     return router;
 };
 exports.createAuditModule = createAuditModule;

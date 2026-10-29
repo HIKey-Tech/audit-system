@@ -62,8 +62,20 @@ export const Combobox = ({
     const onPointerDown = (e: MouseEvent) => {
       if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
     };
+    const onCaptureKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        setOpen(false);
+      }
+    };
     document.addEventListener('mousedown', onPointerDown);
-    return () => document.removeEventListener('mousedown', onPointerDown);
+    document.addEventListener('keydown', onCaptureKeyDown, true);
+    return () => {
+      document.removeEventListener('mousedown', onPointerDown);
+      document.removeEventListener('keydown', onCaptureKeyDown, true);
+    };
   }, [open]);
 
   const choose = (opt: ComboboxOption) => {
@@ -94,7 +106,7 @@ export const Combobox = ({
   };
 
   return (
-    <div ref={rootRef} className="relative w-full">
+    <div ref={rootRef} data-dropdown-open={open ? 'true' : undefined} className="relative w-full">
       <button
         type="button"
         disabled={disabled}

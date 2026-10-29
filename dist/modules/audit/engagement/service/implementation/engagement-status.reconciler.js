@@ -5,6 +5,8 @@ const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
+const finding_responder_notify_utility_1 = require("../../../utility/finding-responder-notify.utility");
+const lifecycle_notify_utility_1 = require("../../../utility/lifecycle-notify.utility");
 const engagement_gates_1 = require("./engagement-gates");
 /** Compute the immediate forward target if its gates are met, else null. Forward-only. */
 const nextForwardStatus = async (status, engagementId) => {
@@ -30,7 +32,7 @@ const reconcileEngagementStatus = async (engagementId, actorId) => {
     for (let hop = 0; hop < 3; hop += 1) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
-            select: { id: true, status: true, universe_id: true },
+            select: { id: true, status: true, universe_id: true, reference_number: true },
         });
         if (!engagement)
             return;
@@ -52,6 +54,11 @@ const reconcileEngagementStatus = async (engagementId, actorId) => {
                 });
             }
         });
+        if (target === audit_enum_1.EngagementStatus.UnderReview) {
+            // Fieldwork is complete: ask the auditee to respond to their findings before the report is issued.
+            await (0, finding_responder_notify_utility_1.notifyFindingResponders)(engagementId, engagement.reference_number, 'draft');
+        }
+        await (0, lifecycle_notify_utility_1.notifyEngagementLifecycleChange)(engagementId, engagement.status, target, actorId);
         logger_util_1.logger.info('Audit engagement auto-advanced', { engagementId, from: engagement.status, to: target, actorId });
         audit_log_service_1.auditLogService.logAsync({
             userId: actorId,

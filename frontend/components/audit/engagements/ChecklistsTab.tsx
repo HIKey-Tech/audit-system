@@ -3,22 +3,25 @@
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ListChecks, AlertTriangle } from 'lucide-react';
+import { ListChecks, AlertTriangle, Upload, Library, Plus, Trash2, Paperclip, Check, Download } from 'lucide-react';
 import { toast } from 'sonner';
 
-import { Paperclip, Check, Download } from 'lucide-react';
-
 import { Card } from '@/components/ui/Card';
-import { Select, Input } from '@/components/ui/Input';
+import { Select, Input, Textarea } from '@/components/ui/Input';
+import { FormField } from '@/components/ui/FormField';
 import { Button } from '@/components/ui/Button';
+import { SlideOver } from '@/components/ui/SlideOver';
+import { Badge } from '@/components/ui/Badge';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { checklistsApi, evidenceApi, findingsApi } from '@/lib/api/audit';
+import { api } from '@/lib/api-client';
+import { checklistsApi, complianceApi, evidenceApi, findingsApi } from '@/lib/api/audit';
 import { documentsApi } from '@/lib/api/documents';
+import { auditTypeLabel } from '@/lib/audit-domains';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
-import type { AuditEngagementDetail, AuditChecklistItem } from '@/lib/types/domain';
+import type { AuditEngagementDetail, AuditChecklistItem, ChecklistTemplateControl } from '@/lib/types/domain';
 import { NewFindingSlideOver, type FindingPrefill } from './NewFindingSlideOver';
 
 function normalizeChecklists(
@@ -50,6 +53,11 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
   const [bulkConfirmOpen, setBulkConfirmOpen] = useState(false);
   const [bulkRunning, setBulkRunning] = useState(false);
   const [findingPrefill, setFindingPrefill] = useState<FindingPrefill | null>(null);
+  const [uploadModalOpen, setUploadModalOpen] = useState(false);
+  const [libraryModalOpen, setLibraryModalOpen] = useState(false);
+  const [addControlModalOpen, setAddControlModalOpen] = useState(false);
+
+  const isClosed = engagement.status === 'closed';
 
   const list = useQuery({
     queryKey: ['engagements', engagement.id, 'checklists'],
@@ -84,9 +92,18 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
 
   const openFindingForm = (item: AuditChecklistItem): void => {
     const notes = notesDrafts.current.get(item.id) ?? item.notes;
+    const prefix = `Control ${item.controlReference} failed: `;
+    const maxDescLen = Math.max(40, 195 - prefix.length);
+    const rawDesc = item.controlDescription.trim();
+    let shortDesc = rawDesc;
+    if (rawDesc.length > maxDescLen) {
+      const sliced = rawDesc.slice(0, maxDescLen - 1);
+      const lastSpace = sliced.lastIndexOf(' ');
+      shortDesc = `${(lastSpace > maxDescLen * 0.6 ? sliced.slice(0, lastSpace) : sliced).replace(/[,;:\s]+$/, '')}…`;
+    }
     setFindingPrefill({
       checklistId: item.id,
-      title: `Control ${item.controlReference} failed: ${item.controlDescription.slice(0, 120)}`,
+      title: `${prefix}${shortDesc}`,
       description: [
         `Control ${item.controlReference} — ${item.controlDescription}`,
         item.testProcedure ? `Test procedure: ${item.testProcedure}` : null,
@@ -167,9 +184,41 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
 
   return (
     <div>
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-text-primary">Checklists</h2>
-        <p className="text-xs text-text-secondary">Control test register for this engagement.</p>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h2 className="text-base font-semibold text-text-primary">Checklists</h2>
+          <p className="text-xs text-text-secondary">
+            Control test register for this engagement. Upload an Act/Policy or import from the Control Library to generate checklist controls.
+          </p>
+        </div>
+        {canUpdateChecklist && !isClosed && (
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<Upload className="h-3.5 w-3.5" />}
+              onClick={() => setUploadModalOpen(true)}
+            >
+              Upload Act / Policy
+            </Button>
+            <Button
+              size="sm"
+              variant="secondary"
+              leftIcon={<Library className="h-3.5 w-3.5" />}
+              onClick={() => setLibraryModalOpen(true)}
+            >
+              Import from Control Library
+            </Button>
+            <Button
+              size="sm"
+              variant="primary"
+              leftIcon={<Plus className="h-3.5 w-3.5" />}
+              onClick={() => setAddControlModalOpen(true)}
+            >
+              Add Control
+            </Button>
+          </div>
+        )}
       </div>
 
       {list.isLoading ? (
@@ -235,7 +284,7 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
             <Card key={type} className="mb-4" padded={false}>
               <div className="border-b border-border bg-surface-alt px-5 py-3">
                 <p className="text-xs font-semibold uppercase tracking-wider text-text-secondary">
-                  {humanizeStatus(type)} Audit
+                  {auditTypeLabel(type)}
                 </p>
               </div>
               <ul className="divide-y divide-border">
@@ -323,7 +372,496 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
         onClose={() => setFindingPrefill(null)}
         prefill={findingPrefill ?? undefined}
       />
+
+      {canUpdateChecklist && !isClosed && (
+        <>
+          <UploadActPolicySlideOver
+            engagementId={engagement.id}
+            auditType={engagement.auditType}
+            open={uploadModalOpen}
+            onClose={() => setUploadModalOpen(false)}
+            onImported={() => {
+              setUploadModalOpen(false);
+              qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'checklists'] });
+              qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+            }}
+          />
+          <ImportFromLibrarySlideOver
+            engagementId={engagement.id}
+            auditType={engagement.auditType}
+            open={libraryModalOpen}
+            onClose={() => setLibraryModalOpen(false)}
+            onImported={() => {
+              setLibraryModalOpen(false);
+              qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'checklists'] });
+              qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+            }}
+          />
+          <AddCustomControlSlideOver
+            engagementId={engagement.id}
+            auditType={engagement.auditType}
+            open={addControlModalOpen}
+            onClose={() => setAddControlModalOpen(false)}
+            onAdded={() => {
+              setAddControlModalOpen(false);
+              qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'checklists'] });
+              qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+            }}
+          />
+        </>
+      )}
     </div>
+  );
+};
+
+interface ExtractedPreviewResponse {
+  suggestedCode: string;
+  suggestedName: string;
+  controls: ChecklistTemplateControl[];
+}
+
+const UploadActPolicySlideOver = ({
+  engagementId,
+  auditType,
+  open,
+  onClose,
+  onImported,
+}: {
+  engagementId: string;
+  auditType: string;
+  open: boolean;
+  onClose: () => void;
+  onImported: () => void;
+}): JSX.Element => {
+  const [file, setFile] = useState<File | null>(null);
+  const [prefix, setPrefix] = useState('');
+  const [controls, setControls] = useState<ChecklistTemplateControl[]>([]);
+  const [saveToLibrary, setSaveToLibrary] = useState(false);
+  const [frameworkCode, setFrameworkCode] = useState('');
+  const [frameworkName, setFrameworkName] = useState('');
+  const [category, setCategory] = useState('regulatory');
+
+  const extractPreview = useMutation({
+    mutationFn: async (selectedFile: File) => {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      if (prefix.trim()) fd.append('prefix', prefix.trim());
+      return api.upload<ExtractedPreviewResponse>('/audit/compliance/extract-preview', fd);
+    },
+    onSuccess: (res) => {
+      setControls(res.controls);
+      if (!frameworkCode) setFrameworkCode(res.suggestedCode);
+      if (!frameworkName) setFrameworkName(res.suggestedName);
+      toast.success(`Extracted ${res.controls.length} checklist control(s) from document`);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to parse document'),
+  });
+
+  const importMutation = useMutation({
+    mutationFn: async () => {
+      const cleaned = controls
+        .map((c) => ({
+          controlReference: c.controlReference.trim(),
+          controlDescription: c.controlDescription.trim(),
+          testProcedure: c.testProcedure.trim(),
+        }))
+        .filter((c) => c.controlReference && c.controlDescription && c.testProcedure);
+
+      if (cleaned.length === 0) {
+        throw new Error('Add or extract at least one valid control before importing');
+      }
+
+      const fd = new FormData();
+      if (file) fd.append('file', file);
+      if (prefix.trim()) fd.append('prefix', prefix.trim());
+      fd.append('controls', JSON.stringify(cleaned));
+      fd.append('auditType', auditType);
+      fd.append('saveToLibrary', String(saveToLibrary));
+      if (saveToLibrary) {
+        if (frameworkCode.trim()) fd.append('frameworkCode', frameworkCode.trim());
+        if (frameworkName.trim()) fd.append('frameworkName', frameworkName.trim());
+        fd.append('category', category);
+      }
+
+      return api.upload<{ addedCount: number }>(
+        `/audit/engagements/${engagementId}/checklists/import-document`,
+        fd,
+      );
+    },
+    onSuccess: (res) => {
+      toast.success(`${res.addedCount} control(s) imported into engagement checklist`);
+      setFile(null);
+      setControls([]);
+      onImported();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to import controls'),
+  });
+
+  const updateRow = (idx: number, field: keyof ChecklistTemplateControl, value: string) => {
+    setControls((prev) => prev.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
+  };
+
+  const removeRow = (idx: number) => {
+    setControls((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addRow = () => {
+    setControls((prev) => [
+      ...prev,
+      {
+        controlReference: `${prefix.trim() || 'CTRL'}-${String(prev.length + 1).padStart(3, '0')}`,
+        controlDescription: '',
+        testProcedure: '',
+      },
+    ]);
+  };
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="Upload Act / Policy / Framework"
+      description="Upload a PDF, Word (.docx), Excel/CSV, or TXT document (e.g. Pension Reform Act, Procurement Policy, SOP) to automatically extract and customize audit checklist items."
+      width="xl"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => importMutation.mutate()}
+            isLoading={importMutation.isPending}
+            disabled={controls.length === 0}
+          >
+            Import into Engagement Checklist ({controls.length})
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <div className="sm:col-span-2">
+            <FormField label="Document File (PDF, DOCX, XLSX, CSV, TXT)" required>
+              <Input
+                type="file"
+                accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md"
+                onChange={(e) => {
+                  const selected = e.target.files?.[0] ?? null;
+                  setFile(selected);
+                  if (selected) {
+                    extractPreview.mutate(selected);
+                  }
+                }}
+              />
+            </FormField>
+          </div>
+          <FormField label="Reference Prefix (optional)">
+            <Input
+              value={prefix}
+              onChange={(e) => setPrefix(e.target.value)}
+              placeholder="e.g. PEN, PROC, SOP"
+            />
+          </FormField>
+        </div>
+
+        {file && (
+          <div className="flex items-center justify-between rounded-lg border border-border bg-surface-alt px-3 py-2 text-xs">
+            <span className="text-text-secondary">
+              Selected: <strong className="text-text-primary">{file.name}</strong>
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              isLoading={extractPreview.isPending}
+              onClick={() => extractPreview.mutate(file)}
+            >
+              Re-extract with Prefix
+            </Button>
+          </div>
+        )}
+
+        <div className="rounded-lg border border-border bg-surface-alt p-3 space-y-3">
+          <label className="flex items-center gap-2 text-sm font-medium text-text-primary">
+            <input
+              type="checkbox"
+              checked={saveToLibrary}
+              onChange={(e) => setSaveToLibrary(e.target.checked)}
+            />
+            Also save as a reusable Framework / Act in the Control Library
+          </label>
+          {saveToLibrary && (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 pt-1">
+              <FormField label="Framework Code" required>
+                <Input
+                  value={frameworkCode}
+                  onChange={(e) => setFrameworkCode(e.target.value)}
+                  placeholder="e.g. PRA-2014"
+                />
+              </FormField>
+              <FormField label="Framework / Act Name" required>
+                <Input
+                  value={frameworkName}
+                  onChange={(e) => setFrameworkName(e.target.value)}
+                  placeholder="e.g. Pension Reform Act 2014"
+                />
+              </FormField>
+              <FormField label="Category" required>
+                <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+                  <option value="act">Act / Legislation</option>
+                  <option value="regulatory">Regulatory Guideline</option>
+                  <option value="policy">Internal Policy / SOP</option>
+                  <option value="standard">Standard / Framework</option>
+                </Select>
+              </FormField>
+            </div>
+          )}
+        </div>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Extracted Checklist Controls ({controls.length})
+            </p>
+            <Button size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={addRow}>
+              Add Row
+            </Button>
+          </div>
+          {extractPreview.isPending ? (
+            <p className="text-xs text-text-muted py-4">Extracting clauses and controls from document…</p>
+          ) : controls.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-text-muted">
+              Select a document above to extract checklist items automatically, or click &ldquo;Add Row&rdquo; to enter controls manually.
+            </p>
+          ) : (
+            <div className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
+              {controls.map((c, idx) => (
+                <div key={idx} className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={c.controlReference}
+                      onChange={(e) => updateRow(idx, 'controlReference', e.target.value)}
+                      placeholder="Control Reference"
+                      className="font-mono text-xs"
+                    />
+                    <Button size="sm" variant="ghost" onClick={() => removeRow(idx)} aria-label="Remove row">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    rows={2}
+                    value={c.controlDescription}
+                    onChange={(e) => updateRow(idx, 'controlDescription', e.target.value)}
+                    placeholder="Control requirement / description"
+                  />
+                  <Textarea
+                    rows={2}
+                    value={c.testProcedure}
+                    onChange={(e) => updateRow(idx, 'testProcedure', e.target.value)}
+                    placeholder="Audit test procedure"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </SlideOver>
+  );
+};
+
+const ImportFromLibrarySlideOver = ({
+  engagementId,
+  auditType,
+  open,
+  onClose,
+  onImported,
+}: {
+  engagementId: string;
+  auditType: string;
+  open: boolean;
+  onClose: () => void;
+  onImported: () => void;
+}): JSX.Element => {
+  const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const frameworks = useQuery({
+    queryKey: ['compliance', 'frameworks'],
+    queryFn: () => complianceApi.listFrameworks(),
+    enabled: open,
+  });
+
+  const toggle = (id: string) => {
+    setSelectedIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  };
+
+  const importMutation = useMutation({
+    mutationFn: () =>
+      api.post<{ addedCount: number }>(
+        `/audit/engagements/${engagementId}/checklists/import-framework`,
+        { frameworkIds: selectedIds, auditType },
+      ),
+    onSuccess: (res) => {
+      toast.success(`${res.addedCount} control(s) imported from Control Library`);
+      setSelectedIds([]);
+      onImported();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to import framework controls'),
+  });
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="Import from Control Library"
+      description="Select one or more Acts, Policies, or Frameworks from the Control Library to import their active controls into this engagement."
+      width="lg"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => importMutation.mutate()}
+            isLoading={importMutation.isPending}
+            disabled={selectedIds.length === 0}
+          >
+            Import Selected ({selectedIds.length})
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-2">
+        {frameworks.isLoading ? (
+          <p className="text-xs text-text-muted">Loading frameworks…</p>
+        ) : (frameworks.data ?? []).length === 0 ? (
+          <p className="text-xs text-text-muted">No frameworks found in the Control Library.</p>
+        ) : (
+          (frameworks.data ?? [])
+            .filter((f) => f.isActive)
+            .map((fw) => {
+              const checked = selectedIds.includes(fw.id);
+              return (
+                <label
+                  key={fw.id}
+                  className={`flex cursor-pointer items-start gap-3 rounded-lg border p-3 transition-colors ${
+                    checked ? 'border-primary bg-primary/5' : 'border-border bg-surface hover:border-primary/40'
+                  }`}
+                >
+                  <input
+                    type="checkbox"
+                    checked={checked}
+                    onChange={() => toggle(fw.id)}
+                    className="mt-1"
+                  />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-mono text-xs font-semibold text-primary">{fw.code}</span>
+                      <Badge tone="gray">{humanizeStatus(fw.category)}</Badge>
+                    </div>
+                    <p className="mt-0.5 text-sm font-medium text-text-primary">{fw.name}</p>
+                    {fw.description && (
+                      <p className="mt-0.5 text-xs text-text-secondary line-clamp-2">{fw.description}</p>
+                    )}
+                  </div>
+                </label>
+              );
+            })
+        )}
+      </div>
+    </SlideOver>
+  );
+};
+
+const AddCustomControlSlideOver = ({
+  engagementId,
+  auditType,
+  open,
+  onClose,
+  onAdded,
+}: {
+  engagementId: string;
+  auditType: string;
+  open: boolean;
+  onClose: () => void;
+  onAdded: () => void;
+}): JSX.Element => {
+  const [controlReference, setControlReference] = useState('');
+  const [controlDescription, setControlDescription] = useState('');
+  const [testProcedure, setTestProcedure] = useState('');
+
+  const createMutation = useMutation({
+    mutationFn: () =>
+      api.post<AuditChecklistItem>(`/audit/engagements/${engagementId}/checklists`, {
+        auditType,
+        controlReference: controlReference.trim(),
+        controlDescription: controlDescription.trim(),
+        testProcedure: testProcedure.trim(),
+      }),
+    onSuccess: () => {
+      toast.success('Checklist control added');
+      setControlReference('');
+      setControlDescription('');
+      setTestProcedure('');
+      onAdded();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to add checklist control'),
+  });
+
+  const valid =
+    controlReference.trim().length > 0 &&
+    controlDescription.trim().length > 0 &&
+    testProcedure.trim().length > 0;
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="Add Custom Checklist Control"
+      description="Add an engagement-specific control requirement and test procedure."
+      width="lg"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => createMutation.mutate()}
+            isLoading={createMutation.isPending}
+            disabled={!valid}
+          >
+            Add Control
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <FormField label="Control Reference" required>
+          <Input
+            value={controlReference}
+            onChange={(e) => setControlReference(e.target.value)}
+            placeholder="e.g. PEN-CUSTOM-001"
+          />
+        </FormField>
+        <FormField label="Control Description / Requirement" required>
+          <Textarea
+            rows={3}
+            value={controlDescription}
+            onChange={(e) => setControlDescription(e.target.value)}
+            placeholder="Describe the control or policy requirement being tested…"
+          />
+        </FormField>
+        <FormField label="Test Procedure" required>
+          <Textarea
+            rows={3}
+            value={testProcedure}
+            onChange={(e) => setTestProcedure(e.target.value)}
+            placeholder="Describe the steps the auditor should perform to verify compliance…"
+          />
+        </FormField>
+      </div>
+    </SlideOver>
   );
 };
 

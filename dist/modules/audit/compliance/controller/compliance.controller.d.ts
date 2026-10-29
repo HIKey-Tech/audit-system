@@ -18,5 +18,7 @@ export declare class ComplianceController {
     private _createControl;
     private _updateControl;
     private _deleteControl;
+    private _extractPreview;
+    private _uploadFrameworkDocument;
 }
 //# sourceMappingURL=compliance.controller.d.ts.map

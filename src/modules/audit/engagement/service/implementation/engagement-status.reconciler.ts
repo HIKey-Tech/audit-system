@@ -3,6 +3,7 @@ import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { EngagementStatus } from '../../../domain/enum/audit.enum';
 import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
+import { notifyEngagementLifecycleChange } from '../../../utility/lifecycle-notify.utility';
 import { canClose, canEnterReported, canEnterUnderReview } from './engagement-gates';
 
 type ApprovalEntityType = 'audit_working_paper' | 'audit_finding_closure';
@@ -62,6 +63,8 @@ export const reconcileEngagementStatus = async (engagementId: string, actorId: s
       // Fieldwork is complete: ask the auditee to respond to their findings before the report is issued.
       await notifyFindingResponders(engagementId, engagement.reference_number, 'draft');
     }
+
+    await notifyEngagementLifecycleChange(engagementId, engagement.status, target, actorId);
 
     logger.info('Audit engagement auto-advanced', { engagementId, from: engagement.status, to: target, actorId });
     auditLogService.logAsync({

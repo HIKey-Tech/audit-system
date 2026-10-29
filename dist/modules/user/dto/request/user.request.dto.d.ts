@@ -158,6 +158,28 @@ export declare const ReplaceRolePermissionsRequestSchema: z.ZodObject<{
 }, {
     permissionIds: string[];
 }>;
+export declare const ProvisionAuditeeRequestSchema: z.ZodObject<{
+    email: z.ZodString;
+    firstName: z.ZodOptional<z.ZodString>;
+    lastName: z.ZodOptional<z.ZodString>;
+    displayName: z.ZodOptional<z.ZodString>;
+    department: z.ZodOptional<z.ZodString>;
+    jobTitle: z.ZodOptional<z.ZodString>;
+}, "strip", z.ZodTypeAny, {
+    email: string;
+    department?: string | undefined;
+    displayName?: string | undefined;
+    firstName?: string | undefined;
+    lastName?: string | undefined;
+    jobTitle?: string | undefined;
+}, {
+    email: string;
+    department?: string | undefined;
+    displayName?: string | undefined;
+    firstName?: string | undefined;
+    lastName?: string | undefined;
+    jobTitle?: string | undefined;
+}>;
 export type CreateUserRequestDto = z.infer<typeof CreateUserRequestSchema>;
 export type UpdateUserRequestDto = z.infer<typeof UpdateUserRequestSchema>;
 export type AssignRoleRequestDto = z.infer<typeof AssignRoleRequestSchema>;
@@ -167,4 +189,5 @@ export type RoleQueryDto = z.infer<typeof RoleQuerySchema>;
 export type CreateRoleRequestDto = z.infer<typeof CreateRoleRequestSchema>;
 export type UpdateRoleRequestDto = z.infer<typeof UpdateRoleRequestSchema>;
 export type ReplaceRolePermissionsRequestDto = z.infer<typeof ReplaceRolePermissionsRequestSchema>;
+export type ProvisionAuditeeRequestDto = z.infer<typeof ProvisionAuditeeRequestSchema>;
 //# sourceMappingURL=user.request.dto.d.ts.map

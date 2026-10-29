@@ -25,10 +25,16 @@ interface Props {
 export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props): JSX.Element => {
   const qc = useQueryClient();
   const canCreate = usePermission('assignment:create');
+  const canUpdateEngagement = usePermission('engagement:update');
   const canDelete = usePermission('assignment:delete');
+  const canSubstitute = canCreate || canUpdateEngagement;
 
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [roleToAssign, setRoleToAssign] = useState<Record<string, 'lead_auditor' | 'supporting_auditor'>>({});
+  const [subRole, setSubRole] = useState<'supporting_auditor' | 'lead_auditor' | 'audit_manager'>('supporting_auditor');
+  const [subOutgoingUserId, setSubOutgoingUserId] = useState<string>('');
+  const [subIncomingUserId, setSubIncomingUserId] = useState<string>('');
+  const [subReason, setSubReason] = useState<string>('');
 
   // Server-side candidate search: the backend filters + caps the list, so we don't
   // pull the whole directory. Debounce so typing doesn't fire a request per keystroke.
@@ -86,6 +92,28 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
       qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'candidates'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to remove assignment'),
+  });
+
+  // Mutation: substitute team member (Supporting, Lead, or Manager)
+  const substitute = useMutation({
+    mutationFn: () =>
+      workflowApi.substituteStaff({
+        engagementId: engagement.id,
+        role: subRole,
+        outgoingUserId: subOutgoingUserId || undefined,
+        incomingUserId: subIncomingUserId,
+        reason: subReason.trim(),
+      }),
+    onSuccess: (res) => {
+      toast.success(`Substituted ${res.incomingUserName} as ${humanizeStatus(res.role)}`);
+      setSubIncomingUserId('');
+      setSubOutgoingUserId('');
+      setSubReason('');
+      qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'assignments'] });
+      qc.invalidateQueries({ queryKey: ['engagements', engagement.id, 'candidates'] });
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to substitute team member'),
   });
 
   // Candidates arrive already scored and ranked by the backend
@@ -147,6 +175,99 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
             </div>
           )}
         </div>
+
+        {/* Section: Substitute / Reassign Team Member (Supporting, Lead, or Manager) */}
+        {canSubstitute && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-3">
+            <div>
+              <h3 className="text-xs font-semibold text-text-primary uppercase tracking-wider">
+                Substitute / Reassign Team Member
+              </h3>
+              <p className="text-[11px] text-text-secondary mt-0.5">
+                If a team member is unavailable or unwell, substitute or add a replacement as Supporting Auditor, Lead Auditor, or Audit Manager. All parties and oversight are notified automatically.
+              </p>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div>
+                <label className="block text-[11px] font-semibold text-text-secondary mb-1">
+                  Role to Substitute
+                </label>
+                <Select
+                  value={subRole}
+                  onChange={(e) => {
+                    const nextRole = e.target.value as 'supporting_auditor' | 'lead_auditor' | 'audit_manager';
+                    setSubRole(nextRole);
+                    if (nextRole === 'lead_auditor') {
+                      setSubOutgoingUserId(engagement.leadAuditorId);
+                    } else if (nextRole === 'audit_manager') {
+                      setSubOutgoingUserId(engagement.auditManagerId);
+                    } else {
+                      setSubOutgoingUserId('');
+                    }
+                  }}
+                >
+                  <option value="supporting_auditor">Supporting Auditor</option>
+                  <option value="lead_auditor">Lead Auditor (Currently: {engagement.leadAuditorName ?? '—'})</option>
+                  <option value="audit_manager">Audit Manager (Currently: {engagement.auditManagerName ?? '—'})</option>
+                </Select>
+              </div>
+              {subRole === 'supporting_auditor' && (
+                <div>
+                  <label className="block text-[11px] font-semibold text-text-secondary mb-1">
+                    Member Being Replaced (Optional)
+                  </label>
+                  <Select
+                    value={subOutgoingUserId}
+                    onChange={(e) => setSubOutgoingUserId(e.target.value)}
+                  >
+                    <option value="">Add as additional substitute (keep current team)</option>
+                    {(assignments.data ?? []).map((a) => (
+                      <option key={a.userId} value={a.userId}>
+                        Replace {a.userName} ({humanizeStatus(a.role)})
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              )}
+              <div className={subRole === 'supporting_auditor' ? 'sm:col-span-2' : ''}>
+                <label className="block text-[11px] font-semibold text-text-secondary mb-1">
+                  Incoming Substitute Staff
+                </label>
+                <Select
+                  value={subIncomingUserId}
+                  onChange={(e) => setSubIncomingUserId(e.target.value)}
+                >
+                  <option value="">Select incoming staff member…</option>
+                  {sortedCandidates.map((c) => (
+                    <option key={c.id} value={c.id}>
+                      {c.displayName} ({c.email}) — {c.activeEngagementCount} active
+                    </option>
+                  ))}
+                </Select>
+              </div>
+              <div className="sm:col-span-2">
+                <label className="block text-[11px] font-semibold text-text-secondary mb-1">
+                  Substitution Reason
+                </label>
+                <Input
+                  placeholder="e.g., Medical leave / reassignment during fieldwork"
+                  value={subReason}
+                  onChange={(e) => setSubReason(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="flex justify-end">
+              <Button
+                size="sm"
+                disabled={!subIncomingUserId || subReason.trim().length < 3}
+                isLoading={substitute.isPending}
+                onClick={() => substitute.mutate()}
+              >
+                Confirm Substitution
+              </Button>
+            </div>
+          </div>
+        )}
 
         {/* Section: Skill-Based Candidates Recommender */}
         <div>

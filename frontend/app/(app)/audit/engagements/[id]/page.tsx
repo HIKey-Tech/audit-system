@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback } from 'react';
+import { useCallback, useEffect } from 'react';
 import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useQuery } from '@tanstack/react-query';
@@ -99,6 +99,60 @@ export default function EngagementDetailPage(): JSX.Element {
   const canReadSystemAudit =
     hasPermission(session, 'sysaudit:read') || hasPermission(session, 'sysdoc:read') || hasPermission(session, 'sectest:read');
 
+  const vc = data?.viewerContext;
+  const canViewReportTab =
+    hasPermission(session, 'report:read') &&
+    (vc ? vc.canViewReports !== false && vc.canViewWorkingPapers : true);
+
+  // Internal-team-only restriction (not a "wait until X happens" gate — see
+  // resolveViewerContext) — keep the tab visible but disabled with a reason,
+  // rather than removing it, so a restricted viewer sees "not visible"
+  // instead of the feature appearing to not exist.
+  const RESTRICTED_TAB_REASON = 'Internal audit material — not visible with your permissions on this engagement.';
+  const tabs: TabItem[] = TAB_DEFS
+    .filter(
+      (t) =>
+        (t.key !== 'assets' || canReadAssets) &&
+        (t.key !== 'imoc' || canReadImoc) &&
+        (t.key !== 'system-audit' || canReadSystemAudit),
+    )
+    .map((t) => {
+      const restricted =
+        !!vc &&
+        ((t.key === 'working-papers' && !vc.canViewWorkingPapers) ||
+          (t.key === 'evidence' && !vc.canViewInternalEvidence) ||
+          (t.key === 'checklists' && !vc.canViewChecklists) ||
+          (t.key === 'report' && !canViewReportTab));
+      const noReviewAccess = t.key === 'report' && !canViewReportTab;
+      const disabled = restricted || noReviewAccess;
+      return { ...t, disabled, disabledReason: disabled ? RESTRICTED_TAB_REASON : undefined };
+    })
+    .map((t) => ({
+      key: t.key,
+      label: t.label,
+      disabled: t.disabled,
+      disabledReason: t.disabledReason,
+      count:
+        t.key === 'findings'
+          ? data?.findings?.length ?? 0
+          : t.key === 'working-papers'
+            ? data?.workingPapers?.length ?? 0
+            : t.key === 'evidence'
+              ? data?.evidence?.length ?? 0
+              : null,
+    }));
+
+  // If the URL deep-links to a locked/disabled or hidden tab, redirect to 'overview'
+  // so the user never sees a blank page.
+  const activeTabItem = tabs.find((t) => t.key === tab);
+  const effectiveTab: TabKey = !activeTabItem || activeTabItem.disabled ? 'overview' : tab;
+
+  useEffect(() => {
+    if (data && effectiveTab !== tab) {
+      setTab('overview');
+    }
+  }, [data, effectiveTab, tab, setTab]);
+
   if (isError) {
     return (
       <div>
@@ -122,47 +176,6 @@ export default function EngagementDetailPage(): JSX.Element {
       </div>
     );
   }
-
-  const vc = data.viewerContext;
-  // Internal-team-only restriction (not a "wait until X happens" gate — see
-  // resolveViewerContext) — keep the tab visible but disabled with a reason,
-  // rather than removing it, so a restricted auditee sees "not for your role"
-  // instead of the feature appearing to not exist.
-  const RESTRICTED_TAB_REASON = "Internal audit material — not visible to your role on this engagement.";
-  const tabs: TabItem[] = TAB_DEFS
-    .filter(
-      (t) =>
-        (t.key !== 'assets' || canReadAssets) &&
-        (t.key !== 'imoc' || canReadImoc) &&
-        (t.key !== 'system-audit' || canReadSystemAudit),
-    )
-    .map((t) => {
-      const restricted =
-        !!vc &&
-        ((t.key === 'working-papers' && !vc.canViewWorkingPapers) ||
-          (t.key === 'evidence' && !vc.canViewInternalEvidence) ||
-          (t.key === 'checklists' && !vc.canViewChecklists));
-      // The audit review itself is not shared with roles that lack report:read (e.g. the
-      // auditee, who works from Findings and Follow-up) — don't offer a tab that can only
-      // say "No review yet" while one has been issued.
-      const noReviewAccess = t.key === 'report' && !hasPermission(session, 'report:read');
-      const disabled = restricted || noReviewAccess;
-      return { ...t, disabled, disabledReason: disabled ? RESTRICTED_TAB_REASON : undefined };
-    })
-    .map((t) => ({
-      key: t.key,
-      label: t.label,
-      disabled: t.disabled,
-      disabledReason: t.disabledReason,
-      count:
-        t.key === 'findings'
-          ? data.findings?.length ?? 0
-          : t.key === 'working-papers'
-            ? data.workingPapers?.length ?? 0
-            : t.key === 'evidence'
-              ? data.evidence?.length ?? 0
-              : null,
-    }));
 
   return (
     <div>
@@ -215,20 +228,20 @@ export default function EngagementDetailPage(): JSX.Element {
       <StatusStepper engagement={data} onNavigateTab={(k) => setTab(k as TabKey)} />
 
       <div className="mb-6">
-        <Tabs tabs={tabs} active={tab} onChange={(k) => setTab(k as TabKey)} />
+        <Tabs tabs={tabs} active={effectiveTab} onChange={(k) => setTab(k as TabKey)} />
       </div>
 
-      {tab === 'overview' && <OverviewTab engagement={data} />}
-      {tab === 'working-papers' && vc?.canViewWorkingPapers !== false && <WorkingPapersTab engagement={data} />}
-      {tab === 'evidence' && vc?.canViewInternalEvidence !== false && <EvidenceTab engagement={data} />}
-      {tab === 'requests' && <EvidenceRequestsTab engagement={data} />}
-      {tab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
-      {tab === 'imoc' && canReadImoc && <ImocTicketsTab engagement={data} />}
-      {tab === 'system-audit' && canReadSystemAudit && <SystemAuditTab engagement={data} />}
-      {tab === 'findings' && <FindingsTab engagement={data} />}
-      {tab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}
-      {tab === 'report' && <ReportTab engagement={data} />}
-      {tab === 'follow-up' && <FollowUpTab engagement={data} />}
+      {effectiveTab === 'overview' && <OverviewTab engagement={data} />}
+      {effectiveTab === 'working-papers' && vc?.canViewWorkingPapers !== false && <WorkingPapersTab engagement={data} />}
+      {effectiveTab === 'evidence' && vc?.canViewInternalEvidence !== false && <EvidenceTab engagement={data} />}
+      {effectiveTab === 'requests' && <EvidenceRequestsTab engagement={data} />}
+      {effectiveTab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
+      {effectiveTab === 'imoc' && canReadImoc && <ImocTicketsTab engagement={data} />}
+      {effectiveTab === 'system-audit' && canReadSystemAudit && <SystemAuditTab engagement={data} />}
+      {effectiveTab === 'findings' && <FindingsTab engagement={data} />}
+      {effectiveTab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}
+      {effectiveTab === 'report' && canViewReportTab && <ReportTab engagement={data} />}
+      {effectiveTab === 'follow-up' && <FollowUpTab engagement={data} />}
     </div>
   );
 }

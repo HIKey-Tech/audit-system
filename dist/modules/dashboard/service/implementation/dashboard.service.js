@@ -147,7 +147,7 @@ class DashboardService {
         const findingWhereBase = {
             deleted_at: null,
             // Findings stay internal until the report is issued (engagement reported/closed).
-            ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } : {}),
+            ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['under_review', 'reported', 'closed'] } } } : {}),
         };
         const openWhere = {
             ...findingWhereBase,
@@ -517,8 +517,8 @@ class DashboardService {
                         // Auditee view: findings assigned to them that still need action.
                         {
                             status: { in: ['open', 'management_response_received', 'in_remediation'] },
-                            // Not visible to the auditee until the report is issued.
-                            engagement: { deleted_at: null, status: { in: ['reported', 'closed'] } },
+                            // Visible to the auditee from Quality Assurance onward (before the report is issued).
+                            engagement: { deleted_at: null, status: { in: ['under_review', 'reported', 'closed'] } },
                             OR: [
                                 { auditee_id: userId },
                                 { responders: { some: { user_id: userId } } },
@@ -809,7 +809,7 @@ class DashboardService {
         const restrictToAuditee = (0, dashboard_utility_1.isRestrictedAuditee)(actor.permissions);
         const where = {
             ...(restrictToAuditee
-                ? { finding: { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } }
+                ? { finding: { auditee_id: actor.id, engagement: { status: { in: ['under_review', 'reported', 'closed'] } } } }
                 : {}),
         };
         const now = new Date();
@@ -823,7 +823,7 @@ class DashboardService {
                     deleted_at: null,
                     due_date: { lt: now },
                     status: { notIn: FINDING_RESOLVED_STATUSES },
-                    ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['reported', 'closed'] } } } : {}),
+                    ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['under_review', 'reported', 'closed'] } } } : {}),
                 },
             }),
         ]);

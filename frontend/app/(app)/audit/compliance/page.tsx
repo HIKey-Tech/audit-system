@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Plus, Search, ShieldCheck, Library } from 'lucide-react';
+import { Plus, Search, ShieldCheck, Library, Upload, Trash2 } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -15,14 +15,15 @@ import { Badge } from '@/components/ui/Badge';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { usePermission } from '@/hooks/usePermission';
+import { api } from '@/lib/api-client';
 import { complianceApi, type ComplianceControl, type CreateControlDto } from '@/lib/api/audit';
 import { riskApi } from '@/lib/api/risk';
 import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
-import { auditTypeLabel } from '@/lib/audit-domains';
+import { auditTypeLabel, SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
+import type { ChecklistTemplateControl } from '@/lib/types/domain';
 
-const AUDIT_TYPES = ['it', 'financial', 'compliance'] as const;
-const CATEGORIES = ['it', 'financial', 'compliance', 'governance'] as const;
+const CATEGORIES = ['regulatory', 'act', 'policy', 'standard', 'it', 'financial', 'compliance', 'governance'] as const;
 
 export default function CompliancePage(): JSX.Element {
   const qc = useQueryClient();
@@ -34,6 +35,7 @@ export default function CompliancePage(): JSX.Element {
   const [page, setPage] = useState(1);
   const [editing, setEditing] = useState<ComplianceControl | null>(null);
   const [open, setOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   const coverage = useQuery({ queryKey: ['compliance', 'coverage'], queryFn: () => complianceApi.coverage() });
   const tested = useQuery({ queryKey: ['compliance', 'tested'], queryFn: () => complianceApi.testedCoverage() });
@@ -101,12 +103,21 @@ export default function CompliancePage(): JSX.Element {
     <div>
       <PageHeader
         title="Control Library"
-        subtitle="Control library and per-framework coverage across System/IT, financial, and compliance audits."
+        subtitle="Control library, Acts, Policies, and per-framework coverage across all audit domains."
         actions={
           canManage ? (
-            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openCreate}>
-              New control
-            </Button>
+            <div className="flex flex-wrap items-center gap-2">
+              <Button
+                variant="secondary"
+                leftIcon={<Upload className="h-4 w-4" />}
+                onClick={() => setUploadOpen(true)}
+              >
+                Upload Act / Policy / Framework
+              </Button>
+              <Button leftIcon={<Plus className="h-4 w-4" />} onClick={openCreate}>
+                New control
+              </Button>
+            </div>
           ) : null
         }
       />
@@ -275,8 +286,8 @@ export default function CompliancePage(): JSX.Element {
             }}
           >
             <option value="">All audit types</option>
-            {AUDIT_TYPES.map((t) => (
-              <option key={t} value={t}>{humanizeStatus(t)}</option>
+            {SELECTABLE_AUDIT_TYPES.map((t) => (
+              <option key={t.value} value={t.value}>{t.label}</option>
             ))}
           </Select>
         </div>
@@ -317,15 +328,255 @@ export default function CompliancePage(): JSX.Element {
       />
 
       {canManage && (
-        <ControlSlideOver
-          open={open}
-          onClose={() => setOpen(false)}
-          editing={editing}
-          frameworks={(frameworks.data ?? []).map((f) => ({ id: f.id, label: `${f.code} — ${f.name}` }))}
-          onSaved={onSaved}
-        />
+        <>
+          <ControlSlideOver
+            open={open}
+            onClose={() => setOpen(false)}
+            editing={editing}
+            frameworks={(frameworks.data ?? []).map((f) => ({ id: f.id, label: `${f.code} — ${f.name}` }))}
+            onSaved={onSaved}
+          />
+          <UploadFrameworkSlideOver
+            open={uploadOpen}
+            onClose={() => setUploadOpen(false)}
+            onSaved={() => {
+              setUploadOpen(false);
+              qc.invalidateQueries({ queryKey: ['compliance'] });
+            }}
+          />
+        </>
       )}
     </div>
+  );
+}
+
+function UploadFrameworkSlideOver({
+  open,
+  onClose,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  onSaved: () => void;
+}): JSX.Element {
+  const [file, setFile] = useState<File | null>(null);
+  const [code, setCode] = useState('');
+  const [name, setName] = useState('');
+  const [category, setCategory] = useState('regulatory');
+  const [auditType, setAuditType] = useState('compliance');
+  const [description, setDescription] = useState('');
+  const [controls, setControls] = useState<ChecklistTemplateControl[]>([]);
+
+  const extractPreview = useMutation({
+    mutationFn: async (selectedFile: File) => {
+      const fd = new FormData();
+      fd.append('file', selectedFile);
+      if (code.trim()) fd.append('prefix', code.trim());
+      return api.upload<{
+        suggestedCode: string;
+        suggestedName: string;
+        controls: ChecklistTemplateControl[];
+      }>('/audit/compliance/extract-preview', fd);
+    },
+    onSuccess: (res) => {
+      setControls(res.controls);
+      if (!code.trim()) setCode(res.suggestedCode);
+      if (!name.trim()) setName(res.suggestedName);
+      toast.success(`Extracted ${res.controls.length} control(s) from document`);
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to parse document'),
+  });
+
+  const saveDocumentFramework = useMutation({
+    mutationFn: async () => {
+      const cleaned = controls
+        .map((c) => ({
+          controlReference: c.controlReference.trim(),
+          controlDescription: c.controlDescription.trim(),
+          testProcedure: c.testProcedure.trim(),
+        }))
+        .filter((c) => c.controlReference && c.controlDescription && c.testProcedure);
+
+      if (cleaned.length === 0) {
+        throw new Error('At least one valid control is required');
+      }
+
+      const fd = new FormData();
+      if (file) fd.append('file', file);
+      fd.append('code', code.trim());
+      fd.append('name', name.trim());
+      fd.append('category', category);
+      fd.append('auditType', auditType);
+      if (description.trim()) fd.append('description', description.trim());
+      fd.append('controls', JSON.stringify(cleaned));
+
+      return api.upload<{ controlsCreated: number }>(
+        '/audit/compliance/frameworks/upload-document',
+        fd,
+      );
+    },
+    onSuccess: (res) => {
+      toast.success(`Framework saved with ${res.controlsCreated} control(s)`);
+      setFile(null);
+      setCode('');
+      setName('');
+      setDescription('');
+      setControls([]);
+      onSaved();
+    },
+    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to save framework'),
+  });
+
+  const updateRow = (idx: number, field: keyof ChecklistTemplateControl, value: string) => {
+    setControls((prev) => prev.map((c, i) => (i === idx ? { ...c, [field]: value } : c)));
+  };
+
+  const removeRow = (idx: number) => {
+    setControls((prev) => prev.filter((_, i) => i !== idx));
+  };
+
+  const addRow = () => {
+    setControls((prev) => [
+      ...prev,
+      {
+        controlReference: `${code.trim() || 'CTRL'}-${String(prev.length + 1).padStart(3, '0')}`,
+        controlDescription: '',
+        testProcedure: '',
+      },
+    ]);
+  };
+
+  const valid = code.trim().length >= 2 && name.trim().length >= 2 && controls.length > 0;
+
+  return (
+    <SlideOver
+      open={open}
+      onClose={onClose}
+      title="Upload Act / Policy / Framework"
+      description="Upload an Act, Policy, Regulation, or Standard document (PDF, DOCX, XLSX, CSV, TXT) to automatically extract controls and register them in the Control Library."
+      width="xl"
+      footer={
+        <div className="flex justify-end gap-2">
+          <Button variant="secondary" size="sm" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button
+            size="sm"
+            onClick={() => saveDocumentFramework.mutate()}
+            isLoading={saveDocumentFramework.isPending}
+            disabled={!valid}
+          >
+            Save Framework &amp; Controls ({controls.length})
+          </Button>
+        </div>
+      }
+    >
+      <div className="space-y-4">
+        <FormField label="Document File (PDF, DOCX, XLSX, CSV, TXT)" required>
+          <Input
+            type="file"
+            accept=".pdf,.docx,.xlsx,.xls,.csv,.txt,.md"
+            onChange={(e) => {
+              const selected = e.target.files?.[0] ?? null;
+              setFile(selected);
+              if (selected) {
+                extractPreview.mutate(selected);
+              }
+            }}
+          />
+        </FormField>
+
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <FormField label="Framework / Act Code" required>
+            <Input
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+              placeholder="e.g. PRA-2014, PPA-2007"
+            />
+          </FormField>
+          <FormField label="Framework / Act Name" required>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder="e.g. Pension Reform Act 2014"
+            />
+          </FormField>
+          <FormField label="Category" required>
+            <Select value={category} onChange={(e) => setCategory(e.target.value)}>
+              <option value="act">Act / Legislation</option>
+              <option value="regulatory">Regulatory Guideline</option>
+              <option value="policy">Internal Policy / SOP</option>
+              <option value="standard">Standard / Framework</option>
+              <option value="governance">Governance</option>
+            </Select>
+          </FormField>
+          <FormField label="Default Audit Type" required>
+            <Select value={auditType} onChange={(e) => setAuditType(e.target.value)}>
+              {SELECTABLE_AUDIT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
+              ))}
+            </Select>
+          </FormField>
+        </div>
+
+        <FormField label="Description (optional)">
+          <Textarea
+            rows={2}
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="Brief summary of the Act, Policy, or Framework…"
+          />
+        </FormField>
+
+        <div>
+          <div className="mb-2 flex items-center justify-between">
+            <p className="text-xs font-semibold uppercase tracking-wider text-text-muted">
+              Extracted Controls ({controls.length})
+            </p>
+            <Button size="sm" variant="secondary" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={addRow}>
+              Add Control Row
+            </Button>
+          </div>
+          {extractPreview.isPending ? (
+            <p className="text-xs text-text-muted py-4">Extracting controls from document…</p>
+          ) : controls.length === 0 ? (
+            <p className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-text-muted">
+              Upload a document above to auto-extract controls, or click &ldquo;Add Control Row&rdquo; to enter them manually.
+            </p>
+          ) : (
+            <div className="max-h-96 space-y-2.5 overflow-y-auto pr-1">
+              {controls.map((c, idx) => (
+                <div key={idx} className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                  <div className="flex items-center gap-2">
+                    <Input
+                      value={c.controlReference}
+                      onChange={(e) => updateRow(idx, 'controlReference', e.target.value)}
+                      placeholder="Control Reference"
+                      className="font-mono text-xs"
+                    />
+                    <Button size="sm" variant="ghost" onClick={() => removeRow(idx)} aria-label="Remove row">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                  <Textarea
+                    rows={2}
+                    value={c.controlDescription}
+                    onChange={(e) => updateRow(idx, 'controlDescription', e.target.value)}
+                    placeholder="Control requirement / description"
+                  />
+                  <Textarea
+                    rows={2}
+                    value={c.testProcedure}
+                    onChange={(e) => updateRow(idx, 'testProcedure', e.target.value)}
+                    placeholder="Test procedure"
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    </SlideOver>
   );
 }
 
@@ -481,8 +732,8 @@ function ControlSlideOver({ open, onClose, editing, frameworks, onSaved }: Contr
           </FormField>
           <FormField label="Audit type" required>
             <Select value={form.auditType} onChange={(e) => set('auditType', e.target.value)}>
-              {AUDIT_TYPES.map((t) => (
-                <option key={t} value={t}>{humanizeStatus(t)}</option>
+              {SELECTABLE_AUDIT_TYPES.map((t) => (
+                <option key={t.value} value={t.value}>{t.label}</option>
               ))}
             </Select>
           </FormField>

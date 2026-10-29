@@ -3,7 +3,7 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.assertAdminForSensitiveAssetFields = exports.daysAgo = exports.stringifyJson = exports.hasPermission = exports.assertHasPermission = void 0;
 const app_error_1 = require("../../../shared/errors/app.error");
 const asset_enum_1 = require("../domain/enum/asset.enum");
-const assertHasPermission = (actor, required, message = 'Insufficient permission for this action') => {
+const assertHasPermission = (actor, required, message = app_error_1.PERMISSION_DENIED_MESSAGE) => {
     if (actor.isSuperAdmin)
         return;
     if (!actor.permissions.includes(required)) {

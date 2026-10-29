@@ -9,6 +9,7 @@ import {
   CreateRoleRequestDto,
   UpdateRoleRequestDto,
   ReplaceRolePermissionsRequestDto,
+  ProvisionAuditeeRequestDto,
 } from '../../dto/request/user.request.dto';
 import {
   UserResponseDto,
@@ -48,6 +49,13 @@ export interface IUserService {
 
   /** Minimal active-user directory for people-pickers (gated on `user:directory`). */
   listDirectory(): Promise<UserDirectoryDto[]>;
+
+  /**
+   * Pre-provisions an Active Directory / corporate staff member by email before
+   * their first SSO login and assigns them the `auditee` role so they can be
+   * assigned to engagements/findings and receive email notifications immediately.
+   */
+  provisionDirectoryUser(dto: ProvisionAuditeeRequestDto, actorId: string): Promise<UserDirectoryDto>;
 
   /** Every account's effective roles and permissions — read-only input to user access reviews. */
   listAccessEntitlements(): Promise<UserAccessEntitlementDto[]>;

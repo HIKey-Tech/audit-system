@@ -13,6 +13,12 @@ export declare class TemplateService implements ITemplateService {
         templates: NotificationTemplateResponseDto[];
         meta: PaginationMeta;
     }>;
+    /**
+     * Idempotently syncs default notification templates to the database at server
+     * startup so updated wording (e.g. OLA vs SLA, new event keys) takes effect
+     * on deployment without requiring a manual `prisma db seed` run.
+     */
+    syncDefaultTemplates(): Promise<void>;
     private _assertTemplateExists;
 }
 export declare const templateService: TemplateService;

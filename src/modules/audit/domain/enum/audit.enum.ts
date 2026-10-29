@@ -2,6 +2,12 @@ export enum AuditType {
   It = 'it',
   Financial = 'financial',
   Compliance = 'compliance',
+  Operational = 'operational',
+  Pension = 'pension',
+  Procurement = 'procurement',
+  HrPayroll = 'hr_payroll',
+  Project = 'project',
+  Special = 'special',
   /** @deprecated Merged into `It` as the System/IT domain. Kept so records
    *  created before the merge still resolve; never offer it as a choice. */
   Systems = 'systems',
@@ -12,9 +18,18 @@ export enum AuditType {
  *  new record while existing rows still read correctly. */
 export const SELECTABLE_AUDIT_TYPES = [
   AuditType.It,
+  AuditType.Systems,
   AuditType.Financial,
   AuditType.Compliance,
+  AuditType.Operational,
+  AuditType.Pension,
+  AuditType.Procurement,
+  AuditType.HrPayroll,
+  AuditType.Project,
+  AuditType.Special,
 ] as const;
+
+export const selectableAuditTypes = SELECTABLE_AUDIT_TYPES;
 
 export enum AuditPriority {
   Critical = 'critical',
@@ -69,17 +84,27 @@ export enum FindingCategory {
   It = 'it',
   Financial = 'financial',
   Compliance = 'compliance',
-  /** @deprecated Merged into `It`. See AuditType.Systems. */
   Systems = 'systems',
   Operational = 'operational',
+  Pension = 'pension',
+  Procurement = 'procurement',
+  HrPayroll = 'hr_payroll',
+  Project = 'project',
+  Special = 'special',
 }
 
-/** Finding categories a user may pick — `systems` is retired, see AuditType. */
+/** Finding categories a user may pick across all audit domains. */
 export const SELECTABLE_FINDING_CATEGORIES = [
   FindingCategory.It,
+  FindingCategory.Systems,
   FindingCategory.Financial,
   FindingCategory.Compliance,
   FindingCategory.Operational,
+  FindingCategory.Pension,
+  FindingCategory.Procurement,
+  FindingCategory.HrPayroll,
+  FindingCategory.Project,
+  FindingCategory.Special,
 ] as const;
 
 export enum FindingSeverity {

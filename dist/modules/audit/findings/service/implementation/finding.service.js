@@ -1,16 +1,20 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.FindingService = void 0;
+const crypto_1 = require("crypto");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
+const app_config_1 = require("../../../../../shared/config/app.config");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
 const api_response_type_1 = require("../../../../../shared/types/api-response.type");
 const tabular_export_util_1 = require("../../../../../shared/utils/tabular-export.util");
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
+const notification_queue_service_1 = require("../../../../messaging/service/implementation/notification-queue.service");
 const approval_service_1 = require("../../../../workflow/approval/service/implementation/approval.service");
 const workflow_enum_1 = require("../../../../workflow/domain/enum/workflow.enum");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const auditee_role_utility_1 = require("../../../utility/auditee-role.utility");
 const engagement_visibility_util_1 = require("../../../engagement/utility/engagement-visibility.util");
 const finding_response_dto_1 = require("../../dto/response/finding.response.dto");
 const findingInclude = {
@@ -74,6 +78,7 @@ class FindingService {
             }
             return created;
         });
+        await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([dto.auditeeId, ...(dto.additionalAuditeeIds ?? [])], actor.id);
         logger_util_1.logger.info('Audit finding created', { findingId: finding.id, engagementId, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({ userId: actor.id, action: 'audit.finding.create', module: 'audit', entityType: 'audit_finding', entityId: finding.id });
         return (0, finding_response_dto_1.mapFindingToResponse)(finding);
@@ -124,6 +129,9 @@ class FindingService {
             }
             return result;
         });
+        if (dto.auditeeId || dto.additionalAuditeeIds !== undefined) {
+            await (0, auditee_role_utility_1.ensureAuditeeRoleAssigned)([dto.auditeeId, ...(dto.additionalAuditeeIds ?? [])], actor.id);
+        }
         logger_util_1.logger.info('Audit finding updated', { findingId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
             userId: actor.id,
@@ -205,12 +213,12 @@ class FindingService {
             where: {
                 id,
                 deleted_at: null,
-                // An auditee only sees findings once the report is issued (engagement reported/closed),
-                // matching the list endpoints.
+                // An auditee sees findings from Quality Assurance onward (fieldwork done), so they can
+                // respond before the report is issued — matching the list endpoints.
                 ...(isAuditee && {
                     AND: [
                         this._auditeeMatch(actor.id),
-                        { engagement: { status: { in: [audit_enum_1.EngagementStatus.Reported, audit_enum_1.EngagementStatus.Closed] } } },
+                        { engagement: { status: { in: [...audit_enum_1.AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } } },
                     ],
                 }),
             },
@@ -300,10 +308,10 @@ class FindingService {
         if (!eng)
             throw app_error_1.AppError.notFound('Audit engagement');
         const viewer = await (0, engagement_visibility_util_1.resolveViewerContext)(engagementId, eng, actor);
-        // A pure auditee only sees findings once the report has been issued
-        // (engagement is reported/closed); before that, findings are still draft/internal.
-        const reportIssued = eng.status === audit_enum_1.EngagementStatus.Reported || eng.status === audit_enum_1.EngagementStatus.Closed;
-        if (viewer.role === 'auditee' && !reportIssued) {
+        // A pure auditee sees findings from Quality Assurance onward; during fieldwork
+        // (planned / in progress) findings are still being drafted and stay internal.
+        const visibleToAuditee = audit_enum_1.AUDITEE_VISIBLE_ENGAGEMENT_STATUSES.includes(eng.status);
+        if (viewer.role === 'auditee' && !visibleToAuditee) {
             return [];
         }
         const findings = await prisma_client_1.prisma.audit_Finding.findMany({
@@ -335,12 +343,12 @@ class FindingService {
         }
         if (isAuditee) {
             // A responder sees a finding whether they are the primary auditee or a co-responder,
-            // but — exactly like the engagement Findings tab — only once the engagement's report
-            // has been issued (reported/closed). Before that, findings are draft/internal, so this
-            // gate stops the standalone Findings page leaking pre-issue findings to the auditee.
+            // but — exactly like the engagement Findings tab — only from Quality Assurance onward.
+            // During fieldwork findings are draft/internal, so this gate stops the standalone
+            // Findings page leaking them to the auditee.
             and.push(this._auditeeMatch(actor.id));
             and.push({
-                engagement: { status: { in: [audit_enum_1.EngagementStatus.Reported, audit_enum_1.EngagementStatus.Closed] } },
+                engagement: { status: { in: [...audit_enum_1.AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } },
             });
         }
         else if (!isOversight) {
@@ -410,6 +418,146 @@ class FindingService {
         if (!finding)
             throw app_error_1.AppError.notFound('Audit finding');
         return finding;
+    }
+    async listComments(findingId, actor) {
+        await this.getFindingById(findingId, actor);
+        const key = `finding.comments.${findingId}`;
+        const row = await prisma_client_1.prisma.system_Config.findUnique({ where: { key }, select: { value: true } });
+        if (!row?.value)
+            return [];
+        try {
+            const parsed = JSON.parse(row.value);
+            return Array.isArray(parsed) ? parsed : [];
+        }
+        catch {
+            return [];
+        }
+    }
+    async addComment(findingId, body, actor) {
+        const trimmed = body?.trim();
+        if (!trimmed)
+            throw app_error_1.AppError.badRequest('Comment body cannot be empty');
+        // Verify viewer access to this finding
+        await this.getFindingById(findingId, actor);
+        const finding = await prisma_client_1.prisma.audit_Finding.findFirst({
+            where: { id: findingId, deleted_at: null },
+            include: {
+                engagement: {
+                    select: {
+                        id: true,
+                        title: true,
+                        reference_number: true,
+                        status: true,
+                        lead_auditor_id: true,
+                        audit_manager_id: true,
+                        auditee_id: true,
+                    },
+                },
+                responders: { select: { user_id: true } },
+            },
+        });
+        if (!finding)
+            throw app_error_1.AppError.notFound('Audit finding');
+        const author = await prisma_client_1.prisma.user.findUnique({
+            where: { id: actor.id },
+            select: { id: true, display_name: true, first_name: true, last_name: true, email: true },
+        });
+        const authorName = author?.display_name?.trim() ||
+            `${author?.first_name ?? ''} ${author?.last_name ?? ''}`.trim() ||
+            author?.email ||
+            'User';
+        const isAuditeeParty = actor.id === finding.auditee_id ||
+            actor.id === finding.engagement.auditee_id ||
+            finding.responders.some((r) => r.user_id === actor.id);
+        const authorRole = isAuditeeParty ? 'Auditee' : 'Audit Team';
+        const existing = await this.listComments(findingId, actor);
+        const newComment = {
+            id: (0, crypto_1.randomUUID)(),
+            findingId,
+            authorId: actor.id,
+            authorName,
+            authorRole,
+            body: trimmed,
+            createdAt: new Date().toISOString(),
+        };
+        const updated = [...existing, newComment];
+        const key = `finding.comments.${findingId}`;
+        await prisma_client_1.prisma.system_Config.upsert({
+            where: { key },
+            update: { value: JSON.stringify(updated), updated_by_id: actor.id },
+            create: {
+                key,
+                value: JSON.stringify(updated),
+                description: `Discussion trail for finding ${findingId}`,
+                updated_by_id: actor.id,
+            },
+        });
+        audit_log_service_1.auditLogService.logAsync({
+            userId: actor.id,
+            action: 'audit.finding.comment',
+            module: 'audit',
+            entityType: 'audit_finding',
+            entityId: findingId,
+            newValues: { commentId: newComment.id, body: trimmed.slice(0, 300) },
+        });
+        // Notify both sides: finding creator, lead auditor, audit manager, primary auditee,
+        // co-responders, and previous commenters (excluding the comment author).
+        // Auditees are only notified once the engagement is visible to auditees.
+        const auditeeVisible = audit_enum_1.AUDITEE_VISIBLE_ENGAGEMENT_STATUSES.includes(finding.engagement.status);
+        const candidateIds = new Set([
+            finding.created_by_id,
+            finding.engagement.lead_auditor_id,
+            finding.engagement.audit_manager_id,
+            ...existing.map((c) => c.authorId),
+            ...(auditeeVisible
+                ? [
+                    finding.auditee_id,
+                    finding.engagement.auditee_id,
+                    ...finding.responders.map((r) => r.user_id),
+                ]
+                : []),
+        ]);
+        candidateIds.delete(actor.id);
+        if (candidateIds.size > 0) {
+            const recipients = await prisma_client_1.prisma.user.findMany({
+                where: { id: { in: Array.from(candidateIds) }, deleted_at: null, is_active: true },
+                select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+            });
+            const actionUrl = `${app_config_1.config.app.frontendUrl.replace(/\/$/, '')}/audit/engagements/${finding.engagement_id}?tab=findings`;
+            for (const r of recipients) {
+                const recipientName = r.display_name?.trim() || `${r.first_name} ${r.last_name}`.trim() || r.email;
+                const variables = {
+                    recipientName,
+                    authorName,
+                    authorRole,
+                    findingTitle: finding.title,
+                    engagementReference: finding.engagement.reference_number,
+                    engagementTitle: finding.engagement.title,
+                    commentBody: trimmed.slice(0, 400),
+                    actionUrl,
+                };
+                await notification_queue_service_1.notificationQueueService.enqueueSafe('in_app', {
+                    userId: r.id,
+                    title: `New comment on finding: ${finding.title}`,
+                    body: `${authorName} (${authorRole}) commented on "${finding.title}": ${trimmed.slice(0, 200)}`,
+                    type: 'info',
+                    referenceType: 'audit_engagement',
+                    referenceId: finding.engagement_id,
+                    eventKey: 'audit.finding.commented',
+                    variables,
+                });
+                if (r.email) {
+                    await notification_queue_service_1.notificationQueueService.enqueueSafe('email', {
+                        to: r.email,
+                        subject: `New Comment on Finding (${finding.engagement.reference_number}): ${finding.title}`,
+                        text: `Dear ${recipientName},\n\n${authorName} (${authorRole}) left a comment on audit finding "${finding.title}" (${finding.engagement.reference_number}).\n\nComment:\n"${trimmed}"\n\nPlease log in to IAMS to view the discussion trail and respond.\n\nRegards,\nIAMS — Internal Audit System`,
+                        eventKey: 'audit.finding.commented',
+                        variables,
+                    });
+                }
+            }
+        }
+        return newComment;
     }
 }
 exports.FindingService = FindingService;

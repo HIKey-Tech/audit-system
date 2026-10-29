@@ -85,10 +85,11 @@ const resolveViewerContext = async (engagementId, parties, actor) => {
         canViewInternalEvidence: full,
         canViewChecklists: full,
         canViewDraftFindings: full,
+        canViewReports: full && actor.permissions.includes('report:read'),
     };
 };
 exports.resolveViewerContext = resolveViewerContext;
-/** Throws 403 for a pure auditee trying to read internal engagement artifacts. */
+/** Throws 403 for a restricted viewer lacking internal artifact visibility. */
 const assertCanViewInternalArtifacts = async (engagementId, actor) => {
     const eng = await prisma_client_1.prisma.audit_Engagement.findFirst({
         where: { id: engagementId, deleted_at: null },
@@ -97,9 +98,9 @@ const assertCanViewInternalArtifacts = async (engagementId, actor) => {
     if (!eng)
         return; // existence handled by the caller's own lookup
     const ctx = await (0, exports.resolveViewerContext)(engagementId, eng, actor);
-    if (ctx.role === 'auditee') {
+    if (!ctx.canViewWorkingPapers) {
         const { AppError } = await Promise.resolve().then(() => __importStar(require('../../../../shared/errors/app.error')));
-        throw AppError.forbidden('Auditees cannot view internal audit working papers, checklists, or draft evidence');
+        throw AppError.forbidden('You do not have permission to view internal audit working papers, checklists, or draft evidence on this engagement');
     }
 };
 exports.assertCanViewInternalArtifacts = assertCanViewInternalArtifacts;

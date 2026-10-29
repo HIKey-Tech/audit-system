@@ -10,10 +10,16 @@ const AUDIT_TYPE_LABELS = {
     systems: 'System/IT',
     financial: 'Financial',
     compliance: 'Compliance',
+    operational: 'Operational',
+    pension: 'Pension',
+    procurement: 'Procurement',
+    hr_payroll: 'HR & Payroll',
+    project: 'Project',
+    special: 'Special Investigation',
 };
 const auditTypeLabel = (auditType) => AUDIT_TYPE_LABELS[auditType] ?? auditType;
 exports.auditTypeLabel = auditTypeLabel;
-const assertHasPermission = (permissions, required, message = 'Insufficient permission for this action') => {
+const assertHasPermission = (permissions, required, message = app_error_1.PERMISSION_DENIED_MESSAGE) => {
     if (!permissions.includes(required)) {
         throw app_error_1.AppError.forbidden(message);
     }
@@ -423,6 +429,138 @@ exports.CONTROL_SETS = {
             controlReference: 'COBIT-BAI06',
             controlDescription: 'IT changes are managed through a controlled process covering assessment, authorization, and tracking (COBIT Managed IT Changes).',
             testProcedure: 'Sample change records, verify impact assessment and authorization, and confirm emergency changes followed the defined exception process.',
+        },
+    ],
+    [audit_enum_1.AuditType.Operational]: [
+        {
+            controlReference: 'OPS-SOP-001',
+            controlDescription: 'Standard Operating Procedures (SOPs) are documented, approved by management, and reviewed periodically for all core operational processes.',
+            testProcedure: 'Obtain the inventory of operational SOPs, verify management sign-off and review dates, and walkthrough a sample of processes to confirm adherence.',
+        },
+        {
+            controlReference: 'OPS-KPI-002',
+            controlDescription: 'Operational service levels, turnaround times, and key performance indicators (KPIs) are tracked, reported, and escalated when breached.',
+            testProcedure: 'Inspect monthly operational performance reports, compare actual turnaround times against target OLAs/SLAs, and review root-cause actions for breaches.',
+        },
+        {
+            controlReference: 'OPS-QA-003',
+            controlDescription: 'Supervisory review and quality assurance checks are performed over daily operational outputs and exception logs.',
+            testProcedure: 'Sample daily operational logs and exception reports to confirm evidence of independent supervisory review and timely resolution of exceptions.',
+        },
+        {
+            controlReference: 'OPS-RES-004',
+            controlDescription: 'Resource utilization, inventory/consumables custody, and operational handovers are logged and reconciled.',
+            testProcedure: 'Inspect shift/process handover logs and custody registers, and trace a sample of operational movements to supporting authorization records.',
+        },
+    ],
+    [audit_enum_1.AuditType.Pension]: [
+        {
+            controlReference: 'PEN-PRA-001',
+            controlDescription: 'Monthly employee and employer pension contributions are deducted in accordance with the Pension Reform Act (PRA 2014) rates and remitted to PFAs/PFCs within 7 working days of salary payment.',
+            testProcedure: 'Recalculate statutory employer (min. 10%) and employee (min. 8%) contributions from the payroll summary, and trace remittance schedules and payment receipts to confirm remittance within 7 working days per PENCOM guidelines.',
+        },
+        {
+            controlReference: 'PEN-REC-002',
+            controlDescription: 'Monthly pension remittance schedules are reconciled with Pension Fund Administrators (PFAs) and uncredited/rejected RSA contributions are resolved promptly.',
+            testProcedure: 'Inspect monthly PFA reconciliation statements, review the schedule of uncredited or returned contributions, and verify evidence of RSA PIN regularization with affected staff and PFAs.',
+        },
+        {
+            controlReference: 'PEN-BEN-003',
+            controlDescription: 'Group Life Insurance Policy (minimum 3x annual total emolument under PRA 2014 Section 4(5)) and death/retirement benefit documentation are maintained and current.',
+            testProcedure: 'Inspect the active Group Life Insurance certificate, verify coverage value against current staff emoluments, and sample deceased/retired employee files for complete PENCOM notification and benefit processing documentation.',
+        },
+        {
+            controlReference: 'PEN-RSA-004',
+            controlDescription: 'All eligible employees have valid Retirement Savings Account (RSA) PINs captured on onboarding, and nominal roll changes are reflected in pension schedules.',
+            testProcedure: 'Compare the active HR nominal roll against the monthly pension contribution schedule to identify any employees without RSA PINs or discrepancies in contribution bases.',
+        },
+    ],
+    [audit_enum_1.AuditType.Procurement]: [
+        {
+            controlReference: 'PROC-PPA-001',
+            controlDescription: 'Procurement activities comply with the Public Procurement Act (PPA 2007) / institutional procurement policy competitive bidding and BPP approval thresholds.',
+            testProcedure: 'Sample procurement files across value bands, verify that appropriate solicitation methods (open competitive bidding, RFQ, or restricted tendering) were used in line with BPP/policy thresholds, and check for contract splitting.',
+        },
+        {
+            controlReference: 'PROC-VDD-002',
+            controlDescription: 'Vendor pre-qualification and due diligence (CAC registration, Tax Clearance Certificate, PENCOM, ITF, NSITF, BPP IRR) are verified prior to contract award.',
+            testProcedure: 'Inspect vendor onboarding and bid evaluation files to confirm valid statutory compliance certificates and conflict-of-interest declarations were verified before award.',
+        },
+        {
+            controlReference: 'PROC-EVAL-003',
+            controlDescription: 'Bid opening, technical and financial evaluation, and Tenders Board / Procurement Committee approvals are transparently documented.',
+            testProcedure: 'Review bid opening registers, technical/financial evaluation score sheets, and Tenders Board minutes to confirm awards were made to the lowest evaluated responsive bidder.',
+        },
+        {
+            controlReference: 'PROC-GRN-004',
+            controlDescription: 'Three-way matching (Purchase Order, Goods Received Note / Job Completion Certificate, and Vendor Invoice) is enforced prior to payment disbursement.',
+            testProcedure: 'Sample procurement payments and verify that signed POs, independent inspection/GRN or JCC sign-offs, and invoices match in quantity, specification, and price before payment approval.',
+        },
+    ],
+    [audit_enum_1.AuditType.HrPayroll]: [
+        {
+            controlReference: 'HRP-NOM-001',
+            controlDescription: 'Monthly payroll register is reconciled against the approved HR nominal roll to prevent unauthorized additions or ghost workers.',
+            testProcedure: 'Perform a headcount and bank-account reconciliation between the HR master file (nominal roll) and the monthly payroll disbursement file; investigate duplicate bank accounts, BVN mismatches, or unapproved staff entries.',
+        },
+        {
+            controlReference: 'HRP-JML-002',
+            controlDescription: 'Joiners, movers (promotions/transfers), and leavers (resignations, dismissals, retirements) are promptly updated on payroll with formal authorization.',
+            testProcedure: 'Sample new hires, promotions, and separated staff during the audit period; verify appointment/exit letters and confirm leavers were removed from payroll before the next pay cycle.',
+        },
+        {
+            controlReference: 'HRP-STAT-003',
+            controlDescription: 'Statutory payroll deductions (PAYE tax, Pension, NHF, NSITF, ITF) are accurately computed and remitted to the relevant regulatory authorities within statutory deadlines.',
+            testProcedure: 'Recalculate PAYE, NHF, NSITF, and pension deductions for a sample of staff across grade levels, and inspect official tax/regulatory remittance receipts and filing acknowledgements.',
+        },
+        {
+            controlReference: 'HRP-VAR-004',
+            controlDescription: 'Month-on-month payroll variance analysis and payroll register sign-off are performed prior to salary disbursement.',
+            testProcedure: 'Inspect monthly payroll variance reports comparing current and prior month gross/net pay, and verify independent HR and Finance approval before bank upload.',
+        },
+    ],
+    [audit_enum_1.AuditType.Project]: [
+        {
+            controlReference: 'PRJ-CHR-001',
+            controlDescription: 'Projects have an approved Project Charter, business case, budget, and governance structure prior to commencement.',
+            testProcedure: 'Inspect the project charter, feasibility/business case approval, and budget allocation records to confirm formal authorization before project kick-off.',
+        },
+        {
+            controlReference: 'PRJ-MLS-002',
+            controlDescription: 'Project deliverables and milestones are independently inspected, tested, and signed off before milestone payments are released.',
+            testProcedure: 'Sample milestone completion certificates and user acceptance sign-offs, and trace them to project schedule deliverables and milestone payment vouchers.',
+        },
+        {
+            controlReference: 'PRJ-VAR-003',
+            controlDescription: 'Scope changes, variation orders, and timeline extensions require formal impact assessment and approval within delegated authority limits.',
+            testProcedure: 'Review all project variation orders and change requests, verify cost/schedule impact assessments, and confirm formal Steering Committee or Tenders Board approval.',
+        },
+        {
+            controlReference: 'PRJ-CLS-004',
+            controlDescription: 'Project expenditure is tracked against budget, and post-implementation review and project closure handover are documented.',
+            testProcedure: 'Compare cumulative project spend against approved budget, review retention fee accounting, and inspect project closure and lessons-learned reports.',
+        },
+    ],
+    [audit_enum_1.AuditType.Special]: [
+        {
+            controlReference: 'SPC-TOR-001',
+            controlDescription: 'Special investigation or ad-hoc audit is conducted under a formal Terms of Reference (ToR) defining mandate, scope, and reporting lines.',
+            testProcedure: 'Inspect the approved Terms of Reference or management/board mandate, and verify that investigation activities and scope align with the authorized mandate.',
+        },
+        {
+            controlReference: 'SPC-EVD-002',
+            controlDescription: 'Chain of custody, forensic evidence preservation, and access logs are maintained for all records and digital/physical artifacts collected.',
+            testProcedure: 'Review the evidence collection log, verify hash/integrity records and chain-of-custody sign-offs, and confirm secure storage of original records.',
+        },
+        {
+            controlReference: 'SPC-INT-003',
+            controlDescription: 'Fact-finding interviews, walkthroughs, and transaction reconstructions are contemporaneously documented and corroborated with independent evidence.',
+            testProcedure: 'Inspect interview notes, written statements, and transaction tracing schedules to confirm every conclusion is supported by corroborated documentary or system evidence.',
+        },
+        {
+            controlReference: 'SPC-REM-004',
+            controlDescription: 'Control breakdowns, financial loss quantification, and disciplinary/remediation recommendations are documented and tracked to closure.',
+            testProcedure: 'Review the root-cause analysis and loss quantification schedule, and verify that recommended control enhancements and recovery actions are assigned to owners with due dates.',
         },
     ],
 };

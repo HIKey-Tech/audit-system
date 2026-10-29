@@ -82,6 +82,15 @@ export const ReplaceRolePermissionsRequestSchema = z.object({
   permissionIds: z.array(z.string().uuid()),
 });
 
+export const ProvisionAuditeeRequestSchema = z.object({
+  email: z.string().trim().email(),
+  firstName: z.string().trim().min(1).max(100).optional(),
+  lastName: z.string().trim().min(1).max(100).optional(),
+  displayName: z.string().trim().max(200).optional(),
+  department: z.string().trim().max(100).optional(),
+  jobTitle: z.string().trim().max(100).optional(),
+});
+
 export type CreateUserRequestDto = z.infer<typeof CreateUserRequestSchema>;
 export type UpdateUserRequestDto = z.infer<typeof UpdateUserRequestSchema>;
 export type AssignRoleRequestDto = z.infer<typeof AssignRoleRequestSchema>;
@@ -91,3 +100,4 @@ export type RoleQueryDto = z.infer<typeof RoleQuerySchema>;
 export type CreateRoleRequestDto = z.infer<typeof CreateRoleRequestSchema>;
 export type UpdateRoleRequestDto = z.infer<typeof UpdateRoleRequestSchema>;
 export type ReplaceRolePermissionsRequestDto = z.infer<typeof ReplaceRolePermissionsRequestSchema>;
+export type ProvisionAuditeeRequestDto = z.infer<typeof ProvisionAuditeeRequestSchema>;

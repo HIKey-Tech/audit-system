@@ -83,6 +83,20 @@ export class FindingController {
      * @access Private - finding:write
      */
     this.router.post('/findings/:id/close', requirePermission('finding:close'), this._closeFinding.bind(this));
+
+    /**
+     * @route  GET /audit/findings/:id/comments
+     * @desc   List comments on a finding (auditor ↔ auditee trail)
+     * @access Private - finding:read
+     */
+    this.router.get('/findings/:id/comments', requirePermission('finding:read'), this._listComments.bind(this));
+
+    /**
+     * @route  POST /audit/findings/:id/comments
+     * @desc   Add a comment to a finding
+     * @access Private - finding:read
+     */
+    this.router.post('/findings/:id/comments', requirePermission('finding:read'), this._addComment.bind(this));
   }
 
   private async _createFinding(req: Request, res: Response, next: NextFunction): Promise<void> {
@@ -116,6 +130,24 @@ export class FindingController {
     try {
       const finding = await this.findingService.closeFinding(req.params.id, req.user!);
       res.status(200).json(buildResponse(finding, 'Finding closure sent for approval'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _listComments(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const comments = await this.findingService.listComments(req.params.id, req.user!);
+      res.status(200).json(buildResponse(comments));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _addComment(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const comment = await this.findingService.addComment(req.params.id, req.body?.body ?? '', req.user!);
+      res.status(201).json(buildResponse(comment, 'Comment added'));
     } catch (err) {
       next(err);
     }

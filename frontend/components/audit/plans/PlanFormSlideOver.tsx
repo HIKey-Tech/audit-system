@@ -13,12 +13,23 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Textarea, Select } from '@/components/ui/Input';
 import { plansApi } from '@/lib/api/audit';
-import { AUDIT_DOMAINS } from '@/lib/audit-domains';
+import { SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
 
 const Schema = z.object({
   title: z.string().min(2).max(200),
   year: z.coerce.number().int().min(2000).max(2100),
-  auditType: z.enum(['it', 'financial', 'compliance']),
+  auditType: z.enum([
+    'it',
+    'systems',
+    'financial',
+    'compliance',
+    'operational',
+    'pension',
+    'procurement',
+    'hr_payroll',
+    'project',
+    'special',
+  ]),
   description: z.string().max(2000).optional().or(z.literal('')),
 });
 
@@ -100,8 +111,8 @@ export const PlanFormSlideOver = ({ open, onClose }: Props): JSX.Element => {
           tooltip="Fixed for the life of the programme — every plan under it is of this type."
         >
           <Select error={errors.auditType?.message} {...register('auditType')}>
-            {AUDIT_DOMAINS.map((d) => (
-              <option key={d.key} value={d.key}>
+            {SELECTABLE_AUDIT_TYPES.map((d) => (
+              <option key={d.value} value={d.value}>
                 {d.label}
               </option>
             ))}

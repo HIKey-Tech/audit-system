@@ -64,6 +64,18 @@ class FindingController {
          * @access Private - finding:write
          */
         this.router.post('/findings/:id/close', (0, auth_middleware_1.requirePermission)('finding:close'), this._closeFinding.bind(this));
+        /**
+         * @route  GET /audit/findings/:id/comments
+         * @desc   List comments on a finding (auditor ↔ auditee trail)
+         * @access Private - finding:read
+         */
+        this.router.get('/findings/:id/comments', (0, auth_middleware_1.requirePermission)('finding:read'), this._listComments.bind(this));
+        /**
+         * @route  POST /audit/findings/:id/comments
+         * @desc   Add a comment to a finding
+         * @access Private - finding:read
+         */
+        this.router.post('/findings/:id/comments', (0, auth_middleware_1.requirePermission)('finding:read'), this._addComment.bind(this));
     }
     async _createFinding(req, res, next) {
         try {
@@ -95,7 +107,25 @@ class FindingController {
     async _closeFinding(req, res, next) {
         try {
             const finding = await this.findingService.closeFinding(req.params.id, req.user);
-            res.status(200).json((0, api_response_type_1.buildResponse)(finding, 'Finding closed'));
+            res.status(200).json((0, api_response_type_1.buildResponse)(finding, 'Finding closure sent for approval'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _listComments(req, res, next) {
+        try {
+            const comments = await this.findingService.listComments(req.params.id, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(comments));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _addComment(req, res, next) {
+        try {
+            const comment = await this.findingService.addComment(req.params.id, req.body?.body ?? '', req.user);
+            res.status(201).json((0, api_response_type_1.buildResponse)(comment, 'Comment added'));
         }
         catch (err) {
             next(err);

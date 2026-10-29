@@ -150,7 +150,7 @@ export declare const RaiseFindingSchema: z.ZodObject<{
     engagementId: z.ZodOptional<z.ZodString>;
     title: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
-    category: z.ZodDefault<z.ZodEnum<[import("../../../../audit/domain/enum/audit.enum").FindingCategory.It, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Financial, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Compliance, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Operational]>>;
+    category: z.ZodDefault<z.ZodEnum<[import("../../../../audit/domain/enum/audit.enum").FindingCategory.It, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Systems, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Financial, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Compliance, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Operational, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Pension, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Procurement, import("../../../../audit/domain/enum/audit.enum").FindingCategory.HrPayroll, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Project, import("../../../../audit/domain/enum/audit.enum").FindingCategory.Special]>>;
     severity: z.ZodNativeEnum<typeof FindingSeverity>;
     rootCause: z.ZodString;
     riskImplication: z.ZodString;
@@ -159,7 +159,7 @@ export declare const RaiseFindingSchema: z.ZodObject<{
     dueDate: z.ZodString;
 }, "strip", z.ZodTypeAny, {
     title: string;
-    category: import("../../../../audit/domain/enum/audit.enum").FindingCategory.It | import("../../../../audit/domain/enum/audit.enum").FindingCategory.Financial | import("../../../../audit/domain/enum/audit.enum").FindingCategory.Compliance | import("../../../../audit/domain/enum/audit.enum").FindingCategory.Operational;
+    category: import("../../../../audit/domain/enum/audit.enum").FindingCategory;
     severity: FindingSeverity;
     recommendation: string;
     auditeeId: string;
@@ -179,7 +179,7 @@ export declare const RaiseFindingSchema: z.ZodObject<{
     dueDate: string;
     exceptionIds: string[];
     description?: string | undefined;
-    category?: import("../../../../audit/domain/enum/audit.enum").FindingCategory.It | import("../../../../audit/domain/enum/audit.enum").FindingCategory.Financial | import("../../../../audit/domain/enum/audit.enum").FindingCategory.Compliance | import("../../../../audit/domain/enum/audit.enum").FindingCategory.Operational | undefined;
+    category?: import("../../../../audit/domain/enum/audit.enum").FindingCategory | undefined;
     engagementId?: string | undefined;
 }>;
 export declare const CompleteReviewSchema: z.ZodObject<{

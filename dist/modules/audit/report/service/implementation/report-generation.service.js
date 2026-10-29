@@ -39,6 +39,8 @@ const path = __importStar(require("path"));
 const docx_1 = require("docx");
 const date_fns_1 = require("date-fns");
 const pdf_util_1 = require("../../../../../shared/utils/pdf.util");
+const working_paper_utility_1 = require("../../../working-papers/utility/working-paper.utility");
+const markdown_utility_1 = require("../../../working-papers/utility/markdown.utility");
 const prisma_client_1 = require("../../../../../shared/prisma/prisma.client");
 const app_error_1 = require("../../../../../shared/errors/app.error");
 const logger_util_1 = require("../../../../../shared/utils/logger.util");
@@ -184,6 +186,7 @@ class ReportGenerationService {
                             where: { deleted_at: null },
                             include: {
                                 auditee: { select: { display_name: true, first_name: true, last_name: true } },
+                                checklist: { select: { control_reference: true } },
                                 follow_up: {
                                     include: {
                                         management_response_by: {
@@ -209,6 +212,19 @@ class ReportGenerationService {
         });
         if (!report)
             throw app_error_1.AppError.notFound('Audit report');
+        let signOffMode = 'cae_and_dg';
+        try {
+            const modeRow = await prisma_client_1.prisma.system_Config.findUnique({
+                where: { key: `report.sign_off_mode.${reportId}` },
+                select: { value: true },
+            });
+            if (modeRow?.value === 'cae_only' || modeRow?.value === 'cae_and_dg') {
+                signOffMode = modeRow.value;
+            }
+        }
+        catch {
+            // Fallback to default
+        }
         const sortedFindings = [...report.engagement.findings].sort((a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99));
         return {
             report: {
@@ -222,6 +238,7 @@ class ReportGenerationService {
                 issuedAt: report.issued_at,
                 createdById: report.created_by_id,
                 templateId: report.template_id ?? null,
+                signOffMode,
             },
             engagement: {
                 id: report.engagement.id,
@@ -262,6 +279,7 @@ class ReportGenerationService {
                 recommendation: f.recommendation,
                 status: f.status,
                 dueDate: f.due_date,
+                controlReference: f.checklist?.control_reference ?? null,
                 auditee: {
                     displayName: f.auditee.display_name,
                     firstName: f.auditee.first_name,
@@ -587,7 +605,9 @@ class ReportGenerationService {
         return items;
     }
     _buildDocxDocumentInfoTable(data, classification, approval) {
-        let finalApproverName = 'Managing Director / CEO';
+        let finalApproverName = data.report.signOffMode === 'cae_only'
+            ? 'Head of Internal Audit (CAE)'
+            : 'Managing Director / CEO';
         if (approval?.steps) {
             const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
             if (approvedSteps.length > 0) {
@@ -808,11 +828,16 @@ class ReportGenerationService {
             });
         }
         else {
-            const defaultApprovers = [
-                { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
-                { name: 'Executive Director (ED)', pos: 'Executive Director' },
-                { name: 'Managing Director / CEO', pos: 'MD / CEO' },
-            ];
+            const defaultApprovers = data.report.signOffMode === 'cae_only'
+                ? [
+                    { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
+                    { name: 'Head of Internal Audit (CAE)', pos: 'Head of Internal Audit' },
+                ]
+                : [
+                    { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
+                    { name: 'Head of Internal Audit (CAE)', pos: 'Head of Internal Audit / ED' },
+                    { name: 'Managing Director / CEO', pos: 'MD / CEO' },
+                ];
             defaultApprovers.forEach((def) => {
                 dataRows.push(new docx_1.TableRow({
                     children: [
@@ -947,16 +972,169 @@ class ReportGenerationService {
             ],
         });
     }
+    _htmlOrTextToDocxBlocks(rawText) {
+        if (!rawText || !rawText.trim()) {
+            return [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'N/A' })] })];
+        }
+        const { markdown, images } = (0, working_paper_utility_1.htmlFragmentToMarkdownAndImages)(rawText);
+        const blocks = [];
+        const lines = markdown.split(/\r?\n/);
+        let idx = 0;
+        while (idx < lines.length) {
+            const line = lines[idx].trim();
+            if (!line) {
+                idx++;
+                continue;
+            }
+            // Markdown table block
+            if (line.startsWith('|') && line.endsWith('|')) {
+                const tableLines = [];
+                while (idx < lines.length && lines[idx].trim().startsWith('|')) {
+                    const tLine = lines[idx].trim();
+                    // Skip separator rows like | --- | --- |
+                    if (!/^\|[\s\-:|]+\|$/.test(tLine)) {
+                        tableLines.push(tLine);
+                    }
+                    idx++;
+                }
+                if (tableLines.length > 0) {
+                    const rows = tableLines.map((rowStr, rIdx) => {
+                        const cells = rowStr
+                            .replace(/^\|/, '')
+                            .replace(/\|$/, '')
+                            .split('|')
+                            .map((c) => c.trim());
+                        return new docx_1.TableRow({
+                            children: cells.map((cellText) => new docx_1.TableCell({
+                                children: [
+                                    new docx_1.Paragraph({
+                                        children: [
+                                            new docx_1.TextRun({
+                                                text: cellText.replace(/\*\*/g, ''),
+                                                bold: rIdx === 0,
+                                                color: rIdx === 0 ? 'FFFFFF' : '1E293B',
+                                            }),
+                                        ],
+                                    }),
+                                ],
+                                shading: rIdx === 0 ? { fill: '003087', type: docx_1.ShadingType.SOLID } : undefined,
+                                verticalAlign: docx_1.VerticalAlign.CENTER,
+                            })),
+                        });
+                    });
+                    blocks.push(new docx_1.Table({
+                        rows,
+                        width: { size: 100, type: docx_1.WidthType.PERCENTAGE },
+                        borders: {
+                            top: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                            bottom: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                            left: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                            right: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                            insideHorizontal: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                            insideVertical: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                        },
+                    }));
+                }
+                continue;
+            }
+            // Headings
+            const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+            if (headingMatch) {
+                const level = headingMatch[1].length;
+                const text = headingMatch[2].replace(/\*\*/g, '');
+                blocks.push(new docx_1.Paragraph({
+                    spacing: { before: 160, after: 80 },
+                    children: [
+                        new docx_1.TextRun({
+                            text,
+                            bold: true,
+                            size: level === 1 ? 26 : level === 2 ? 24 : 22,
+                            color: '003087',
+                        }),
+                    ],
+                }));
+                idx++;
+                continue;
+            }
+            // Bullet / numbered lists
+            const bulletMatch = line.match(/^[-*•]\s+(.+)$/);
+            if (bulletMatch) {
+                blocks.push(new docx_1.Paragraph({
+                    spacing: { before: 40, after: 40 },
+                    children: this._parseInlineBoldRuns(`• ${bulletMatch[1]}`),
+                }));
+                idx++;
+                continue;
+            }
+            blocks.push(new docx_1.Paragraph({
+                spacing: { before: 60, after: 60 },
+                children: this._parseInlineBoldRuns(line),
+            }));
+            idx++;
+        }
+        // Append inline base64 images
+        for (const dataUrl of images) {
+            const m = dataUrl.match(/^data:image\/(png|jpe?g);base64,(.+)$/i);
+            if (m) {
+                try {
+                    const imgType = m[1].toLowerCase() === 'png' ? 'png' : 'jpg';
+                    const imgBuffer = Buffer.from(m[2], 'base64');
+                    blocks.push(new docx_1.Paragraph({
+                        alignment: docx_1.AlignmentType.CENTER,
+                        spacing: { before: 120, after: 120 },
+                        children: [
+                            new docx_1.ImageRun({
+                                type: imgType,
+                                data: imgBuffer,
+                                transformation: { width: 420, height: 260 },
+                            }),
+                        ],
+                    }));
+                }
+                catch {
+                    // Ignore malformed inline image
+                }
+            }
+        }
+        return blocks.length > 0 ? blocks : [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: rawText })] })];
+    }
+    _parseInlineBoldRuns(text) {
+        const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+        return parts.map((part) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return new docx_1.TextRun({ text: part.slice(2, -2), bold: true });
+            }
+            return new docx_1.TextRun({ text: part });
+        });
+    }
+    _htmlOrTextToPdfBlocks(rawText) {
+        if (!rawText || !rawText.trim()) {
+            return [{ text: 'N/A' }];
+        }
+        const { markdown, images } = (0, working_paper_utility_1.htmlFragmentToMarkdownAndImages)(rawText);
+        const content = [...(0, markdown_utility_1.markdownToPdfContent)(markdown)];
+        for (const dataUrl of images) {
+            if (/^data:image\/(png|jpe?g);base64,/i.test(dataUrl)) {
+                content.push({
+                    image: dataUrl,
+                    fit: [440, 280],
+                    alignment: 'center',
+                    margin: [0, 6, 0, 8],
+                });
+            }
+        }
+        return content.length > 0 ? content : [{ text: rawText }];
+    }
     _buildDocxSectionContent(key, data) {
         switch (key) {
             case 'executive_summary':
-                return [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: data.report.executiveSummary })] })];
+                return this._htmlOrTextToDocxBlocks(data.report.executiveSummary);
             case 'background':
                 return [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Refer to engagement details above.' })] })];
             case 'objectives':
-                return [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: data.report.scope })] })];
+                return this._htmlOrTextToDocxBlocks(data.report.scope);
             case 'methodology':
-                return [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: data.report.methodology })] })];
+                return this._htmlOrTextToDocxBlocks(data.report.methodology);
             case 'findings_summary':
                 return [this._buildDocxFindingsSummaryTable(data.findings)];
             case 'detailed_findings':
@@ -1125,7 +1303,7 @@ class ReportGenerationService {
                     new docx_1.TextRun({ text: f.recommendation }),
                 ],
             }));
-            // Management Response
+            // Management Response (always shown so the report captures auditee response status)
             if (f.followUp?.managementResponse) {
                 const responder = f.followUp.managementResponseBy;
                 const responderName = responder?.displayName ??
@@ -1144,10 +1322,19 @@ class ReportGenerationService {
                 result.push(new docx_1.Paragraph({
                     children: [
                         new docx_1.TextRun({
-                            text: `Submitted by: ${responderName} on ${responseDate}`,
+                            text: `Submitted by: ${responderName}${responseDate ? ` on ${responseDate}` : ''}`,
                             italics: true,
                             size: 20,
                         }),
+                    ],
+                }));
+            }
+            else {
+                result.push(new docx_1.Paragraph({
+                    spacing: { before: 120 },
+                    children: [
+                        new docx_1.TextRun({ text: 'Management Response: ', bold: true }),
+                        new docx_1.TextRun({ text: 'Awaiting management response from auditee.', italics: true }),
                     ],
                 }));
             }
@@ -1200,71 +1387,84 @@ class ReportGenerationService {
         const auditeeName = finding.auditee.displayName ??
             `${finding.auditee.firstName} ${finding.auditee.lastName}`.trim() ??
             'N/A';
-        return new docx_1.Table({
-            rows: [
-                new docx_1.TableRow({
-                    children: [
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Severity', bold: true })] })],
-                            width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
-                            shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
-                        }),
-                        this._severityDocxCell(finding.severity),
-                    ],
+        const rows = [
+            new docx_1.TableRow({
+                children: [
+                    new docx_1.TableCell({
+                        children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Severity', bold: true })] })],
+                        width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
+                        shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
+                    }),
+                    this._severityDocxCell(finding.severity),
+                ],
+            }),
+            new docx_1.TableRow({
+                children: [
+                    new docx_1.TableCell({
+                        children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Category', bold: true })] })],
+                        width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
+                        shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
+                    }),
+                    new docx_1.TableCell({
+                        children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_CATEGORY_LABEL[finding.category] ?? finding.category })] })],
+                    }),
+                ],
+            }),
+        ];
+        if (finding.controlReference) {
+            rows.push(new docx_1.TableRow({
+                children: [
+                    new docx_1.TableCell({
+                        children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Control Reference', bold: true })] })],
+                        width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
+                        shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
+                    }),
+                    new docx_1.TableCell({
+                        children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: finding.controlReference })] })],
+                    }),
+                ],
+            }));
+        }
+        rows.push(new docx_1.TableRow({
+            children: [
+                new docx_1.TableCell({
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Status', bold: true })] })],
+                    width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
+                    shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
                 }),
-                new docx_1.TableRow({
-                    children: [
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Category', bold: true })] })],
-                            width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
-                            shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
-                        }),
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_CATEGORY_LABEL[finding.category] ?? finding.category })] })],
-                        }),
-                    ],
+                new docx_1.TableCell({
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_STATUS_LABEL[finding.status] ?? finding.status })] })],
                 }),
-                new docx_1.TableRow({
-                    children: [
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Status', bold: true })] })],
-                            width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
-                            shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
-                        }),
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: FINDING_STATUS_LABEL[finding.status] ?? finding.status })] })],
-                        }),
-                    ],
+            ],
+        }), new docx_1.TableRow({
+            children: [
+                new docx_1.TableCell({
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Due Date', bold: true })] })],
+                    width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
+                    shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
                 }),
-                new docx_1.TableRow({
+                new docx_1.TableCell({
                     children: [
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Due Date', bold: true })] })],
-                            width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
-                            shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
-                        }),
-                        new docx_1.TableCell({
-                            children: [
-                                new docx_1.Paragraph({
-                                    children: [new docx_1.TextRun({ text: (0, date_fns_1.format)(finding.dueDate, 'dd MMM yyyy') })],
-                                }),
-                            ],
-                        }),
-                    ],
-                }),
-                new docx_1.TableRow({
-                    children: [
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Auditee', bold: true })] })],
-                            width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
-                            shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
-                        }),
-                        new docx_1.TableCell({
-                            children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: auditeeName })] })],
+                        new docx_1.Paragraph({
+                            children: [new docx_1.TextRun({ text: (0, date_fns_1.format)(finding.dueDate, 'dd MMM yyyy') })],
                         }),
                     ],
                 }),
             ],
+        }), new docx_1.TableRow({
+            children: [
+                new docx_1.TableCell({
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: 'Auditee', bold: true })] })],
+                    width: { size: 20, type: docx_1.WidthType.PERCENTAGE },
+                    shading: { fill: 'F8F9FA', type: docx_1.ShadingType.SOLID },
+                }),
+                new docx_1.TableCell({
+                    children: [new docx_1.Paragraph({ children: [new docx_1.TextRun({ text: auditeeName })] })],
+                }),
+            ],
+        }));
+        return new docx_1.Table({
+            rows,
             width: { size: 100, type: docx_1.WidthType.PERCENTAGE },
             borders: {
                 top: { style: docx_1.BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
@@ -1302,13 +1502,17 @@ class ReportGenerationService {
             `${data.engagement.auditManager.firstName} ${data.engagement.auditManager.lastName}`.trim() ??
             'N/A';
         const auditManagerTitle = data.engagement.auditManager.jobTitle ?? '';
-        let caeApproverName = 'N/A';
+        let caeApproverName = data.report.signOffMode === 'cae_only'
+            ? 'Head of Internal Audit (Pending)'
+            : 'Head of Internal Audit / DG (Pending)';
         if (approval?.steps) {
             const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
             const highest = approvedSteps.length > 0
                 ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
                 : undefined;
-            caeApproverName = highest?.approver?.displayName ?? 'N/A';
+            if (highest?.approver?.displayName) {
+                caeApproverName = highest.approver.displayName;
+            }
         }
         return new docx_1.Table({
             rows: [
@@ -1409,13 +1613,17 @@ class ReportGenerationService {
             `${data.engagement.auditManager.firstName} ${data.engagement.auditManager.lastName}`.trim() ??
             'N/A';
         const auditManagerTitle = data.engagement.auditManager.jobTitle ?? '';
-        let caeApproverName = 'N/A';
+        let caeApproverName = data.report.signOffMode === 'cae_only'
+            ? 'Head of Internal Audit (Pending)'
+            : 'Head of Internal Audit / DG (Pending)';
         if (approval?.steps) {
             const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
             const highest = approvedSteps.length > 0
                 ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
                 : undefined;
-            caeApproverName = highest?.approver?.displayName ?? 'N/A';
+            if (highest?.approver?.displayName) {
+                caeApproverName = highest.approver.displayName;
+            }
         }
         const findingsSummaryTable = {
             table: {
@@ -1439,16 +1647,18 @@ class ReportGenerationService {
         const detailedFindingsContent = [];
         data.findings.forEach((f, idx) => {
             const auditeeName = f.auditee.displayName ?? `${f.auditee.firstName} ${f.auditee.lastName}`.trim() ?? 'N/A';
+            const detailsBody = [
+                [labelCell('Severity'), (0, pdf_util_1.severityBadge)(f.severity)],
+                [labelCell('Category'), { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category }],
+            ];
+            if (f.controlReference) {
+                detailsBody.push([labelCell('Control Reference'), { text: f.controlReference }]);
+            }
+            detailsBody.push([labelCell('Status'), { text: FINDING_STATUS_LABEL[f.status] ?? f.status }], [labelCell('Due Date'), { text: (0, date_fns_1.format)(f.dueDate, 'dd MMM yyyy') }], [labelCell('Auditee'), { text: auditeeName }]);
             detailedFindingsContent.push({ text: `Finding ${idx + 1}: ${f.title}`, bold: true, fontSize: 12, margin: [0, 14, 0, 6] }, {
                 table: {
                     widths: [110, '*'],
-                    body: [
-                        [labelCell('Severity'), (0, pdf_util_1.severityBadge)(f.severity)],
-                        [labelCell('Category'), { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category }],
-                        [labelCell('Status'), { text: FINDING_STATUS_LABEL[f.status] ?? f.status }],
-                        [labelCell('Due Date'), { text: (0, date_fns_1.format)(f.dueDate, 'dd MMM yyyy') }],
-                        [labelCell('Auditee'), { text: auditeeName }],
-                    ],
+                    body: detailsBody,
                 },
                 layout: pdf_util_1.borderedTableLayout,
                 margin: [0, 0, 0, 6],
@@ -1461,7 +1671,10 @@ class ReportGenerationService {
                 const responseDate = f.followUp.managementResponseAt
                     ? (0, date_fns_1.format)(f.followUp.managementResponseAt, 'dd MMM yyyy')
                     : '';
-                detailedFindingsContent.push(labeled('Management Response', f.followUp.managementResponse), { text: `Submitted by: ${responderName} on ${responseDate}`, italics: true, fontSize: 10, color: '#64748B', margin: [0, 0, 0, 3] });
+                detailedFindingsContent.push(labeled('Management Response', f.followUp.managementResponse), { text: `Submitted by: ${responderName}${responseDate ? ` on ${responseDate}` : ''}`, italics: true, fontSize: 10, color: '#64748B', margin: [0, 0, 0, 3] });
+            }
+            else {
+                detailedFindingsContent.push(labeled('Management Response', 'Awaiting management response from auditee.'));
             }
             if (f.followUp?.verifiedAt) {
                 const verifier = f.followUp.verifiedBy;
@@ -1483,16 +1696,16 @@ class ReportGenerationService {
             sectionsContent.push({ text: `${idx + 1}. ${section.title}`, style: 'sectionTitle', margin: [0, 18, 0, 8] });
             switch (section.key) {
                 case 'executive_summary':
-                    sectionsContent.push({ text: data.report.executiveSummary });
+                    sectionsContent.push(...this._htmlOrTextToPdfBlocks(data.report.executiveSummary));
                     break;
                 case 'background':
                     sectionsContent.push({ text: 'Refer to engagement details above.' });
                     break;
                 case 'objectives':
-                    sectionsContent.push({ text: data.report.scope });
+                    sectionsContent.push(...this._htmlOrTextToPdfBlocks(data.report.scope));
                     break;
                 case 'methodology':
-                    sectionsContent.push({ text: data.report.methodology });
+                    sectionsContent.push(...this._htmlOrTextToPdfBlocks(data.report.methodology));
                     break;
                 case 'findings_summary':
                     sectionsContent.push(findingsSummaryTable);
@@ -1542,7 +1755,11 @@ class ReportGenerationService {
             sortedSteps.forEach((step) => {
                 const name = step.approver?.displayName || `Approver (Level ${step.level})`;
                 const position = step.approver?.jobTitle ||
-                    (step.level === 1 ? 'Head of Unit / Reviewer' : step.level === 2 ? 'Executive Director' : 'Managing Director / CEO');
+                    (step.level === 1
+                        ? 'Head of Unit / Reviewer'
+                        : step.level === 2
+                            ? 'Head of Internal Audit (CAE)'
+                            : 'Director General / CEO');
                 const sig = sigImg(step.id);
                 let sigCell;
                 if (step.status === 'approved') {
@@ -1558,8 +1775,11 @@ class ReportGenerationService {
                 approvalListPdfRows.push([{ text: name, bold: true }, { text: position }, sigCell, { text: dateStr, alignment: 'center' }]);
             });
         }
+        else if (data.report.signOffMode === 'cae_only') {
+            approvalListPdfRows.push([{ text: auditManagerName, bold: true }, { text: auditManagerTitle || 'Head of Unit / Audit Manager' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }], [{ text: 'Head of Internal Audit (CAE)', bold: true }, { text: 'Head of Internal Audit' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }]);
+        }
         else {
-            approvalListPdfRows.push([{ text: auditManagerName, bold: true }, { text: auditManagerTitle || 'Head of Unit / Audit Manager' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }], [{ text: 'Executive Director (ED)', bold: true }, { text: 'Executive Director' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }], [{ text: 'Managing Director / CEO', bold: true }, { text: 'MD / CEO' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }]);
+            approvalListPdfRows.push([{ text: auditManagerName, bold: true }, { text: auditManagerTitle || 'Head of Unit / Audit Manager' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }], [{ text: 'Head of Internal Audit (CAE)', bold: true }, { text: 'Head of Internal Audit' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }], [{ text: 'Director General / CEO', bold: true }, { text: 'Director General / MD' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }]);
         }
         const pad = (l, t, r, b) => [l, t, r, b];
         return {

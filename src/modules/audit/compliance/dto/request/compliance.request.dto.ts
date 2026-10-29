@@ -1,7 +1,23 @@
 import { z } from 'zod';
 import { AuditType, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
-export const FrameworkCategory = z.enum(['it', 'financial', 'compliance', 'systems', 'governance']);
+export const FrameworkCategory = z.enum([
+  'it',
+  'financial',
+  'compliance',
+  'systems',
+  'governance',
+  'regulatory',
+  'standard',
+  'policy',
+  'act',
+  'operational',
+  'pension',
+  'procurement',
+  'hr_payroll',
+  'project',
+  'special',
+]);
 
 export const CreateFrameworkRequestSchema = z.object({
   code: z.string().trim().min(2).max(40).regex(/^[A-Za-z0-9.\-]+$/, 'Code may contain letters, numbers, dot and hyphen only'),
@@ -48,6 +64,21 @@ export const ControlQuerySchema = z.object({
 export const LinkRiskRequestSchema = z.object({
   riskId: z.string().uuid(),
 });
+
+export interface UploadFrameworkDocumentDto {
+  frameworkId?: string;
+  code?: string;
+  name?: string;
+  category?: string;
+  description?: string;
+  auditType?: string;
+  prefix?: string;
+  controls?: Array<{
+    controlReference: string;
+    controlDescription: string;
+    testProcedure: string;
+  }>;
+}
 
 export type LinkRiskRequestDto = z.infer<typeof LinkRiskRequestSchema>;
 export type CreateFrameworkRequestDto = z.infer<typeof CreateFrameworkRequestSchema>;

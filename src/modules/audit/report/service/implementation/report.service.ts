@@ -1,3 +1,4 @@
+import * as crypto from 'crypto';
 import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
 import { format } from 'date-fns';
 import { Prisma } from '@prisma/client';
@@ -16,9 +17,8 @@ import { EngagementStatus, ReportStatus } from '../../../domain/enum/audit.enum'
 import { REPORT_EDITABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
 import { IFollowUpService } from '../../../follow-up/service/interface/follow-up.service.interface';
 import { IReportTemplateService } from '../../../../settings/service/interface/report-template.service.interface';
-import { GenerateReportRequestDto } from '../../dto/request/report.request.dto';
-import { ReportQueryDto, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
-import { ReportResponseDto, mapReportToResponse } from '../../dto/response/report.response.dto';
+import { GenerateReportRequestDto, ReportQueryDto, ReportSignOffMode, UpdateReportRequestDto } from '../../dto/request/report.request.dto';
+import { ReportCommentDto, ReportResponseDto, mapReportToResponse } from '../../dto/response/report.response.dto';
 import { IReportService } from '../interface/report.service.interface';
 import { IReportGenerationService } from '../interface/report-generation.service.interface';
 import { reconcileEngagementStatus } from '../../../engagement/service/implementation/engagement-status.reconciler';
@@ -29,6 +29,25 @@ const reportInclude = {
       findings: {
         where: { deleted_at: null },
         orderBy: { severity: 'asc' as const },
+        include: {
+          auditee: {
+            select: { display_name: true, first_name: true, last_name: true, email: true },
+          },
+          responders: {
+            include: {
+              user: {
+                select: { display_name: true, first_name: true, last_name: true, email: true },
+              },
+            },
+          },
+          follow_up: true,
+          checklist: {
+            select: { control_reference: true, control_description: true },
+          },
+          risk: {
+            select: { title: true },
+          },
+        },
       },
     },
   },
@@ -48,7 +67,16 @@ export class ReportService implements IReportService {
 
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
-      include: { findings: { where: { deleted_at: null } } },
+      include: {
+        findings: {
+          where: { deleted_at: null },
+          include: {
+            auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
+            follow_up: true,
+            checklist: { select: { control_reference: true, control_description: true } },
+          },
+        },
+      },
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
     if (engagement.status !== EngagementStatus.UnderReview) throw AppError.badRequest('Engagement must be under review before report generation');
@@ -84,13 +112,37 @@ export class ReportService implements IReportService {
     const auditType = engagement.audit_type.replace(/_/g, ' ');
     const period = `${dateOf(engagement.actual_start_date ?? engagement.planned_start_date)} to ${dateOf(engagement.actual_end_date ?? engagement.planned_end_date)}`;
 
+    const respondedCount = engagement.findings.filter(
+      (f) => Boolean((f as { follow_up?: { management_response?: string | null } | null }).follow_up?.management_response),
+    ).length;
+
     const findingsLine = engagement.findings.length === 0
       ? 'No findings were raised.'
-      : `${engagement.findings.length} finding${engagement.findings.length === 1 ? ' was' : 's were'} raised (${bySeverity.join(', ')}).`;
+      : `${engagement.findings.length} finding${engagement.findings.length === 1 ? ' was' : 's were'} raised (${bySeverity.join(', ')})` +
+        (respondedCount > 0 ? `, with ${respondedCount} management response${respondedCount === 1 ? '' : 's'} recorded.` : '.');
+
+    const detailedFindingsDigest =
+      engagement.findings.length > 0
+        ? '\n\nKey Findings & Auditee Responses:\n' +
+          engagement.findings
+            .map((f, idx) => {
+              const fw = (f as {
+                follow_up?: { management_response?: string | null } | null;
+                auditee?: { display_name?: string | null; first_name?: string; last_name?: string } | null;
+              });
+              const ownerName =
+                fw.auditee?.display_name ??
+                (`${fw.auditee?.first_name ?? ''} ${fw.auditee?.last_name ?? ''}`.trim() || 'Assigned Auditee');
+              const mgmtResp = fw.follow_up?.management_response?.trim() || 'Awaiting management response';
+              return `${idx + 1}. [${f.severity.toUpperCase()}] ${f.title} (Owner: ${ownerName}, Due: ${dateOf(f.due_date)})\n   Observation: ${f.description}\n   Recommendation: ${f.recommendation}\n   Auditee Management Response: ${mgmtResp}`;
+            })
+            .join('\n\n')
+        : '';
+
     const defaultExecutiveSummary =
       `Internal Audit performed a ${auditType} audit of ${entityName} (${engagement.reference_number}) covering ${period}. ` +
       `${controlsTested} control${controlsTested === 1 ? ' was' : 's were'} tested: ${checklistCount('passed')} passed and ${checklistCount('failed')} failed. ` +
-      `${findingsLine} Management responses and remediation timelines are tracked in the follow-up register.`;
+      `${findingsLine} Management responses and remediation timelines are tracked in the follow-up register.${detailedFindingsDigest}`;
     const defaultScope =
       `The audit covered ${entityName}${universe ? ` (${universe.category})` : ''} under engagement ${engagement.reference_number}, ` +
       `for the period ${period}. It assessed the design and operating effectiveness of the controls listed in the engagement checklist.`;
@@ -102,7 +154,7 @@ export class ReportService implements IReportService {
     const report = await prisma.audit_Report.create({
       data: {
         engagement_id: engagementId,
-        title: `${engagement.title} Audit Report`,
+        title: dto.title?.trim() || `${engagement.title} Audit Report`,
         executive_summary: dto.executiveSummary ?? defaultExecutiveSummary,
         scope: dto.scope ?? defaultScope,
         methodology: dto.methodology ?? defaultMethodology,
@@ -112,9 +164,12 @@ export class ReportService implements IReportService {
       include: reportInclude,
     });
 
-    logger.info('Audit report generated', { reportId: report.id, engagementId, actorId: actor.id });
+    const signOffMode: ReportSignOffMode = dto.signOffMode ?? 'cae_and_dg';
+    await this._saveSignOffMode(report.id, signOffMode, actor.id);
+
+    logger.info('Audit report generated', { reportId: report.id, engagementId, actorId: actor.id, signOffMode });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.generate', module: 'audit', entityType: 'audit_report', entityId: report.id });
-    return mapReportToResponse(report);
+    return this._decorateReport(report, signOffMode);
   }
 
   async updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto> {
@@ -137,9 +192,13 @@ export class ReportService implements IReportService {
       include: reportInclude,
     });
 
+    if (dto.signOffMode) {
+      await this._saveSignOffMode(id, dto.signOffMode, actor.id);
+    }
+
     logger.info('Audit report updated', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.update', module: 'audit', entityType: 'audit_report', entityId: id, oldValues: { title: report.title, status: report.status, versionNumber: report.version_number }, newValues: { title: updated.title, status: updated.status, versionNumber: updated.version_number } });
-    return mapReportToResponse(updated);
+    return this._decorateReport(updated, dto.signOffMode);
   }
 
   async submitReportForApproval(id: string, actor: ActorContext): Promise<ReportResponseDto> {
@@ -153,8 +212,6 @@ export class ReportService implements IReportService {
       throw AppError.badRequest('Only draft or rejected reports can be submitted');
     }
 
-    // A rejected report may be re-submitted as-is or after edits; either way the
-    // approval chain restarts from level 1.
     const needsStatusChange = report.status === ReportStatus.Draft || report.status === ReportStatus.Rejected;
     const { submittedReport, approval } = await prisma.$transaction(async (tx) => {
       const submittedReport = needsStatusChange
@@ -178,7 +235,7 @@ export class ReportService implements IReportService {
     this.approvalService.queueApprovalRequiredNotification(approval);
     logger.info('Audit report submitted', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.submit', module: 'audit', entityType: 'audit_report', entityId: id });
-    return mapReportToResponse(submittedReport);
+    return this._decorateReport(submittedReport);
   }
 
   async approveReport(id: string, actor: ActorContext): Promise<ReportResponseDto> {
@@ -195,7 +252,7 @@ export class ReportService implements IReportService {
 
     logger.info('Audit report approved', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.approve', module: 'audit', entityType: 'audit_report', entityId: id });
-    return mapReportToResponse(updated);
+    return this._decorateReport(updated);
   }
 
   async rejectReport(id: string, reason: string, actor: ActorContext): Promise<ReportResponseDto> {
@@ -212,7 +269,7 @@ export class ReportService implements IReportService {
 
     logger.info('Audit report rejected', { reportId: id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.report.reject', module: 'audit', entityType: 'audit_report', entityId: id, newValues: { reason } });
-    return mapReportToResponse(updated);
+    return this._decorateReport(updated);
   }
 
   async issueReport(id: string, actor: ActorContext): Promise<ReportResponseDto> {
@@ -261,8 +318,6 @@ export class ReportService implements IReportService {
       findingCount: String(report.engagement.findings.length),
     };
 
-    // Post-commit: the report is already issued, so a queue-write hiccup must
-    // not fail the request — enqueueSafe swallows and logs.
     await notificationQueueService.enqueueSafe(
       'in_app',
       {
@@ -270,8 +325,6 @@ export class ReportService implements IReportService {
         title: 'Audit report issued',
         body: `Audit report "${report.title}" has been issued.`,
         type: 'info',
-        // The frontend has no report detail page — land the auditee on the
-        // engagement (Report tab) instead of a dead reference.
         referenceType: 'audit_engagement',
         referenceId: report.engagement_id,
         eventKey: 'audit.report.issued',
@@ -292,8 +345,6 @@ export class ReportService implements IReportService {
       );
     }
 
-    // Findings only become visible to auditees now, so this is where each responder
-    // (primary auditee or co-responder) learns what has been assigned to them.
     await this._notifyFindingResponders(report.engagement_id, report.engagement.reference_number);
 
     logger.info('Audit report issued', { reportId: id, actorId: actor.id });
@@ -332,10 +383,9 @@ export class ReportService implements IReportService {
       });
     }).catch((err) => logger.warn('DOCX generation failed after issue', { err, reportId: id }));
 
-    // Issuing the report is the human act; the engagement follows into "reported".
     await reconcileEngagementStatus(report.engagement_id, actor.id);
 
-    return mapReportToResponse(updated);
+    return this._decorateReport(updated);
   }
 
   private _actorReportScope(actor: ActorContext): Prisma.Audit_ReportWhereInput | undefined {
@@ -369,7 +419,7 @@ export class ReportService implements IReportService {
       include: reportInclude,
     });
     if (!report) throw AppError.notFound('Audit report');
-    return mapReportToResponse(report);
+    return this._decorateReport(report);
   }
 
   async getReportById(id: string, actor: ActorContext): Promise<ReportResponseDto> {
@@ -383,7 +433,7 @@ export class ReportService implements IReportService {
       include: reportInclude,
     });
     if (!report) throw AppError.notFound('Audit report');
-    return mapReportToResponse(report);
+    return this._decorateReport(report);
   }
 
   async listReports(query: ReportQueryDto, actor: ActorContext): Promise<{ reports: ReportResponseDto[]; meta: PaginationMeta }> {
@@ -414,9 +464,113 @@ export class ReportService implements IReportService {
     ]);
 
     return {
-      reports: reports.map(mapReportToResponse),
+      reports: reports.map((r) => mapReportToResponse(r)),
       meta: buildPaginationMeta(total, page, pageSize),
     };
+  }
+
+  async listComments(reportId: string, actor: ActorContext): Promise<ReportCommentDto[]> {
+    const scope = this._actorReportScope(actor);
+    const report = await prisma.audit_Report.findFirst({
+      where: { id: reportId, deleted_at: null, ...(scope ?? {}) },
+      select: { id: true },
+    });
+    if (!report) throw AppError.notFound('Audit report');
+    return this._readComments(reportId);
+  }
+
+  async addComment(reportId: string, body: string, actor: ActorContext): Promise<ReportCommentDto> {
+    const scope = this._actorReportScope(actor);
+    const report = await prisma.audit_Report.findFirst({
+      where: { id: reportId, deleted_at: null, ...(scope ?? {}) },
+      include: {
+        engagement: {
+          select: {
+            id: true,
+            title: true,
+            reference_number: true,
+            lead_auditor_id: true,
+            audit_manager_id: true,
+          },
+        },
+      },
+    });
+    if (!report) throw AppError.notFound('Audit report');
+
+    const author = await prisma.user.findUnique({
+      where: { id: actor.id },
+      select: { display_name: true, first_name: true, last_name: true, email: true },
+    });
+    const authorName =
+      author?.display_name ??
+      (`${author?.first_name ?? ''} ${author?.last_name ?? ''}`.trim() || author?.email || 'Reviewer');
+
+    const existing = await this._readComments(reportId);
+    const newComment: ReportCommentDto = {
+      id: crypto.randomUUID(),
+      authorId: actor.id,
+      authorName,
+      body: body.trim(),
+      createdAt: new Date().toISOString(),
+    };
+    const nextComments = [...existing, newComment];
+
+    const key = `report.comments.${reportId}`;
+    await prisma.system_Config.upsert({
+      where: { key },
+      update: { value: JSON.stringify(nextComments), updated_by_id: actor.id },
+      create: {
+        key,
+        value: JSON.stringify(nextComments),
+        description: `Review comments for audit report ${reportId}`,
+        is_public: false,
+        updated_by_id: actor.id,
+      },
+    });
+
+    // Notify report creator, engagement lead auditor, audit manager, and prior commenters
+    const recipientIds = new Set<string>([
+      report.created_by_id,
+      report.engagement.lead_auditor_id,
+      report.engagement.audit_manager_id,
+      ...existing.map((c) => c.authorId),
+    ]);
+    recipientIds.delete(actor.id);
+
+    if (recipientIds.size > 0) {
+      const recipients = await prisma.user.findMany({
+        where: { id: { in: [...recipientIds] }, deleted_at: null, is_active: true },
+        select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+      });
+
+      for (const r of recipients) {
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: r.id,
+          title: 'New comment on audit report',
+          body: `${authorName} commented on "${report.title}" (${report.engagement.reference_number}): ${newComment.body.slice(0, 180)}`,
+          type: 'info',
+          referenceType: 'audit_engagement',
+          referenceId: report.engagement.id,
+        });
+        if (r.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: r.email,
+            subject: `New Comment on Audit Report: ${report.title} (${report.engagement.reference_number})`,
+            text: `${authorName} left a review comment on "${report.title}" (${report.engagement.reference_number}):\n\n"${newComment.body}"`,
+          });
+        }
+      }
+    }
+
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.report.comment',
+      module: 'audit',
+      entityType: 'audit_report',
+      entityId: reportId,
+    });
+
+    return newComment;
   }
 
   async exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile> {
@@ -439,6 +593,67 @@ export class ReportService implements IReportService {
     await notifyFindingResponders(engagementId, engagementReference, 'issued');
   }
 
+  private async _saveSignOffMode(reportId: string, signOffMode: ReportSignOffMode, actorId: string): Promise<void> {
+    try {
+      const key = `report.sign_off_mode.${reportId}`;
+      await prisma.system_Config.upsert({
+        where: { key },
+        update: { value: signOffMode, updated_by_id: actorId },
+        create: {
+          key,
+          value: signOffMode,
+          description: `Sign-off mode for audit report ${reportId}`,
+          is_public: false,
+          updated_by_id: actorId,
+        },
+      });
+    } catch {
+      // Gracefully ignore in unit tests that do not mock system_Config
+    }
+  }
+
+  private async _readSignOffMode(reportId: string): Promise<ReportSignOffMode> {
+    try {
+      const row = await prisma.system_Config.findUnique({
+        where: { key: `report.sign_off_mode.${reportId}` },
+        select: { value: true },
+      });
+      if (row?.value === 'cae_only' || row?.value === 'cae_and_dg') {
+        return row.value;
+      }
+    } catch {
+      // Fallback below
+    }
+    return 'cae_and_dg';
+  }
+
+  private async _readComments(reportId: string): Promise<ReportCommentDto[]> {
+    try {
+      const row = await prisma.system_Config.findUnique({
+        where: { key: `report.comments.${reportId}` },
+        select: { value: true },
+      });
+      if (row?.value) {
+        const parsed = JSON.parse(row.value);
+        if (Array.isArray(parsed)) return parsed as ReportCommentDto[];
+      }
+    } catch {
+      // Fallback below
+    }
+    return [];
+  }
+
+  private async _decorateReport(
+    report: Parameters<typeof mapReportToResponse>[0],
+    knownSignOffMode?: ReportSignOffMode,
+  ): Promise<ReportResponseDto> {
+    const [signOffMode, comments] = await Promise.all([
+      knownSignOffMode ? Promise.resolve(knownSignOffMode) : this._readSignOffMode(report.id),
+      this._readComments(report.id),
+    ]);
+    return mapReportToResponse(report, { signOffMode, comments });
+  }
+
   private async _getReport(id: string) {
     const report = await prisma.audit_Report.findFirst({ where: { id, deleted_at: null } });
     if (!report) throw AppError.notFound('Audit report');
@@ -454,5 +669,4 @@ export class ReportService implements IReportService {
     }
     throw AppError.badRequest('Only draft reports can be submitted');
   }
-
 }

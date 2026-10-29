@@ -42,6 +42,7 @@ import {
   WorkingPaperPdfData,
   WorkingPaperSignOff,
   buildWorkingPaperDocDefinition,
+  buildWorkingPaperDocx,
   parseWorkingPaperSections,
 } from '../../utility/working-paper.utility';
 import { markdownToPlainText } from '../../utility/markdown.utility';
@@ -227,7 +228,7 @@ export class WorkingPaperService implements IWorkingPaperService {
 
   async addComment(workingPaperId: string, body: string, actor: ActorContext): Promise<WorkingPaperCommentResponseDto> {
     assertHasPermission(actor.permissions, 'working_paper:read');
-    const paper = await this._getPaper(workingPaperId);
+    const paper = await this._getPaperWithEngagement(workingPaperId);
     await assertCanViewInternalArtifacts(paper.engagement_id, actor);
 
     const comment = await prisma.audit_Working_Paper_Comment.create({
@@ -238,16 +239,62 @@ export class WorkingPaperService implements IWorkingPaperService {
     logger.info('Working paper comment added', { workingPaperId, commentId: comment.id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.comment', module: 'audit', entityType: 'audit_working_paper', entityId: workingPaperId });
 
-    // Tell the preparer someone commented on their paper (unless they did).
-    if (paper.created_by_id !== actor.id) {
-      await notificationQueueService.enqueueSafe('in_app', {
-        userId: paper.created_by_id,
-        title: 'New comment on your working paper',
-        body: `${comment.author.display_name ?? 'A reviewer'} commented on "${paper.title}": ${body.slice(0, 200)}`,
-        type: 'info',
-        referenceType: 'audit_engagement',
-        referenceId: paper.engagement_id,
+    // Notify both parties (preparer, engagement manager, lead auditor, and prior commenters) via In-App + Email
+    const priorComments = await prisma.audit_Working_Paper_Comment.findMany({
+      where: { working_paper_id: workingPaperId },
+      select: { author_id: true },
+    });
+    const recipientIds = new Set<string>([
+      paper.created_by_id,
+      paper.engagement.lead_auditor_id,
+      paper.engagement.audit_manager_id,
+      ...priorComments.map((c) => c.author_id),
+    ]);
+    recipientIds.delete(actor.id);
+
+    if (recipientIds.size > 0) {
+      const recipients = await prisma.user.findMany({
+        where: { id: { in: Array.from(recipientIds) }, deleted_at: null, is_active: true },
+        select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
       });
+      const authorName =
+        comment.author.display_name?.trim() ||
+        `${comment.author.first_name ?? ''} ${comment.author.last_name ?? ''}`.trim() ||
+        'A team member';
+
+      for (const recipient of recipients) {
+        const recipientName =
+          recipient.display_name?.trim() || `${recipient.first_name} ${recipient.last_name}`.trim() || recipient.email;
+        const variables = {
+          recipientName,
+          authorName,
+          workingPaperTitle: paper.title,
+          engagementReference: paper.engagement.reference_number,
+          engagementTitle: paper.engagement.title,
+          commentBody: body.slice(0, 400),
+        };
+
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: recipient.id,
+          title: `Comment on Working Paper: ${paper.title}`,
+          body: `${authorName} commented on "${paper.title}" (${paper.engagement.reference_number}): ${body.slice(0, 200)}`,
+          type: 'info',
+          referenceType: 'audit_engagement',
+          referenceId: paper.engagement_id,
+          eventKey: 'audit.working_paper.commented',
+          variables,
+        });
+
+        if (recipient.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: recipient.email,
+            subject: `New Comment on Working Paper (${paper.engagement.reference_number}): ${paper.title}`,
+            text: `Dear ${recipientName},\n\n${authorName} left a review comment on working paper "${paper.title}" (${paper.engagement.reference_number} — ${paper.engagement.title}).\n\nComment:\n"${body}"\n\nPlease log in to IAMS to view the working paper and respond.\n\nRegards,\nIAMS — Internal Audit System`,
+            eventKey: 'audit.working_paper.commented',
+            variables,
+          });
+        }
+      }
     }
 
     return mapWpCommentToResponse(comment);
@@ -357,10 +404,6 @@ export class WorkingPaperService implements IWorkingPaperService {
     });
     if (!paper) throw AppError.notFound('Audit working paper');
 
-    if (paper.status !== WorkingPaperStatus.Approved) {
-      throw AppError.badRequest('Only approved working papers can be exported');
-    }
-
     const auditorName = paper.created_by.display_name || paper.created_by.email;
     const exportDate = new Date().toISOString().slice(0, 10);
     const slug = paper.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -371,45 +414,24 @@ export class WorkingPaperService implements IWorkingPaperService {
     const sections = parseWorkingPaperSections(paper.content);
     const signOff = await this._buildSignOff(id);
 
+    const exportData: WorkingPaperPdfData = {
+      title: paper.title,
+      engagementReference: paper.engagement.reference_number,
+      engagementTitle: paper.engagement.title,
+      workingPaperType: paper.working_paper_type,
+      auditorName,
+      status: paper.status,
+      version: String(paper.version_number),
+      date: exportDate,
+      sections,
+      signOff,
+    };
+
     let buffer: Buffer;
     if (format === 'pdf') {
-      buffer = await this._renderWorkingPaperPdf({
-        title: paper.title,
-        engagementReference: paper.engagement.reference_number,
-        engagementTitle: paper.engagement.title,
-        workingPaperType: paper.working_paper_type,
-        auditorName,
-        status: paper.status,
-        version: String(paper.version_number),
-        date: exportDate,
-        sections,
-        signOff,
-      });
+      buffer = await this._renderWorkingPaperPdf(exportData);
     } else {
-      // The {content} placeholder takes plain text with line breaks — parse the
-      // stored sections (never the raw JSON string) and render each section's
-      // Markdown down to readable text, then append the typed sign-off.
-      const body = sections
-        .map((section, idx) => {
-          const heading = (section.title || `Section ${idx + 1}`).toUpperCase();
-          return `${heading}\n${markdownToPlainText(section.content)}`;
-        })
-        .join('\n\n');
-      const signOffText = signOff.length
-        ? `\n\nSIGN-OFF\n${signOff
-            .map((s) => `Approved by: ${s.name}${s.role ? ` (${s.role})` : ''} — ${s.date}`)
-            .join('\n')}\nDigitally signed in IAMS. Signature images appear in the signed PDF copy.`
-        : '';
-      buffer = await this.documentService.renderDocxTemplate('working_paper', {
-        title: paper.title,
-        engagementReference: paper.engagement.reference_number,
-        engagementTitle: paper.engagement.title,
-        auditorName,
-        date: exportDate,
-        status: paper.status,
-        version: String(paper.version_number),
-        content: body + signOffText,
-      });
+      buffer = await buildWorkingPaperDocx(exportData);
     }
 
     logger.info('Working paper exported', { workingPaperId: id, format });

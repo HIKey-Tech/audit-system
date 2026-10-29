@@ -10,6 +10,10 @@ const mapEvidenceToResponse = (evidence) => ({
     fileName: evidence.file_name,
     fileType: evidence.file_type,
     uploadedById: evidence.uploaded_by_id,
+    uploadedByName: evidence.uploaded_by
+        ? evidence.uploaded_by.display_name?.trim() || `${evidence.uploaded_by.first_name} ${evidence.uploaded_by.last_name}`.trim()
+        : undefined,
+    fileSize: evidence.document?.file_size,
     isDisputed: evidence.is_disputed,
     disputeReason: evidence.dispute_reason,
     uploadedAt: evidence.uploaded_at.toISOString(),

@@ -2,7 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.mapReportToResponse = void 0;
 const finding_response_dto_1 = require("../../../findings/dto/response/finding.response.dto");
-const mapReportToResponse = (report) => ({
+const mapReportToResponse = (report, extra) => ({
     id: report.id,
     engagementId: report.engagement_id,
     engagementReference: report.engagement?.reference_number,
@@ -15,6 +15,8 @@ const mapReportToResponse = (report) => ({
     versionNumber: report.version_number,
     documentId: report.document_id,
     templateId: report.template_id ?? null,
+    ...(extra?.signOffMode !== undefined && { signOffMode: extra.signOffMode }),
+    ...(extra?.comments !== undefined && { comments: extra.comments }),
     issuedAt: report.issued_at?.toISOString() ?? null,
     rejectionReason: report.rejection_reason,
     createdById: report.created_by_id,

@@ -2,7 +2,7 @@ import { z } from 'zod';
 export declare const CreateWorkingPaperTemplateRequestSchema: z.ZodObject<{
     name: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
-    auditType: z.ZodEnum<["it", "financial", "compliance", "systems", "all"]>;
+    auditType: z.ZodEnum<["it", "systems", "financial", "compliance", "operational", "pension", "procurement", "hr_payroll", "project", "special", "all"]>;
     sections: z.ZodArray<z.ZodObject<{
         title: z.ZodString;
         description: z.ZodString;
@@ -29,7 +29,7 @@ export declare const CreateWorkingPaperTemplateRequestSchema: z.ZodObject<{
         required: boolean;
         placeholder: string;
     }[];
-    auditType: "it" | "financial" | "compliance" | "systems" | "all";
+    auditType: "it" | "systems" | "financial" | "compliance" | "operational" | "pension" | "procurement" | "hr_payroll" | "project" | "special" | "all";
     description?: string | undefined;
     isActive?: boolean | undefined;
     isDefault?: boolean | undefined;
@@ -41,7 +41,7 @@ export declare const CreateWorkingPaperTemplateRequestSchema: z.ZodObject<{
         required: boolean;
         placeholder: string;
     }[];
-    auditType: "it" | "financial" | "compliance" | "systems" | "all";
+    auditType: "it" | "systems" | "financial" | "compliance" | "operational" | "pension" | "procurement" | "hr_payroll" | "project" | "special" | "all";
     description?: string | undefined;
     isActive?: boolean | undefined;
     isDefault?: boolean | undefined;
@@ -49,7 +49,7 @@ export declare const CreateWorkingPaperTemplateRequestSchema: z.ZodObject<{
 export declare const UpdateWorkingPaperTemplateRequestSchema: z.ZodObject<{
     name: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
-    auditType: z.ZodOptional<z.ZodEnum<["it", "financial", "compliance", "systems", "all"]>>;
+    auditType: z.ZodOptional<z.ZodEnum<["it", "systems", "financial", "compliance", "operational", "pension", "procurement", "hr_payroll", "project", "special", "all"]>>;
     sections: z.ZodOptional<z.ZodArray<z.ZodObject<{
         title: z.ZodString;
         description: z.ZodString;
@@ -78,7 +78,7 @@ export declare const UpdateWorkingPaperTemplateRequestSchema: z.ZodObject<{
         placeholder: string;
     }[] | undefined;
     isActive?: boolean | undefined;
-    auditType?: "it" | "financial" | "compliance" | "systems" | "all" | undefined;
+    auditType?: "it" | "systems" | "financial" | "compliance" | "operational" | "pension" | "procurement" | "hr_payroll" | "project" | "special" | "all" | undefined;
     isDefault?: boolean | undefined;
 }, {
     name?: string | undefined;
@@ -90,13 +90,13 @@ export declare const UpdateWorkingPaperTemplateRequestSchema: z.ZodObject<{
         placeholder: string;
     }[] | undefined;
     isActive?: boolean | undefined;
-    auditType?: "it" | "financial" | "compliance" | "systems" | "all" | undefined;
+    auditType?: "it" | "systems" | "financial" | "compliance" | "operational" | "pension" | "procurement" | "hr_payroll" | "project" | "special" | "all" | undefined;
     isDefault?: boolean | undefined;
 }>;
 export declare const WorkingPaperTemplateQuerySchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;
     pageSize: z.ZodDefault<z.ZodNumber>;
-    auditType: z.ZodOptional<z.ZodEnum<["it", "financial", "compliance", "systems", "all"]>>;
+    auditType: z.ZodOptional<z.ZodEnum<["it", "systems", "financial", "compliance", "operational", "pension", "procurement", "hr_payroll", "project", "special", "all"]>>;
     isActive: z.ZodOptional<z.ZodBoolean>;
     sortBy: z.ZodDefault<z.ZodEnum<["name", "audit_type", "created_at", "updated_at"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
@@ -106,14 +106,14 @@ export declare const WorkingPaperTemplateQuerySchema: z.ZodObject<{
     sortBy: "name" | "created_at" | "updated_at" | "audit_type";
     sortOrder: "asc" | "desc";
     isActive?: boolean | undefined;
-    auditType?: "it" | "financial" | "compliance" | "systems" | "all" | undefined;
+    auditType?: "it" | "systems" | "financial" | "compliance" | "operational" | "pension" | "procurement" | "hr_payroll" | "project" | "special" | "all" | undefined;
 }, {
     page?: number | undefined;
     pageSize?: number | undefined;
     sortBy?: "name" | "created_at" | "updated_at" | "audit_type" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
     isActive?: boolean | undefined;
-    auditType?: "it" | "financial" | "compliance" | "systems" | "all" | undefined;
+    auditType?: "it" | "systems" | "financial" | "compliance" | "operational" | "pension" | "procurement" | "hr_payroll" | "project" | "special" | "all" | undefined;
 }>;
 export declare const CreateReportTemplateRequestSchema: z.ZodObject<{
     name: z.ZodString;

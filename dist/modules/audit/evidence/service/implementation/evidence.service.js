@@ -109,6 +109,10 @@ class EvidenceService {
                 ...(query.findingId && { finding_id: query.findingId }),
             },
             orderBy: { uploaded_at: 'desc' },
+            include: {
+                uploaded_by: { select: { first_name: true, last_name: true, display_name: true } },
+                document: { select: { file_size: true } },
+            },
         });
         return evidence.map(evidence_response_dto_1.mapEvidenceToResponse);
     }

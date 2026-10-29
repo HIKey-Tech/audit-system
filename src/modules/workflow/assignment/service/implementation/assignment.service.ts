@@ -20,14 +20,16 @@ import {
   getSkillScore,
   rangesOverlap,
 } from '../../utility/assignment-matching.util';
-import { AssignStaffRequestDto, MyAssignmentsQueryDto } from '../../dto/request/assignment.request.dto';
+import { AssignStaffRequestDto, MyAssignmentsQueryDto, SubstituteStaffRequestDto } from '../../dto/request/assignment.request.dto';
 import {
   AssignmentResponseDto,
   WorkloadResponseDto,
   AssignmentCandidateDto,
   mapAssignmentToResponse,
 } from '../../dto/response/assignment.response.dto';
-import { IAssignmentService } from '../interface/assignment.service.interface';
+import { IAssignmentService, SubstituteStaffResultDto } from '../interface/assignment.service.interface';
+import { workflowApprovalService } from '../../../approval/service/implementation/approval.service';
+import { LIFECYCLE_NOTIFY_PERMISSION } from '../../../../audit/utility/lifecycle-notify.utility';
 
 const workflowUserSelect = Prisma.validator<Prisma.UserSelect>()({
   id: true,
@@ -210,6 +212,270 @@ export class AssignmentService implements IAssignmentService {
     });
 
     return mapAssignmentToResponse(assignment);
+  }
+
+  async substituteStaff(
+    dto: SubstituteStaffRequestDto,
+    actor: WorkflowActorContext,
+  ): Promise<SubstituteStaffResultDto> {
+    const canSubstitute =
+      actor.permissions.includes('assignment:create') ||
+      actor.permissions.includes('engagement:update') ||
+      actor.permissions.includes('*');
+    if (!canSubstitute) {
+      throw AppError.forbidden('You do not have permission to substitute engagement team members');
+    }
+
+    const engagement = await prisma.audit_Engagement.findFirst({
+      where: { id: dto.engagementId, deleted_at: null },
+      select: {
+        id: true,
+        title: true,
+        status: true,
+        reference_number: true,
+        sla_deadline: true,
+        lead_auditor_id: true,
+        audit_manager_id: true,
+        auditee_id: true,
+      },
+    });
+    if (!engagement) throw AppError.notFound('Audit engagement');
+    if (engagement.status === 'closed') {
+      throw AppError.badRequest('Cannot substitute team members on a closed engagement');
+    }
+
+    const incomingUser = await prisma.user.findFirst({
+      where: { id: dto.incomingUserId, deleted_at: null, is_active: true },
+      include: {
+        user_roles: {
+          include: {
+            role: {
+              include: {
+                role_permissions: { include: { permission: true } },
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!incomingUser) throw AppError.notFound('Incoming substitute user');
+    if (incomingUser.is_super_admin) {
+      throw AppError.badRequest('A platform administrator cannot be assigned to an audit team');
+    }
+    if (incomingUser.id === engagement.auditee_id) {
+      throw AppError.badRequest('The auditee on this engagement cannot be assigned to the audit team');
+    }
+
+    const incomingPerms = new Set(
+      incomingUser.user_roles.flatMap((ur) => ur.role.role_permissions.map((rp) => rp.permission.slug)),
+    );
+
+    const resolvedOutgoingId =
+      dto.outgoingUserId ??
+      (dto.role === 'lead_auditor'
+        ? engagement.lead_auditor_id
+        : dto.role === 'audit_manager'
+          ? engagement.audit_manager_id
+          : null);
+
+    if (resolvedOutgoingId && resolvedOutgoingId === dto.incomingUserId) {
+      throw AppError.badRequest('Incoming team member must be different from the outgoing member');
+    }
+
+    const outgoingUser = resolvedOutgoingId
+      ? await prisma.user.findUnique({
+          where: { id: resolvedOutgoingId },
+          select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+        })
+      : null;
+
+    if (dto.role === 'audit_manager') {
+      const requiredManagerPerms = ['working_paper:approve', 'report:approve', 'finding:close'];
+      const missing = requiredManagerPerms.filter((p) => !incomingPerms.has(p));
+      if (missing.length > 0) {
+        throw AppError.badRequest(
+          `Substitute audit manager must hold approval permissions: ${missing.join(', ')}`,
+        );
+      }
+      if (dto.incomingUserId === engagement.lead_auditor_id) {
+        throw AppError.badRequest('Audit manager and lead auditor must be different people');
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.audit_Engagement.update({
+          where: { id: dto.engagementId },
+          data: { audit_manager_id: dto.incomingUserId },
+        });
+        await tx.workflow_Assignment.deleteMany({
+          where: { engagement_id: dto.engagementId, user_id: dto.incomingUserId },
+        });
+        await workflowApprovalService.reassignEngagementManagerApprovals(
+          dto.engagementId,
+          engagement.audit_manager_id,
+          dto.incomingUserId,
+          tx,
+        );
+      });
+    } else if (dto.role === 'lead_auditor') {
+      if (!incomingPerms.has('working_paper:create')) {
+        throw AppError.badRequest('Substitute lead auditor must hold fieldwork permission (working_paper:create)');
+      }
+      if (dto.incomingUserId === engagement.audit_manager_id) {
+        throw AppError.badRequest('Lead auditor and audit manager must be different people');
+      }
+
+      await prisma.$transaction(async (tx) => {
+        await tx.audit_Engagement.update({
+          where: { id: dto.engagementId },
+          data: { lead_auditor_id: dto.incomingUserId },
+        });
+        await tx.workflow_Assignment.deleteMany({
+          where: { engagement_id: dto.engagementId, user_id: dto.incomingUserId },
+        });
+      });
+    } else {
+      // supporting_auditor
+      if (!incomingPerms.has('working_paper:create')) {
+        throw AppError.badRequest('Substitute supporting auditor must hold fieldwork permission (working_paper:create)');
+      }
+      if ([engagement.lead_auditor_id, engagement.audit_manager_id].includes(dto.incomingUserId)) {
+        throw AppError.badRequest('This user is already the lead auditor or audit manager on this engagement');
+      }
+
+      await prisma.$transaction(async (tx) => {
+        if (resolvedOutgoingId) {
+          await tx.workflow_Assignment.deleteMany({
+            where: { engagement_id: dto.engagementId, user_id: resolvedOutgoingId },
+          });
+        }
+        const alreadyAssigned = await tx.workflow_Assignment.findFirst({
+          where: {
+            engagement_id: dto.engagementId,
+            user_id: dto.incomingUserId,
+            role: WorkflowAssignmentRole.SupportingAuditor,
+          },
+          select: { id: true },
+        });
+        if (!alreadyAssigned) {
+          await tx.workflow_Assignment.create({
+            data: {
+              engagement_id: dto.engagementId,
+              user_id: dto.incomingUserId,
+              role: WorkflowAssignmentRole.SupportingAuditor,
+              assigned_by_id: actor.id,
+            },
+          });
+        }
+      });
+    }
+
+    const incomingUserName =
+      incomingUser.display_name?.trim() || `${incomingUser.first_name} ${incomingUser.last_name}`.trim();
+    const outgoingUserName = outgoingUser
+      ? outgoingUser.display_name?.trim() || `${outgoingUser.first_name} ${outgoingUser.last_name}`.trim()
+      : 'None (Additional Substitute)';
+    const olaDeadlineFormatted = engagement.sla_deadline.toISOString().slice(0, 10);
+    const roleLabel =
+      dto.role === 'audit_manager'
+        ? 'Audit Manager'
+        : dto.role === 'lead_auditor'
+          ? 'Lead Auditor'
+          : 'Supporting Auditor';
+
+    // Notify incoming user, outgoing user, lead, manager, and oversight holders
+    const oversightUsers = await prisma.user.findMany({
+      where: {
+        deleted_at: null,
+        is_active: true,
+        user_roles: {
+          some: {
+            role: {
+              role_permissions: {
+                some: { permission: { slug: { in: [LIFECYCLE_NOTIFY_PERMISSION, '*'] } } },
+              },
+            },
+          },
+        },
+      },
+      select: { id: true },
+    });
+
+    const notifyIds = new Set<string>([
+      dto.incomingUserId,
+      ...(resolvedOutgoingId ? [resolvedOutgoingId] : []),
+      engagement.lead_auditor_id,
+      engagement.audit_manager_id,
+      ...oversightUsers.map((u) => u.id),
+    ]);
+
+    const recipients = await prisma.user.findMany({
+      where: { id: { in: Array.from(notifyIds) }, deleted_at: null, is_active: true },
+      select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+    });
+
+    for (const r of recipients) {
+      const recipientName =
+        r.display_name?.trim() || `${r.first_name} ${r.last_name}`.trim() || r.email;
+      const variables = {
+        recipientName,
+        engagementTitle: engagement.title,
+        engagementReference: engagement.reference_number,
+        assignmentRole: roleLabel,
+        outgoingUserName,
+        incomingUserName,
+        reason: dto.reason,
+        olaDeadline: olaDeadlineFormatted,
+        slaDeadline: olaDeadlineFormatted,
+      };
+
+      await notificationQueueService.enqueueSafe('in_app', {
+        userId: r.id,
+        title: `Audit Team Substitution: ${engagement.reference_number}`,
+        body: `Team substitution on "${engagement.title}" (${engagement.reference_number}): ${incomingUserName} assigned as ${roleLabel} (replacing ${outgoingUserName}). Reason: ${dto.reason}`,
+        type: 'info',
+        referenceType: 'audit_engagement',
+        referenceId: dto.engagementId,
+        eventKey: 'workflow.assignment.substituted',
+        variables,
+      });
+
+      if (r.email) {
+        await notificationQueueService.enqueueSafe('email', {
+          to: r.email,
+          subject: `Audit Team Substitution (${engagement.reference_number}): ${engagement.title}`,
+          text: `Dear ${recipientName},\n\nA team member substitution has been recorded on audit engagement "${engagement.title}" (${engagement.reference_number}).\n\nRole: ${roleLabel}\nPrevious Member: ${outgoingUserName}\nIncoming Member: ${incomingUserName}\nReason: ${dto.reason}\nOLA Deadline: ${olaDeadlineFormatted}\n\nPlease log in to IAMS to review the updated engagement team.\n\nRegards,\nIAMS — Internal Audit System`,
+          eventKey: 'workflow.assignment.substituted',
+          variables,
+        });
+      }
+    }
+
+    logger.info('Audit team member substituted', {
+      engagementId: dto.engagementId,
+      role: dto.role,
+      outgoingUserId: resolvedOutgoingId,
+      incomingUserId: dto.incomingUserId,
+      actorId: actor.id,
+    });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'workflow.assignment.substitute',
+      module: 'workflow',
+      entityType: 'audit_engagement',
+      entityId: dto.engagementId,
+      oldValues: { role: dto.role, outgoingUserId: resolvedOutgoingId, outgoingUserName },
+      newValues: { role: dto.role, incomingUserId: dto.incomingUserId, incomingUserName, reason: dto.reason },
+    });
+
+    return {
+      engagementId: dto.engagementId,
+      role: dto.role,
+      outgoingUserId: resolvedOutgoingId,
+      outgoingUserName: outgoingUser ? outgoingUserName : null,
+      incomingUserId: dto.incomingUserId,
+      incomingUserName,
+      reason: dto.reason,
+    };
   }
 
   async removeAssignment(assignmentId: string, removedBy: WorkflowActorContext): Promise<void> {

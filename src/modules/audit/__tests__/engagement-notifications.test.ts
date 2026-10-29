@@ -70,5 +70,17 @@ describe('engagement assignment notification templates', () => {
     );
     expect(emailTpl).toBeDefined();
     expect(emailTpl?.body).toContain('OLA Deadline: {{olaDeadline}}');
+    expect(emailTpl?.body).not.toContain('SLA Deadline');
+  });
+
+  it('uses OLA Deadline across all audit escalation email templates', () => {
+    for (const level of [1, 2, 3, 4]) {
+      const emailTpl = NOTIFICATION_TEMPLATES.find(
+        (t) => t.eventKey === `audit.escalation.level_${level}` && t.channel === 'email',
+      );
+      expect(emailTpl).toBeDefined();
+      expect(emailTpl?.body).toContain('OLA Deadline: {{slaDeadline}}');
+      expect(emailTpl?.body).not.toContain('SLA Deadline');
+    }
   });
 });

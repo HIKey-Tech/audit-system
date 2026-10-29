@@ -12,5 +12,6 @@ export interface ITemplateService {
         templates: NotificationTemplateResponseDto[];
         meta: PaginationMeta;
     }>;
+    syncDefaultTemplates(): Promise<void>;
 }
 //# sourceMappingURL=template.service.interface.d.ts.map

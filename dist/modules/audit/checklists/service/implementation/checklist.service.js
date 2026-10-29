@@ -11,6 +11,7 @@ const engagement_visibility_util_1 = require("../../../engagement/utility/engage
 const audit_config_utility_1 = require("../../../utility/audit-config.utility");
 const checklist_response_dto_1 = require("../../dto/response/checklist.response.dto");
 const engagement_status_reconciler_1 = require("../../../engagement/service/implementation/engagement-status.reconciler");
+const document_control_extractor_utility_1 = require("../../../compliance/utility/document-control-extractor.utility");
 class ChecklistService {
     async populateChecklists(engagementId, actorId) {
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
@@ -47,7 +48,12 @@ class ChecklistService {
         });
     }
     async createChecklistItem(engagementId, dto, actor) {
-        (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:create');
+        if (!actor.permissions.includes('*') &&
+            !actor.permissions.includes('checklist:create') &&
+            !actor.permissions.includes('checklist:update') &&
+            !actor.permissions.includes('engagement:create')) {
+            (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:create');
+        }
         await this._assertEngagementTeam(engagementId, actor);
         const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
             where: { id: engagementId, deleted_at: null },
@@ -74,6 +80,170 @@ class ChecklistService {
             newValues: (0, checklist_response_dto_1.mapChecklistToResponse)(item),
         });
         return (0, checklist_response_dto_1.mapChecklistToResponse)(item);
+    }
+    async bulkCreateChecklistItems(engagementId, dto, actor) {
+        await this._assertEngagementTeam(engagementId, actor);
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { id: true, audit_type: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        const existingRefs = new Set((await prisma_client_1.prisma.audit_Checklist.findMany({
+            where: { engagement_id: engagementId },
+            select: { control_reference: true },
+        })).map((r) => r.control_reference.toUpperCase()));
+        const createdItems = [];
+        for (const ctrl of dto.controls) {
+            const ref = ctrl.controlReference.trim().slice(0, 200);
+            if (!ref || existingRefs.has(ref.toUpperCase()))
+                continue;
+            existingRefs.add(ref.toUpperCase());
+            const item = await prisma_client_1.prisma.audit_Checklist.create({
+                data: {
+                    engagement_id: engagementId,
+                    audit_type: ctrl.auditType?.trim() || engagement.audit_type,
+                    control_reference: ref,
+                    control_description: ctrl.controlDescription.trim(),
+                    test_procedure: ctrl.testProcedure.trim(),
+                },
+            });
+            createdItems.push((0, checklist_response_dto_1.mapChecklistToResponse)(item));
+        }
+        logger_util_1.logger.info('Bulk checklist items added to engagement', {
+            engagementId,
+            addedCount: createdItems.length,
+            actorId: actor.id,
+        });
+        return { addedCount: createdItems.length, items: createdItems };
+    }
+    async importFrameworkControls(engagementId, dto, actor) {
+        await this._assertEngagementTeam(engagementId, actor);
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { id: true, audit_type: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        const controls = await prisma_client_1.prisma.compliance_Control.findMany({
+            where: {
+                framework_id: { in: dto.frameworkIds },
+                is_active: true,
+                deleted_at: null,
+            },
+            orderBy: { control_reference: 'asc' },
+        });
+        if (controls.length === 0) {
+            return { addedCount: 0, items: [] };
+        }
+        return this.bulkCreateChecklistItems(engagementId, {
+            controls: controls.map((c) => ({
+                controlReference: c.control_reference,
+                controlDescription: c.control_description,
+                testProcedure: c.test_procedure,
+                auditType: dto.auditType || engagement.audit_type,
+            })),
+        }, actor);
+    }
+    async importDocumentControls(engagementId, file, dto, actor) {
+        await this._assertEngagementTeam(engagementId, actor);
+        const engagement = await prisma_client_1.prisma.audit_Engagement.findFirst({
+            where: { id: engagementId, deleted_at: null },
+            select: { id: true, audit_type: true },
+        });
+        if (!engagement)
+            throw app_error_1.AppError.notFound('Audit engagement');
+        let extractedControls = Array.isArray(dto.controls)
+            ? dto.controls
+                .map((c) => ({
+                controlReference: String(c.controlReference ?? '').trim(),
+                controlDescription: String(c.controlDescription ?? '').trim(),
+                testProcedure: String(c.testProcedure ?? '').trim(),
+            }))
+                .filter((c) => c.controlReference && c.controlDescription && c.testProcedure)
+            : [];
+        let suggestedCode = dto.frameworkCode?.trim() || '';
+        let suggestedName = dto.frameworkName?.trim() || '';
+        if (file && file.buffer) {
+            const extracted = await (0, document_control_extractor_utility_1.extractControlsFromDocument)(file.buffer, file.mimetype, file.originalname, dto.prefix || dto.frameworkCode);
+            if (!suggestedCode)
+                suggestedCode = extracted.suggestedCode;
+            if (!suggestedName)
+                suggestedName = extracted.suggestedName;
+            if (extractedControls.length === 0) {
+                extractedControls = extracted.controls;
+            }
+        }
+        else if (!suggestedCode || !suggestedName) {
+            const derived = (0, document_control_extractor_utility_1.deriveFrameworkMetaFromFilename)(dto.frameworkName || 'Policy Document', dto.prefix || dto.frameworkCode);
+            if (!suggestedCode)
+                suggestedCode = derived.suggestedCode;
+            if (!suggestedName)
+                suggestedName = derived.suggestedName;
+        }
+        if (extractedControls.length === 0) {
+            throw app_error_1.AppError.badRequest('No controls could be extracted from the uploaded document');
+        }
+        const auditType = dto.auditType?.trim() || engagement.audit_type;
+        const bulkResult = await this.bulkCreateChecklistItems(engagementId, {
+            controls: extractedControls.map((c) => ({
+                ...c,
+                auditType,
+            })),
+        }, actor);
+        let savedFrameworkId;
+        if (dto.saveToLibrary) {
+            const code = (dto.frameworkCode?.trim() || suggestedCode || 'DOC-001')
+                .replace(/[^A-Za-z0-9.\-]/g, '-')
+                .slice(0, 40);
+            const name = (dto.frameworkName?.trim() || suggestedName || code).slice(0, 160);
+            const category = (dto.category?.trim() || 'regulatory').slice(0, 50);
+            let framework = await prisma_client_1.prisma.compliance_Framework.findFirst({ where: { code } });
+            if (framework) {
+                framework = await prisma_client_1.prisma.compliance_Framework.update({
+                    where: { id: framework.id },
+                    data: { is_active: true, deleted_at: null, name, category },
+                });
+            }
+            else {
+                framework = await prisma_client_1.prisma.compliance_Framework.create({
+                    data: {
+                        code,
+                        name,
+                        category,
+                        is_active: true,
+                        created_by_id: actor.id,
+                    },
+                });
+            }
+            savedFrameworkId = framework.id;
+            const existingLibRefs = new Set((await prisma_client_1.prisma.compliance_Control.findMany({
+                where: { framework_id: framework.id, deleted_at: null },
+                select: { control_reference: true },
+            })).map((r) => r.control_reference.toUpperCase()));
+            for (const ctrl of extractedControls) {
+                const ref = ctrl.controlReference.trim().slice(0, 80);
+                if (!ref || existingLibRefs.has(ref.toUpperCase()))
+                    continue;
+                existingLibRefs.add(ref.toUpperCase());
+                await prisma_client_1.prisma.compliance_Control.create({
+                    data: {
+                        framework_id: framework.id,
+                        control_reference: ref,
+                        control_description: ctrl.controlDescription.trim(),
+                        test_procedure: ctrl.testProcedure.trim(),
+                        audit_type: auditType,
+                        is_active: true,
+                        created_by_id: actor.id,
+                    },
+                });
+            }
+        }
+        return {
+            addedCount: bulkResult.addedCount,
+            items: bulkResult.items,
+            frameworkId: savedFrameworkId,
+        };
     }
     async updateChecklistItem(id, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'checklist:update');

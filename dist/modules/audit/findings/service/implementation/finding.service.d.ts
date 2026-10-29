@@ -5,7 +5,7 @@ import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus } from '../../../domain/enum/audit.enum';
 import { CreateFindingRequestDto, FindingQueryDto, UpdateFindingRequestDto } from '../../dto/request/finding.request.dto';
 import { FindingResponseDto } from '../../dto/response/finding.response.dto';
-import { IFindingService } from '../interface/finding.service.interface';
+import { FindingCommentDto, IFindingService } from '../interface/finding.service.interface';
 export declare class FindingService implements IFindingService {
     private readonly approvalService;
     constructor(approvalService?: IApprovalService);
@@ -28,5 +28,7 @@ export declare class FindingService implements IFindingService {
     private _assertChecklistInEngagement;
     private _assertRiskExists;
     private _getFinding;
+    listComments(findingId: string, actor: ActorContext): Promise<FindingCommentDto[]>;
+    addComment(findingId: string, body: string, actor: ActorContext): Promise<FindingCommentDto>;
 }
 //# sourceMappingURL=finding.service.d.ts.map

@@ -76,19 +76,104 @@ export const AUDIT_DOMAIN_MAP: Record<AuditDomainKey, AuditDomainMeta> = Object.
 export const isAuditDomain = (value: string): value is AuditDomainKey =>
   value in AUDIT_DOMAIN_MAP;
 
+export type SelectableAuditTypeKey =
+  | 'it'
+  | 'systems'
+  | 'financial'
+  | 'compliance'
+  | 'operational'
+  | 'pension'
+  | 'procurement'
+  | 'hr_payroll'
+  | 'project'
+  | 'special';
+
+export interface SelectableAuditTypeOption {
+  value: SelectableAuditTypeKey;
+  label: string;
+  shortLabel: string;
+  description: string;
+}
+
+export const SELECTABLE_AUDIT_TYPES: SelectableAuditTypeOption[] = [
+  {
+    value: 'it',
+    label: 'IT Audit',
+    shortLabel: 'IT Audit',
+    description: 'Infrastructure, access management, cybersecurity & IT general controls (ISO 27001 / SOX ITGC)',
+  },
+  {
+    value: 'systems',
+    label: 'Systems Audit',
+    shortLabel: 'Systems',
+    description: 'System baselines, configuration drift, CAB change control, disaster recovery & capacity (ISO 22301)',
+  },
+  {
+    value: 'financial',
+    label: 'Financial Audit',
+    shortLabel: 'Financial',
+    description: 'Transactions, maker-checker controls, reconciliations & fixed assets',
+  },
+  {
+    value: 'compliance',
+    label: 'Compliance Audit',
+    shortLabel: 'Compliance',
+    description: 'Adherence to regulatory frameworks, ISO standards, NDPR & internal policies',
+  },
+  {
+    value: 'operational',
+    label: 'Operational Audit',
+    shortLabel: 'Operational',
+    description: 'Standard operating procedures, process efficiency, KPIs & turnaround times',
+  },
+  {
+    value: 'pension',
+    label: 'Pension Audit',
+    shortLabel: 'Pension',
+    description: 'PENCOM / PRA 2014 remittances, PFA reconciliations, RSA PINs & retirement benefits',
+  },
+  {
+    value: 'procurement',
+    label: 'Procurement Audit',
+    shortLabel: 'Procurement',
+    description: 'PPA 2007 competitive bidding, BPP thresholds, vendor due diligence & contract awards',
+  },
+  {
+    value: 'hr_payroll',
+    label: 'HR & Payroll Audit',
+    shortLabel: 'HR & Payroll',
+    description: 'Nominal roll reconciliation, statutory deductions (PAYE/NHF/NSITF) & ghost worker controls',
+  },
+  {
+    value: 'project',
+    label: 'Project / Capital Audit',
+    shortLabel: 'Project / Capital',
+    description: 'Project charter governance, milestone sign-offs, variation orders & capital budget tracking',
+  },
+  {
+    value: 'special',
+    label: 'Special Investigation / Audit',
+    shortLabel: 'Special',
+    description: 'Ad-hoc investigations, terms of reference, forensic evidence preservation & loss quantification',
+  },
+];
+
+const SELECTABLE_AUDIT_TYPE_MAP: Record<string, SelectableAuditTypeOption> = Object.fromEntries(
+  SELECTABLE_AUDIT_TYPES.map((t) => [t.value, t]),
+);
+
 /**
- * Display label for any stored `audit_type`. Handles `systems`, which pre-merge
- * records still carry, and the `all` sentinel used by templates and policies.
+ * Display label for any stored `audit_type`.
  */
 export const auditTypeLabel = (
   value: string | null | undefined,
   form: 'long' | 'short' = 'long',
 ): string => {
   if (!value) return '—';
-  const key = value === 'systems' ? 'it' : value; // pre-merge records
-  if (key === 'all') return form === 'short' ? 'All' : 'All audit types';
-  const meta = AUDIT_DOMAIN_MAP[key as AuditDomainKey];
+  if (value === 'all') return form === 'short' ? 'All' : 'All audit types';
+  const selectable = SELECTABLE_AUDIT_TYPE_MAP[value];
+  if (selectable) return form === 'short' ? selectable.shortLabel : selectable.label;
+  const meta = AUDIT_DOMAIN_MAP[value as AuditDomainKey];
   if (meta) return form === 'short' ? meta.short : meta.label;
-  // Values that are not domains at all — e.g. the `operational` finding category.
-  return key.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+  return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
 };

@@ -31,7 +31,7 @@ export const WhatsNextPanel = ({
     mutationFn: () => engagementsApi.updateStatus(engagement.id, 'in_progress'),
     onSuccess: () => {
       toast.success('Fieldwork started');
-      qc.invalidateQueries({ queryKey: ['engagements', engagement.id] });
+      qc.invalidateQueries({ queryKey: ['engagements'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to start fieldwork'),
   });

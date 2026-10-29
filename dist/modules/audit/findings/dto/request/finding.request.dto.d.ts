@@ -6,7 +6,7 @@ export declare const CreateFindingRequestSchema: z.ZodObject<{
     riskId: z.ZodOptional<z.ZodString>;
     title: z.ZodString;
     description: z.ZodString;
-    category: z.ZodEnum<[FindingCategory.It, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational]>;
+    category: z.ZodEnum<[FindingCategory.It, FindingCategory.Systems, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational, FindingCategory.Pension, FindingCategory.Procurement, FindingCategory.HrPayroll, FindingCategory.Project, FindingCategory.Special]>;
     severity: z.ZodNativeEnum<typeof FindingSeverity>;
     rootCause: z.ZodString;
     riskImplication: z.ZodString;
@@ -18,7 +18,7 @@ export declare const CreateFindingRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     title: string;
     description: string;
-    category: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational;
+    category: FindingCategory;
     severity: FindingSeverity;
     recommendation: string;
     auditeeId: string;
@@ -32,7 +32,7 @@ export declare const CreateFindingRequestSchema: z.ZodObject<{
 }, {
     title: string;
     description: string;
-    category: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational;
+    category: FindingCategory;
     severity: FindingSeverity;
     recommendation: string;
     auditeeId: string;
@@ -50,7 +50,7 @@ export declare const UpdateFindingRequestSchema: z.ZodObject<{
     riskId: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     title: z.ZodOptional<z.ZodString>;
     description: z.ZodOptional<z.ZodString>;
-    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational]>>;
+    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Systems, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational, FindingCategory.Pension, FindingCategory.Procurement, FindingCategory.HrPayroll, FindingCategory.Project, FindingCategory.Special]>>;
     severity: z.ZodOptional<z.ZodNativeEnum<typeof FindingSeverity>>;
     rootCause: z.ZodOptional<z.ZodString>;
     riskImplication: z.ZodOptional<z.ZodString>;
@@ -62,7 +62,7 @@ export declare const UpdateFindingRequestSchema: z.ZodObject<{
 }, "strip", z.ZodTypeAny, {
     title?: string | undefined;
     description?: string | undefined;
-    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     recommendation?: string | undefined;
     riskId?: string | null | undefined;
@@ -76,7 +76,7 @@ export declare const UpdateFindingRequestSchema: z.ZodObject<{
 }, {
     title?: string | undefined;
     description?: string | undefined;
-    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     recommendation?: string | undefined;
     riskId?: string | null | undefined;
@@ -101,7 +101,7 @@ export declare const FindingQuerySchema: z.ZodObject<{
     search: z.ZodOptional<z.ZodString>;
     severity: z.ZodOptional<z.ZodNativeEnum<typeof FindingSeverity>>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof FindingStatus>>;
-    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational]>>;
+    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Systems, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational, FindingCategory.Pension, FindingCategory.Procurement, FindingCategory.HrPayroll, FindingCategory.Project, FindingCategory.Special]>>;
     controlReference: z.ZodOptional<z.ZodString>;
     auditeeId: z.ZodOptional<z.ZodString>;
     riskId: z.ZodOptional<z.ZodString>;
@@ -115,7 +115,7 @@ export declare const FindingQuerySchema: z.ZodObject<{
     sortOrder: "asc" | "desc";
     search?: string | undefined;
     status?: FindingStatus | undefined;
-    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     universeId?: string | undefined;
     riskId?: string | undefined;
@@ -124,7 +124,7 @@ export declare const FindingQuerySchema: z.ZodObject<{
 }, {
     search?: string | undefined;
     status?: FindingStatus | undefined;
-    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
@@ -141,7 +141,7 @@ export declare const FindingExportQuerySchema: z.ZodObject<Omit<{
     search: z.ZodOptional<z.ZodString>;
     severity: z.ZodOptional<z.ZodNativeEnum<typeof FindingSeverity>>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof FindingStatus>>;
-    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational]>>;
+    category: z.ZodOptional<z.ZodEnum<[FindingCategory.It, FindingCategory.Systems, FindingCategory.Financial, FindingCategory.Compliance, FindingCategory.Operational, FindingCategory.Pension, FindingCategory.Procurement, FindingCategory.HrPayroll, FindingCategory.Project, FindingCategory.Special]>>;
     controlReference: z.ZodOptional<z.ZodString>;
     auditeeId: z.ZodOptional<z.ZodString>;
     riskId: z.ZodOptional<z.ZodString>;
@@ -156,7 +156,7 @@ export declare const FindingExportQuerySchema: z.ZodObject<Omit<{
     sortOrder: "asc" | "desc";
     search?: string | undefined;
     status?: FindingStatus | undefined;
-    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     universeId?: string | undefined;
     riskId?: string | undefined;
@@ -166,7 +166,7 @@ export declare const FindingExportQuerySchema: z.ZodObject<Omit<{
     format?: "csv" | "xlsx" | undefined;
     search?: string | undefined;
     status?: FindingStatus | undefined;
-    category?: FindingCategory.It | FindingCategory.Financial | FindingCategory.Compliance | FindingCategory.Operational | undefined;
+    category?: FindingCategory | undefined;
     severity?: FindingSeverity | undefined;
     sortBy?: "created_at" | "updated_at" | "status" | "due_date" | "severity" | undefined;
     sortOrder?: "asc" | "desc" | undefined;

@@ -33,6 +33,12 @@ export declare enum EscalationPolicyAuditType {
     Financial = "financial",
     Compliance = "compliance",
     Systems = "systems",
+    Operational = "operational",
+    Pension = "pension",
+    Procurement = "procurement",
+    HrPayroll = "hr_payroll",
+    Project = "project",
+    Special = "special",
     All = "all"
 }
 //# sourceMappingURL=workflow.enum.d.ts.map

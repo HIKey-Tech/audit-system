@@ -23,6 +23,12 @@ class AssignmentController {
          */
         this.router.post('/', (0, auth_middleware_1.requirePermission)('assignment:create'), (0, validate_middleware_1.validate)(assignment_request_dto_1.AssignStaffRequestSchema), this._assignStaff.bind(this));
         /**
+         * @route  POST /workflow/assignments/substitute
+         * @desc   Substitute or reassign a supporting auditor, lead auditor, or audit manager on an engagement
+         * @access Private - assignment:create OR engagement:update
+         */
+        this.router.post('/substitute', (0, auth_middleware_1.requireAnyPermission)('assignment:create', 'engagement:update'), (0, validate_middleware_1.validate)(assignment_request_dto_1.SubstituteStaffRequestSchema), this._substituteStaff.bind(this));
+        /**
          * @route  GET /workflow/assignments/engagement/:id
          * @desc   Get engagement assignments
          * @access Private - audit:read
@@ -64,6 +70,15 @@ class AssignmentController {
         try {
             const assignment = await this.assignmentService.assignStaff(req.body, req.user);
             res.status(201).json((0, api_response_type_1.buildResponse)(assignment, 'Staff assigned'));
+        }
+        catch (err) {
+            next(err);
+        }
+    }
+    async _substituteStaff(req, res, next) {
+        try {
+            const result = await this.assignmentService.substituteStaff(req.body, req.user);
+            res.status(200).json((0, api_response_type_1.buildResponse)(result, 'Team member substituted successfully'));
         }
         catch (err) {
             next(err);

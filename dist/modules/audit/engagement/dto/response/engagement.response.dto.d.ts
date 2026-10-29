@@ -25,6 +25,7 @@ export interface ViewerContext {
     canViewInternalEvidence: boolean;
     canViewChecklists: boolean;
     canViewDraftFindings: boolean;
+    canViewReports?: boolean;
 }
 export interface EngagementResponseDto {
     id: string;

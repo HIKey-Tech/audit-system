@@ -9,6 +9,8 @@ export declare class FindingController {
     private _updateFinding;
     private _updateFindingStatus;
     private _closeFinding;
+    private _listComments;
+    private _addComment;
     private _getFindingById;
     private _listFindings;
     private _listAllFindings;

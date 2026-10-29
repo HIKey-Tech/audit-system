@@ -19,10 +19,13 @@ export interface ChecklistTemplateControl {
 export type ChecklistTemplateConfig = Partial<Record<AuditType, ChecklistTemplateControl[]>>;
 export declare const DEFAULT_AUDIT_LIFECYCLE_RULES: AuditLifecycleRules;
 export declare const DEFAULT_AUDIT_SLA_RULES: AuditSlaRules;
+export declare const DEFAULT_SLA_CONFIG: Record<string, number>;
+export declare const DEFAULT_CHECKLIST_TEMPLATES: Record<AuditType, ChecklistTemplateControl[]>;
 export declare const DEFAULT_CHECKLIST_TEMPLATE_CONFIG: ChecklistTemplateConfig;
 export declare const getAuditLifecycleRules: () => Promise<AuditLifecycleRules>;
 export declare const getAuditSlaRules: () => Promise<AuditSlaRules>;
-export declare const getChecklistTemplateControls: (auditType: AuditType) => Promise<ChecklistTemplateControl[]>;
+export declare const getSlaDaysForAuditType: (auditType?: string) => Promise<number>;
+export declare const getChecklistTemplateControls: (auditType: AuditType | string) => Promise<ChecklistTemplateControl[]>;
 /**
  * Authoritative control source for populating an engagement's checklist.
  *
@@ -39,6 +42,7 @@ export declare const CHECKLIST_TEMPLATE_CONFIG_KEY = "checklist_templates";
  * type, falling back to the built-in CONTROL_SETS where nothing is configured.
  */
 export declare const getChecklistTemplateConfig: () => Promise<Record<AuditType, ChecklistTemplateControl[]>>;
+export declare const getChecklistTemplates: (auditType: AuditType | string) => Promise<ChecklistTemplateControl[]>;
 /** Validates and persists (upserts) the full checklist template config. */
 export declare const setChecklistTemplateConfig: (config: ChecklistTemplateConfig, actorId: string) => Promise<Record<AuditType, ChecklistTemplateControl[]>>;
 /**

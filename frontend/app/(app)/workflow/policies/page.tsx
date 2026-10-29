@@ -12,9 +12,10 @@ import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { workflowApi } from '@/lib/api/workflow';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { SELECTABLE_AUDIT_TYPES, auditTypeLabel } from '@/lib/audit-domains';
 import type { EscalationPolicy } from '@/lib/types/domain';
 
-const AUDIT_TYPES = ['it', 'financial', 'compliance', 'all'];
+const AUDIT_TYPES = [...SELECTABLE_AUDIT_TYPES.map((t) => t.value), 'all'];
 
 export default function EscalationPoliciesPage(): JSX.Element | null {
   const router = useRouter();
@@ -110,7 +111,7 @@ const PolicyRow = ({
 
   return (
     <tr>
-      <td className="px-4 py-3 font-medium text-text-primary capitalize">{auditType}</td>
+      <td className="px-4 py-3 font-medium text-text-primary">{auditTypeLabel(auditType)}</td>
       <td className="px-4 py-3"><Input type="number" value={l1} onChange={(e) => setL1(Number(e.target.value))} className="w-24 h-8" /></td>
       <td className="px-4 py-3"><Input type="number" value={l2} onChange={(e) => setL2(Number(e.target.value))} className="w-24 h-8" /></td>
       <td className="px-4 py-3"><Input type="number" value={l3} onChange={(e) => setL3(Number(e.target.value))} className="w-24 h-8" /></td>

@@ -36,6 +36,8 @@ import { EvidenceRequestService } from './evidence-request/service/implementatio
 import { EvidenceRequestController } from './evidence-request/controller/evidence-request.controller';
 import { TimeEntryService } from './time-entry/service/implementation/time-entry.service';
 import { TimeEntryController } from './time-entry/controller/time-entry.controller';
+import { PeriodicReportService } from './periodic-report/service/periodic-report.service';
+import { PeriodicReportController } from './periodic-report/controller/periodic-report.controller';
 
 export const createAuditModule = (): Router => {
   const router = Router();
@@ -87,6 +89,7 @@ export const createAuditModule = (): Router => {
   router.use('/audit', samplingController.router);
   router.use('/audit', new EvidenceRequestController(new EvidenceRequestService(documentService)).router);
   router.use('/audit', new TimeEntryController(new TimeEntryService()).router);
+  router.use('/audit', new PeriodicReportController(new PeriodicReportService()).router);
 
   return router;
 };

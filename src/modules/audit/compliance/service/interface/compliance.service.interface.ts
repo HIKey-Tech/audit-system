@@ -5,6 +5,7 @@ import {
   CreateFrameworkRequestDto,
   UpdateControlRequestDto,
   UpdateFrameworkRequestDto,
+  UploadFrameworkDocumentDto,
 } from '../../dto/request/compliance.request.dto';
 import {
   ComplianceCoverageDto,
@@ -14,6 +15,7 @@ import {
   RiskCoverageDto,
   TestedCoverageDto,
 } from '../../dto/response/compliance.response.dto';
+import { ExtractedDocumentResult } from '../../utility/document-control-extractor.utility';
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 
 export interface IComplianceService {
@@ -32,4 +34,19 @@ export interface IComplianceService {
   linkRisk(controlId: string, riskId: string, actor: ActorContext): Promise<ControlRiskDto[]>;
   unlinkRisk(controlId: string, riskId: string, actor: ActorContext): Promise<void>;
   getRiskCoverage(): Promise<RiskCoverageDto>;
+
+  extractDocumentPreview(
+    file: { buffer: Buffer; mimetype: string; originalname: string },
+    prefix?: string,
+  ): Promise<ExtractedDocumentResult>;
+
+  uploadFrameworkDocument(
+    file: { buffer: Buffer; mimetype: string; originalname: string } | undefined,
+    dto: UploadFrameworkDocumentDto,
+    actor: ActorContext,
+  ): Promise<{
+    framework: FrameworkResponseDto;
+    controlsCreated: number;
+    controls: ControlResponseDto[];
+  }>;
 }

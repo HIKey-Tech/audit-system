@@ -21,6 +21,8 @@ import {
 import type { Content, TableCell as PdfTableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
 import { format as formatDate } from 'date-fns';
 import { borderedTableLayout, hexColor, mm, renderPdf, severityBadge } from '../../../../../shared/utils/pdf.util';
+import { htmlFragmentToMarkdownAndImages } from '../../../working-papers/utility/working-paper.utility';
+import { markdownToPdfContent } from '../../../working-papers/utility/markdown.utility';
 import { prisma } from '../../../../../shared/prisma/prisma.client';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
@@ -74,6 +76,7 @@ interface ReportFinding {
   recommendation: string;
   status: string;
   dueDate: Date;
+  controlReference?: string | null;
   auditee: { displayName: string | null; firstName: string; lastName: string };
   followUp: {
     managementResponse: string | null;
@@ -98,6 +101,7 @@ interface ReportData {
     issuedAt: Date | null;
     createdById: string;
     templateId: string | null;
+    signOffMode?: 'cae_only' | 'cae_and_dg';
   };
   engagement: {
     id: string;
@@ -287,6 +291,7 @@ export class ReportGenerationService implements IReportGenerationService {
               where: { deleted_at: null },
               include: {
                 auditee: { select: { display_name: true, first_name: true, last_name: true } },
+                checklist: { select: { control_reference: true } },
                 follow_up: {
                   include: {
                     management_response_by: {
@@ -313,6 +318,19 @@ export class ReportGenerationService implements IReportGenerationService {
 
     if (!report) throw AppError.notFound('Audit report');
 
+    let signOffMode: 'cae_only' | 'cae_and_dg' = 'cae_and_dg';
+    try {
+      const modeRow = await prisma.system_Config.findUnique({
+        where: { key: `report.sign_off_mode.${reportId}` },
+        select: { value: true },
+      });
+      if (modeRow?.value === 'cae_only' || modeRow?.value === 'cae_and_dg') {
+        signOffMode = modeRow.value;
+      }
+    } catch {
+      // Fallback to default
+    }
+
     const sortedFindings = [...report.engagement.findings].sort(
       (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
     );
@@ -329,6 +347,7 @@ export class ReportGenerationService implements IReportGenerationService {
         issuedAt: report.issued_at,
         createdById: report.created_by_id,
         templateId: report.template_id ?? null,
+        signOffMode,
       },
       engagement: {
         id: report.engagement.id,
@@ -369,6 +388,7 @@ export class ReportGenerationService implements IReportGenerationService {
         recommendation: f.recommendation,
         status: f.status,
         dueDate: f.due_date,
+        controlReference: (f as { checklist?: { control_reference?: string } | null }).checklist?.control_reference ?? null,
         auditee: {
           displayName: f.auditee.display_name,
           firstName: f.auditee.first_name,
@@ -741,7 +761,10 @@ export class ReportGenerationService implements IReportGenerationService {
     classification: string,
     approval: ApprovalResponseDto | null,
   ): (Paragraph | Table)[] {
-    let finalApproverName = 'Managing Director / CEO';
+    let finalApproverName =
+      data.report.signOffMode === 'cae_only'
+        ? 'Head of Internal Audit (CAE)'
+        : 'Managing Director / CEO';
     if (approval?.steps) {
       const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
       if (approvedSteps.length > 0) {
@@ -994,11 +1017,17 @@ export class ReportGenerationService implements IReportGenerationService {
         );
       });
     } else {
-      const defaultApprovers = [
-        { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
-        { name: 'Executive Director (ED)', pos: 'Executive Director' },
-        { name: 'Managing Director / CEO', pos: 'MD / CEO' },
-      ];
+      const defaultApprovers =
+        data.report.signOffMode === 'cae_only'
+          ? [
+              { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
+              { name: 'Head of Internal Audit (CAE)', pos: 'Head of Internal Audit' },
+            ]
+          : [
+              { name: data.engagement.auditManager.displayName || 'Head of Unit (HOU)', pos: 'Head of Unit / Audit Manager' },
+              { name: 'Head of Internal Audit (CAE)', pos: 'Head of Internal Audit / ED' },
+              { name: 'Managing Director / CEO', pos: 'MD / CEO' },
+            ];
       defaultApprovers.forEach((def) => {
         dataRows.push(
           new TableRow({
@@ -1149,16 +1178,191 @@ export class ReportGenerationService implements IReportGenerationService {
     });
   }
 
+  private _htmlOrTextToDocxBlocks(rawText: string): (Paragraph | Table)[] {
+    if (!rawText || !rawText.trim()) {
+      return [new Paragraph({ children: [new TextRun({ text: 'N/A' })] })];
+    }
+    const { markdown, images } = htmlFragmentToMarkdownAndImages(rawText);
+    const blocks: (Paragraph | Table)[] = [];
+    const lines = markdown.split(/\r?\n/);
+    let idx = 0;
+
+    while (idx < lines.length) {
+      const line = lines[idx].trim();
+      if (!line) {
+        idx++;
+        continue;
+      }
+
+      // Markdown table block
+      if (line.startsWith('|') && line.endsWith('|')) {
+        const tableLines: string[] = [];
+        while (idx < lines.length && lines[idx].trim().startsWith('|')) {
+          const tLine = lines[idx].trim();
+          // Skip separator rows like | --- | --- |
+          if (!/^\|[\s\-:|]+\|$/.test(tLine)) {
+            tableLines.push(tLine);
+          }
+          idx++;
+        }
+        if (tableLines.length > 0) {
+          const rows = tableLines.map((rowStr, rIdx) => {
+            const cells = rowStr
+              .replace(/^\|/, '')
+              .replace(/\|$/, '')
+              .split('|')
+              .map((c) => c.trim());
+            return new TableRow({
+              children: cells.map(
+                (cellText) =>
+                  new TableCell({
+                    children: [
+                      new Paragraph({
+                        children: [
+                          new TextRun({
+                            text: cellText.replace(/\*\*/g, ''),
+                            bold: rIdx === 0,
+                            color: rIdx === 0 ? 'FFFFFF' : '1E293B',
+                          }),
+                        ],
+                      }),
+                    ],
+                    shading: rIdx === 0 ? { fill: '003087', type: ShadingType.SOLID } : undefined,
+                    verticalAlign: VerticalAlign.CENTER,
+                  }),
+              ),
+            });
+          });
+          blocks.push(
+            new Table({
+              rows,
+              width: { size: 100, type: WidthType.PERCENTAGE },
+              borders: {
+                top: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                bottom: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                left: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                right: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+                insideVertical: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
+              },
+            }),
+          );
+        }
+        continue;
+      }
+
+      // Headings
+      const headingMatch = line.match(/^(#{1,4})\s+(.+)$/);
+      if (headingMatch) {
+        const level = headingMatch[1].length;
+        const text = headingMatch[2].replace(/\*\*/g, '');
+        blocks.push(
+          new Paragraph({
+            spacing: { before: 160, after: 80 },
+            children: [
+              new TextRun({
+                text,
+                bold: true,
+                size: level === 1 ? 26 : level === 2 ? 24 : 22,
+                color: '003087',
+              }),
+            ],
+          }),
+        );
+        idx++;
+        continue;
+      }
+
+      // Bullet / numbered lists
+      const bulletMatch = line.match(/^[-*•]\s+(.+)$/);
+      if (bulletMatch) {
+        blocks.push(
+          new Paragraph({
+            spacing: { before: 40, after: 40 },
+            children: this._parseInlineBoldRuns(`• ${bulletMatch[1]}`),
+          }),
+        );
+        idx++;
+        continue;
+      }
+
+      blocks.push(
+        new Paragraph({
+          spacing: { before: 60, after: 60 },
+          children: this._parseInlineBoldRuns(line),
+        }),
+      );
+      idx++;
+    }
+
+    // Append inline base64 images
+    for (const dataUrl of images) {
+      const m = dataUrl.match(/^data:image\/(png|jpe?g);base64,(.+)$/i);
+      if (m) {
+        try {
+          const imgType = m[1].toLowerCase() === 'png' ? 'png' : 'jpg';
+          const imgBuffer = Buffer.from(m[2], 'base64');
+          blocks.push(
+            new Paragraph({
+              alignment: AlignmentType.CENTER,
+              spacing: { before: 120, after: 120 },
+              children: [
+                new ImageRun({
+                  type: imgType,
+                  data: imgBuffer,
+                  transformation: { width: 420, height: 260 },
+                }),
+              ],
+            }),
+          );
+        } catch {
+          // Ignore malformed inline image
+        }
+      }
+    }
+
+    return blocks.length > 0 ? blocks : [new Paragraph({ children: [new TextRun({ text: rawText })] })];
+  }
+
+  private _parseInlineBoldRuns(text: string): TextRun[] {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g).filter(Boolean);
+    return parts.map((part) => {
+      if (part.startsWith('**') && part.endsWith('**')) {
+        return new TextRun({ text: part.slice(2, -2), bold: true });
+      }
+      return new TextRun({ text: part });
+    });
+  }
+
+  private _htmlOrTextToPdfBlocks(rawText: string): Content[] {
+    if (!rawText || !rawText.trim()) {
+      return [{ text: 'N/A' }];
+    }
+    const { markdown, images } = htmlFragmentToMarkdownAndImages(rawText);
+    const content: Content[] = [...markdownToPdfContent(markdown)];
+    for (const dataUrl of images) {
+      if (/^data:image\/(png|jpe?g);base64,/i.test(dataUrl)) {
+        content.push({
+          image: dataUrl,
+          fit: [440, 280],
+          alignment: 'center',
+          margin: [0, 6, 0, 8],
+        });
+      }
+    }
+    return content.length > 0 ? content : [{ text: rawText }];
+  }
+
   private _buildDocxSectionContent(key: string, data: ReportData): (Paragraph | Table)[] {
     switch (key) {
       case 'executive_summary':
-        return [new Paragraph({ children: [new TextRun({ text: data.report.executiveSummary })] })];
+        return this._htmlOrTextToDocxBlocks(data.report.executiveSummary);
       case 'background':
         return [new Paragraph({ children: [new TextRun({ text: 'Refer to engagement details above.' })] })];
       case 'objectives':
-        return [new Paragraph({ children: [new TextRun({ text: data.report.scope })] })];
+        return this._htmlOrTextToDocxBlocks(data.report.scope);
       case 'methodology':
-        return [new Paragraph({ children: [new TextRun({ text: data.report.methodology })] })];
+        return this._htmlOrTextToDocxBlocks(data.report.methodology);
       case 'findings_summary':
         return [this._buildDocxFindingsSummaryTable(data.findings)];
       case 'detailed_findings':
@@ -1356,7 +1560,7 @@ export class ReportGenerationService implements IReportGenerationService {
         }),
       );
 
-      // Management Response
+      // Management Response (always shown so the report captures auditee response status)
       if (f.followUp?.managementResponse) {
         const responder = f.followUp.managementResponseBy;
         const responderName =
@@ -1379,10 +1583,20 @@ export class ReportGenerationService implements IReportGenerationService {
           new Paragraph({
             children: [
               new TextRun({
-                text: `Submitted by: ${responderName} on ${responseDate}`,
+                text: `Submitted by: ${responderName}${responseDate ? ` on ${responseDate}` : ''}`,
                 italics: true,
                 size: 20,
               }),
+            ],
+          }),
+        );
+      } else {
+        result.push(
+          new Paragraph({
+            spacing: { before: 120 },
+            children: [
+              new TextRun({ text: 'Management Response: ', bold: true }),
+              new TextRun({ text: 'Awaiting management response from auditee.', italics: true }),
             ],
           }),
         );
@@ -1450,71 +1664,93 @@ export class ReportGenerationService implements IReportGenerationService {
       `${finding.auditee.firstName} ${finding.auditee.lastName}`.trim() ??
       'N/A';
 
+    const rows: TableRow[] = [
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: 'Severity', bold: true })] })],
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
+          }),
+          this._severityDocxCell(finding.severity),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: 'Category', bold: true })] })],
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: FINDING_CATEGORY_LABEL[finding.category] ?? finding.category })] })],
+          }),
+        ],
+      }),
+    ];
+
+    if (finding.controlReference) {
+      rows.push(
+        new TableRow({
+          children: [
+            new TableCell({
+              children: [new Paragraph({ children: [new TextRun({ text: 'Control Reference', bold: true })] })],
+              width: { size: 20, type: WidthType.PERCENTAGE },
+              shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
+            }),
+            new TableCell({
+              children: [new Paragraph({ children: [new TextRun({ text: finding.controlReference })] })],
+            }),
+          ],
+        }),
+      );
+    }
+
+    rows.push(
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: 'Status', bold: true })] })],
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: FINDING_STATUS_LABEL[finding.status] ?? finding.status })] })],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: 'Due Date', bold: true })] })],
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
+          }),
+          new TableCell({
+            children: [
+              new Paragraph({
+                children: [new TextRun({ text: formatDate(finding.dueDate, 'dd MMM yyyy') })],
+              }),
+            ],
+          }),
+        ],
+      }),
+      new TableRow({
+        children: [
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: 'Auditee', bold: true })] })],
+            width: { size: 20, type: WidthType.PERCENTAGE },
+            shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
+          }),
+          new TableCell({
+            children: [new Paragraph({ children: [new TextRun({ text: auditeeName })] })],
+          }),
+        ],
+      }),
+    );
+
     return new Table({
-      rows: [
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: 'Severity', bold: true })] })],
-              width: { size: 20, type: WidthType.PERCENTAGE },
-              shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
-            }),
-            this._severityDocxCell(finding.severity),
-          ],
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: 'Category', bold: true })] })],
-              width: { size: 20, type: WidthType.PERCENTAGE },
-              shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
-            }),
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: FINDING_CATEGORY_LABEL[finding.category] ?? finding.category })] })],
-            }),
-          ],
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: 'Status', bold: true })] })],
-              width: { size: 20, type: WidthType.PERCENTAGE },
-              shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
-            }),
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: FINDING_STATUS_LABEL[finding.status] ?? finding.status })] })],
-            }),
-          ],
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: 'Due Date', bold: true })] })],
-              width: { size: 20, type: WidthType.PERCENTAGE },
-              shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
-            }),
-            new TableCell({
-              children: [
-                new Paragraph({
-                  children: [new TextRun({ text: formatDate(finding.dueDate, 'dd MMM yyyy') })],
-                }),
-              ],
-            }),
-          ],
-        }),
-        new TableRow({
-          children: [
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: 'Auditee', bold: true })] })],
-              width: { size: 20, type: WidthType.PERCENTAGE },
-              shading: { fill: 'F8F9FA', type: ShadingType.SOLID },
-            }),
-            new TableCell({
-              children: [new Paragraph({ children: [new TextRun({ text: auditeeName })] })],
-            }),
-          ],
-        }),
-      ],
+      rows,
       width: { size: 100, type: WidthType.PERCENTAGE },
       borders: {
         top: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
@@ -1562,14 +1798,19 @@ export class ReportGenerationService implements IReportGenerationService {
       'N/A';
     const auditManagerTitle = data.engagement.auditManager.jobTitle ?? '';
 
-    let caeApproverName = 'N/A';
+    let caeApproverName =
+      data.report.signOffMode === 'cae_only'
+        ? 'Head of Internal Audit (Pending)'
+        : 'Head of Internal Audit / DG (Pending)';
     if (approval?.steps) {
       const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
       const highest =
         approvedSteps.length > 0
           ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
           : undefined;
-      caeApproverName = highest?.approver?.displayName ?? 'N/A';
+      if (highest?.approver?.displayName) {
+        caeApproverName = highest.approver.displayName;
+      }
     }
 
     return new Table({
@@ -1686,14 +1927,19 @@ export class ReportGenerationService implements IReportGenerationService {
       'N/A';
     const auditManagerTitle = data.engagement.auditManager.jobTitle ?? '';
 
-    let caeApproverName = 'N/A';
+    let caeApproverName =
+      data.report.signOffMode === 'cae_only'
+        ? 'Head of Internal Audit (Pending)'
+        : 'Head of Internal Audit / DG (Pending)';
     if (approval?.steps) {
       const approvedSteps = approval.steps.filter((s) => s.status === 'approved');
       const highest =
         approvedSteps.length > 0
           ? approvedSteps.reduce((max, s) => (s.level > max.level ? s : max))
           : undefined;
-      caeApproverName = highest?.approver?.displayName ?? 'N/A';
+      if (highest?.approver?.displayName) {
+        caeApproverName = highest.approver.displayName;
+      }
     }
 
     const findingsSummaryTable: Content = {
@@ -1723,18 +1969,25 @@ export class ReportGenerationService implements IReportGenerationService {
       const auditeeName =
         f.auditee.displayName ?? `${f.auditee.firstName} ${f.auditee.lastName}`.trim() ?? 'N/A';
 
+      const detailsBody: PdfTableCell[][] = [
+        [labelCell('Severity'), severityBadge(f.severity)],
+        [labelCell('Category'), { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category }],
+      ];
+      if (f.controlReference) {
+        detailsBody.push([labelCell('Control Reference'), { text: f.controlReference }]);
+      }
+      detailsBody.push(
+        [labelCell('Status'), { text: FINDING_STATUS_LABEL[f.status] ?? f.status }],
+        [labelCell('Due Date'), { text: formatDate(f.dueDate, 'dd MMM yyyy') }],
+        [labelCell('Auditee'), { text: auditeeName }],
+      );
+
       detailedFindingsContent.push(
         { text: `Finding ${idx + 1}: ${f.title}`, bold: true, fontSize: 12, margin: [0, 14, 0, 6] },
         {
           table: {
             widths: [110, '*'],
-            body: [
-              [labelCell('Severity'), severityBadge(f.severity)],
-              [labelCell('Category'), { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category }],
-              [labelCell('Status'), { text: FINDING_STATUS_LABEL[f.status] ?? f.status }],
-              [labelCell('Due Date'), { text: formatDate(f.dueDate, 'dd MMM yyyy') }],
-              [labelCell('Auditee'), { text: auditeeName }],
-            ],
+            body: detailsBody,
           },
           layout: borderedTableLayout,
           margin: [0, 0, 0, 6],
@@ -1756,7 +2009,11 @@ export class ReportGenerationService implements IReportGenerationService {
           : '';
         detailedFindingsContent.push(
           labeled('Management Response', f.followUp.managementResponse),
-          { text: `Submitted by: ${responderName} on ${responseDate}`, italics: true, fontSize: 10, color: '#64748B', margin: [0, 0, 0, 3] },
+          { text: `Submitted by: ${responderName}${responseDate ? ` on ${responseDate}` : ''}`, italics: true, fontSize: 10, color: '#64748B', margin: [0, 0, 0, 3] },
+        );
+      } else {
+        detailedFindingsContent.push(
+          labeled('Management Response', 'Awaiting management response from auditee.'),
         );
       }
 
@@ -1787,16 +2044,16 @@ export class ReportGenerationService implements IReportGenerationService {
       sectionsContent.push({ text: `${idx + 1}. ${section.title}`, style: 'sectionTitle', margin: [0, 18, 0, 8] });
       switch (section.key) {
         case 'executive_summary':
-          sectionsContent.push({ text: data.report.executiveSummary });
+          sectionsContent.push(...this._htmlOrTextToPdfBlocks(data.report.executiveSummary));
           break;
         case 'background':
           sectionsContent.push({ text: 'Refer to engagement details above.' });
           break;
         case 'objectives':
-          sectionsContent.push({ text: data.report.scope });
+          sectionsContent.push(...this._htmlOrTextToPdfBlocks(data.report.scope));
           break;
         case 'methodology':
-          sectionsContent.push({ text: data.report.methodology });
+          sectionsContent.push(...this._htmlOrTextToPdfBlocks(data.report.methodology));
           break;
         case 'findings_summary':
           sectionsContent.push(findingsSummaryTable);
@@ -1850,7 +2107,11 @@ export class ReportGenerationService implements IReportGenerationService {
         const name = step.approver?.displayName || `Approver (Level ${step.level})`;
         const position =
           step.approver?.jobTitle ||
-          (step.level === 1 ? 'Head of Unit / Reviewer' : step.level === 2 ? 'Executive Director' : 'Managing Director / CEO');
+          (step.level === 1
+            ? 'Head of Unit / Reviewer'
+            : step.level === 2
+              ? 'Head of Internal Audit (CAE)'
+              : 'Director General / CEO');
         const sig = sigImg(step.id);
         let sigCell: PdfTableCell;
         if (step.status === 'approved') {
@@ -1863,11 +2124,16 @@ export class ReportGenerationService implements IReportGenerationService {
         const dateStr = step.actedAt ? formatDate(new Date(step.actedAt), 'dd/MM/yyyy') : '—';
         approvalListPdfRows.push([{ text: name, bold: true }, { text: position }, sigCell, { text: dateStr, alignment: 'center' }]);
       });
+    } else if (data.report.signOffMode === 'cae_only') {
+      approvalListPdfRows.push(
+        [{ text: auditManagerName, bold: true }, { text: auditManagerTitle || 'Head of Unit / Audit Manager' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+        [{ text: 'Head of Internal Audit (CAE)', bold: true }, { text: 'Head of Internal Audit' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+      );
     } else {
       approvalListPdfRows.push(
         [{ text: auditManagerName, bold: true }, { text: auditManagerTitle || 'Head of Unit / Audit Manager' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
-        [{ text: 'Executive Director (ED)', bold: true }, { text: 'Executive Director' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
-        [{ text: 'Managing Director / CEO', bold: true }, { text: 'MD / CEO' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+        [{ text: 'Head of Internal Audit (CAE)', bold: true }, { text: 'Head of Internal Audit' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
+        [{ text: 'Director General / CEO', bold: true }, { text: 'Director General / MD' }, { text: 'Pending Submission', italics: true, color: '#64748B' }, { text: '—', alignment: 'center' }],
       );
     }
 

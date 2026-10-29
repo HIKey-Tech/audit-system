@@ -1,10 +1,22 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
+import multer from 'multer';
+import { authenticate, requireAnyPermission, requirePermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
-import { CreateChecklistItemRequestSchema, UpdateChecklistItemRequestSchema, UpdateChecklistTemplatesRequestSchema } from '../dto/request/checklist.request.dto';
+import {
+  BulkCreateChecklistItemsRequestSchema,
+  CreateChecklistItemRequestSchema,
+  ImportFrameworkChecklistsRequestSchema,
+  UpdateChecklistItemRequestSchema,
+  UpdateChecklistTemplatesRequestSchema,
+} from '../dto/request/checklist.request.dto';
 import { AuditType } from '../../domain/enum/audit.enum';
 import { IChecklistService } from '../service/interface/checklist.service.interface';
+
+const checklistDocumentUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 15 * 1024 * 1024 },
+});
 
 export class ChecklistController {
   public readonly router: Router;
@@ -50,9 +62,50 @@ export class ChecklistController {
     /**
      * @route  POST /audit/engagements/:id/checklists
      * @desc   Add a custom checklist item to an engagement
-     * @access Private - checklist:create
+     * @access Private - checklist:create or checklist:update
      */
-    this.router.post('/engagements/:id/checklists', requirePermission('checklist:create'), validate(CreateChecklistItemRequestSchema), this._createChecklistItem.bind(this));
+    this.router.post(
+      '/engagements/:id/checklists',
+      requireAnyPermission('checklist:create', 'checklist:update', 'engagement:create'),
+      validate(CreateChecklistItemRequestSchema),
+      this._createChecklistItem.bind(this),
+    );
+
+    /**
+     * @route  POST /audit/engagements/:id/checklists/items
+     * @desc   Bulk-add custom/previewed checklist controls to an engagement
+     * @access Private - checklist:update
+     */
+    this.router.post(
+      '/engagements/:id/checklists/items',
+      requireAnyPermission('checklist:update', 'checklist:create', 'engagement:create'),
+      validate(BulkCreateChecklistItemsRequestSchema),
+      this._bulkCreateChecklistItems.bind(this),
+    );
+
+    /**
+     * @route  POST /audit/engagements/:id/checklists/import-framework
+     * @desc   Import active controls from one or more compliance frameworks into an engagement checklist
+     * @access Private - checklist:update or engagement:create
+     */
+    this.router.post(
+      '/engagements/:id/checklists/import-framework',
+      requireAnyPermission('checklist:update', 'checklist:create', 'engagement:create'),
+      validate(ImportFrameworkChecklistsRequestSchema),
+      this._importFrameworkControls.bind(this),
+    );
+
+    /**
+     * @route  POST /audit/engagements/:id/checklists/import-document
+     * @desc   Extract controls from an uploaded Act/Policy/Framework document and import into engagement checklist
+     * @access Private - checklist:update or engagement:create
+     */
+    this.router.post(
+      '/engagements/:id/checklists/import-document',
+      requireAnyPermission('checklist:update', 'checklist:create', 'engagement:create'),
+      checklistDocumentUpload.single('file'),
+      this._importDocumentControls.bind(this),
+    );
 
     /**
      * @route  GET /audit/engagements/:id/checklists/progress
@@ -125,6 +178,59 @@ export class ChecklistController {
     try {
       const item = await this.checklistService.createChecklistItem(req.params.id, req.body, req.user!);
       res.status(201).json(buildResponse(item, 'Checklist item added'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _bulkCreateChecklistItems(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await this.checklistService.bulkCreateChecklistItems(req.params.id, req.body, req.user!);
+      res.status(201).json(buildResponse(result, `${result.addedCount} checklist item(s) added`));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _importFrameworkControls(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await this.checklistService.importFrameworkControls(req.params.id, req.body, req.user!);
+      res.status(201).json(buildResponse(result, `${result.addedCount} control(s) imported from framework`));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _importDocumentControls(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      let parsedControls = req.body?.controls;
+      if (typeof parsedControls === 'string' && parsedControls.trim()) {
+        try {
+          parsedControls = JSON.parse(parsedControls);
+        } catch {
+          parsedControls = undefined;
+        }
+      }
+      const saveToLibrary =
+        req.body?.saveToLibrary === true ||
+        req.body?.saveToLibrary === 'true' ||
+        req.body?.saveToLibrary === '1';
+
+      const result = await this.checklistService.importDocumentControls(
+        req.params.id,
+        req.file,
+        {
+          prefix: req.body?.prefix || undefined,
+          saveToLibrary,
+          frameworkName: req.body?.frameworkName || undefined,
+          frameworkCode: req.body?.frameworkCode || undefined,
+          category: req.body?.category || undefined,
+          auditType: req.body?.auditType || undefined,
+          controls: Array.isArray(parsedControls) ? parsedControls : undefined,
+        },
+        req.user!,
+      );
+      res.status(201).json(buildResponse(result, `${result.addedCount} control(s) imported from document`));
     } catch (err) {
       next(err);
     }

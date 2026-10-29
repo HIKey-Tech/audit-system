@@ -396,7 +396,17 @@ export interface RaiseFindingInput {
   engagementId?: string;
   title: string;
   description?: string;
-  category: 'it' | 'financial' | 'compliance' | 'operational';
+  category:
+    | 'it'
+    | 'systems'
+    | 'financial'
+    | 'compliance'
+    | 'operational'
+    | 'pension'
+    | 'procurement'
+    | 'hr_payroll'
+    | 'project'
+    | 'special';
   severity: 'critical' | 'high' | 'medium' | 'low' | 'informational';
   rootCause: string;
   riskImplication: string;

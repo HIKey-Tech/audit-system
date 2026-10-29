@@ -1,10 +1,11 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission, requireAnyPermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
   AssignStaffRequestSchema,
   MyAssignmentsQuerySchema,
+  SubstituteStaffRequestSchema,
 } from '../dto/request/assignment.request.dto';
 import { IAssignmentService } from '../service/interface/assignment.service.interface';
 
@@ -25,6 +26,18 @@ export class AssignmentController {
      * @access Private - audit:write
      */
     this.router.post('/', requirePermission('assignment:create'), validate(AssignStaffRequestSchema), this._assignStaff.bind(this));
+
+    /**
+     * @route  POST /workflow/assignments/substitute
+     * @desc   Substitute or reassign a supporting auditor, lead auditor, or audit manager on an engagement
+     * @access Private - assignment:create OR engagement:update
+     */
+    this.router.post(
+      '/substitute',
+      requireAnyPermission('assignment:create', 'engagement:update'),
+      validate(SubstituteStaffRequestSchema),
+      this._substituteStaff.bind(this),
+    );
 
     /**
      * @route  GET /workflow/assignments/engagement/:id
@@ -74,6 +87,15 @@ export class AssignmentController {
     try {
       const assignment = await this.assignmentService.assignStaff(req.body, req.user!);
       res.status(201).json(buildResponse(assignment, 'Staff assigned'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _substituteStaff(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const result = await this.assignmentService.substituteStaff(req.body, req.user!);
+      res.status(200).json(buildResponse(result, 'Team member substituted successfully'));
     } catch (err) {
       next(err);
     }

@@ -380,7 +380,7 @@ export const registerAllJobs = (): void => {
       let notificationsSent = 0;
 
       for (const engagement of engagements) {
-        const slaDeadline = engagement.sla_deadline.toISOString();
+        const slaDeadline = engagement.sla_deadline.toISOString().slice(0, 10);
         const daysRemaining = Math.max(
           0,
           Math.ceil((engagement.sla_deadline.getTime() - now.getTime()) / 86_400_000),
@@ -394,6 +394,7 @@ export const registerAllJobs = (): void => {
             recipientName,
             engagementTitle: engagement.title,
             engagementReference: engagement.reference_number,
+            olaDeadline: slaDeadline,
             slaDeadline,
             daysRemaining: String(daysRemaining),
           };

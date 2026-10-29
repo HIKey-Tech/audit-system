@@ -1,9 +1,19 @@
 import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 import { WorkflowActorContext } from '../../../domain/entity/workflow.entity';
-import { AssignStaffRequestDto, MyAssignmentsQueryDto } from '../../dto/request/assignment.request.dto';
+import { AssignStaffRequestDto, MyAssignmentsQueryDto, SubstituteStaffRequestDto } from '../../dto/request/assignment.request.dto';
 import { AssignmentResponseDto, WorkloadResponseDto, AssignmentCandidateDto } from '../../dto/response/assignment.response.dto';
+export interface SubstituteStaffResultDto {
+    engagementId: string;
+    role: 'supporting_auditor' | 'lead_auditor' | 'audit_manager';
+    outgoingUserId: string | null;
+    outgoingUserName: string | null;
+    incomingUserId: string;
+    incomingUserName: string;
+    reason: string;
+}
 export interface IAssignmentService {
     assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto>;
+    substituteStaff(dto: SubstituteStaffRequestDto, actor: WorkflowActorContext): Promise<SubstituteStaffResultDto>;
     removeAssignment(assignmentId: string, removedBy: WorkflowActorContext): Promise<void>;
     getAssignments(engagementId: string, actor: WorkflowActorContext): Promise<AssignmentResponseDto[]>;
     getVisibleAssignments(actor: WorkflowActorContext): Promise<AssignmentResponseDto[]>;
