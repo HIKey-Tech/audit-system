@@ -2,9 +2,9 @@
 
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { usePathname, useRouter } from 'next/navigation';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Bell, Menu, Search } from 'lucide-react';
+import { Bell, CircleHelp, Menu, Search } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { cn } from '@/lib/utils/cn';
@@ -12,11 +12,13 @@ import { formatRelative } from '@/lib/utils/format';
 import { notificationsApi } from '@/lib/api/notifications';
 import { notificationHref } from '@/lib/notification-links';
 import { titleForPath } from '@/lib/navigation';
+import { helpArticleForPath } from '@/lib/help/context';
 import { useSession } from '@/components/providers/AuthProvider';
 import { useLayout } from '@/components/providers/LayoutProvider';
 
 export const Header = (): JSX.Element => {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const router = useRouter();
   const session = useSession();
   const qc = useQueryClient();
@@ -24,6 +26,7 @@ export const Header = (): JSX.Element => {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const title = titleForPath(pathname);
+  const helpHref = `/help/center?a=${helpArticleForPath(pathname, searchParams?.get('tab'))}`;
 
 
   const { data: unread } = useQuery({
@@ -88,6 +91,16 @@ export const Header = (): JSX.Element => {
             Ctrl K
           </kbd>
         </button>
+
+        {/* Contextual help — opens the guide page for whatever screen the user is on. */}
+        <Link
+          href={helpHref}
+          aria-label="Help for this page"
+          title="Help for this page"
+          className="inline-flex h-9 w-9 items-center justify-center rounded-md text-text-secondary transition-colors hover:bg-surface-alt hover:text-primary"
+        >
+          <CircleHelp className="h-4 w-4" />
+        </Link>
 
         <div className="relative" ref={ref}>
           <button

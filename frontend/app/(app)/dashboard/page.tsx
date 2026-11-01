@@ -21,6 +21,7 @@ import { RiskHeatMap } from '@/components/dashboard/RiskHeatMap';
 import { EscalationsCard } from '@/components/dashboard/EscalationsCard';
 import { AuditIntelligenceCard } from '@/components/dashboard/AuditIntelligenceCard';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { GettingStarted } from '@/components/dashboard/GettingStarted';
 
 export default function DashboardPage(): JSX.Element {
   const { dashboard, quickActions, isAuditee, canManageAuditProgramme, hasPermission } = usePermissions();
@@ -52,6 +53,8 @@ export default function DashboardPage(): JSX.Element {
       />
 
       <section className="space-y-6">
+        <GettingStarted />
+
         {/* Auditees log in rarely — spell out what is expected of them. */}
         {isAuditee && (
           <Card padded>

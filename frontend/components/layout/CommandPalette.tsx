@@ -14,6 +14,7 @@ import {
   Server,
   Users,
   Send,
+  LifeBuoy,
 } from 'lucide-react';
 
 import { cn } from '@/lib/utils/cn';
@@ -28,6 +29,7 @@ import { assetsApi } from '@/lib/api/assets';
 import { usersApi } from '@/lib/api/users';
 import { requestsApi } from '@/lib/api/workflow';
 import { auditTypeLabel } from '@/lib/audit-domains';
+import { excerpt, searchHelp } from '@/lib/help/search';
 
 interface Command {
   id: string;
@@ -35,7 +37,7 @@ interface Command {
   hint?: string;
   href: string;
   icon: NavLink['icon'];
-  group: 'Go to' | 'Requests' | 'Programmes' | 'Engagements' | 'Findings' | 'Risks' | 'Assets' | 'People';
+  group: 'Help' | 'Go to' | 'Requests' | 'Programmes' | 'Engagements' | 'Findings' | 'Risks' | 'Assets' | 'People';
 }
 
 /** Minimum characters before we hit the API for records. */
@@ -214,9 +216,33 @@ export const CommandPalette = (): JSX.Element | null => {
       group: 'Requests' as const,
     }));
 
+    // Help topics: a typed question (3+ words or a “?”) puts the answer first;
+    // short searches list help after the records so they never bury a record.
+    const helpHits = needle.length >= 3 ? searchHelp(query, 3) : [];
+    const helpCommands: Command[] = helpHits.map(({ article }) => ({
+      id: `help:${article.id}`,
+      label: `${article.num ? article.num + ' ' : ''}${article.title}`,
+      hint: excerpt(article, query, 110),
+      href: `/help/center?a=${article.id}&q=${encodeURIComponent(query.trim())}`,
+      icon: LifeBuoy,
+      group: 'Help' as const,
+    }));
+    if (needle.length >= 3) {
+      helpCommands.push({
+        id: 'help:all',
+        label: `Ask the Help Centre: “${query.trim()}”`,
+        hint: 'See all matching guides',
+        href: `/help/center?q=${encodeURIComponent(query.trim())}`,
+        icon: LifeBuoy,
+        group: 'Help' as const,
+      });
+    }
+    const isQuestion = needle.split(/\s+/).length >= 3 || needle.endsWith('?');
+
     // Records first once the user has typed enough — they're the specific thing
     // being looked for; destinations are always available as a fallback.
     return [
+      ...(isQuestion ? helpCommands : []),
       ...requestCommands,
       ...planCommands,
       ...engagementCommands,
@@ -225,6 +251,7 @@ export const CommandPalette = (): JSX.Element | null => {
       ...assetCommands,
       ...peopleCommands,
       ...destinations.slice(0, 8),
+      ...(isQuestion ? [] : helpCommands),
     ];
   }, [
     query,
@@ -318,7 +345,7 @@ export const CommandPalette = (): JSX.Element | null => {
               setQuery(e.target.value);
               setActiveIndex(0);
             }}
-            placeholder="Search programmes, engagements, findings, risks, assets, people, or jump to a page…"
+            placeholder="Search records, jump to a page, or ask a question (e.g. how do I raise a finding?)…"
             aria-label="Search"
             aria-autocomplete="list"
             className="h-12 flex-1 bg-transparent text-sm text-text-primary outline-none placeholder:text-text-muted"

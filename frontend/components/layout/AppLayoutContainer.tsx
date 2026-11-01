@@ -6,6 +6,7 @@ import { Sidebar } from './Sidebar';
 import { Header } from './Header';
 import { CommandPalette } from './CommandPalette';
 import { NotificationWatcher } from './NotificationWatcher';
+import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { cn } from '@/lib/utils/cn';
 
 export const AppLayoutContainer = ({
@@ -31,6 +32,7 @@ export const AppLayoutContainer = ({
         </main>
       </div>
       <CommandPalette />
+      <KeyboardShortcuts />
       <NotificationWatcher />
     </div>
   );
