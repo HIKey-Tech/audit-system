@@ -1031,7 +1031,9 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             documentTitle={title || `${engagement.title} — Audit Report`}
             engagementReference={engagement.referenceNumber}
             engagementTitle={
-              selectedTemplate?.name ?? appliedTemplate?.name ?? 'Standard Audit Report Template'
+              // `appliedTemplate` is declared further down; it only exists once a report
+              // does, so never read it on the "no report yet" path (TDZ crash otherwise).
+              selectedTemplate?.name ?? (currentReport ? appliedTemplate?.name : undefined) ?? 'Standard Audit Report Template'
             }
             classification="INTERNAL AUDIT CONFIDENTIAL"
             onSaveDraft={
