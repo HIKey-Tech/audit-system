@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 
+import { riskApi } from '@/lib/api/risk';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { Badge } from '@/components/ui/Badge';
@@ -225,6 +226,12 @@ export default function IntegrationsPage(): JSX.Element {
       qc.invalidateQueries({ queryKey: ['integration', 'imoc', 'rules'] });
     },
     onError: (err) => toast.error(err instanceof Error ? err.message : 'Could not create rule'),
+  });
+
+  const riskCategories = useQuery({
+    queryKey: ['risk', 'categories', 'active'],
+    queryFn: () => riskApi.listCategories({ isActive: true }),
+    enabled: riskModalOpen,
   });
 
   const createRiskMutation = useMutation({
@@ -1224,12 +1231,16 @@ export default function IntegrationsPage(): JSX.Element {
               toast.error('Risk title is required');
               return;
             }
+            if (!riskForm.categoryId) {
+              toast.error('Choose a risk category');
+              return;
+            }
             createRiskMutation.mutate({
               imocTicketId: selectedTicketId,
               createRisk: {
                 title: riskForm.title.trim(),
                 description: riskForm.description.trim(),
-                categoryId: riskForm.categoryId || 'c0000000-0000-0000-0000-000000000001', // Fallback or pick
+                categoryId: riskForm.categoryId,
                 likelihood: Number(riskForm.likelihood) || 3,
                 impact: Number(riskForm.impact) || 3,
                 businessObjective: riskForm.businessObjective.trim() || undefined,
@@ -1256,6 +1267,27 @@ export default function IntegrationsPage(): JSX.Element {
               className="w-full rounded-md border border-border bg-surface p-2 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
               required
             />
+          </div>
+
+          <div>
+            <label className="block font-medium text-text-primary mb-1">Risk Category *</label>
+            <select
+              value={riskForm.categoryId}
+              onChange={(e) => setRiskForm({ ...riskForm, categoryId: e.target.value })}
+              disabled={riskCategories.isLoading}
+              className="h-9 w-full rounded-md border border-border bg-surface px-2.5 text-xs text-text-primary focus:outline-none focus:ring-1 focus:ring-primary"
+              required
+            >
+              <option value="">{riskCategories.isLoading ? 'Loading categories…' : 'Select a category'}</option>
+              {(riskCategories.data ?? []).map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+            {riskCategories.isError && (
+              <p className="mt-1 text-danger">
+                Could not load risk categories. You may need the "View risk categories" permission.
+              </p>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">
