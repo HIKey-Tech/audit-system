@@ -180,6 +180,20 @@ export const config = {
     timestampsUtc: optionalEnv('IMOC_TIMESTAMPS_UTC', 'true') === 'true',
   },
 
+  // Project Plus (project implementation / contracts) is an optional, strictly
+  // read-only source reached through the Hub360 gateway. It is never required by
+  // any audit step. PROJECTPLUS_ENABLED=false (default) disables every call.
+  projectPlus: {
+    enabled: optionalEnv('PROJECTPLUS_ENABLED', 'false') === 'true',
+    baseUrl: optionalEnv('PROJECTPLUS_BASE_URL').replace(/\/$/, ''),
+    // none | api-key | bearer — final scheme pending GBB confirmation.
+    authMode: optionalEnv('PROJECTPLUS_AUTH_MODE', 'none'),
+    authHeader: optionalEnv('PROJECTPLUS_AUTH_HEADER', 'X-Api-Key'),
+    authSecret: optionalEnv('PROJECTPLUS_AUTH_SECRET'),
+    timeoutMs: parseInt(optionalEnv('PROJECTPLUS_TIMEOUT_MS', '10000'), 10),
+    caCertPath: optionalEnv('PROJECTPLUS_CA_CERT_PATH'),
+  },
+
   redis: {
     url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
     password: optionalEnv('REDIS_PASSWORD'),
@@ -292,6 +306,18 @@ if (config.imoc.enabled) {
     throw new Error(
       'Set IMOC_ACCESS_KEY, IMOC_SECRET_KEY, and IMOC_TENANT_ID or IMOC_TENANT_ACCOUNT when IMOC_ENABLED=true.',
     );
+  }
+}
+
+if (config.projectPlus.enabled) {
+  if (!config.projectPlus.baseUrl) {
+    throw new Error('PROJECTPLUS_BASE_URL is required when PROJECTPLUS_ENABLED=true.');
+  }
+  if (!['none', 'api-key', 'bearer'].includes(config.projectPlus.authMode)) {
+    throw new Error('PROJECTPLUS_AUTH_MODE must be one of: none, api-key, bearer.');
+  }
+  if (config.projectPlus.authMode !== 'none' && !config.projectPlus.authSecret) {
+    throw new Error('PROJECTPLUS_AUTH_SECRET is required when PROJECTPLUS_AUTH_MODE is api-key or bearer.');
   }
 }
 

@@ -4,6 +4,10 @@ import { directoryMappingService } from './service/implementation/directory-mapp
 import { ImocTicketController } from './imoc/controller/imoc-ticket.controller';
 import { ImocTicketService } from './imoc/service/implementation/imoc-ticket.service';
 import { createImocClient } from './imoc/service/client/imoc.client';
+import { ProjectPlusController } from './projectplus/controller/projectplus.controller';
+import { ProjectPlusService } from './projectplus/service/implementation/projectplus.service';
+import { ProjectPlusLinkService } from './projectplus/service/implementation/projectplus-link.service';
+import { createProjectPlusClient } from './projectplus/service/client/projectplus.client';
 import { EvidenceService } from '../audit/evidence/service/implementation/evidence.service';
 import { EngagementService } from '../audit/engagement/service/implementation/engagement.service';
 import { ChecklistService } from '../audit/checklists/service/implementation/checklist.service';
@@ -34,6 +38,15 @@ export const createIntegrationModule = (): Router => {
   );
   router.use('/integration/directory', controller.router);
   router.use('/integration/imoc', imocController.router);
+  const projectPlusClient = createProjectPlusClient();
+  router.use(
+    '/integration/projectplus',
+    new ProjectPlusController(
+      new ProjectPlusService(projectPlusClient),
+      new ProjectPlusLinkService(projectPlusClient),
+      engagementService,
+    ).router,
+  );
   return router;
 };
 

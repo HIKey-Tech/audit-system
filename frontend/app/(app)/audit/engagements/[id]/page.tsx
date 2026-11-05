@@ -27,6 +27,7 @@ import { ChecklistsTab } from '@/components/audit/engagements/ChecklistsTab';
 import { ReportTab } from '@/components/audit/engagements/ReportTab';
 import { FollowUpTab } from '@/components/audit/engagements/FollowUpTab';
 import { StatusStepper } from '@/components/audit/engagements/StatusStepper';
+import { ProjectPlusTab } from '@/components/audit/engagements/ProjectPlusTab';
 import { ImocTicketsTab } from '@/components/audit/engagements/ImocTicketsTab';
 import { SystemAuditTab } from '@/components/audit/engagements/SystemAuditTab';
 import { useSession, hasPermission } from '@/components/providers/AuthProvider';
@@ -42,6 +43,7 @@ type TabKey =
   | 'report'
   | 'follow-up'
   | 'imoc'
+  | 'projectplus'
   | 'system-audit';
 
 // Ordered to mirror the fieldwork lifecycle: test controls → document work →
@@ -58,6 +60,7 @@ const TAB_DEFS: { key: TabKey; label: string }[] = [
   { key: 'follow-up', label: 'Follow-up' },
   { key: 'assets', label: 'Assets' },
   { key: 'imoc', label: 'IMOC Tickets' },
+  { key: 'projectplus', label: 'Project Plus' },
   { key: 'system-audit', label: 'System audit' },
 ];
 
@@ -96,6 +99,7 @@ export default function EngagementDetailPage(): JSX.Element {
   const { canReadAssets } = usePermissions();
   const session = useSession();
   const canReadImoc = hasPermission(session, 'imoc:read');
+  const canReadProjectPlus = hasPermission(session, 'projectplus:read');
   const canReadSystemAudit =
     hasPermission(session, 'sysaudit:read') || hasPermission(session, 'sysdoc:read') || hasPermission(session, 'sectest:read');
 
@@ -114,6 +118,7 @@ export default function EngagementDetailPage(): JSX.Element {
       (t) =>
         (t.key !== 'assets' || canReadAssets) &&
         (t.key !== 'imoc' || canReadImoc) &&
+        (t.key !== 'projectplus' || canReadProjectPlus) &&
         (t.key !== 'system-audit' || canReadSystemAudit),
     )
     .map((t) => {
@@ -237,6 +242,7 @@ export default function EngagementDetailPage(): JSX.Element {
       {effectiveTab === 'requests' && <EvidenceRequestsTab engagement={data} />}
       {effectiveTab === 'assets' && canReadAssets && <AssetsTab engagement={data} />}
       {effectiveTab === 'imoc' && canReadImoc && <ImocTicketsTab engagement={data} />}
+      {effectiveTab === 'projectplus' && canReadProjectPlus && <ProjectPlusTab engagement={data} />}
       {effectiveTab === 'system-audit' && canReadSystemAudit && <SystemAuditTab engagement={data} />}
       {effectiveTab === 'findings' && <FindingsTab engagement={data} />}
       {effectiveTab === 'checklists' && vc?.canViewChecklists !== false && <ChecklistsTab engagement={data} />}

@@ -70,6 +70,7 @@ model User {
   wp_comments_resolved            Audit_Working_Paper_Comment[] @relation("WPCommentResolvedBy")
   time_entries                    Audit_Time_Entry[]       @relation("TimeEntryUser")
   imoc_ticket_links_created       Imoc_Ticket_Link[]       @relation("ImocTicketLinkCreatedBy")
+  projectplus_entity_links_created Projectplus_Entity_Link[] @relation("ProjectPlusEntityLinkCreatedBy")
   imoc_ticket_snapshots_captured  Imoc_Ticket_Snapshot[]   @relation("ImocTicketSnapshotCapturedBy")
   findings_as_auditee             Audit_Finding[]          @relation("FindingAuditee")
   finding_responder_for           Audit_Finding_Responder[] @relation("FindingResponderUser")
@@ -994,6 +995,7 @@ model Audit_Engagement {
   asset_links          Audit_Engagement_Asset[]
   time_entries         Audit_Time_Entry[]
   imoc_ticket_links    Imoc_Ticket_Link[]
+  projectplus_entity_links Projectplus_Entity_Link[]
   system_audit_runs    System_Audit_Run[]
   security_tests       Security_Test[]
 
@@ -1140,6 +1142,36 @@ model Imoc_Ticket_Link {
   @@index([last_status])
   @@index([imoc_ticket_id])
   @@map("imoc_ticket_links")
+}
+
+// A deliberate, optional association between an IAMS engagement and a Project
+// Plus entity (customer / vendor / client). Project Plus is read-only and never
+// required: this stores only the minimal last-known identity summary needed to
+// make the entity useful in fieldwork. No contact details or credentials.
+model Projectplus_Entity_Link {
+  id                String    @id @default(uuid())
+  engagement_id     String
+  customer_type     String
+  reference_code    String
+  full_name         String
+  entity_type       String?
+  entity_sub_type   String?
+  rc_number         String?
+  tin               String?
+  last_status       String?
+  last_synced_at    DateTime?
+  is_active         Boolean   @default(true)
+  created_by_id     String
+  deleted_at        DateTime?
+  created_at        DateTime  @default(now())
+  updated_at        DateTime  @updatedAt
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  created_by User             @relation("ProjectPlusEntityLinkCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([engagement_id, customer_type, reference_code])
+  @@index([engagement_id, is_active])
+  @@map("projectplus_entity_links")
 }
 
 // Immutable, explicitly captured audit record. snapshot_json is a redacted

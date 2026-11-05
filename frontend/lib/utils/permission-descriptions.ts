@@ -693,6 +693,16 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     who: 'Personnel extracting ticket logs for IT audit analysis and compliance reporting',
     summary: 'Allows exporting IT tickets to spreadsheets. For personnel extracting incident records.',
   },
+  'projectplus:read': {
+    what: 'View read-only Project Plus customers, vendors, clients and contract document types',
+    who: 'Personnel verifying vendor or customer identity during audits',
+    summary: 'Allows viewing Project Plus entities. For personnel verifying vendors and customers.',
+  },
+  'projectplus:link': {
+    what: 'Link and unlink Project Plus entities to audit engagements',
+    who: 'Personnel attaching vendor or customer context to audit engagements',
+    summary: 'Allows linking Project Plus entities to engagements. For personnel adding vendor context to audits.',
+  },
   'predictive:read': {
     what: 'View predictive analytics models, risk forecasts, and automated anomaly insights',
     who: 'Personnel reviewing data-driven risk projections and predictive audit indicators',
