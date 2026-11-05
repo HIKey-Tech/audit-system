@@ -409,6 +409,43 @@ export const ROLES: Array<{
     ],
   },
   {
+    // Director General — final executive sign-off. Approver + read-wide overseer; no
+    // authoring, issuing, or administration rights. The final report step is the
+    // `report:approve:final` permission (approval matrix level 3), so any role holding it
+    // is routed that step; this role bundles it with the DG's oversight/approval rights.
+    name: 'director_general',
+    description: 'Director General — final executive sign-off on audit reviews, security-test authorisation, requests, and read-wide oversight',
+    isSystem: false,
+    permissions: [
+      // Approvals & sign-offs
+      'report:approve:final',
+      'approval:read', 'approval:approve', 'approval:reject',
+      'sectest:read', 'sectest:authorise',
+      'request:create', 'request:read', 'request:receive', 'request:act',
+      // Read-wide oversight
+      'engagement:read', 'engagement:read_all', 'engagement:notify_lifecycle',
+      'finding:read', 'finding:read_all',
+      'followup:read',
+      'report:read', 'report:export',
+      'committee_pack:read',
+      'risk:read', 'risk:read_all',
+      'risk_monitoring:read',
+      'asset:read',
+      'integration:read',
+      'predictive:read',
+      'universe:read',
+      'plan:read',
+      'dashboard:read',
+      'sysaudit:read', 'sysdoc:read',
+      'log:read',
+      'escalation:read', 'escalation:acknowledge',
+      'user:directory',
+      'notification:read', 'notification:update',
+      // Exports
+      'finding:export', 'risk:export', 'log:export', 'asset:export',
+    ],
+  },
+  {
     name: 'cae',
     description: 'Chief Audit Executive with executive oversight and issue authority',
     isSystem: false,
