@@ -89,6 +89,23 @@ services:
       mssql:
         condition: service_healthy
 
+  # Wipes test data, keeping users + configuration. Dry run unless args are passed:
+  #   docker compose -f docker-compose.prod.yml --profile ops run --rm db-reset
+  #   docker compose -f docker-compose.prod.yml --profile ops run --rm db-reset --execute --confirm=RESET
+  db-reset:
+    build:
+      context: .
+      target: build
+    image: iams-db-tools:latest
+    env_file: .env
+    entrypoint: ["npx", "ts-node", "prisma/reset-test-data.ts"]
+    command: []
+    networks: [iams]
+    profiles: [ops]
+    depends_on:
+      mssql:
+        condition: service_healthy
+
   db-seed:
     build:
       context: .
