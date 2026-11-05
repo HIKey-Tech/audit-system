@@ -24,7 +24,6 @@ import {
   Trash2,
   XCircle,
 } from 'lucide-react';
-import Link from 'next/link';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -330,18 +329,13 @@ export default function IntegrationsPage(): JSX.Element {
         subtitle="Ingested Galaxy Backbone service tickets, audit analytics, and automated rules engine."
       />
 
-      {hasPermission(session, 'projectplus:read') && (
-        <Link
-          href="/integrations/projectplus"
-          className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-sm hover:bg-surface-subtle"
-        >
-          <span>
-            <span className="font-semibold text-text-primary">Project Plus</span>
-            <span className="ml-2 text-text-secondary">Optional, read-only vendor and customer lookup</span>
-          </span>
-          <span className="text-xs text-primary">Open →</span>
-        </Link>
-      )}
+      <div className="flex items-center justify-between rounded-lg border border-border bg-surface px-4 py-3 text-sm">
+        <span>
+          <span className="font-semibold text-text-primary">Project Plus</span>
+          <span className="ml-2 text-text-secondary">Optional, read-only vendor and customer lookup</span>
+        </span>
+        <Badge tone="amber">Coming soon</Badge>
+      </div>
 
       {/* Top Connection Status Banner */}
       <Card>

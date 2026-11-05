@@ -1,5 +1,11 @@
 import { api } from '@/lib/api-client';
 
+/**
+ * While true, every Project Plus screen shows a "Coming soon" notice and makes
+ * no API calls. Flip to false once GBB confirms the gateway credentials.
+ */
+export const PROJECT_PLUS_COMING_SOON = true;
+
 export interface ProjectPlusStatus {
   enabled: boolean;
   configured: boolean;

@@ -11,12 +11,32 @@ import { Badge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ProjectPlusEntityList } from '@/components/integrations/ProjectPlusEntityList';
-import { projectPlusApi } from '@/lib/api/projectplus';
+import { PROJECT_PLUS_COMING_SOON, projectPlusApi } from '@/lib/api/projectplus';
 import { formatDate } from '@/lib/utils/format';
 import { hasPermission, useSession } from '@/components/providers/AuthProvider';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
-export const ProjectPlusTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
+export const ProjectPlusTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element =>
+  PROJECT_PLUS_COMING_SOON ? (
+    <Card>
+      <div className="flex items-start gap-3">
+        <Building2 className="mt-0.5 h-5 w-5 text-text-muted" />
+        <div>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-text-primary">Project Plus</h3>
+            <Badge tone="amber">Coming soon</Badge>
+          </div>
+          <p className="mt-1 text-sm text-text-secondary">
+            Linking vendors and customers from Project Plus to this engagement will be available soon.
+          </p>
+        </div>
+      </div>
+    </Card>
+  ) : (
+    <ProjectPlusTabContent engagement={engagement} />
+  );
+
+const ProjectPlusTabContent = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const session = useSession();
   const qc = useQueryClient();
   const [pickerOpen, setPickerOpen] = useState(false);

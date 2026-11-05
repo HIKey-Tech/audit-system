@@ -11,9 +11,39 @@ import { Button } from '@/components/ui/Button';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { ProjectPlusEntityList } from '@/components/integrations/ProjectPlusEntityList';
 import { hasPermission, useSession } from '@/components/providers/AuthProvider';
-import { projectPlusApi, ProjectPlusRealStatus } from '@/lib/api/projectplus';
+import { PROJECT_PLUS_COMING_SOON, projectPlusApi, ProjectPlusRealStatus } from '@/lib/api/projectplus';
 
 export default function ProjectPlusPage(): JSX.Element {
+  if (PROJECT_PLUS_COMING_SOON) {
+    return (
+      <div className="space-y-6">
+        <PageHeader
+          title="Project Plus"
+          subtitle="Read-only view of customers, vendors and clients held in Project Plus."
+          breadcrumbs={[{ label: 'Integrations', href: '/integrations' }, { label: 'Project Plus' }]}
+        />
+        <Card>
+          <div className="flex items-start gap-3">
+            <Building2 className="mt-0.5 h-5 w-5 text-text-muted" />
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm font-semibold text-text-primary">Project Plus integration</h2>
+                <Badge tone="amber">Coming soon</Badge>
+              </div>
+              <p className="mt-1 text-sm text-text-secondary">
+                This integration is being set up. It will let auditors look up vendors and customers from Project Plus and optionally attach them to an audit.
+              </p>
+              <p className="mt-2 text-xs text-text-muted">No audit workflow depends on it.</p>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
+  return <ProjectPlusPageContent />;
+}
+
+function ProjectPlusPageContent(): JSX.Element {
   const session = useSession();
   const canRead = hasPermission(session, 'projectplus:read');
   const status = useQuery({ queryKey: ['integration', 'projectplus', 'status'], queryFn: projectPlusApi.status });
