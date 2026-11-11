@@ -27,7 +27,8 @@ export declare enum AuditFrequency {
     Annual = "annual",
     Biannual = "biannual",
     Quarterly = "quarterly",
-    Monthly = "monthly"
+    Monthly = "monthly",
+    OnDemand = "on_demand"
 }
 export declare enum UniverseCategory {
     Department = "department",

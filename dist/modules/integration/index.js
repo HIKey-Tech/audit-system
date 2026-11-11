@@ -7,6 +7,10 @@ const directory_mapping_service_1 = require("./service/implementation/directory-
 const imoc_ticket_controller_1 = require("./imoc/controller/imoc-ticket.controller");
 const imoc_ticket_service_1 = require("./imoc/service/implementation/imoc-ticket.service");
 const imoc_client_1 = require("./imoc/service/client/imoc.client");
+const projectplus_controller_1 = require("./projectplus/controller/projectplus.controller");
+const projectplus_service_1 = require("./projectplus/service/implementation/projectplus.service");
+const projectplus_link_service_1 = require("./projectplus/service/implementation/projectplus-link.service");
+const projectplus_client_1 = require("./projectplus/service/client/projectplus.client");
 const evidence_service_1 = require("../audit/evidence/service/implementation/evidence.service");
 const engagement_service_1 = require("../audit/engagement/service/implementation/engagement.service");
 const checklist_service_1 = require("../audit/checklists/service/implementation/checklist.service");
@@ -28,6 +32,8 @@ const createIntegrationModule = () => {
     const imocController = new imoc_ticket_controller_1.ImocTicketController(new imoc_ticket_service_1.ImocTicketService((0, imoc_client_1.createImocClient)(), evidenceService), engagementService, imoc_ingestion_service_1.imocIngestionService, imoc_store_service_1.imocStoreService);
     router.use('/integration/directory', controller.router);
     router.use('/integration/imoc', imocController.router);
+    const projectPlusClient = (0, projectplus_client_1.createProjectPlusClient)();
+    router.use('/integration/projectplus', new projectplus_controller_1.ProjectPlusController(new projectplus_service_1.ProjectPlusService(projectPlusClient), new projectplus_link_service_1.ProjectPlusLinkService(projectPlusClient), engagementService).router);
     return router;
 };
 exports.createIntegrationModule = createIntegrationModule;

@@ -31,7 +31,8 @@ const STATUS_TABS: TabItem[] = [
 
 export default function PlansListPage(): JSX.Element {
   const router = useRouter();
-  const { canManageAuditProgramme: canWrite } = usePermissions();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('plan:create');
   const currentYear = new Date().getFullYear();
 
   const [page, setPage] = useState(1);
@@ -114,7 +115,7 @@ export default function PlansListPage(): JSX.Element {
         title="Audit Programme"
         subtitle="The annual programme holds the plans that drive engagement scheduling and approval routing."
         actions={
-          canWrite ? (
+          canCreate ? (
             <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setOpen(true)}>
               New Programme
             </Button>
@@ -194,7 +195,7 @@ export default function PlansListPage(): JSX.Element {
             title="No programmes yet"
             description="Create your first audit programme to begin scheduling engagements."
             action={
-              canWrite ? (
+              canCreate ? (
                 <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setOpen(true)}>
                   New Programme
                 </Button>

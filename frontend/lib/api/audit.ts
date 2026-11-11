@@ -4,6 +4,7 @@ import type {
   AuditUniverseDetail,
   AuditPlan,
   AuditPlanItem,
+  PlanUniverseCandidate,
   AuditEngagement,
   AuditEngagementDetail,
   AuditWorkingPaper,
@@ -28,6 +29,7 @@ export interface UniverseListQuery {
   pageSize?: number;
   search?: string;
   category?: string;
+  auditFrequency?: string;
   status?: string;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
@@ -37,11 +39,14 @@ export interface CreateUniverseEntityDto {
   name: string;
   description?: string;
   category: string;
-  ownerId: string;
+  ownerId?: string;
+  ownerIds?: string[];
+  additionalOwnerIds?: string[];
   auditFrequency: string;
 }
 
-export interface UpdateUniverseEntityDto extends Partial<CreateUniverseEntityDto> {
+export interface UpdateUniverseEntityDto extends Partial<Omit<CreateUniverseEntityDto, 'description'>> {
+  description?: string | null;
   status?: string;
 }
 
@@ -76,6 +81,12 @@ export interface CreatePlanDto {
   description?: string;
 }
 
+export interface UpdatePlanDto {
+  title?: string;
+  year?: number;
+  description?: string | null;
+}
+
 export interface AddPlanItemDto {
   universeId: string;
   priority: string;
@@ -83,6 +94,8 @@ export interface AddPlanItemDto {
   plannedEndDate: string;
   notes?: string | null;
 }
+
+export type UpdatePlanItemDto = Partial<AddPlanItemDto>;
 
 export interface PlanningRecommendation {
   universeId: string;
@@ -106,15 +119,21 @@ export interface PlanningRecommendation {
 export const plansApi = {
   /** Composite audit-priority ranking of universe entities, highest first. */
   recommendations: () => api.get<PlanningRecommendation[]>('/audit/plans/recommendations'),
+  universeCandidates: (planId: string) =>
+    api.get<PlanUniverseCandidate[]>(`/audit/plans/${planId}/universe-candidates`),
   list: (q?: PlansListQuery) =>
     api.getPaginated<AuditPlan>('/audit/plans', q as Record<string, string | number | boolean | undefined>),
   get: (id: string) => api.get<AuditPlan>(`/audit/plans/${id}`),
   create: (dto: CreatePlanDto) => api.post<AuditPlan>('/audit/plans', dto),
-  update: (id: string, dto: Partial<CreatePlanDto>) =>
+  update: (id: string, dto: UpdatePlanDto) =>
     api.put<AuditPlan>(`/audit/plans/${id}`, dto),
   remove: (id: string) => api.delete(`/audit/plans/${id}`),
   addItem: (planId: string, dto: AddPlanItemDto) =>
     api.post<AuditPlanItem>(`/audit/plans/${planId}/items`, dto),
+  bulkAddItems: (planId: string, items: AddPlanItemDto[]) =>
+    api.post<AuditPlan>(`/audit/plans/${planId}/items/bulk`, { items }),
+  updateItem: (planId: string, itemId: string, dto: UpdatePlanItemDto) =>
+    api.put<AuditPlan>(`/audit/plans/${planId}/items/${itemId}`, dto),
   removeItem: (planId: string, itemId: string) =>
     api.delete(`/audit/plans/${planId}/items/${itemId}`),
   submit: (id: string) => api.post<AuditPlan>(`/audit/plans/${id}/submit`),

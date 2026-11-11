@@ -43,6 +43,7 @@ export enum AuditFrequency {
   Biannual = 'biannual',
   Quarterly = 'quarterly',
   Monthly = 'monthly',
+  OnDemand = 'on_demand',
 }
 
 export enum UniverseCategory {

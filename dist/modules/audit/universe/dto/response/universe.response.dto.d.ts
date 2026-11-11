@@ -15,6 +15,11 @@ export interface UniverseEngagementHistoryDto {
     startDate: string | null;
     endDate: string | null;
 }
+export interface UniverseOwnerDto {
+    id: string;
+    name: string | null;
+    isPrimary: boolean;
+}
 export interface UniverseResponseDto {
     id: string;
     name: string;
@@ -22,6 +27,8 @@ export interface UniverseResponseDto {
     category: string;
     ownerId: string;
     ownerName: string | null;
+    ownerIds: string[];
+    owners: UniverseOwnerDto[];
     riskScore: number | null;
     lastAuditedAt: string | null;
     auditFrequency: string;
@@ -35,17 +42,23 @@ export interface UniverseResponseDto {
      * results feeding back into the risk view of the entity. */
     openFindingsCount?: number;
 }
+type UserNameShape = {
+    id?: string;
+    display_name: string | null;
+    first_name: string;
+    last_name: string;
+};
 export declare const mapUniverseToResponse: (entity: {
     id: string;
     name: string;
     description: string | null;
     category: string;
     owner_id: string;
-    owner?: {
-        display_name: string | null;
-        first_name: string;
-        last_name: string;
-    } | null;
+    owner?: UserNameShape | null;
+    additional_owners?: Array<{
+        user_id: string;
+        user?: UserNameShape | null;
+    }>;
     risk_score: Prisma.Decimal | null;
     last_audited_at: Date | null;
     audit_frequency: string;
@@ -54,4 +67,5 @@ export declare const mapUniverseToResponse: (entity: {
     created_at: Date;
     updated_at: Date;
 }) => UniverseResponseDto;
+export {};
 //# sourceMappingURL=universe.response.dto.d.ts.map

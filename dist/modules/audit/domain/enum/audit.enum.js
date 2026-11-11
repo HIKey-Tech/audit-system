@@ -45,6 +45,7 @@ var AuditFrequency;
     AuditFrequency["Biannual"] = "biannual";
     AuditFrequency["Quarterly"] = "quarterly";
     AuditFrequency["Monthly"] = "monthly";
+    AuditFrequency["OnDemand"] = "on_demand";
 })(AuditFrequency || (exports.AuditFrequency = AuditFrequency = {}));
 var UniverseCategory;
 (function (UniverseCategory) {

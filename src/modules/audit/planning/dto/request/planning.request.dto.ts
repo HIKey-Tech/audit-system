@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AuditPriority, AuditType, PlanStatus, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
+import { AuditPriority, PlanStatus, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
 export const CreatePlanRequestSchema = z.object({
   title: z.string().min(1).max(200),
@@ -12,15 +12,49 @@ export const CreatePlanRequestSchema = z.object({
 export const UpdatePlanRequestSchema = z.object({
   title: z.string().min(1).max(200).optional(),
   year: z.coerce.number().int().min(2000).max(2100).optional(),
-  description: z.string().max(2000).optional(),
+  description: z.string().max(2000).nullable().optional(),
 });
 
-export const AddPlanItemRequestSchema = z.object({
+const BasePlanItemSchema = z.object({
   universeId: z.string().uuid(),
   plannedStartDate: z.string().datetime(),
   plannedEndDate: z.string().datetime(),
   priority: z.nativeEnum(AuditPriority),
   notes: z.string().max(5000).nullable().optional(),
+});
+
+export const AddPlanItemRequestSchema = BasePlanItemSchema.refine(
+  (d) => new Date(d.plannedStartDate) <= new Date(d.plannedEndDate),
+  { message: 'Planned end date must be on or after planned start date', path: ['plannedEndDate'] },
+);
+
+export const UpdatePlanItemRequestSchema = z
+  .object({
+    universeId: z.string().uuid().optional(),
+    plannedStartDate: z.string().datetime().optional(),
+    plannedEndDate: z.string().datetime().optional(),
+    priority: z.nativeEnum(AuditPriority).optional(),
+    notes: z.string().max(5000).nullable().optional(),
+  })
+  .refine(
+    (d) =>
+      d.universeId !== undefined ||
+      d.plannedStartDate !== undefined ||
+      d.plannedEndDate !== undefined ||
+      d.priority !== undefined ||
+      d.notes !== undefined,
+    { message: 'At least one field is required' },
+  )
+  .refine(
+    (d) =>
+      !d.plannedStartDate ||
+      !d.plannedEndDate ||
+      new Date(d.plannedStartDate) <= new Date(d.plannedEndDate),
+    { message: 'Planned end date must be on or after planned start date', path: ['plannedEndDate'] },
+  );
+
+export const BulkAddPlanItemsRequestSchema = z.object({
+  items: z.array(AddPlanItemRequestSchema).min(1).max(100),
 });
 
 export const RejectPlanRequestSchema = z.object({
@@ -41,5 +75,7 @@ export const PlanQuerySchema = z.object({
 export type CreatePlanRequestDto = z.infer<typeof CreatePlanRequestSchema>;
 export type UpdatePlanRequestDto = z.infer<typeof UpdatePlanRequestSchema>;
 export type AddPlanItemRequestDto = z.infer<typeof AddPlanItemRequestSchema>;
+export type UpdatePlanItemRequestDto = z.infer<typeof UpdatePlanItemRequestSchema>;
+export type BulkAddPlanItemsRequestDto = z.infer<typeof BulkAddPlanItemsRequestSchema>;
 export type RejectPlanRequestDto = z.infer<typeof RejectPlanRequestSchema>;
 export type PlanQueryDto = z.infer<typeof PlanQuerySchema>;

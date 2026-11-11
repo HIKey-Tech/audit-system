@@ -11,14 +11,30 @@ import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, PlanStatus, UniverseStatus } from '../../../domain/enum/audit.enum';
 import { PLAN_EDITABLE_STATUSES, assertHasPermission, auditTypeLabel, decimalToNumber } from '../../../utility/audit.utility';
 import { getPlanningPriorityWeights } from '../../../utility/audit-config.utility';
+import { mapUniverseToResponse } from '../../../universe/dto/response/universe.response.dto';
 import {
   AddPlanItemRequestDto,
+  BulkAddPlanItemsRequestDto,
   CreatePlanRequestDto,
   PlanQueryDto,
+  UpdatePlanItemRequestDto,
   UpdatePlanRequestDto,
 } from '../../dto/request/planning.request.dto';
 import { PlanResponseDto, mapPlanToResponse } from '../../dto/response/planning.response.dto';
-import { IPlanningService, PlanningRecommendationDto } from '../interface/planning.service.interface';
+import {
+  classifyUniverseDueStatus,
+  computeEntityRecommendation,
+  recommendedPriorityFromRiskScore,
+} from '../../utility/planning.utility';
+import {
+  getCachedRecommendations,
+  setCachedRecommendations,
+} from '../../utility/recommendations-cache.utility';
+import {
+  IPlanningService,
+  PlanUniverseCandidateDto,
+  PlanningRecommendationDto,
+} from '../interface/planning.service.interface';
 
 const planInclude = {
   approved_by: { select: { display_name: true, first_name: true, last_name: true } },
@@ -28,24 +44,7 @@ const planInclude = {
   },
 };
 
-/** Months per audit-frequency value, mirroring the AuditFrequency enum. */
-const FREQUENCY_MONTHS: Record<string, number> = {
-  monthly: 1,
-  quarterly: 3,
-  biannual: 6,
-  annual: 12,
-};
-
-const monthsSince = (date: Date, now: Date): number =>
-  (now.getTime() - date.getTime()) / (30.44 * 24 * 60 * 60 * 1000);
-
-// ponytail: 60s org-wide cache for the recommendations ranking. The Add-plan-item
-// picker reopens constantly, and each recompute is a full-universe scan + open-finding
-// scan + per-entity scoring. Recommendations are the same for everyone (no per-user
-// input), so one cached list serves all callers; 60s staleness is fine for a planning
-// aid. Upgrade path: invalidate on universe/finding writes if fresher ranking is needed.
-let recommendationsCache: { at: number; data: PlanningRecommendationDto[] } | null = null;
-const RECOMMENDATIONS_TTL_MS = 60_000;
+const candidateOwnerSelect = { id: true, display_name: true, first_name: true, last_name: true } as const;
 
 export class PlanningService implements IPlanningService {
   constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
@@ -59,9 +58,8 @@ export class PlanningService implements IPlanningService {
    * are returned so the ranking is explainable, not a black box.
    */
   async getRecommendations(): Promise<PlanningRecommendationDto[]> {
-    if (recommendationsCache && Date.now() - recommendationsCache.at < RECOMMENDATIONS_TTL_MS) {
-      return recommendationsCache.data;
-    }
+    const cached = getCachedRecommendations();
+    if (cached) return cached;
 
     const [weights, entities, openFindings] = await Promise.all([
       getPlanningPriorityWeights(),
@@ -92,69 +90,149 @@ export class PlanningService implements IPlanningService {
       openByUniverse.set(key, (openByUniverse.get(key) ?? 0) + 1);
     }
 
-    const weightSum =
-      weights.riskScore + weights.openFindings + weights.overdueForAudit + weights.neverAudited + weights.timeSinceLastAudit;
     const now = new Date();
+    const sorted = entities
+      .map((entity) =>
+        computeEntityRecommendation(
+          {
+            id: entity.id,
+            name: entity.name,
+            category: entity.category,
+            riskScore: decimalToNumber(entity.risk_score) ?? 0,
+            auditFrequency: entity.audit_frequency,
+            lastAuditedAt: entity.last_audited_at,
+          },
+          openByUniverse.get(entity.id) ?? 0,
+          weights,
+          now,
+        ),
+      )
+      .sort((a, b) => b.score - a.score);
 
-    const recommendations = entities.map((entity): PlanningRecommendationDto => {
-      const riskScore = decimalToNumber(entity.risk_score) ?? 0;
-      const openCount = openByUniverse.get(entity.id) ?? 0;
-      const frequencyMonths = FREQUENCY_MONTHS[entity.audit_frequency];
-      const monthsSinceAudit = entity.last_audited_at ? monthsSince(entity.last_audited_at, now) : null;
-      const overdue =
-        monthsSinceAudit !== null && frequencyMonths !== undefined && monthsSinceAudit > frequencyMonths;
-
-      const components = {
-        riskScore: Math.min((riskScore / 25) * 100, 100),
-        openFindings: Math.min(openCount * 25, 100),
-        overdueForAudit: overdue ? 100 : 0,
-        neverAudited: entity.last_audited_at === null ? 100 : 0,
-        timeSinceLastAudit:
-          monthsSinceAudit === null ? 100 : Math.min((monthsSinceAudit / 24) * 100, 100),
-      };
-
-      const score =
-        weightSum <= 0
-          ? 0
-          : (weights.riskScore * components.riskScore +
-              weights.openFindings * components.openFindings +
-              weights.overdueForAudit * components.overdueForAudit +
-              weights.neverAudited * components.neverAudited +
-              weights.timeSinceLastAudit * components.timeSinceLastAudit) /
-            weightSum;
-
-      const reasons: string[] = [];
-      if (riskScore >= 13) reasons.push(`High risk score (${riskScore})`);
-      if (openCount > 0) reasons.push(`${openCount} unresolved finding${openCount === 1 ? '' : 's'}`);
-      if (entity.last_audited_at === null) reasons.push('Never audited');
-      else if (overdue) reasons.push(`Audit overdue (${entity.audit_frequency} cycle)`);
-      else if (monthsSinceAudit !== null && monthsSinceAudit >= 12) {
-        reasons.push(`Last audited ${Math.floor(monthsSinceAudit)} months ago`);
-      }
-
-      return {
-        universeId: entity.id,
-        name: entity.name,
-        category: entity.category,
-        riskScore,
-        auditFrequency: entity.audit_frequency,
-        lastAuditedAt: entity.last_audited_at?.toISOString() ?? null,
-        openFindingsCount: openCount,
-        score: Math.round(score),
-        components: {
-          riskScore: Math.round(components.riskScore),
-          openFindings: Math.round(components.openFindings),
-          overdueForAudit: components.overdueForAudit,
-          neverAudited: components.neverAudited,
-          timeSinceLastAudit: Math.round(components.timeSinceLastAudit),
-        },
-        reasons,
-      };
-    });
-
-    const sorted = recommendations.sort((a, b) => b.score - a.score);
-    recommendationsCache = { at: Date.now(), data: sorted };
+    setCachedRecommendations(sorted);
     return sorted;
+  }
+
+  /**
+   * Returns all active audit universe entities enriched with due-cycle classification,
+   * recommended priority, owners, and existing coverage within the target programme's year.
+   */
+  async getUniverseCandidates(planId: string): Promise<PlanUniverseCandidateDto[]> {
+    const plan = await prisma.audit_Plan.findFirst({
+      where: { id: planId, deleted_at: null },
+      select: { id: true, year: true },
+    });
+    if (!plan) throw AppError.notFound('Audit plan');
+
+    const [weights, entities, openFindings, yearPlanItems] = await Promise.all([
+      getPlanningPriorityWeights(),
+      prisma.audit_Universe.findMany({
+        where: { deleted_at: null, status: UniverseStatus.Active },
+        include: {
+          owner: { select: candidateOwnerSelect },
+          additional_owners: {
+            include: { user: { select: candidateOwnerSelect } },
+            orderBy: { created_at: 'asc' },
+          },
+        },
+      }),
+      prisma.audit_Finding.findMany({
+        where: {
+          deleted_at: null,
+          status: { not: FindingStatus.Closed },
+          engagement: { deleted_at: null },
+        },
+        select: { engagement: { select: { universe_id: true } } },
+      }),
+      prisma.audit_Plan_Item.findMany({
+        where: { plan: { year: plan.year, deleted_at: null } },
+        select: {
+          universe_id: true,
+          plan_id: true,
+          plan: { select: { id: true, title: true, audit_type: true, status: true } },
+        },
+      }),
+    ]);
+
+    const openByUniverse = new Map<string, number>();
+    for (const finding of openFindings) {
+      const key = finding.engagement.universe_id;
+      openByUniverse.set(key, (openByUniverse.get(key) ?? 0) + 1);
+    }
+
+    const thisPlanCountByUniverse = new Map<string, number>();
+    const otherPlansByUniverse = new Map<
+      string,
+      Map<string, { planId: string; planTitle: string; auditType: string; status: string }>
+    >();
+
+    for (const item of yearPlanItems) {
+      if (item.plan_id === plan.id) {
+        thisPlanCountByUniverse.set(
+          item.universe_id,
+          (thisPlanCountByUniverse.get(item.universe_id) ?? 0) + 1,
+        );
+      } else {
+        let mapForEntity = otherPlansByUniverse.get(item.universe_id);
+        if (!mapForEntity) {
+          mapForEntity = new Map();
+          otherPlansByUniverse.set(item.universe_id, mapForEntity);
+        }
+        mapForEntity.set(item.plan_id, {
+          planId: item.plan.id,
+          planTitle: item.plan.title,
+          auditType: item.plan.audit_type,
+          status: item.plan.status,
+        });
+      }
+    }
+
+    const now = new Date();
+    return entities
+      .map((entity): PlanUniverseCandidateDto => {
+        const mapped = mapUniverseToResponse(entity);
+        const riskScore = mapped.riskScore ?? 0;
+        const openCount = openByUniverse.get(entity.id) ?? 0;
+        const rec = computeEntityRecommendation(
+          {
+            id: entity.id,
+            name: entity.name,
+            category: entity.category,
+            riskScore,
+            auditFrequency: entity.audit_frequency,
+            lastAuditedAt: entity.last_audited_at,
+          },
+          openCount,
+          weights,
+          now,
+        );
+        const dueStatus = classifyUniverseDueStatus(
+          entity.audit_frequency,
+          entity.last_audited_at,
+          plan.year,
+          now,
+        );
+
+        return {
+          universeId: entity.id,
+          name: entity.name,
+          description: entity.description,
+          category: entity.category,
+          ownerName: mapped.ownerName,
+          owners: mapped.owners,
+          riskScore,
+          auditFrequency: entity.audit_frequency,
+          lastAuditedAt: mapped.lastAuditedAt,
+          openFindingsCount: openCount,
+          score: rec.score,
+          reasons: rec.reasons,
+          recommendedPriority: recommendedPriorityFromRiskScore(riskScore),
+          dueStatus,
+          alreadyInThisPlanCount: thisPlanCountByUniverse.get(entity.id) ?? 0,
+          alreadyInYearPlans: [...(otherPlansByUniverse.get(entity.id)?.values() ?? [])],
+        };
+      })
+      .sort((a, b) => b.score - a.score || a.name.localeCompare(b.name));
   }
 
   async createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
@@ -262,9 +340,9 @@ export class PlanningService implements IPlanningService {
   async addPlanItem(planId: string, dto: AddPlanItemRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:add_item');
     await this._assertDraftPlan(planId);
-    await this._assertUniverseExists(dto.universeId);
+    await this._assertUniverseActive(dto.universeId);
 
-    await prisma.audit_Plan_Item.create({
+    const created = await prisma.audit_Plan_Item.create({
       data: {
         plan_id: planId,
         universe_id: dto.universeId,
@@ -275,14 +353,125 @@ export class PlanningService implements IPlanningService {
       },
     });
 
-    logger.info('Audit plan item added', { planId, universeId: dto.universeId, actorId: actor.id });
+    logger.info('Audit plan item added', { planId, itemId: created.id, universeId: dto.universeId, actorId: actor.id });
     auditLogService.logAsync({
       userId: actor.id,
       action: 'audit.plan.item.add',
       module: 'audit',
+      entityType: 'audit_plan_item',
+      entityId: created.id,
+      newValues: dto,
+    });
+
+    return this.getPlanById(planId);
+  }
+
+  async bulkAddPlanItems(planId: string, dto: BulkAddPlanItemsRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
+    assertHasPermission(actor.permissions, 'plan:add_item');
+    await this._assertDraftPlan(planId);
+
+    const uniqueUniverseIds = [...new Set(dto.items.map((i) => i.universeId))];
+    const universeRows = await prisma.audit_Universe.findMany({
+      where: { id: { in: uniqueUniverseIds }, deleted_at: null },
+      select: { id: true, name: true, status: true },
+    });
+    const byId = new Map(universeRows.map((u) => [u.id, u]));
+
+    for (const universeId of uniqueUniverseIds) {
+      const entity = byId.get(universeId);
+      if (!entity) throw AppError.notFound('Audit universe entity');
+      if (entity.status !== UniverseStatus.Active) {
+        throw AppError.badRequest(
+          `Auditable entity '${entity.name}' is inactive and cannot be added to an audit programme`,
+        );
+      }
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.audit_Plan_Item.createMany({
+        data: dto.items.map((item) => ({
+          plan_id: planId,
+          universe_id: item.universeId,
+          planned_start_date: new Date(item.plannedStartDate),
+          planned_end_date: new Date(item.plannedEndDate),
+          priority: item.priority,
+          notes: item.notes ?? null,
+        })),
+      });
+    });
+
+    logger.info('Audit plan items bulk added', { planId, count: dto.items.length, actorId: actor.id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.plan.item.bulk_add',
+      module: 'audit',
       entityType: 'audit_plan',
       entityId: planId,
-      newValues: dto,
+      newValues: { count: dto.items.length, universeIds: uniqueUniverseIds },
+    });
+
+    return this.getPlanById(planId);
+  }
+
+  async updatePlanItem(
+    planId: string,
+    itemId: string,
+    dto: UpdatePlanItemRequestDto,
+    actor: ActorContext,
+  ): Promise<PlanResponseDto> {
+    assertHasPermission(actor.permissions, 'plan:add_item');
+    await this._assertDraftPlan(planId);
+
+    const existing = await prisma.audit_Plan_Item.findFirst({
+      where: { id: itemId, plan_id: planId },
+    });
+    if (!existing) throw AppError.notFound('Audit plan item');
+    if (existing.engagement_created) {
+      throw AppError.badRequest('Cannot edit a plan item after an engagement has been created');
+    }
+
+    if (dto.universeId !== undefined && dto.universeId !== existing.universe_id) {
+      await this._assertUniverseActive(dto.universeId);
+    }
+
+    const nextStart = dto.plannedStartDate ? new Date(dto.plannedStartDate) : existing.planned_start_date;
+    const nextEnd = dto.plannedEndDate ? new Date(dto.plannedEndDate) : existing.planned_end_date;
+    if (nextStart > nextEnd) {
+      throw AppError.badRequest('Planned end date must be on or after planned start date');
+    }
+
+    const updated = await prisma.audit_Plan_Item.update({
+      where: { id: itemId },
+      data: {
+        ...(dto.universeId !== undefined && { universe_id: dto.universeId }),
+        ...(dto.plannedStartDate !== undefined && { planned_start_date: nextStart }),
+        ...(dto.plannedEndDate !== undefined && { planned_end_date: nextEnd }),
+        ...(dto.priority !== undefined && { priority: dto.priority }),
+        ...(dto.notes !== undefined && { notes: dto.notes }),
+      },
+    });
+
+    logger.info('Audit plan item updated', { planId, itemId, actorId: actor.id });
+    auditLogService.logAsync({
+      userId: actor.id,
+      action: 'audit.plan.item.update',
+      module: 'audit',
+      entityType: 'audit_plan_item',
+      entityId: itemId,
+      oldValues: {
+        universeId: existing.universe_id,
+        priority: existing.priority,
+        plannedStartDate: existing.planned_start_date.toISOString(),
+        plannedEndDate: existing.planned_end_date.toISOString(),
+        notes: existing.notes,
+      },
+      newValues: {
+        universeId: updated.universe_id,
+        priority: updated.priority,
+        plannedStartDate: updated.planned_start_date.toISOString(),
+        plannedEndDate: updated.planned_end_date.toISOString(),
+        notes: updated.notes,
+      },
     });
 
     return this.getPlanById(planId);
@@ -309,6 +498,14 @@ export class PlanningService implements IPlanningService {
       module: 'audit',
       entityType: 'audit_plan_item',
       entityId: itemId,
+      oldValues: {
+        planId,
+        universeId: item.universe_id,
+        priority: item.priority,
+        plannedStartDate: item.planned_start_date.toISOString(),
+        plannedEndDate: item.planned_end_date.toISOString(),
+        notes: item.notes,
+      },
     });
   }
 
@@ -426,12 +623,16 @@ export class PlanningService implements IPlanningService {
     }
   }
 
-  private async _assertUniverseExists(universeId: string): Promise<void> {
+  private async _assertUniverseActive(universeId: string): Promise<void> {
     const universe = await prisma.audit_Universe.findFirst({
       where: { id: universeId, deleted_at: null },
-      select: { id: true },
+      select: { id: true, name: true, status: true },
     });
     if (!universe) throw AppError.notFound('Audit universe entity');
+    if (universe.status !== UniverseStatus.Active) {
+      throw AppError.badRequest(
+        `Auditable entity '${universe.name}' is inactive and cannot be added to an audit programme`,
+      );
+    }
   }
-
 }

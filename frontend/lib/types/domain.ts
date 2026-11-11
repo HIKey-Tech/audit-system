@@ -242,7 +242,14 @@ export type AuditFrequency =
   | 'biannual'
   | 'annual'
   | 'biennial'
+  | 'on_demand'
   | 'ad_hoc';
+
+export interface UniverseOwner {
+  id: string;
+  name: string | null;
+  isPrimary: boolean;
+}
 
 export interface AuditUniverseEntity {
   id: string;
@@ -251,6 +258,8 @@ export interface AuditUniverseEntity {
   category: string;
   ownerId: string;
   ownerName: string;
+  ownerIds?: string[];
+  owners?: UniverseOwner[];
   riskScore: number;
   auditFrequency: string;
   lastAuditedAt: string | null;
@@ -296,6 +305,37 @@ export interface AuditPlanItem {
   engagementCreated: boolean;
   engagementId: string | null;
   notes: string | null;
+}
+
+export type PlanUniverseDueStatus =
+  | 'overdue'
+  | 'never_audited'
+  | 'due_in_year'
+  | 'on_track'
+  | 'on_demand';
+
+export interface PlanUniverseCandidate {
+  universeId: string;
+  name: string;
+  description: string | null;
+  category: string;
+  ownerName: string | null;
+  owners: UniverseOwner[];
+  riskScore: number;
+  auditFrequency: string;
+  lastAuditedAt: string | null;
+  openFindingsCount: number;
+  score: number;
+  reasons: string[];
+  recommendedPriority: 'critical' | 'high' | 'medium' | 'low';
+  dueStatus: PlanUniverseDueStatus;
+  alreadyInThisPlanCount: number;
+  alreadyInYearPlans: Array<{
+    planId: string;
+    planTitle: string;
+    auditType: string;
+    status: string;
+  }>;
 }
 
 export interface AuditPlan {

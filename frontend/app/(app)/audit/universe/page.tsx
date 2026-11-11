@@ -2,8 +2,9 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useQuery } from '@tanstack/react-query';
-import { Plus, Search, Globe } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Plus, Search, Globe, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -12,7 +13,9 @@ import { Table, type Column } from '@/components/ui/Table';
 import { Input, Select } from '@/components/ui/Input';
 import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { useDebouncedValue } from '@/lib/hooks/useDebouncedValue';
 import { universeApi } from '@/lib/api/audit';
 import { formatDate, formatNumber } from '@/lib/utils/format';
 import { humanizeStatus, riskScoreLabel, riskScoreTone } from '@/lib/utils/status';
@@ -21,24 +24,49 @@ import { UniverseFormSlideOver } from '@/components/audit/universe/UniverseFormS
 
 export default function UniverseListPage(): JSX.Element {
   const router = useRouter();
-  const { canManageAuditProgramme: canWrite } = usePermissions();
+  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canCreate = hasPermission('universe:create');
+  const canUpdate = hasPermission('universe:update');
+  const canDelete = hasPermission('universe:delete');
 
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [category, setCategory] = useState('');
+  const [auditFrequency, setAuditFrequency] = useState('');
   const [status, setStatus] = useState('');
   const [slideOpen, setSlideOpen] = useState(false);
+  const [editingEntity, setEditingEntity] = useState<AuditUniverseEntity | null>(null);
+  const [deletingEntity, setDeletingEntity] = useState<AuditUniverseEntity | null>(null);
+
+  const debouncedSearch = useDebouncedValue(search, 300);
 
   const query = useQuery({
-    queryKey: ['universe', { page, search, category, status }],
+    queryKey: ['universe', { page, search: debouncedSearch, category, auditFrequency, status }],
     queryFn: () =>
       universeApi.list({
         page,
         pageSize: 20,
-        search: search || undefined,
+        search: debouncedSearch || undefined,
         category: category || undefined,
+        auditFrequency: auditFrequency || undefined,
         status: status || undefined,
       }),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: string) => universeApi.remove(id),
+    onSuccess: () => {
+      toast.success('Entity removed from audit universe');
+      qc.invalidateQueries({ queryKey: ['universe'] });
+      qc.invalidateQueries({ queryKey: ['plans', 'recommendations'] });
+      qc.invalidateQueries({ queryKey: ['plans'] });
+      setDeletingEntity(null);
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove entity');
+      setDeletingEntity(null);
+    },
   });
 
   const columns: Column<AuditUniverseEntity>[] = [
@@ -58,13 +86,29 @@ export default function UniverseListPage(): JSX.Element {
       key: 'category',
       header: 'Category',
       render: (e) => <Badge tone="gray">{humanizeStatus(e.category)}</Badge>,
-      width: '140px',
+      width: '130px',
     },
     {
       key: 'owner',
-      header: 'Owner',
-      render: (e) => <span className="text-text-secondary">{e.ownerName}</span>,
-      width: '180px',
+      header: 'Owners',
+      render: (e) => {
+        const allNames =
+          e.owners && e.owners.length > 0
+            ? e.owners.map((o) => o.name).filter(Boolean).join(', ')
+            : e.ownerName;
+        const extraCount = (e.owners?.length ?? 1) - 1;
+        return (
+          <div className="flex items-center gap-1.5 min-w-0" title={allNames}>
+            <span className="truncate text-text-secondary">{e.ownerName || '—'}</span>
+            {extraCount > 0 && (
+              <Badge tone="gray" className="shrink-0 text-[10px] py-0 px-1.5">
+                +{extraCount}
+              </Badge>
+            )}
+          </div>
+        );
+      },
+      width: '200px',
     },
     {
       key: 'risk',
@@ -80,13 +124,13 @@ export default function UniverseListPage(): JSX.Element {
           </span>
         );
       },
-      width: '170px',
+      width: '165px',
     },
     {
       key: 'frequency',
       header: 'Frequency',
-      render: (e) => <span className="capitalize text-text-secondary">{humanizeStatus(e.auditFrequency)}</span>,
-      width: '120px',
+      render: (e) => <span className="text-text-secondary">{humanizeStatus(e.auditFrequency)}</span>,
+      width: '125px',
     },
     {
       key: 'lastAudited',
@@ -96,30 +140,62 @@ export default function UniverseListPage(): JSX.Element {
           {e.lastAuditedAt ? formatDate(e.lastAuditedAt) : 'Never'}
         </span>
       ),
-      width: '130px',
+      width: '125px',
     },
     {
       key: 'status',
       header: 'Status',
       render: (e) => <StatusBadge status={e.status} />,
-      width: '110px',
+      width: '105px',
     },
     {
       key: 'actions',
       header: '',
       align: 'right',
-      width: '90px',
+      width: canUpdate || canDelete ? '155px' : '85px',
       render: (e) => (
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={(ev) => {
-            ev.stopPropagation();
-            router.push(`/audit/universe/${e.id}`);
-          }}
-        >
-          View
-        </Button>
+        <div className="inline-flex items-center justify-end gap-1">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={(ev) => {
+              ev.stopPropagation();
+              router.push(`/audit/universe/${e.id}`);
+            }}
+          >
+            View
+          </Button>
+          {canUpdate && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Edit ${e.name}`}
+              title="Edit entity"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                setEditingEntity(e);
+                setSlideOpen(true);
+              }}
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+          )}
+          {canDelete && (
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${e.name}`}
+              title="Remove entity"
+              className="text-danger hover:text-danger"
+              onClick={(ev) => {
+                ev.stopPropagation();
+                setDeletingEntity(e);
+              }}
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
+        </div>
       ),
     },
   ];
@@ -130,8 +206,14 @@ export default function UniverseListPage(): JSX.Element {
         title="Audit Universe"
         subtitle="Departments, systems, processes, assets and projects in the audit scope."
         actions={
-          canWrite ? (
-            <Button leftIcon={<Plus className="h-4 w-4" />} onClick={() => setSlideOpen(true)}>
+          canCreate ? (
+            <Button
+              leftIcon={<Plus className="h-4 w-4" />}
+              onClick={() => {
+                setEditingEntity(null);
+                setSlideOpen(true);
+              }}
+            >
               New Entity
             </Button>
           ) : null
@@ -139,9 +221,9 @@ export default function UniverseListPage(): JSX.Element {
       />
 
       <Card padded className="mb-4">
-        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Input
-            placeholder="Search by name…"
+            placeholder="Search by name or description…"
             leftIcon={<Search className="h-4 w-4" />}
             value={search}
             onChange={(e) => {
@@ -162,6 +244,20 @@ export default function UniverseListPage(): JSX.Element {
             <option value="process">Process</option>
             <option value="asset">Asset</option>
             <option value="project">Project</option>
+          </Select>
+          <Select
+            value={auditFrequency}
+            onChange={(e) => {
+              setAuditFrequency(e.target.value);
+              setPage(1);
+            }}
+          >
+            <option value="">All frequencies</option>
+            <option value="monthly">Monthly</option>
+            <option value="quarterly">Quarterly</option>
+            <option value="biannual">Bi-annual</option>
+            <option value="annual">Annual</option>
+            <option value="on_demand">On-Demand</option>
           </Select>
           <Select
             value={status}
@@ -191,8 +287,15 @@ export default function UniverseListPage(): JSX.Element {
             title="No auditable entities yet"
             description="Add your first entity to start defining the GBB audit universe."
             action={
-              canWrite ? (
-                <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setSlideOpen(true)}>
+              canCreate ? (
+                <Button
+                  size="sm"
+                  leftIcon={<Plus className="h-3.5 w-3.5" />}
+                  onClick={() => {
+                    setEditingEntity(null);
+                    setSlideOpen(true);
+                  }}
+                >
                   New Entity
                 </Button>
               ) : undefined
@@ -211,7 +314,30 @@ export default function UniverseListPage(): JSX.Element {
         }
       />
 
-      <UniverseFormSlideOver open={slideOpen} onClose={() => setSlideOpen(false)} />
+      <UniverseFormSlideOver
+        open={slideOpen}
+        entity={editingEntity}
+        onClose={() => {
+          setSlideOpen(false);
+          setEditingEntity(null);
+        }}
+      />
+
+      <ConfirmDialog
+        open={Boolean(deletingEntity)}
+        title="Remove auditable entity"
+        description={
+          deletingEntity
+            ? `Remove "${deletingEntity.name}" from the Audit Universe? Entities referenced by audit plans, engagements, risks, assets, or system documents cannot be removed and must be deactivated instead.`
+            : undefined
+        }
+        confirmLabel="Remove entity"
+        isLoading={deleteMut.isPending}
+        onCancel={() => setDeletingEntity(null)}
+        onConfirm={() => {
+          if (deletingEntity) deleteMut.mutate(deletingEntity.id);
+        }}
+      />
     </div>
   );
 }

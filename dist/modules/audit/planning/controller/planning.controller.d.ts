@@ -7,6 +7,8 @@ export declare class PlanningController {
     private _registerRoutes;
     private _createPlan;
     private _addPlanItem;
+    private _bulkAddPlanItems;
+    private _updatePlanItem;
     private _updatePlan;
     private _deletePlan;
     private _removePlanItem;
@@ -14,6 +16,7 @@ export declare class PlanningController {
     private _approvePlan;
     private _rejectPlan;
     private _getPlanById;
+    private _getUniverseCandidates;
     private _getRecommendations;
     private _listPlans;
 }

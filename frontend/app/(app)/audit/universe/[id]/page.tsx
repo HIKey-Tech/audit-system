@@ -3,8 +3,9 @@
 import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { useQuery } from '@tanstack/react-query';
-import { ArrowLeft, Pencil } from 'lucide-react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { ArrowLeft, Pencil, Trash2 } from 'lucide-react';
+import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Button } from '@/components/ui/Button';
@@ -13,6 +14,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton } from '@/components/ui/Skeleton';
 import { EmptyState } from '@/components/ui/EmptyState';
 import { ErrorState } from '@/components/ui/ErrorState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Table, type Column } from '@/components/ui/Table';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { universeApi } from '@/lib/api/audit';
@@ -29,13 +31,33 @@ export default function UniverseDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
   const router = useRouter();
-  const { canManageAuditProgramme: canWrite } = usePermissions();
+  const qc = useQueryClient();
+  const { hasPermission } = usePermissions();
+  const canUpdate = hasPermission('universe:update');
+  const canDelete = hasPermission('universe:delete');
   const [editOpen, setEditOpen] = useState(false);
+  const [deleteOpen, setDeleteOpen] = useState(false);
 
   const { data, isLoading, isError, error, refetch } = useQuery({
     queryKey: ['universe', id],
     queryFn: () => universeApi.get(id),
     enabled: Boolean(id),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: () => universeApi.remove(id),
+    onSuccess: () => {
+      toast.success('Entity removed from audit universe');
+      qc.invalidateQueries({ queryKey: ['universe'] });
+      qc.invalidateQueries({ queryKey: ['plans', 'recommendations'] });
+      qc.invalidateQueries({ queryKey: ['plans'] });
+      setDeleteOpen(false);
+      router.push('/audit/universe');
+    },
+    onError: (err) => {
+      toast.error(err instanceof Error ? err.message : 'Failed to remove entity');
+      setDeleteOpen(false);
+    },
   });
 
   if (isError) {
@@ -75,6 +97,11 @@ export default function UniverseDetailPage(): JSX.Element {
   }
 
   const t = riskScoreTone(data.riskScore);
+  const owners =
+    data.owners && data.owners.length > 0
+      ? data.owners
+      : [{ id: data.ownerId, name: data.ownerName, isPrimary: true }];
+
   const riskColumns: Column<UniverseLinkedRisk>[] = [
     {
       key: 'title',
@@ -168,9 +195,18 @@ export default function UniverseDetailPage(): JSX.Element {
             <Button variant="secondary" leftIcon={<ArrowLeft className="h-4 w-4" />} onClick={() => router.push('/audit/universe')}>
               Back
             </Button>
-            {canWrite && (
+            {canUpdate && (
               <Button leftIcon={<Pencil className="h-4 w-4" />} onClick={() => setEditOpen(true)}>
                 Edit
+              </Button>
+            )}
+            {canDelete && (
+              <Button
+                variant="danger"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                onClick={() => setDeleteOpen(true)}
+              >
+                Delete
               </Button>
             )}
           </div>
@@ -189,9 +225,25 @@ export default function UniverseDetailPage(): JSX.Element {
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Status</dt>
               <dd className="mt-1"><StatusBadge status={data.status} /></dd>
             </div>
-            <div>
-              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Owner</dt>
-              <dd className="mt-1 text-sm text-text-primary">{data.ownerName}</dd>
+            <div className="sm:col-span-2">
+              <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+                {owners.length > 1 ? 'Owners' : 'Owner'}
+              </dt>
+              <dd className="mt-1.5 flex flex-wrap gap-1.5">
+                {owners.map((owner) => (
+                  <span
+                    key={owner.id}
+                    className="inline-flex items-center gap-1.5 rounded-full bg-surface-alt px-2.5 py-1 text-xs text-text-primary ring-1 ring-border"
+                  >
+                    <span>{owner.name || '—'}</span>
+                    {owner.isPrimary && owners.length > 1 && (
+                      <Badge tone="blue" className="text-[10px] py-0 px-1.5">
+                        Primary
+                      </Badge>
+                    )}
+                  </span>
+                ))}
+              </dd>
             </div>
             <div>
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Audit frequency</dt>
@@ -265,6 +317,16 @@ export default function UniverseDetailPage(): JSX.Element {
         open={editOpen}
         onClose={() => setEditOpen(false)}
         entity={data}
+      />
+
+      <ConfirmDialog
+        open={deleteOpen}
+        title="Remove auditable entity"
+        description={`Remove "${data.name}" from the Audit Universe? Entities referenced by audit plans, engagements, risks, assets, or system documents cannot be removed and must be deactivated instead.`}
+        confirmLabel="Remove entity"
+        isLoading={deleteMut.isPending}
+        onCancel={() => setDeleteOpen(false)}
+        onConfirm={() => deleteMut.mutate()}
       />
     </div>
   );

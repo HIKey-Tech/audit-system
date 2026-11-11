@@ -1,6 +1,6 @@
 "use strict";
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.PlanQuerySchema = exports.RejectPlanRequestSchema = exports.AddPlanItemRequestSchema = exports.UpdatePlanRequestSchema = exports.CreatePlanRequestSchema = void 0;
+exports.PlanQuerySchema = exports.RejectPlanRequestSchema = exports.BulkAddPlanItemsRequestSchema = exports.UpdatePlanItemRequestSchema = exports.AddPlanItemRequestSchema = exports.UpdatePlanRequestSchema = exports.CreatePlanRequestSchema = void 0;
 const zod_1 = require("zod");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 exports.CreatePlanRequestSchema = zod_1.z.object({
@@ -13,14 +13,34 @@ exports.CreatePlanRequestSchema = zod_1.z.object({
 exports.UpdatePlanRequestSchema = zod_1.z.object({
     title: zod_1.z.string().min(1).max(200).optional(),
     year: zod_1.z.coerce.number().int().min(2000).max(2100).optional(),
-    description: zod_1.z.string().max(2000).optional(),
+    description: zod_1.z.string().max(2000).nullable().optional(),
 });
-exports.AddPlanItemRequestSchema = zod_1.z.object({
+const BasePlanItemSchema = zod_1.z.object({
     universeId: zod_1.z.string().uuid(),
     plannedStartDate: zod_1.z.string().datetime(),
     plannedEndDate: zod_1.z.string().datetime(),
     priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority),
     notes: zod_1.z.string().max(5000).nullable().optional(),
+});
+exports.AddPlanItemRequestSchema = BasePlanItemSchema.refine((d) => new Date(d.plannedStartDate) <= new Date(d.plannedEndDate), { message: 'Planned end date must be on or after planned start date', path: ['plannedEndDate'] });
+exports.UpdatePlanItemRequestSchema = zod_1.z
+    .object({
+    universeId: zod_1.z.string().uuid().optional(),
+    plannedStartDate: zod_1.z.string().datetime().optional(),
+    plannedEndDate: zod_1.z.string().datetime().optional(),
+    priority: zod_1.z.nativeEnum(audit_enum_1.AuditPriority).optional(),
+    notes: zod_1.z.string().max(5000).nullable().optional(),
+})
+    .refine((d) => d.universeId !== undefined ||
+    d.plannedStartDate !== undefined ||
+    d.plannedEndDate !== undefined ||
+    d.priority !== undefined ||
+    d.notes !== undefined, { message: 'At least one field is required' })
+    .refine((d) => !d.plannedStartDate ||
+    !d.plannedEndDate ||
+    new Date(d.plannedStartDate) <= new Date(d.plannedEndDate), { message: 'Planned end date must be on or after planned start date', path: ['plannedEndDate'] });
+exports.BulkAddPlanItemsRequestSchema = zod_1.z.object({
+    items: zod_1.z.array(exports.AddPlanItemRequestSchema).min(1).max(100),
 });
 exports.RejectPlanRequestSchema = zod_1.z.object({
     reason: zod_1.z.string().min(1).max(5000),

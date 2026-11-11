@@ -15,6 +15,6 @@ export declare class UniverseService implements IUniverseService {
         entities: UniverseResponseDto[];
         meta: PaginationMeta;
     }>;
-    private _assertEntityExists;
+    private _assertOwnersActive;
 }
 //# sourceMappingURL=universe.service.d.ts.map

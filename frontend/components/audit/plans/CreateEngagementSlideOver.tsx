@@ -40,6 +40,8 @@ interface Props {
   planId: string;
   itemId: string;
   defaultTitle?: string;
+  defaultStartDate?: string;
+  defaultEndDate?: string;
 }
 
 export const CreateEngagementSlideOver = ({
@@ -48,6 +50,8 @@ export const CreateEngagementSlideOver = ({
   planId,
   itemId,
   defaultTitle,
+  defaultStartDate,
+  defaultEndDate,
 }: Props): JSX.Element => {
   const qc = useQueryClient();
   const router = useRouter();
@@ -74,17 +78,19 @@ export const CreateEngagementSlideOver = ({
 
   useEffect(() => {
     if (open) {
+      const start = defaultStartDate ? defaultStartDate.slice(0, 10) : '';
+      const end = defaultEndDate ? defaultEndDate.slice(0, 10) : '';
       reset({
         title: defaultTitle ?? '',
         leadAuditorId: '',
         auditManagerId: '',
         auditeeId: '',
-        plannedStartDate: '',
-        plannedEndDate: '',
-        slaDeadline: '',
+        plannedStartDate: start,
+        plannedEndDate: end,
+        slaDeadline: end,
       });
     }
-  }, [open, reset, defaultTitle]);
+  }, [open, reset, defaultTitle, defaultStartDate, defaultEndDate]);
 
   const create = useMutation({
     mutationFn: (v: FormValues) =>

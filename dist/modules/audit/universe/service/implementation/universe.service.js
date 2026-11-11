@@ -9,7 +9,17 @@ const api_response_type_1 = require("../../../../../shared/types/api-response.ty
 const audit_log_service_1 = require("../../../../logging/service/implementation/audit-log.service");
 const audit_enum_1 = require("../../../domain/enum/audit.enum");
 const audit_utility_1 = require("../../../utility/audit.utility");
+const recommendations_cache_utility_1 = require("../../../planning/utility/recommendations-cache.utility");
 const universe_response_dto_1 = require("../../dto/response/universe.response.dto");
+const universe_utility_1 = require("../../utility/universe.utility");
+const userBriefSelect = { id: true, display_name: true, first_name: true, last_name: true };
+const universeInclude = {
+    owner: { select: userBriefSelect },
+    additional_owners: {
+        include: { user: { select: userBriefSelect } },
+        orderBy: { created_at: 'asc' },
+    },
+};
 class UniverseService {
     riskRegisterService;
     constructor(riskRegisterService) {
@@ -17,18 +27,40 @@ class UniverseService {
     }
     async createEntity(dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:create');
-        const entity = await prisma_client_1.prisma.audit_Universe.create({
-            data: {
-                name: dto.name,
-                description: dto.description,
-                category: dto.category,
-                owner_id: dto.ownerId,
-                risk_score: dto.riskScore === undefined ? null : new client_1.Prisma.Decimal(dto.riskScore),
-                last_audited_at: dto.lastAuditedAt ? new Date(dto.lastAuditedAt) : null,
-                audit_frequency: dto.auditFrequency,
-                created_by_id: actor.id,
-            },
+        const resolvedOwners = (0, universe_utility_1.resolveUniverseOwners)(dto);
+        if (!resolvedOwners) {
+            throw app_error_1.AppError.badRequest('At least one owner is required');
+        }
+        await this._assertOwnersActive([resolvedOwners.primaryOwnerId, ...resolvedOwners.additionalOwnerIds]);
+        const entity = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const created = await tx.audit_Universe.create({
+                data: {
+                    name: dto.name,
+                    description: dto.description,
+                    category: dto.category,
+                    owner_id: resolvedOwners.primaryOwnerId,
+                    risk_score: dto.riskScore === undefined ? null : new client_1.Prisma.Decimal(dto.riskScore),
+                    last_audited_at: dto.lastAuditedAt ? new Date(dto.lastAuditedAt) : null,
+                    audit_frequency: dto.auditFrequency,
+                    created_by_id: actor.id,
+                },
+                include: universeInclude,
+            });
+            if (resolvedOwners.additionalOwnerIds.length > 0) {
+                await tx.audit_Universe_Owner.createMany({
+                    data: resolvedOwners.additionalOwnerIds.map((userId) => ({
+                        universe_id: created.id,
+                        user_id: userId,
+                    })),
+                });
+                return tx.audit_Universe.findUniqueOrThrow({
+                    where: { id: created.id },
+                    include: universeInclude,
+                });
+            }
+            return created;
         });
+        (0, recommendations_cache_utility_1.invalidatePlanningRecommendationsCache)();
         logger_util_1.logger.info('Audit universe entity created', { entityId: entity.id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
             userId: actor.id,
@@ -42,25 +74,59 @@ class UniverseService {
     }
     async updateEntity(id, dto, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:update');
-        await this._assertEntityExists(id);
-        const before = await prisma_client_1.prisma.audit_Universe.findUnique({ where: { id } });
-        const entity = await prisma_client_1.prisma.audit_Universe.update({
-            where: { id },
-            data: {
-                ...(dto.name !== undefined && { name: dto.name }),
-                ...(dto.description !== undefined && { description: dto.description }),
-                ...(dto.category !== undefined && { category: dto.category }),
-                ...(dto.ownerId !== undefined && { owner_id: dto.ownerId }),
-                ...(dto.riskScore !== undefined && {
-                    risk_score: dto.riskScore === null ? null : new client_1.Prisma.Decimal(dto.riskScore),
-                }),
-                ...(dto.lastAuditedAt !== undefined && {
-                    last_audited_at: dto.lastAuditedAt === null ? null : new Date(dto.lastAuditedAt),
-                }),
-                ...(dto.auditFrequency !== undefined && { audit_frequency: dto.auditFrequency }),
-                ...(dto.status !== undefined && { status: dto.status }),
-            },
+        const before = await prisma_client_1.prisma.audit_Universe.findFirst({
+            where: { id, deleted_at: null },
+            include: universeInclude,
         });
+        if (!before)
+            throw app_error_1.AppError.notFound('Audit universe entity');
+        const resolvedOwners = (0, universe_utility_1.resolveUniverseOwners)(dto, {
+            primaryOwnerId: before.owner_id,
+            additionalOwnerIds: before.additional_owners.map((o) => o.user_id),
+        });
+        if (dto.ownerIds !== undefined && !resolvedOwners) {
+            throw app_error_1.AppError.badRequest('At least one owner is required');
+        }
+        if (resolvedOwners) {
+            await this._assertOwnersActive([resolvedOwners.primaryOwnerId, ...resolvedOwners.additionalOwnerIds]);
+        }
+        const entity = await prisma_client_1.prisma.$transaction(async (tx) => {
+            const updated = await tx.audit_Universe.update({
+                where: { id },
+                data: {
+                    ...(dto.name !== undefined && { name: dto.name }),
+                    ...(dto.description !== undefined && { description: dto.description }),
+                    ...(dto.category !== undefined && { category: dto.category }),
+                    ...(resolvedOwners && { owner_id: resolvedOwners.primaryOwnerId }),
+                    ...(dto.riskScore !== undefined && {
+                        risk_score: dto.riskScore === null ? null : new client_1.Prisma.Decimal(dto.riskScore),
+                    }),
+                    ...(dto.lastAuditedAt !== undefined && {
+                        last_audited_at: dto.lastAuditedAt === null ? null : new Date(dto.lastAuditedAt),
+                    }),
+                    ...(dto.auditFrequency !== undefined && { audit_frequency: dto.auditFrequency }),
+                    ...(dto.status !== undefined && { status: dto.status }),
+                },
+                include: universeInclude,
+            });
+            if (resolvedOwners) {
+                await tx.audit_Universe_Owner.deleteMany({ where: { universe_id: id } });
+                if (resolvedOwners.additionalOwnerIds.length > 0) {
+                    await tx.audit_Universe_Owner.createMany({
+                        data: resolvedOwners.additionalOwnerIds.map((userId) => ({
+                            universe_id: id,
+                            user_id: userId,
+                        })),
+                    });
+                }
+                return tx.audit_Universe.findUniqueOrThrow({
+                    where: { id },
+                    include: universeInclude,
+                });
+            }
+            return updated;
+        });
+        (0, recommendations_cache_utility_1.invalidatePlanningRecommendationsCache)();
         logger_util_1.logger.info('Audit universe entity updated', { entityId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
             userId: actor.id,
@@ -68,14 +134,46 @@ class UniverseService {
             module: 'audit',
             entityType: 'audit_universe',
             entityId: id,
-            oldValues: before ? (0, universe_response_dto_1.mapUniverseToResponse)(before) : undefined,
+            oldValues: (0, universe_response_dto_1.mapUniverseToResponse)(before),
             newValues: (0, universe_response_dto_1.mapUniverseToResponse)(entity),
         });
         return (0, universe_response_dto_1.mapUniverseToResponse)(entity);
     }
     async deactivateEntity(id, actor) {
         (0, audit_utility_1.assertHasPermission)(actor.permissions, 'universe:delete');
-        await this._assertEntityExists(id);
+        const existing = await prisma_client_1.prisma.audit_Universe.findFirst({
+            where: { id, deleted_at: null },
+            include: universeInclude,
+        });
+        if (!existing)
+            throw app_error_1.AppError.notFound('Audit universe entity');
+        const [planItems, engagements, risks, assets, systemDocs] = await prisma_client_1.prisma.$transaction([
+            prisma_client_1.prisma.audit_Plan_Item.count({
+                where: { universe_id: id, plan: { deleted_at: null } },
+            }),
+            prisma_client_1.prisma.audit_Engagement.count({
+                where: { universe_id: id, deleted_at: null },
+            }),
+            prisma_client_1.prisma.risk_Register.count({
+                where: { universe_id: id, deleted_at: null },
+            }),
+            prisma_client_1.prisma.audit_Universe_Asset.count({
+                where: { universe_id: id },
+            }),
+            prisma_client_1.prisma.system_Document.count({
+                where: { universe_id: id, deleted_at: null },
+            }),
+        ]);
+        const blockers = (0, universe_utility_1.listUniverseReferenceBlockers)({
+            planItems,
+            engagements,
+            risks,
+            assets,
+            systemDocs,
+        });
+        if (blockers.length > 0) {
+            throw app_error_1.AppError.badRequest(`Cannot remove '${existing.name}' because it is linked to ${blockers.join(', ')}. Edit it and set Status to Inactive to retire it without losing history.`);
+        }
         await prisma_client_1.prisma.audit_Universe.update({
             where: { id },
             data: {
@@ -83,6 +181,7 @@ class UniverseService {
                 deleted_at: new Date(),
             },
         });
+        (0, recommendations_cache_utility_1.invalidatePlanningRecommendationsCache)();
         logger_util_1.logger.info('Audit universe entity deactivated', { entityId: id, actorId: actor.id });
         audit_log_service_1.auditLogService.logAsync({
             userId: actor.id,
@@ -90,12 +189,13 @@ class UniverseService {
             module: 'audit',
             entityType: 'audit_universe',
             entityId: id,
+            oldValues: (0, universe_response_dto_1.mapUniverseToResponse)(existing),
         });
     }
     async getEntityById(id, actor) {
         const entity = await prisma_client_1.prisma.audit_Universe.findFirst({
             where: { id, deleted_at: null },
-            include: { owner: { select: { display_name: true, first_name: true, last_name: true } } },
+            include: universeInclude,
         });
         if (!entity)
             throw app_error_1.AppError.notFound('Audit universe entity');
@@ -150,13 +250,20 @@ class UniverseService {
         const where = {
             deleted_at: null,
             ...(query.category && { category: query.category }),
+            ...(query.auditFrequency && { audit_frequency: query.auditFrequency }),
             ...(query.status && { status: query.status }),
+            ...(query.search && {
+                OR: [
+                    { name: { contains: query.search } },
+                    { description: { contains: query.search } },
+                ],
+            }),
         };
         const [total, entities] = await prisma_client_1.prisma.$transaction([
             prisma_client_1.prisma.audit_Universe.count({ where }),
             prisma_client_1.prisma.audit_Universe.findMany({
                 where,
-                include: { owner: { select: { display_name: true, first_name: true, last_name: true } } },
+                include: universeInclude,
                 orderBy: { [query.sortBy]: query.sortOrder },
                 skip,
                 take,
@@ -167,13 +274,18 @@ class UniverseService {
             meta: (0, api_response_type_1.buildPaginationMeta)(total, page, pageSize),
         };
     }
-    async _assertEntityExists(id) {
-        const entity = await prisma_client_1.prisma.audit_Universe.findFirst({
-            where: { id, deleted_at: null },
+    async _assertOwnersActive(ownerIds) {
+        const uniqueIds = [...new Set(ownerIds)];
+        if (uniqueIds.length === 0)
+            return;
+        const users = await prisma_client_1.prisma.user.findMany({
+            where: { id: { in: uniqueIds }, deleted_at: null, is_active: true },
             select: { id: true },
         });
-        if (!entity)
-            throw app_error_1.AppError.notFound('Audit universe entity');
+        const found = new Set(users.map((u) => u.id));
+        if (found.size !== uniqueIds.length) {
+            throw app_error_1.AppError.badRequest('One or more selected owners do not exist or are inactive');
+        }
     }
 }
 exports.UniverseService = UniverseService;

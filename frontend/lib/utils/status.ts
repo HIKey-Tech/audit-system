@@ -185,6 +185,7 @@ export const statusTone = (status: string | null | undefined): ToneStyle => {
 const STATUS_LABELS: Record<string, string> = {
   under_review: 'Quality Assurance',
   reported: 'Review Issued',
+  on_demand: 'On-Demand',
 };
 
 export const humanizeStatus = (status: string | null | undefined): string => {

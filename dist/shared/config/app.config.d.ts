@@ -97,6 +97,15 @@ export declare const config: {
         readonly ingestRequestsPerSecond: number;
         readonly timestampsUtc: boolean;
     };
+    readonly projectPlus: {
+        readonly enabled: boolean;
+        readonly baseUrl: string;
+        readonly authMode: string;
+        readonly authHeader: string;
+        readonly authSecret: string;
+        readonly timeoutMs: number;
+        readonly caCertPath: string;
+    };
     readonly redis: {
         readonly url: string;
         readonly password: string;

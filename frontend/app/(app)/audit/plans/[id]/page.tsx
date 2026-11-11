@@ -1,10 +1,10 @@
 'use client';
 
 import { useState } from 'react';
-import { useParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Send, Check, X } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Check, X, Pencil, Trash2, Sparkles, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -14,6 +14,7 @@ import { Badge, StatusBadge } from '@/components/ui/Badge';
 import { Skeleton, ListSkeleton } from '@/components/ui/Skeleton';
 import { ErrorState } from '@/components/ui/ErrorState';
 import { EmptyState } from '@/components/ui/EmptyState';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { Table, type Column } from '@/components/ui/Table';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Textarea } from '@/components/ui/Input';
@@ -22,7 +23,9 @@ import { FormField } from '@/components/ui/FormField';
 import { plansApi } from '@/lib/api/audit';
 import { formatDate } from '@/lib/utils/format';
 import { usePermissions } from '@/lib/hooks/usePermissions';
+import { PlanFormSlideOver } from '@/components/audit/plans/PlanFormSlideOver';
 import { AddPlanItemSlideOver } from '@/components/audit/plans/AddPlanItemSlideOver';
+import { PopulateFromUniverseSlideOver } from '@/components/audit/plans/PopulateFromUniverseSlideOver';
 import { CreateEngagementSlideOver } from '@/components/audit/plans/CreateEngagementSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
@@ -33,12 +36,28 @@ import { auditTypeLabel } from '@/lib/audit-domains';
 export default function PlanDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
   const id = params?.id ?? '';
+  const router = useRouter();
   const qc = useQueryClient();
-  const { canManageAuditProgramme: canWrite, hasPermission } = usePermissions();
+  const { hasPermission } = usePermissions();
+
+  const canEditPlan = hasPermission('plan:update');
+  const canEditItems = hasPermission('plan:add_item');
+  const canSubmitPlan = hasPermission('plan:submit');
+  const canCreateEngagement = hasPermission('engagement:create');
   const isAdmin = hasPermission('plan:approve');
 
+  const [editPlanOpen, setEditPlanOpen] = useState(false);
+  const [deletePlanOpen, setDeletePlanOpen] = useState(false);
   const [addItemOpen, setAddItemOpen] = useState(false);
-  const [createEngOpen, setCreateEngOpen] = useState<{ itemId: string; title: string } | null>(null);
+  const [populateOpen, setPopulateOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<AuditPlanItem | null>(null);
+  const [removingItem, setRemovingItem] = useState<AuditPlanItem | null>(null);
+  const [createEngOpen, setCreateEngOpen] = useState<{
+    itemId: string;
+    title: string;
+    plannedStartDate: string;
+    plannedEndDate: string;
+  } | null>(null);
   const [rejectOpen, setRejectOpen] = useState(false);
   const [rejectReason, setRejectReason] = useState('');
   const [approveOpen, setApproveOpen] = useState(false);
@@ -54,9 +73,39 @@ export default function PlanDetailPage(): JSX.Element {
     onSuccess: () => {
       toast.success('Programme submitted for approval');
       qc.invalidateQueries({ queryKey: ['plans', id] });
+      qc.invalidateQueries({ queryKey: ['plans'] });
       qc.invalidateQueries({ queryKey: ['approval-chain'] });
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
+  });
+
+  const deletePlanMut = useMutation({
+    mutationFn: () => plansApi.remove(id),
+    onSuccess: () => {
+      toast.success('Programme deleted');
+      qc.invalidateQueries({ queryKey: ['plans'] });
+      setDeletePlanOpen(false);
+      router.push('/audit/plans');
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : 'Failed to delete programme');
+      setDeletePlanOpen(false);
+    },
+  });
+
+  const removeItemMut = useMutation({
+    mutationFn: (itemId: string) => plansApi.removeItem(id, itemId),
+    onSuccess: () => {
+      toast.success('Plan item removed');
+      qc.invalidateQueries({ queryKey: ['plans', id] });
+      qc.invalidateQueries({ queryKey: ['plans'] });
+      qc.invalidateQueries({ queryKey: ['plans', id, 'universe-candidates'] });
+      setRemovingItem(null);
+    },
+    onError: (e) => {
+      toast.error(e instanceof Error ? e.message : 'Failed to remove item');
+      setRemovingItem(null);
+    },
   });
 
   const rejectMut = useMutation({
@@ -64,6 +113,7 @@ export default function PlanDetailPage(): JSX.Element {
     onSuccess: () => {
       toast.success('Programme rejected');
       qc.invalidateQueries({ queryKey: ['plans', id] });
+      qc.invalidateQueries({ queryKey: ['plans'] });
       qc.invalidateQueries({ queryKey: ['approval-chain'] });
       setRejectOpen(false);
       setRejectReason('');
@@ -96,13 +146,21 @@ export default function PlanDetailPage(): JSX.Element {
     );
   }
 
+  const isEditable = data.status === 'draft' || data.status === 'rejected';
+  const hasEngagements = (data.items ?? []).some((i) => i.engagementCreated);
+
   const itemColumns: Column<AuditPlanItem>[] = [
     {
       key: 'name',
       header: 'Entity',
       render: (i) => (
         <div className="min-w-0">
-          <span className="font-medium text-text-primary">{i.universeName}</span>
+          <Link
+            href={`/audit/universe/${i.universeId}`}
+            className="font-medium text-text-primary hover:text-primary hover:underline"
+          >
+            {i.universeName}
+          </Link>
           {i.notes && (
             <p className="mt-0.5 text-xs text-text-muted whitespace-pre-wrap">{i.notes}</p>
           )}
@@ -139,22 +197,25 @@ export default function PlanDetailPage(): JSX.Element {
             </Link>
           );
         }
-        if (data.status === 'approved' && canWrite) {
+        if (data.status === 'approved' && canCreateEngagement) {
           return (
             <Button
               size="sm"
               variant="ghost"
               onClick={(e) => {
                 e.stopPropagation();
-                setCreateEngOpen({ itemId: i.id, title: i.universeName });
+                setCreateEngOpen({
+                  itemId: i.id,
+                  title: i.universeName,
+                  plannedStartDate: i.plannedStartDate,
+                  plannedEndDate: i.plannedEndDate,
+                });
               }}
             >
               Create
             </Button>
           );
         }
-        // Approved but the viewer can't create engagements — say so instead of
-        // wrongly implying the programme is still awaiting approval.
         return (
           <span className="text-text-muted text-xs">
             {data.status === 'approved' ? 'No engagement yet' : 'Pending programme approval'}
@@ -163,6 +224,49 @@ export default function PlanDetailPage(): JSX.Element {
       },
       width: '170px',
     },
+    ...(isEditable && canEditItems
+      ? [
+          {
+            key: 'actions',
+            header: '',
+            align: 'right' as const,
+            width: '96px',
+            render: (i: AuditPlanItem) =>
+              i.engagementCreated ? (
+                <span className="text-[11px] text-text-muted">Locked</span>
+              ) : (
+                <div className="inline-flex items-center justify-end gap-1">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Edit ${i.universeName}`}
+                    title="Edit plan item"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setEditingItem(i);
+                      setAddItemOpen(true);
+                    }}
+                  >
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    aria-label={`Remove ${i.universeName}`}
+                    title="Remove plan item"
+                    className="text-danger hover:text-danger"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setRemovingItem(i);
+                    }}
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              ),
+          },
+        ]
+      : []),
   ];
 
   return (
@@ -181,7 +285,25 @@ export default function PlanDetailPage(): JSX.Element {
                 Back
               </Button>
             </Link>
-            {(data.status === 'draft' || data.status === 'rejected') && canWrite && (
+            {isEditable && canEditPlan && (
+              <Button
+                variant="secondary"
+                leftIcon={<Pencil className="h-4 w-4" />}
+                onClick={() => setEditPlanOpen(true)}
+              >
+                Edit
+              </Button>
+            )}
+            {isEditable && canEditPlan && !hasEngagements && (
+              <Button
+                variant="danger"
+                leftIcon={<Trash2 className="h-4 w-4" />}
+                onClick={() => setDeletePlanOpen(true)}
+              >
+                Delete
+              </Button>
+            )}
+            {isEditable && canSubmitPlan && (
               <Button
                 leftIcon={<Send className="h-4 w-4" />}
                 onClick={() => submitMut.mutate()}
@@ -221,7 +343,8 @@ export default function PlanDetailPage(): JSX.Element {
             onDone={() => {
               setApproveOpen(false);
               qc.invalidateQueries({ queryKey: ['plans', id] });
-      qc.invalidateQueries({ queryKey: ['approval-chain'] });
+              qc.invalidateQueries({ queryKey: ['plans'] });
+              qc.invalidateQueries({ queryKey: ['approval-chain'] });
             }}
           />
         </div>
@@ -258,7 +381,7 @@ export default function PlanDetailPage(): JSX.Element {
               <dd className="mt-1 text-sm text-text-primary">{data.approvedByName ?? '—'}</dd>
             </div>
             {data.description && (
-              <div className="col-span-2">
+              <div className="sm:col-span-2">
                 <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Description</dt>
                 <dd className="mt-1 text-sm text-text-primary whitespace-pre-wrap">{data.description}</dd>
               </div>
@@ -278,25 +401,92 @@ export default function PlanDetailPage(): JSX.Element {
       </div>
 
       <Card className="mt-6" padded={false}>
-        <div className="flex items-center justify-between px-5 pt-5 pb-3">
-          <CardHeader title="Plans" subtitle="Audits scheduled within this programme — all of its audit type" className="mb-0" />
-          {(data.status === 'draft' || data.status === 'rejected') && canWrite && (
-            <Button size="sm" leftIcon={<Plus className="h-3.5 w-3.5" />} onClick={() => setAddItemOpen(true)}>
-              Add plan
-            </Button>
-          )}
+        <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-3">
+          <CardHeader
+            title="Plans"
+            subtitle="Audits scheduled from the Audit Universe within this programme — all inherit its audit type"
+            className="mb-0"
+          />
+          {isEditable && canEditItems ? (
+            <div className="flex flex-wrap gap-2">
+              <Button
+                size="sm"
+                variant="secondary"
+                leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                onClick={() => setPopulateOpen(true)}
+              >
+                Populate from Universe
+              </Button>
+              <Button
+                size="sm"
+                leftIcon={<Plus className="h-3.5 w-3.5" />}
+                onClick={() => {
+                  setEditingItem(null);
+                  setAddItemOpen(true);
+                }}
+              >
+                Add plan
+              </Button>
+            </div>
+          ) : !isEditable ? (
+            <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-alt px-2.5 py-1 text-xs text-text-secondary">
+              <Lock className="h-3 w-3" />
+              Items locked while {data.status}
+            </span>
+          ) : null}
         </div>
         <Table<AuditPlanItem>
           columns={itemColumns}
           data={data.items ?? []}
           rowKey={(r) => r.id}
           density="compact"
-          emptyState={<EmptyState compact title="No plans yet" description="Add the first auditable entity to this programme." />}
+          emptyState={
+            <EmptyState
+              compact
+              title="No plans yet"
+              description="Populate items directly from the Audit Universe or add them individually."
+              action={
+                isEditable && canEditItems ? (
+                  <Button
+                    size="sm"
+                    leftIcon={<Sparkles className="h-3.5 w-3.5" />}
+                    onClick={() => setPopulateOpen(true)}
+                  >
+                    Populate from Universe
+                  </Button>
+                ) : undefined
+              }
+            />
+          }
           className="rounded-none border-0 border-t border-border"
         />
       </Card>
 
-      <AddPlanItemSlideOver open={addItemOpen} onClose={() => setAddItemOpen(false)} planId={data.id} />
+      <PlanFormSlideOver
+        open={editPlanOpen}
+        onClose={() => setEditPlanOpen(false)}
+        plan={data}
+      />
+
+      <AddPlanItemSlideOver
+        open={addItemOpen}
+        onClose={() => {
+          setAddItemOpen(false);
+          setEditingItem(null);
+        }}
+        planId={data.id}
+        planYear={data.year}
+        item={editingItem}
+      />
+
+      <PopulateFromUniverseSlideOver
+        open={populateOpen}
+        onClose={() => setPopulateOpen(false)}
+        planId={data.id}
+        planTitle={data.title}
+        planYear={data.year}
+      />
+
       {createEngOpen && (
         <CreateEngagementSlideOver
           open
@@ -304,8 +494,36 @@ export default function PlanDetailPage(): JSX.Element {
           planId={data.id}
           itemId={createEngOpen.itemId}
           defaultTitle={createEngOpen.title}
+          defaultStartDate={createEngOpen.plannedStartDate}
+          defaultEndDate={createEngOpen.plannedEndDate}
         />
       )}
+
+      <ConfirmDialog
+        open={Boolean(removingItem)}
+        title="Remove plan item"
+        description={
+          removingItem
+            ? `Remove "${removingItem.universeName}" from this audit programme?`
+            : undefined
+        }
+        confirmLabel="Remove item"
+        isLoading={removeItemMut.isPending}
+        onCancel={() => setRemovingItem(null)}
+        onConfirm={() => {
+          if (removingItem) removeItemMut.mutate(removingItem.id);
+        }}
+      />
+
+      <ConfirmDialog
+        open={deletePlanOpen}
+        title="Delete audit programme"
+        description={`Delete "${data.title}" (${data.year}) and all of its draft plan items? This action cannot be undone.`}
+        confirmLabel="Delete programme"
+        isLoading={deletePlanMut.isPending}
+        onCancel={() => setDeletePlanOpen(false)}
+        onConfirm={() => deletePlanMut.mutate()}
+      />
 
       <SlideOver
         open={rejectOpen}

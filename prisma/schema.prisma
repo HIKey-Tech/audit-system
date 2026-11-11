@@ -54,6 +54,7 @@ model User {
 
   // Audit module back-relations
   universes_owned                 Audit_Universe[]         @relation("UniverseOwner")
+  universes_co_owned              Audit_Universe_Owner[]   @relation("UniverseAdditionalOwner")
   universes_created               Audit_Universe[]         @relation("UniverseCreatedBy")
   plans_created                   Audit_Plan[]             @relation("PlanCreatedBy")
   plans_approved                  Audit_Plan[]             @relation("PlanApprovedBy")
@@ -878,26 +879,44 @@ model Audit_Universe {
   owner_id        String
   risk_score      Decimal?  @db.Decimal(5, 2)
   last_audited_at DateTime?
-  audit_frequency String // annual | biannual | quarterly | monthly
+  audit_frequency String // annual | biannual | quarterly | monthly | on_demand
   status          String    @default("active") // active | inactive
   created_by_id   String
   deleted_at      DateTime?
   created_at      DateTime  @default(now())
   updated_at      DateTime  @updatedAt
 
-  owner       User               @relation("UniverseOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  created_by  User               @relation("UniverseCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
-  plan_items  Audit_Plan_Item[]
-  engagements Audit_Engagement[]
-  risks       Risk_Register[]
-  asset_links Audit_Universe_Asset[]
-  system_documents System_Document[]
+  owner             User                   @relation("UniverseOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  additional_owners Audit_Universe_Owner[]
+  created_by        User                   @relation("UniverseCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  plan_items        Audit_Plan_Item[]
+  engagements       Audit_Engagement[]
+  risks             Risk_Register[]
+  asset_links       Audit_Universe_Asset[]
+  system_documents  System_Document[]
 
   @@index([category])
   @@index([status])
   @@index([owner_id])
   @@index([risk_score])
   @@map("audit_universe")
+}
+
+// Co-owners alongside the primary `owner_id`. The primary owner stays on
+// Audit_Universe for backward compatibility while allowing multiple owners
+// per auditable entity.
+model Audit_Universe_Owner {
+  id          String   @id @default(uuid())
+  universe_id String
+  user_id     String
+  created_at  DateTime @default(now())
+
+  universe Audit_Universe @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  user     User           @relation("UniverseAdditionalOwner", fields: [user_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([universe_id, user_id])
+  @@index([user_id])
+  @@map("audit_universe_owners")
 }
 
 model Audit_Plan {

@@ -1,28 +1,54 @@
 import { z } from 'zod';
 import { AuditFrequency, UniverseCategory, UniverseStatus } from '../../../domain/enum/audit.enum';
-export declare const CreateUniverseRequestSchema: z.ZodObject<{
+export declare const CreateUniverseRequestSchema: z.ZodEffects<z.ZodObject<{
     name: z.ZodString;
     description: z.ZodOptional<z.ZodString>;
     category: z.ZodNativeEnum<typeof UniverseCategory>;
-    ownerId: z.ZodString;
+    ownerId: z.ZodOptional<z.ZodString>;
+    additionalOwnerIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    ownerIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     riskScore: z.ZodOptional<z.ZodNumber>;
     lastAuditedAt: z.ZodOptional<z.ZodString>;
     auditFrequency: z.ZodNativeEnum<typeof AuditFrequency>;
 }, "strip", z.ZodTypeAny, {
     name: string;
     category: UniverseCategory;
-    ownerId: string;
     auditFrequency: AuditFrequency;
     description?: string | undefined;
+    ownerId?: string | undefined;
     riskScore?: number | undefined;
+    additionalOwnerIds?: string[] | undefined;
+    ownerIds?: string[] | undefined;
     lastAuditedAt?: string | undefined;
 }, {
     name: string;
     category: UniverseCategory;
-    ownerId: string;
     auditFrequency: AuditFrequency;
     description?: string | undefined;
+    ownerId?: string | undefined;
     riskScore?: number | undefined;
+    additionalOwnerIds?: string[] | undefined;
+    ownerIds?: string[] | undefined;
+    lastAuditedAt?: string | undefined;
+}>, {
+    name: string;
+    category: UniverseCategory;
+    auditFrequency: AuditFrequency;
+    description?: string | undefined;
+    ownerId?: string | undefined;
+    riskScore?: number | undefined;
+    additionalOwnerIds?: string[] | undefined;
+    ownerIds?: string[] | undefined;
+    lastAuditedAt?: string | undefined;
+}, {
+    name: string;
+    category: UniverseCategory;
+    auditFrequency: AuditFrequency;
+    description?: string | undefined;
+    ownerId?: string | undefined;
+    riskScore?: number | undefined;
+    additionalOwnerIds?: string[] | undefined;
+    ownerIds?: string[] | undefined;
     lastAuditedAt?: string | undefined;
 }>;
 export declare const UpdateUniverseRequestSchema: z.ZodObject<{
@@ -30,6 +56,8 @@ export declare const UpdateUniverseRequestSchema: z.ZodObject<{
     description: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     category: z.ZodOptional<z.ZodNativeEnum<typeof UniverseCategory>>;
     ownerId: z.ZodOptional<z.ZodString>;
+    additionalOwnerIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
+    ownerIds: z.ZodOptional<z.ZodArray<z.ZodString, "many">>;
     riskScore: z.ZodOptional<z.ZodNullable<z.ZodNumber>>;
     lastAuditedAt: z.ZodOptional<z.ZodNullable<z.ZodString>>;
     auditFrequency: z.ZodOptional<z.ZodNativeEnum<typeof AuditFrequency>>;
@@ -41,6 +69,8 @@ export declare const UpdateUniverseRequestSchema: z.ZodObject<{
     category?: UniverseCategory | undefined;
     ownerId?: string | undefined;
     riskScore?: number | null | undefined;
+    additionalOwnerIds?: string[] | undefined;
+    ownerIds?: string[] | undefined;
     lastAuditedAt?: string | null | undefined;
     auditFrequency?: AuditFrequency | undefined;
 }, {
@@ -50,13 +80,17 @@ export declare const UpdateUniverseRequestSchema: z.ZodObject<{
     category?: UniverseCategory | undefined;
     ownerId?: string | undefined;
     riskScore?: number | null | undefined;
+    additionalOwnerIds?: string[] | undefined;
+    ownerIds?: string[] | undefined;
     lastAuditedAt?: string | null | undefined;
     auditFrequency?: AuditFrequency | undefined;
 }>;
 export declare const UniverseQuerySchema: z.ZodObject<{
     page: z.ZodDefault<z.ZodNumber>;
     pageSize: z.ZodDefault<z.ZodNumber>;
+    search: z.ZodOptional<z.ZodString>;
     category: z.ZodOptional<z.ZodNativeEnum<typeof UniverseCategory>>;
+    auditFrequency: z.ZodOptional<z.ZodNativeEnum<typeof AuditFrequency>>;
     status: z.ZodOptional<z.ZodNativeEnum<typeof UniverseStatus>>;
     sortBy: z.ZodDefault<z.ZodEnum<["risk_score", "name", "created_at", "updated_at"]>>;
     sortOrder: z.ZodDefault<z.ZodEnum<["asc", "desc"]>>;
@@ -65,15 +99,19 @@ export declare const UniverseQuerySchema: z.ZodObject<{
     pageSize: number;
     sortBy: "name" | "created_at" | "updated_at" | "risk_score";
     sortOrder: "asc" | "desc";
+    search?: string | undefined;
     status?: UniverseStatus | undefined;
     category?: UniverseCategory | undefined;
+    auditFrequency?: AuditFrequency | undefined;
 }, {
+    search?: string | undefined;
     status?: UniverseStatus | undefined;
     category?: UniverseCategory | undefined;
     page?: number | undefined;
     pageSize?: number | undefined;
     sortBy?: "name" | "created_at" | "updated_at" | "risk_score" | undefined;
     sortOrder?: "asc" | "desc" | undefined;
+    auditFrequency?: AuditFrequency | undefined;
 }>;
 export type CreateUniverseRequestDto = z.infer<typeof CreateUniverseRequestSchema>;
 export type UpdateUniverseRequestDto = z.infer<typeof UpdateUniverseRequestSchema>;

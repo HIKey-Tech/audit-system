@@ -167,6 +167,19 @@ exports.config = {
         ingestRequestsPerSecond: parseInt(optionalEnv('IMOC_INGEST_REQUESTS_PER_SECOND', '20'), 10),
         timestampsUtc: optionalEnv('IMOC_TIMESTAMPS_UTC', 'true') === 'true',
     },
+    // Project Plus (project implementation / contracts) is an optional, strictly
+    // read-only source reached through the Hub360 gateway. It is never required by
+    // any audit step. PROJECTPLUS_ENABLED=false (default) disables every call.
+    projectPlus: {
+        enabled: optionalEnv('PROJECTPLUS_ENABLED', 'false') === 'true',
+        baseUrl: optionalEnv('PROJECTPLUS_BASE_URL').replace(/\/$/, ''),
+        // none | api-key | bearer — final scheme pending GBB confirmation.
+        authMode: optionalEnv('PROJECTPLUS_AUTH_MODE', 'none'),
+        authHeader: optionalEnv('PROJECTPLUS_AUTH_HEADER', 'X-Api-Key'),
+        authSecret: optionalEnv('PROJECTPLUS_AUTH_SECRET'),
+        timeoutMs: parseInt(optionalEnv('PROJECTPLUS_TIMEOUT_MS', '10000'), 10),
+        caCertPath: optionalEnv('PROJECTPLUS_CA_CERT_PATH'),
+    },
     redis: {
         url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
         password: optionalEnv('REDIS_PASSWORD'),
@@ -263,6 +276,17 @@ if (exports.config.imoc.enabled) {
         && (exports.config.imoc.tenantId || exports.config.imoc.tenantAccount));
     if (!hasMachineCredentials && !exports.config.imoc.token) {
         throw new Error('Set IMOC_ACCESS_KEY, IMOC_SECRET_KEY, and IMOC_TENANT_ID or IMOC_TENANT_ACCOUNT when IMOC_ENABLED=true.');
+    }
+}
+if (exports.config.projectPlus.enabled) {
+    if (!exports.config.projectPlus.baseUrl) {
+        throw new Error('PROJECTPLUS_BASE_URL is required when PROJECTPLUS_ENABLED=true.');
+    }
+    if (!['none', 'api-key', 'bearer'].includes(exports.config.projectPlus.authMode)) {
+        throw new Error('PROJECTPLUS_AUTH_MODE must be one of: none, api-key, bearer.');
+    }
+    if (exports.config.projectPlus.authMode !== 'none' && !exports.config.projectPlus.authSecret) {
+        throw new Error('PROJECTPLUS_AUTH_SECRET is required when PROJECTPLUS_AUTH_MODE is api-key or bearer.');
     }
 }
 //# sourceMappingURL=app.config.js.map

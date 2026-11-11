@@ -259,7 +259,7 @@ export const ROLES: Array<{
     description: 'Audit manager with audit programme, workflow, risk, document, and read-only settings access',
     isSystem: false,
     permissions: [
-      'universe:read', 'universe:create', 'universe:update',
+      'universe:read', 'universe:create', 'universe:update', 'universe:delete',
       'plan:read', 'plan:create', 'plan:update', 'plan:add_item', 'plan:submit',
       'engagement:read', 'engagement:create', 'engagement:update', 'engagement:read_all', 'engagement:notify_lifecycle',
       'checklist:read', 'checklist:create', 'checklist:update',
