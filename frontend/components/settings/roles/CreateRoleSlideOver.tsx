@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/Button';
 import { FormField } from '@/components/ui/FormField';
 import { Input, Textarea } from '@/components/ui/Input';
 import { rolesApi } from '@/lib/api/settings';
+import type { RoleListDto } from '@/lib/types/domain';
 
 const Schema = z.object({
   name: z.string().min(1, 'Name is required').max(100),
@@ -24,9 +25,10 @@ type FormValues = z.infer<typeof Schema>;
 interface Props {
   open: boolean;
   onClose: () => void;
+  onCreated?: (role: RoleListDto) => void;
 }
 
-export const CreateRoleSlideOver = ({ open, onClose }: Props): JSX.Element => {
+export const CreateRoleSlideOver = ({ open, onClose, onCreated }: Props): JSX.Element => {
   const qc = useQueryClient();
 
   const {
@@ -49,10 +51,11 @@ export const CreateRoleSlideOver = ({ open, onClose }: Props): JSX.Element => {
         name: values.name,
         description: values.description || undefined,
       }),
-    onSuccess: () => {
+    onSuccess: (created) => {
       toast.success('Role created');
       qc.invalidateQueries({ queryKey: ['settings', 'roles'] });
       onClose();
+      onCreated?.(created);
     },
     onError: (err) =>
       toast.error(err instanceof Error ? err.message : 'Failed to create role'),

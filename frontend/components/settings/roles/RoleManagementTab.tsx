@@ -151,7 +151,11 @@ export const RoleManagementTab = (): JSX.Element => {
         }
       />
 
-      <CreateRoleSlideOver open={createOpen} onClose={() => setCreateOpen(false)} />
+      <CreateRoleSlideOver
+        open={createOpen}
+        onClose={() => setCreateOpen(false)}
+        onCreated={(created) => setEditPermsRole(created)}
+      />
 
       {editPermsRole && (
         <EditPermissionsSlideOver
