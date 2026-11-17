@@ -68,16 +68,16 @@ export interface IUserService {
 
   getRoleById(id: string): Promise<RoleListResponseDto>;
 
-  createRole(dto: CreateRoleRequestDto, actorId: string): Promise<RoleListResponseDto>;
+  createRole(dto: CreateRoleRequestDto, actor: RoleManagementActor): Promise<RoleListResponseDto>;
 
-  updateRole(id: string, dto: UpdateRoleRequestDto, actorId: string): Promise<RoleListResponseDto>;
+  updateRole(id: string, dto: UpdateRoleRequestDto, actor: RoleManagementActor): Promise<RoleListResponseDto>;
 
   deleteRole(id: string, actorId: string): Promise<void>;
 
   replaceRolePermissions(
     id: string,
     dto: ReplaceRolePermissionsRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<RoleListResponseDto>;
 
   listPermissionsGroupedByModule(): Promise<PermissionGroupResponseDto[]>;

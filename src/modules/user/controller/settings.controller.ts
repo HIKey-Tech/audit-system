@@ -200,7 +200,7 @@ export class SettingsController {
 
   private async _createRole(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const role = await this.userService.createRole(req.body, req.user!.id);
+      const role = await this.userService.createRole(req.body, req.user!);
       res.status(201).json(buildResponse(role, 'Role created'));
     } catch (err) {
       next(err);
@@ -209,7 +209,7 @@ export class SettingsController {
 
   private async _updateRole(req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      const role = await this.userService.updateRole(req.params.id, req.body, req.user!.id);
+      const role = await this.userService.updateRole(req.params.id, req.body, req.user!);
       res.status(200).json(buildResponse(role, 'Role updated'));
     } catch (err) {
       next(err);
@@ -234,7 +234,7 @@ export class SettingsController {
       const role = await this.userService.replaceRolePermissions(
         req.params.id,
         req.body,
-        req.user!.id,
+        req.user!,
       );
       res.status(200).json(buildResponse(role, 'Role permissions updated'));
     } catch (err) {

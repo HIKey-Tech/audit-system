@@ -42,6 +42,11 @@ import {
   mapPermissionToResponse,
 } from '../../dto/response/user.response.dto';
 import { hashPassword, comparePassword, generateTemporaryPassword } from '../../utility/token.utility';
+import {
+  RoleSnapshot,
+  assertCanModifyRole,
+  assertSuperAdminRoleNotRenamed,
+} from '../../utility/role-management.utility';
 import { userWithRolesInclude, UserWithRoles } from '../../../../shared/prisma/prisma.types';
 import {
   revokeUserSessions,
@@ -354,14 +359,17 @@ export class UserService implements IUserService {
 
   async createRole(
     dto: CreateRoleRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<RoleListResponseDto> {
+    const actorId = actor.id;
     const existing = await prisma.role.findUnique({ where: { name: dto.name } });
     if (existing) {
       throw AppError.conflict(`Role with name '${dto.name}' already exists`);
     }
 
-    await this._assertPermissionsExist(dto.permissionIds ?? []);
+    const newSlugs = await this._assertPermissionsExist(dto.permissionIds ?? []);
+    // A new role may not carry authority its creator does not hold.
+    assertCanModifyRole(actor, { name: dto.name, isSystem: false, permissionSlugs: [] }, newSlugs);
 
     const role = await prisma.role.create({
       data: {
@@ -393,10 +401,14 @@ export class UserService implements IUserService {
   async updateRole(
     id: string,
     dto: UpdateRoleRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<RoleListResponseDto> {
+    const actorId = actor.id;
     const existing = await prisma.role.findUnique({ where: { id } });
     if (!existing) throw AppError.notFound('Role');
+
+    assertSuperAdminRoleNotRenamed(existing.name, dto.name);
+    assertCanModifyRole(actor, await this._getRoleSnapshot(id));
 
     if (dto.name && dto.name !== existing.name) {
       const nameOwner = await prisma.role.findUnique({ where: { name: dto.name } });
@@ -420,6 +432,10 @@ export class UserService implements IUserService {
     });
 
     logger.info('Role updated', { roleId: id, actorId });
+    // Role names ride in the JWT too, so a rename leaves holders with a stale name.
+    if (dto.name !== undefined && dto.name !== existing.name) {
+      await this._revokeSessionsForRole(id);
+    }
     return mapRoleToResponse(role);
   }
 
@@ -446,12 +462,13 @@ export class UserService implements IUserService {
   async replaceRolePermissions(
     id: string,
     dto: ReplaceRolePermissionsRequestDto,
-    actorId: string,
+    actor: RoleManagementActor,
   ): Promise<RoleListResponseDto> {
-    const role = await prisma.role.findUnique({ where: { id }, select: { id: true } });
-    if (!role) throw AppError.notFound('Role');
+    const actorId = actor.id;
+    const snapshot = await this._getRoleSnapshot(id);
 
-    await this._assertPermissionsExist(dto.permissionIds);
+    const newSlugs = await this._assertPermissionsExist(dto.permissionIds);
+    assertCanModifyRole(actor, snapshot, newSlugs);
 
     await prisma.$transaction([
       prisma.role_Permission.deleteMany({ where: { role_id: id } }),
@@ -463,9 +480,13 @@ export class UserService implements IUserService {
       }),
     ]);
 
+    // Runs after the commit so the refresh that follows reads the new permissions.
+    const sessionsRevoked = await this._revokeSessionsForRole(id);
+
     logger.info('Role permissions replaced', {
       roleId: id,
       permissionIds: dto.permissionIds,
+      holdersRevoked: sessionsRevoked,
       actorId,
     });
     return this.getRoleById(id);
@@ -925,17 +946,61 @@ export class UserService implements IUserService {
     if (!user) throw AppError.notFound('User');
   }
 
-  private async _assertPermissionsExist(permissionIds: string[]): Promise<void> {
-    if (permissionIds.length === 0) return;
+  /** Validates every permission ID exists and returns their slugs. */
+  private async _assertPermissionsExist(permissionIds: string[]): Promise<string[]> {
+    if (permissionIds.length === 0) return [];
 
     const permissions = await prisma.permission.findMany({
       where: { id: { in: permissionIds } },
-      select: { id: true },
+      select: { id: true, slug: true },
     });
 
     if (permissions.length !== permissionIds.length) {
       throw AppError.badRequest('One or more permission IDs are invalid');
     }
+    return permissions.map((p) => p.slug);
+  }
+
+  /**
+   * Invalidates the access tokens of everyone holding `roleId`. Permissions are
+   * baked into the JWT at issue time, so without this a reduction (or any other
+   * change) to a role takes up to the access-token TTL to reach its holders —
+   * a user whose authority was just removed keeps using it. Their refresh tokens
+   * stay valid, so the client silently re-authenticates and picks up the new
+   * permissions on its next request instead of being logged out.
+   */
+  private async _revokeSessionsForRole(roleId: string): Promise<number> {
+    const holders = await prisma.user_Role.findMany({
+      where: { role_id: roleId },
+      select: { user_id: true },
+      distinct: ['user_id'],
+    });
+
+    // Bounded batches: a broad role (e.g. `viewer`) can be held by every employee.
+    const BATCH = 200;
+    for (let i = 0; i < holders.length; i += BATCH) {
+      await Promise.all(
+        holders.slice(i, i + BATCH).map((holder) => revokeUserSessions(holder.user_id)),
+      );
+    }
+    return holders.length;
+  }
+
+  private async _getRoleSnapshot(id: string): Promise<RoleSnapshot> {
+    const role = await prisma.role.findUnique({
+      where: { id },
+      select: {
+        name: true,
+        is_system: true,
+        role_permissions: { select: { permission: { select: { slug: true } } } },
+      },
+    });
+    if (!role) throw AppError.notFound('Role');
+    return {
+      name: role.name,
+      isSystem: role.is_system,
+      permissionSlugs: role.role_permissions.map((rp) => rp.permission.slug),
+    };
   }
 
   private async _syncUserSuperAdminFlag(userId: string): Promise<void> {
