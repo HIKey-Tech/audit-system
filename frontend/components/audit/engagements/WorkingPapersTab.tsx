@@ -45,6 +45,7 @@ import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 import { formatRelative } from '@/lib/utils/format';
+import { toastSubmitted } from '@/lib/utils/approval-toast';
 import { usePermission } from '@/hooks/usePermission';
 import { useSession } from '@/components/providers/AuthProvider';
 import type {
@@ -254,8 +255,8 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
 
   const submitMut = useMutation({
     mutationFn: (id: string) => workingPapersApi.submit(id),
-    onSuccess: () => {
-      toast.success('Submitted for review');
+    onSuccess: (_data, id) => {
+      toastSubmitted('Submitted for review', 'audit_working_paper', id);
       refresh();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
@@ -637,7 +638,8 @@ const CreateOrEditPaperSlideOver = ({
       if (alsoSubmit) {
         await workingPapersApi.submit(created.id);
       }
-      toast.success(alsoSubmit ? 'Submitted for review' : 'Saved as draft');
+      if (alsoSubmit) toastSubmitted('Submitted for review', 'audit_working_paper', created.id);
+      else toast.success('Saved as draft');
       onSaved();
       reset();
       onClose();

@@ -30,6 +30,7 @@ import { CreateEngagementSlideOver } from '@/components/audit/plans/CreateEngage
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { ApprovalChain } from '@/components/audit/engagements/ApprovalChain';
+import { toastSubmitted } from '@/lib/utils/approval-toast';
 import type { AuditPlanItem } from '@/lib/types/domain';
 import { auditTypeLabel } from '@/lib/audit-domains';
 
@@ -71,7 +72,7 @@ export default function PlanDetailPage(): JSX.Element {
   const submitMut = useMutation({
     mutationFn: () => plansApi.submit(id),
     onSuccess: () => {
-      toast.success('Programme submitted for approval');
+      toastSubmitted('Programme submitted for approval', 'audit_plan', id);
       qc.invalidateQueries({ queryKey: ['plans', id] });
       qc.invalidateQueries({ queryKey: ['plans'] });
       qc.invalidateQueries({ queryKey: ['approval-chain'] });

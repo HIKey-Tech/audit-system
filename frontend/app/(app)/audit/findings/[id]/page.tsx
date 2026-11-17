@@ -23,6 +23,7 @@ import { formatDate } from '@/lib/utils/format';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { cn } from '@/lib/utils/cn';
 import { auditTypeLabel } from '@/lib/audit-domains';
+import { toastSubmitted } from '@/lib/utils/approval-toast';
 
 export default function FindingDetailPage(): JSX.Element {
   const params = useParams<{ id: string }>();
@@ -57,7 +58,7 @@ export default function FindingDetailPage(): JSX.Element {
   const requestClosure = useMutation({
     mutationFn: () => findingsApi.close(params!.id),
     onSuccess: () => {
-      toast.success('Finding closure sent for approval');
+      toastSubmitted('Finding closure sent for approval', 'audit_finding_closure', params?.id);
       invalidate();
       qc.invalidateQueries({ queryKey: ['workflow', 'approvals'] });
     },

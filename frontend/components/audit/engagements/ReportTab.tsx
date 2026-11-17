@@ -49,6 +49,7 @@ import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
 import { SignedApprovalDocuments } from '@/components/workflow/SignedApprovalDocuments';
 import { DocumentSignerModal } from '@/components/workflow/DocumentSignerModal';
 import { ApprovalChain } from '@/components/audit/engagements/ApprovalChain';
+import { toastSubmitted } from '@/lib/utils/approval-toast';
 import { formatRelative, formatDate } from '@/lib/utils/format';
 import { auditTypeLabel } from '@/lib/audit-domains';
 import { usePermission } from '@/hooks/usePermission';
@@ -719,7 +720,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
       return reportsApi.submit(r.id);
     },
     onSuccess: () => {
-      toast.success('Submitted for approval');
+      toastSubmitted('Submitted for approval', 'audit_report', report.data?.id);
       setActiveView('preview');
       refresh();
     },
