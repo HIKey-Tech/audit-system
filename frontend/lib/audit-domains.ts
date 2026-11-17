@@ -103,12 +103,6 @@ export const SELECTABLE_AUDIT_TYPES: SelectableAuditTypeOption[] = [
     description: 'Infrastructure, access management, cybersecurity & IT general controls (ISO 27001 / SOX ITGC)',
   },
   {
-    value: 'systems',
-    label: 'Systems Audit',
-    shortLabel: 'Systems',
-    description: 'System baselines, configuration drift, CAB change control, disaster recovery & capacity (ISO 22301)',
-  },
-  {
     value: 'financial',
     label: 'Financial Audit',
     shortLabel: 'Financial',
@@ -163,6 +157,15 @@ const SELECTABLE_AUDIT_TYPE_MAP: Record<string, SelectableAuditTypeOption> = Obj
 );
 
 /**
+ * Labels for the retired `systems` type. It is no longer offered in any picker
+ * (the backend rejects it on create/update), but a stray stored value must
+ * still read as something sensible rather than falling through to raw text.
+ */
+const LEGACY_AUDIT_TYPE_LABELS: Record<string, { label: string; short: string }> = {
+  systems: { label: 'System/IT Audit', short: 'System/IT' },
+};
+
+/**
  * Display label for any stored `audit_type`.
  */
 export const auditTypeLabel = (
@@ -173,6 +176,8 @@ export const auditTypeLabel = (
   if (value === 'all') return form === 'short' ? 'All' : 'All audit types';
   const selectable = SELECTABLE_AUDIT_TYPE_MAP[value];
   if (selectable) return form === 'short' ? selectable.shortLabel : selectable.label;
+  const legacy = LEGACY_AUDIT_TYPE_LABELS[value];
+  if (legacy) return form === 'short' ? legacy.short : legacy.label;
   const meta = AUDIT_DOMAIN_MAP[value as AuditDomainKey];
   if (meta) return form === 'short' ? meta.short : meta.label;
   return value.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());

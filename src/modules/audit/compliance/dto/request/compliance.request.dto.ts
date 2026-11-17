@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AuditType, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
+import { AuditType, FILTERABLE_AUDIT_TYPES, SELECTABLE_AUDIT_TYPES } from '../../../domain/enum/audit.enum';
 
 export const FrameworkCategory = z.enum([
   'it',
@@ -57,7 +57,7 @@ export const ControlQuerySchema = z.object({
   pageSize: z.coerce.number().int().positive().max(200).default(50),
   search: z.string().trim().optional(),
   frameworkId: z.string().uuid().optional(),
-  auditType: z.enum(SELECTABLE_AUDIT_TYPES).optional(),
+  auditType: z.enum(FILTERABLE_AUDIT_TYPES).optional(),
   isActive: z.coerce.boolean().optional(),
 });
 

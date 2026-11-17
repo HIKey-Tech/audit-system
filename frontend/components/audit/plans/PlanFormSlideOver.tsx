@@ -18,7 +18,6 @@ import type { AuditPlan } from '@/lib/types/domain';
 
 const VALID_AUDIT_TYPES = [
   'it',
-  'systems',
   'financial',
   'compliance',
   'operational',

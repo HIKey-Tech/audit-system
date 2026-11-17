@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ExportFormatSchema } from '../../../../../shared/utils/tabular-export.util';
-import { FindingCategory, FindingSeverity, FindingStatus, SELECTABLE_FINDING_CATEGORIES } from '../../../domain/enum/audit.enum';
+import { FILTERABLE_FINDING_CATEGORIES, FindingCategory, FindingSeverity, FindingStatus, SELECTABLE_FINDING_CATEGORIES } from '../../../domain/enum/audit.enum';
 
 export const CreateFindingRequestSchema = z.object({
   workingPaperId: z.string().uuid().optional(),
@@ -46,7 +46,7 @@ export const FindingQuerySchema = z.object({
   search: z.string().trim().optional(),
   severity: z.nativeEnum(FindingSeverity).optional(),
   status: z.nativeEnum(FindingStatus).optional(),
-  category: z.enum(SELECTABLE_FINDING_CATEGORIES).optional(),
+  category: z.enum(FILTERABLE_FINDING_CATEGORIES).optional(),
   controlReference: z.string().trim().optional(),
   auditeeId: z.string().uuid().optional(),
   riskId: z.string().uuid().optional(),

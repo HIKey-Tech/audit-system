@@ -28,7 +28,6 @@ function toISODatetime(dateStr: string): string {
 
 const FINDING_CATEGORIES = [
   'it',
-  'systems',
   'financial',
   'compliance',
   'operational',

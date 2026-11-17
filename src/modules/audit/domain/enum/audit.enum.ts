@@ -13,12 +13,11 @@ export enum AuditType {
   Systems = 'systems',
 }
 
-/** The audit types a user may actually pick. Request DTOs validate against this
- *  rather than the enum, so the retired `systems` value can never enter on a
- *  new record while existing rows still read correctly. */
+/** The audit types a user may actually pick. Create/update request DTOs validate
+ *  against this rather than the enum, so the retired `systems` value can never
+ *  enter on a record. Read-side filters use FILTERABLE_AUDIT_TYPES instead. */
 export const SELECTABLE_AUDIT_TYPES = [
   AuditType.It,
-  AuditType.Systems,
   AuditType.Financial,
   AuditType.Compliance,
   AuditType.Operational,
@@ -30,6 +29,11 @@ export const SELECTABLE_AUDIT_TYPES = [
 ] as const;
 
 export const selectableAuditTypes = SELECTABLE_AUDIT_TYPES;
+
+/** Accepted by query/filter DTOs only: selectable types plus the retired
+ *  `systems` alias, so an old bookmarked URL or saved filter still resolves
+ *  instead of failing validation. Never use this to accept new data. */
+export const FILTERABLE_AUDIT_TYPES = [...SELECTABLE_AUDIT_TYPES, AuditType.Systems] as const;
 
 export enum AuditPriority {
   Critical = 'critical',
@@ -94,10 +98,10 @@ export enum FindingCategory {
   Special = 'special',
 }
 
-/** Finding categories a user may pick across all audit domains. */
+/** Finding categories a user may pick across all audit domains. `systems` is
+ *  retired (merged into `it`), so it is deliberately absent. */
 export const SELECTABLE_FINDING_CATEGORIES = [
   FindingCategory.It,
-  FindingCategory.Systems,
   FindingCategory.Financial,
   FindingCategory.Compliance,
   FindingCategory.Operational,
@@ -106,6 +110,12 @@ export const SELECTABLE_FINDING_CATEGORIES = [
   FindingCategory.HrPayroll,
   FindingCategory.Project,
   FindingCategory.Special,
+] as const;
+
+/** Query/filter DTOs only: selectable categories plus the retired `systems`. */
+export const FILTERABLE_FINDING_CATEGORIES = [
+  ...SELECTABLE_FINDING_CATEGORIES,
+  FindingCategory.Systems,
 ] as const;
 
 export enum FindingSeverity {
