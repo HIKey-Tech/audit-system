@@ -258,7 +258,7 @@ export const toGbbModel = (data: WorkingPaperPdfData): GbbDocumentModel => {
     approvals: (data.signOff ?? []).map((s) => ({
       name: s.name,
       position: s.role,
-      date: s.date,
+      date: formatGbbDate(s.date) || s.date,
       signature: parseImageDataUrl(s.imageDataUrl),
     })),
     lastReviewed: date,

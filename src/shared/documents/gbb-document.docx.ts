@@ -331,7 +331,7 @@ const frontMatter = (model: GbbDocumentModel): (Paragraph | Table)[] => {
     frontHeading('Change Control', { size: GBB_SIZE.bigHeading }),
     new Paragraph({ spacing: { after: 200, line: 240 }, children: [text(GBB_CHANGE_CONTROL_NOTE, { font: GBB_FONT.body, size: GBB_SIZE.body })] }),
 
-    frontHeading('Table of contents', { size: GBB_SIZE.bigHeading }),
+    frontHeading('Table of contents', { size: GBB_SIZE.bigHeading, pageBreakBefore: true }),
     // A real Word contents field. It is filled in when Word updates fields (the document asks once on open).
     new TableOfContents('Table of contents', { hyperlink: true, headingStyleRange: '1-3' }),
   ];
