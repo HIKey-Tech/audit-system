@@ -6,7 +6,7 @@
 // these numbers — they are what makes the output match the template.
 //
 // Twips (1/20 pt) are used for Word measurements; pdfmake uses points (twips / 20).
-import { GBB_LOGO_BASE64 } from './gbb-logo.data';
+import { GBB_LOGO_BASE64, GBB_LOGO_FLAT_BASE64 } from './gbb-logo.data';
 
 /** US Letter, exactly as the template. (Word scales it to A4 when printing.) */
 export const GBB_PAGE = {
@@ -104,6 +104,14 @@ let cachedLogo: Buffer | undefined;
 export const loadGbbLogo = (): Buffer => {
   if (!cachedLogo) cachedLogo = Buffer.from(GBB_LOGO_BASE64, 'base64');
   return cachedLogo;
+};
+
+let cachedFlatLogo: Buffer | undefined;
+
+/** The logo flattened onto white, for PDFs (avoids the transparent-edge line some viewers draw). */
+export const loadGbbLogoFlat = (): Buffer => {
+  if (!cachedFlatLogo) cachedFlatLogo = Buffer.from(GBB_LOGO_FLAT_BASE64, 'base64');
+  return cachedFlatLogo;
 };
 
 export type GbbDocumentKind = 'RPT' | 'WP';

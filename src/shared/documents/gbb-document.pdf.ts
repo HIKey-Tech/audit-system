@@ -22,7 +22,7 @@ import {
   GBB_TABLE_GRID,
   GBB_VALIDITY_HEADING,
   gbbValidityText,
-  loadGbbLogo,
+  loadGbbLogoFlat,
 } from "./gbb-document.constants";
 import {
   GbbDocumentModel,
@@ -118,7 +118,7 @@ const coverPage = (model: GbbDocumentModel): Content[] => {
   };
   return [
     {
-      image: `data:image/png;base64,${loadGbbLogo().toString("base64")}`,
+      image: `data:image/png;base64,${loadGbbLogoFlat().toString("base64")}`,
       width: logoWidth,
       height: logoHeight,
       alignment: "center",
@@ -132,7 +132,8 @@ const coverPage = (model: GbbDocumentModel): Content[] => {
       margin: [0, 6, 0, 36],
     },
     {
-      margin: [pt(1818) - 36, 0, 0, 0],
+      // Centred on the text area, like the logo and organisation name above it.
+      margin: [(pt(GBB_PAGE.width - GBB_PAGE.marginLeft - GBB_PAGE.marginRight) - pt(GBB_TABLE_GRID.coverTitle[0])) / 2, 0, 0, 0],
       layout: {
         ...rule,
         paddingTop: () => 40,

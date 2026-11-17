@@ -227,7 +227,7 @@ const coverPage = (model: GbbDocumentModel): (Paragraph | Table)[] => {
     new Table({
       width: dxa(GBB_TABLE_GRID.coverTitle[0]),
       columnWidths: [...GBB_TABLE_GRID.coverTitle],
-      indent: dxa(GBB_INDENT.coverTitle),
+      alignment: AlignmentType.CENTER,
       borders: { ...NO_BORDERS, top: rule, bottom: rule },
       rows: [
         new TableRow({
