@@ -408,9 +408,8 @@ export class WorkingPaperService implements IWorkingPaperService {
     const exportDate = new Date().toISOString().slice(0, 10);
     const slug = paper.title.replace(/[^a-z0-9]+/gi, '-').toLowerCase();
 
-    // Built once and used by both formats: the PDF embeds the drawn signature
-    // images, while the DOCX gets a typed sign-off block (docxtemplater here has
-    // no image support — the signature images live in the signed PDF copy).
+    // Built once and used by both formats; both show approvers (with their drawn
+    // signature, when recorded) in the template's Approval List.
     const sections = parseWorkingPaperSections(paper.content);
     const signOff = await this._buildSignOff(id);
 
@@ -425,6 +424,7 @@ export class WorkingPaperService implements IWorkingPaperService {
       date: exportDate,
       sections,
       signOff,
+      workingPaperId: id,
     };
 
     let buffer: Buffer;

@@ -1,8 +1,5 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import type { Content, TableCell, TDocumentDefinitions } from 'pdfmake/interfaces';
+import type { Content, TDocumentDefinitions } from 'pdfmake/interfaces';
 import {
-  Document,
   Packer,
   Paragraph,
   TextRun,
@@ -12,14 +9,15 @@ import {
   WidthType,
   BorderStyle,
   AlignmentType,
-  Footer,
-  PageNumber,
   convertInchesToTwip,
   ShadingType,
   ImageRun,
   HeadingLevel,
 } from 'docx';
-import { borderedTableLayout, mm } from '../../../../shared/utils/pdf.util';
+import { GBB_DEFAULT_CLASSIFICATION, gbbDocumentId } from '../../../../shared/documents/gbb-document.constants';
+import { buildGbbDocxDocument } from '../../../../shared/documents/gbb-document.docx';
+import { buildGbbPdfDefinition } from '../../../../shared/documents/gbb-document.pdf';
+import { formatGbbDate, GbbDocumentModel, parseImageDataUrl } from '../../../../shared/documents/gbb-document.model';
 import { markdownToPdfContent } from './markdown.utility';
 
 export { WP_REVIEWABLE_STATUSES } from '../../utility/audit.utility';
@@ -49,31 +47,9 @@ export interface WorkingPaperPdfData {
   date: string;
   sections: WorkingPaperSection[];
   signOff?: WorkingPaperSignOff[];
+  /** Used to build the document reference number. */
+  workingPaperId?: string;
 }
-
-let cachedGbbLogoDataUrl: string | null = null;
-const getGbbLogoDataUrl = (): string | null => {
-  if (cachedGbbLogoDataUrl) return cachedGbbLogoDataUrl;
-  const candidates = [
-    path.resolve(__dirname, '../../../../assets/gbb-logo.png'),
-    path.resolve(__dirname, '../../../../../assets/gbb-logo.png'),
-    path.resolve(process.cwd(), 'src/assets/gbb-logo.png'),
-    path.resolve(process.cwd(), 'assets/gbb-logo.png'),
-    path.resolve(process.cwd(), 'frontend/public/gbb-logo.png'),
-  ];
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) {
-        const buf = fs.readFileSync(candidate);
-        cachedGbbLogoDataUrl = `data:image/png;base64,${buf.toString('base64')}`;
-        return cachedGbbLogoDataUrl;
-      }
-    } catch {
-      // Try next path
-    }
-  }
-  return null;
-};
 
 /**
  * Escape a value for safe interpolation into HTML.
@@ -232,7 +208,62 @@ export const parseWorkingPaperSections = (content: string | null | undefined): W
 };
 
 /** Brand navy used across the working-paper PDF. */
-const BRAND = '#1E3A8A';
+/** The paper's sections, numbered by the document template (so any "1." typed into a title is dropped). */
+const workingPaperSections = (data: WorkingPaperPdfData): WorkingPaperSection[] => {
+  if (data.sections.length === 0) {
+    return [{ title: 'Content', content: '_This working paper has no content._' }];
+  }
+  return data.sections.map((section, idx) => ({
+    ...section,
+    title: (section.title || `Section ${idx + 1}`).replace(/^\d+\.\s*/, ''),
+  }));
+};
+
+/**
+ * Maps a working paper onto the GBB document front matter. Only facts held by the
+ * system are shown — the change history is this version, never invented earlier ones.
+ */
+export const toGbbModel = (data: WorkingPaperPdfData): GbbDocumentModel => {
+  const date = formatGbbDate(data.date) || data.date;
+  const versionNumber = `${data.version}.0`;
+  const approvers = (data.signOff ?? []).map((s) => s.name);
+  const documentId = gbbDocumentId(
+    'WP',
+    data.engagementReference,
+    data.workingPaperId ? `WP-${data.workingPaperId.slice(0, 8).toUpperCase()}` : undefined,
+  );
+  return {
+    title: data.title,
+    documentId,
+    version: versionNumber,
+    versionDate: date,
+    division: 'Internal Audit',
+    owner: data.auditorName,
+    author: data.auditorName,
+    approvedBy: approvers.length > 0 ? approvers.join(', ') : 'Pending approval',
+    classification: GBB_DEFAULT_CLASSIFICATION,
+    status: data.status.charAt(0).toUpperCase() + data.status.slice(1).replace(/_/g, ' '),
+    changeHistory: [
+      {
+        version: `Version ${versionNumber}`,
+        date,
+        createdBy: data.auditorName,
+        change: Number(data.version) > 1 ? 'Revised following review' : 'Initial version',
+      },
+    ],
+    distribution: [
+      { name: data.auditorName, version: versionNumber, date },
+      ...(data.signOff ?? []).map((s) => ({ name: s.name, version: versionNumber, date })),
+    ],
+    approvals: (data.signOff ?? []).map((s) => ({
+      name: s.name,
+      position: s.role,
+      date: s.date,
+      signature: parseImageDataUrl(s.imageDataUrl),
+    })),
+    lastReviewed: date,
+  };
+};
 
 /** Render a section's Markdown body + inline images into pdfmake blocks. */
 const renderSectionBody = (section: WorkingPaperSection): Content[] => {
@@ -251,114 +282,14 @@ const renderSectionBody = (section: WorkingPaperSection): Content[] => {
 };
 
 /**
- * Build a pdfmake document definition for a working paper.
- * Rendered to a PDF Buffer via `renderPdf` in the service layer.
+ * Build a pdfmake document definition for a working paper, in GBB's internal
+ * document template. Rendered to a PDF Buffer via `renderPdf` in the service layer.
  */
-export const buildWorkingPaperDocDefinition = (data: WorkingPaperPdfData): TDocumentDefinitions => {
-  const logoDataUrl = getGbbLogoDataUrl();
-
-  const sectionsContent: Content[] =
-    data.sections.length === 0
-      ? [{ text: 'This working paper has no content.', italics: true, color: '#64748B', margin: [0, 8, 0, 0] }]
-      : data.sections.flatMap((section, idx) => {
-          const heading = section.title || `Section ${idx + 1}`;
-          return [
-            { text: `${idx + 1}. ${heading.replace(/^\d+\.\s*/, '')}`, style: 'sectionTitle', margin: [0, 16, 0, 6] },
-            ...renderSectionBody(section),
-          ];
-        });
-
-  const metaRow = (label: string, value: string): TableCell[] => [
-    { text: label, bold: true, color: BRAND, fillColor: '#F8F9FA' },
-    { text: value },
-  ];
-
-  const content: Content[] = [
-    ...(logoDataUrl
-      ? [{ image: logoDataUrl, width: 110, alignment: 'center' as const, margin: [0, 0, 0, 6] as [number, number, number, number] }]
-      : []),
-    { text: 'Galaxy Backbone Limited', style: 'orgName', alignment: 'center' },
-    { text: 'Audit Working Paper', style: 'docTitle', alignment: 'center', margin: [0, 2, 0, 8] },
-    {
-      canvas: [{ type: 'line', x1: 0, y1: 0, x2: 493, y2: 0, lineWidth: 2, lineColor: BRAND }],
-      margin: [0, 0, 0, 14],
-    },
-    {
-      table: {
-        widths: [130, '*'],
-        body: [
-          metaRow('Title', data.title),
-          metaRow('Engagement', `${data.engagementReference} — ${data.engagementTitle}`),
-          metaRow('Working Paper Type', data.workingPaperType),
-          metaRow('Prepared By', data.auditorName),
-          metaRow('Status', data.status.toUpperCase()),
-          metaRow('Version', `v${data.version}.0`),
-          metaRow('Exported On', data.date),
-        ],
-      },
-      layout: borderedTableLayout,
-    },
-    ...sectionsContent,
-  ];
-
-  if (data.signOff && data.signOff.length > 0) {
-    content.push({ text: 'Approvals & Signatures', style: 'sectionTitle', margin: [0, 22, 0, 8] });
-    content.push({
-      columns: data.signOff.map((s) => ({
-        width: '*',
-        stack: [
-          s.imageDataUrl
-            ? { image: s.imageDataUrl, fit: [120, 40], margin: [0, 0, 0, 2] }
-            : { text: ' ', margin: [0, 0, 0, 24] },
-          { text: s.role ? `${s.name} — ${s.role}` : s.name, bold: true },
-          { text: `Approved & signed ${s.date}`, color: '#64748B', fontSize: 9 },
-        ],
-      })),
-      columnGap: 8,
-    });
-  }
-
-  return {
-    pageSize: 'A4',
-    pageMargins: [mm(18), mm(20), mm(18), mm(20)],
-    footer: (currentPage, pageCount) => ({
-      text: `Galaxy Backbone Limited — Internal Audit Working Paper · Page ${currentPage} of ${pageCount}`,
-      alignment: 'center',
-      fontSize: 9,
-      color: '#64748B',
-      margin: [0, 10, 0, 0],
-    }),
-    content,
-    styles: {
-      orgName: { fontSize: 16, bold: true, color: BRAND },
-      docTitle: { fontSize: 13, bold: true },
-      sectionTitle: { fontSize: 13, bold: true, color: BRAND },
-    },
-  };
-};
-
-let cachedGbbLogoBuffer: Buffer | null = null;
-export const getGbbLogoBuffer = (): Buffer | null => {
-  if (cachedGbbLogoBuffer) return cachedGbbLogoBuffer;
-  const candidates = [
-    path.resolve(__dirname, '../../../../assets/gbb-logo.png'),
-    path.resolve(__dirname, '../../../../../assets/gbb-logo.png'),
-    path.resolve(process.cwd(), 'src/assets/gbb-logo.png'),
-    path.resolve(process.cwd(), 'assets/gbb-logo.png'),
-    path.resolve(process.cwd(), 'frontend/public/gbb-logo.png'),
-  ];
-  for (const candidate of candidates) {
-    try {
-      if (fs.existsSync(candidate)) {
-        cachedGbbLogoBuffer = fs.readFileSync(candidate);
-        return cachedGbbLogoBuffer;
-      }
-    } catch {
-      // Continue
-    }
-  }
-  return null;
-};
+export const buildWorkingPaperDocDefinition = (data: WorkingPaperPdfData): TDocumentDefinitions =>
+  buildGbbPdfDefinition(
+    toGbbModel(data),
+    workingPaperSections(data).map((section) => ({ title: section.title, content: renderSectionBody(section) })),
+  );
 
 const parseInlineDocxRuns = (
   text: string,
@@ -449,7 +380,7 @@ const parseMarkdownPipeTable = (lines: string[]): Table | null => {
             shading: { fill: 'F1F5F9', type: ShadingType.CLEAR },
             children: [
               new Paragraph({
-                children: [new TextRun({ text: hc, bold: true, color: '1E3A8A', size: 19 })],
+                children: [new TextRun({ text: hc, bold: true, color: '4F6228', size: 19 })],
               }),
             ],
           }),
@@ -564,7 +495,7 @@ const markdownToDocxBlocks = (markdown: string): (Paragraph | Table)[] => {
           new Paragraph({
             spacing: { after: 60 },
             children: [
-              new TextRun({ text: `${match[1]} `, bold: true, color: '1E3A8A', size: 20 }),
+              new TextRun({ text: `${match[1]} `, bold: true, color: '4F6228', size: 20 }),
               ...parseInlineDocxRuns(match[2]),
             ],
           }),
@@ -624,259 +555,15 @@ const renderDocxImages = (images: string[]): Paragraph[] => {
   return result;
 };
 
-const buildDocxSignOffTable = (signOff: WorkingPaperSignOff[]): (Paragraph | Table)[] => {
-  const border = { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1' };
-  const cellBorders = { top: border, bottom: border, left: border, right: border };
-  const cellMargins = { top: 120, bottom: 120, left: 140, right: 140 };
-
-  const cols = signOff.map((s) => {
-    const children: Paragraph[] = [];
-    if (s.imageDataUrl) {
-      try {
-        const match = s.imageDataUrl.match(/^data:image\/(png|jpeg|jpg);base64,(.+)$/);
-        if (match) {
-          const sigType: 'png' | 'jpg' = match[1] === 'jpeg' ? 'jpg' : (match[1] as 'png' | 'jpg');
-          const sigBuf = Buffer.from(match[2], 'base64');
-          children.push(
-            new Paragraph({
-              alignment: AlignmentType.CENTER,
-              children: [
-                new ImageRun({
-                  type: sigType,
-                  data: sigBuf,
-                  transformation: { width: 140, height: 45 },
-                }),
-              ],
-            }),
-          );
-        }
-      } catch {
-        // Fallback below
-      }
-    }
-    if (children.length === 0) {
-      children.push(
-        new Paragraph({
-          children: [new TextRun({ text: 'Digitally Approved & Signed', italics: true, color: '1E3A8A', size: 18 })],
-        }),
-      );
-    }
-    children.push(
-      new Paragraph({
-        spacing: { before: 60 },
-        children: [
-          new TextRun({ text: s.role ? `${s.name} — ${s.role}` : s.name, bold: true, color: '0F172A', size: 19 }),
-        ],
-      }),
-      new Paragraph({
-        children: [new TextRun({ text: `Approved & signed ${s.date}`, color: '64748B', size: 17 })],
-      }),
-    );
-
-    return new DocxTableCell({
-      borders: cellBorders,
-      margins: cellMargins,
-      width: { size: Math.floor(100 / Math.max(1, signOff.length)), type: WidthType.PERCENTAGE },
-      children,
-    });
-  });
-
-  return [
-    new Paragraph({
-      heading: HeadingLevel.HEADING_2,
-      spacing: { before: 320, after: 120 },
-      children: [new TextRun({ text: 'Approvals & Signatures', bold: true, color: '1E3A8A', size: 24 })],
-    }),
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: cellBorders,
-      rows: [new TableRow({ children: cols })],
-    }),
-  ];
-};
-
 /**
- * Build a rich DOCX document for an audit working paper using the `docx` library.
- * Embeds official GBB logo, styled metadata table, real Word tables from Markdown,
- * inline images, and digital approver signatures.
+ * Build the Word version of an audit working paper in GBB's internal document template.
+ * Section bodies keep their real Word tables, lists and inline images.
  */
 export const buildWorkingPaperDocx = async (data: WorkingPaperPdfData): Promise<Buffer> => {
-  const logoBuf = getGbbLogoBuffer();
-  const children: (Paragraph | Table)[] = [];
-
-  if (logoBuf) {
-    children.push(
-      new Paragraph({
-        alignment: AlignmentType.CENTER,
-        spacing: { after: 120 },
-        children: [
-          new ImageRun({
-            type: 'png',
-            data: logoBuf,
-            transformation: { width: 120, height: 40 },
-          }),
-        ],
-      }),
-    );
-  }
-
-  children.push(
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      children: [
-        new TextRun({
-          text: 'Galaxy Backbone Limited',
-          bold: true,
-          color: '1E3A8A',
-          size: 32,
-        }),
-      ],
-    }),
-    new Paragraph({
-      alignment: AlignmentType.CENTER,
-      spacing: { after: 140 },
-      children: [
-        new TextRun({
-          text: 'Audit Working Paper',
-          bold: true,
-          color: '0F172A',
-          size: 26,
-        }),
-      ],
-    }),
-  );
-
-  const border = { style: BorderStyle.SINGLE, size: 4, color: 'CBD5E1' };
-  const cellBorders = { top: border, bottom: border, left: border, right: border };
-  const cellMargins = { top: 100, bottom: 100, left: 140, right: 140 };
-
-  const metaDocxRow = (label: string, value: string): TableRow =>
-    new TableRow({
-      children: [
-        new DocxTableCell({
-          width: { size: 28, type: WidthType.PERCENTAGE },
-          shading: { fill: 'F8F9FA', type: ShadingType.CLEAR },
-          borders: cellBorders,
-          margins: cellMargins,
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: label, bold: true, color: '1E3A8A', size: 19 })],
-            }),
-          ],
-        }),
-        new DocxTableCell({
-          width: { size: 72, type: WidthType.PERCENTAGE },
-          borders: cellBorders,
-          margins: cellMargins,
-          children: [
-            new Paragraph({
-              children: [new TextRun({ text: value || '—', size: 19, color: '1E293B' })],
-            }),
-          ],
-        }),
-      ],
-    });
-
-  children.push(
-    new Table({
-      width: { size: 100, type: WidthType.PERCENTAGE },
-      borders: cellBorders,
-      rows: [
-        metaDocxRow('Title', data.title),
-        metaDocxRow('Engagement', `${data.engagementReference} — ${data.engagementTitle}`),
-        metaDocxRow('Working Paper Type', data.workingPaperType),
-        metaDocxRow('Prepared By', data.auditorName),
-        metaDocxRow('Status', data.status.toUpperCase()),
-        metaDocxRow('Version', `v${data.version}.0`),
-        metaDocxRow('Exported On', data.date),
-      ],
-    }),
-  );
-
-  if (data.sections.length === 0) {
-    children.push(
-      new Paragraph({
-        spacing: { before: 200 },
-        children: [new TextRun({ text: 'This working paper has no content.', italics: true, color: '64748B', size: 20 })],
-      }),
-    );
-  } else {
-    data.sections.forEach((section, idx) => {
-      const heading = section.title || `Section ${idx + 1}`;
-      children.push(
-        new Paragraph({
-          heading: HeadingLevel.HEADING_2,
-          spacing: { before: 280, after: 120 },
-          children: [
-            new TextRun({
-              text: `${idx + 1}. ${heading.replace(/^\d+\.\s*/, '')}`,
-              bold: true,
-              color: '000000',
-              size: 24,
-            }),
-          ],
-        }),
-      );
-      children.push(...markdownToDocxBlocks(section.content));
-      if (section.images && section.images.length > 0) {
-        children.push(...renderDocxImages(section.images));
-      }
-    });
-  }
-
-  if (data.signOff && data.signOff.length > 0) {
-    children.push(...buildDocxSignOffTable(data.signOff));
-  }
-
-  const doc = new Document({
-    sections: [
-      {
-        properties: {
-          page: {
-            margin: {
-              top: convertInchesToTwip(0.8),
-              bottom: convertInchesToTwip(0.8),
-              left: convertInchesToTwip(0.8),
-              right: convertInchesToTwip(0.8),
-            },
-          },
-        },
-        footers: {
-          default: new Footer({
-            children: [
-              new Paragraph({
-                alignment: AlignmentType.CENTER,
-                children: [
-                  new TextRun({
-                    text: 'Galaxy Backbone Limited — Internal Audit Working Paper · Page ',
-                    size: 16,
-                    color: '64748B',
-                  }),
-                  new TextRun({
-                    children: [PageNumber.CURRENT],
-                    size: 16,
-                    color: '64748B',
-                  }),
-                  new TextRun({
-                    text: ' of ',
-                    size: 16,
-                    color: '64748B',
-                  }),
-                  new TextRun({
-                    children: [PageNumber.TOTAL_PAGES],
-                    size: 16,
-                    color: '64748B',
-                  }),
-                ],
-              }),
-            ],
-          }),
-        },
-        children,
-      },
-    ],
-  });
-
-  const uint8 = await Packer.toBuffer(doc);
+  const sections = workingPaperSections(data).map((section) => ({
+    title: section.title,
+    children: [...markdownToDocxBlocks(section.content), ...renderDocxImages(section.images ?? [])],
+  }));
+  const uint8 = await Packer.toBuffer(buildGbbDocxDocument(toGbbModel(data), sections));
   return Buffer.from(uint8);
 };
