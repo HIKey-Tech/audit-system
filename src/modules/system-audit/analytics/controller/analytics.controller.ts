@@ -181,9 +181,9 @@ export class SystemAuditAnalyticsController {
     );
   }
 
-  private _listTypes(_req: Request, res: Response, next: NextFunction): void {
+  private async _listTypes(_req: Request, res: Response, next: NextFunction): Promise<void> {
     try {
-      res.status(200).json(buildResponse(this.analyticsService.listAnalysisTypes()));
+      res.status(200).json(buildResponse(await this.analyticsService.listAnalysisTypes()));
     } catch (err) {
       next(err);
     }

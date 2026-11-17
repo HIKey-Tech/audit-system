@@ -194,6 +194,23 @@ export const config = {
     caCertPath: optionalEnv('PROJECTPLUS_CA_CERT_PATH'),
   },
 
+  // Dynafin (GBB's finance system) is an optional, strictly read-only data source
+  // for the financial audit analyses. DYNAFIN_ENABLED=false (default) disables
+  // every call. The vendor has not released an API yet, so the HTTP driver is a
+  // ready-to-wire shell; `fixture` serves labelled SAMPLE data for UAT/demos only
+  // and is refused in production.
+  dynafin: {
+    enabled: optionalEnv('DYNAFIN_ENABLED', 'false') === 'true',
+    driver: optionalEnv('DYNAFIN_DRIVER', 'http') as 'http' | 'fixture',
+    baseUrl: optionalEnv('DYNAFIN_BASE_URL').replace(/\/$/, ''),
+    // none | api-key | bearer — final scheme pending the Dynafin API release.
+    authMode: optionalEnv('DYNAFIN_AUTH_MODE', 'none'),
+    authHeader: optionalEnv('DYNAFIN_AUTH_HEADER', 'X-Api-Key'),
+    authSecret: optionalEnv('DYNAFIN_AUTH_SECRET'),
+    timeoutMs: parseInt(optionalEnv('DYNAFIN_TIMEOUT_MS', '15000'), 10),
+    caCertPath: optionalEnv('DYNAFIN_CA_CERT_PATH'),
+  },
+
   redis: {
     url: optionalEnv('REDIS_URL', 'redis://localhost:6379'),
     password: optionalEnv('REDIS_PASSWORD'),
@@ -318,6 +335,28 @@ if (config.projectPlus.enabled) {
   }
   if (config.projectPlus.authMode !== 'none' && !config.projectPlus.authSecret) {
     throw new Error('PROJECTPLUS_AUTH_SECRET is required when PROJECTPLUS_AUTH_MODE is api-key or bearer.');
+  }
+}
+
+if (config.dynafin.enabled) {
+  if (!['http', 'fixture'].includes(config.dynafin.driver)) {
+    throw new Error('DYNAFIN_DRIVER must be one of: http, fixture.');
+  }
+  if (config.dynafin.driver === 'fixture' && config.app.isProd) {
+    throw new Error(
+      'DYNAFIN_DRIVER=fixture serves sample data and is not allowed in production. Use DYNAFIN_DRIVER=http.',
+    );
+  }
+  if (config.dynafin.driver === 'http') {
+    if (!config.dynafin.baseUrl) {
+      throw new Error('DYNAFIN_BASE_URL is required when DYNAFIN_ENABLED=true and DYNAFIN_DRIVER=http.');
+    }
+    if (!['none', 'api-key', 'bearer'].includes(config.dynafin.authMode)) {
+      throw new Error('DYNAFIN_AUTH_MODE must be one of: none, api-key, bearer.');
+    }
+    if (config.dynafin.authMode !== 'none' && !config.dynafin.authSecret) {
+      throw new Error('DYNAFIN_AUTH_SECRET is required when DYNAFIN_AUTH_MODE is api-key or bearer.');
+    }
   }
 }
 

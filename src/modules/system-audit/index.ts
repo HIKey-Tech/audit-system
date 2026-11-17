@@ -14,6 +14,7 @@ import { assetService } from '../asset/service/implementation/asset.service';
 import { workflowAssignmentService } from '../workflow/assignment/service/implementation/assignment.service';
 import { ImocTicketService } from '../integration/imoc/service/implementation/imoc-ticket.service';
 import { createImocClient } from '../integration/imoc/service/client/imoc.client';
+import { createDynafinClient } from '../integration/dynafin/service/client/dynafin.client';
 import { directoryMappingService } from '../integration/service/implementation/directory-mapping.service';
 import { systemConfigService } from '../settings/service/implementation/system-config.service';
 import { notificationQueueService } from '../messaging/service/implementation/notification-queue.service';
@@ -43,6 +44,8 @@ export const systemAuditAnalyticsService = new SystemAuditAnalyticsService(
     auditLogService,
     new ImocTicketService(createImocClient(), evidenceService),
     directoryMappingService,
+    createDynafinClient(),
+    systemConfigService,
   ),
   userService,
   evidenceService,

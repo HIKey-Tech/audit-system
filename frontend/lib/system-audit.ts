@@ -1,15 +1,18 @@
 import {
   Activity,
   Archive,
+  Banknote,
   BookOpen,
   Bug,
   ClipboardCheck,
+  Copy,
   Database,
   FileCheck2,
   FileSearch,
   FileText,
   Gauge,
   GitPullRequest,
+  HandCoins,
   HardDriveDownload,
   KeyRound,
   LifeBuoy,
@@ -141,13 +144,59 @@ export const ANALYSIS_META: Record<AnalysisType, AnalysisMeta> = {
       { key: 'totalDifference', label: 'Total difference', bad: true },
     ],
   },
+  high_value_transactions: {
+    label: 'High-value transactions & expenditure',
+    short: 'High-value',
+    icon: Banknote,
+    hint: 'A Dynafin transaction listing (reference, date, amount, payee, approver). Reports each transaction above ₦5m — or, in expenditure mode, above ₦10m in the nine named categories. Transactions are never added together.',
+    headline: [
+      { key: 'transactions', label: 'Transactions' },
+      { key: 'qualifying', label: 'Above threshold', bad: true },
+      { key: 'qualifyingValue', label: 'Value above threshold (₦)' },
+      { key: 'missingApprover', label: 'No approver', bad: true },
+      { key: 'selfApproved', label: 'Self-approved', bad: true },
+      { key: 'missingSupport', label: 'No support', bad: true },
+    ],
+  },
+  duplicate_postings: {
+    label: 'Duplicate & unusual postings',
+    short: 'Duplicates',
+    icon: Copy,
+    hint: 'A Dynafin transaction listing. Finds the same reference or vendor invoice posted twice, identical amount/account/date/payee, reversals, and payments split below a limit.',
+    headline: [
+      { key: 'transactions', label: 'Transactions' },
+      { key: 'duplicateReferenceGroups', label: 'Duplicate references', bad: true },
+      { key: 'duplicateInvoiceGroups', label: 'Duplicate invoices', bad: true },
+      { key: 'sameAmountGroups', label: 'Same amount/payee', bad: true },
+      { key: 'splitPaymentGroups', label: 'Split payments', bad: true },
+      { key: 'valueAtRisk', label: 'Value at risk (₦)', bad: true },
+    ],
+  },
+  staff_advances: {
+    label: 'Staff advances & retirement',
+    short: 'Staff advances',
+    icon: HandCoins,
+    hint: 'A Dynafin staff-advance listing (advance, employee, date issued, amount, retired/refunded). Ages each advance against the 72-hour retirement rule.',
+    headline: [
+      { key: 'advances', label: 'Advances' },
+      { key: 'totalOutstanding', label: 'Outstanding (₦)', bad: true },
+      { key: 'overdueAdvances', label: 'Overdue', bad: true },
+      { key: 'partiallyRetired', label: 'Partly retired', bad: true },
+      { key: 'newBeforePreviousRetired', label: 'New before retired', bad: true },
+      { key: 'repeatEmployees', label: 'Repeat borrowers', bad: true },
+    ],
+  },
 };
+
+/** Analyses that will read live from Dynafin once its API is connected. */
+export const DYNAFIN_ANALYSES: AnalysisType[] = ['high_value_transactions', 'duplicate_postings', 'staff_advances'];
 
 export const SOURCE_LABELS: Record<AnalysisSource, string> = {
   upload: 'Uploaded export',
   iams: 'IAMS (live)',
   entra_id: 'Entra ID (live)',
   imoc: 'IMOC (live)',
+  dynafin: 'Dynafin (live)',
 };
 
 export const SECURITY_TEST_TYPE_LABELS: Record<SecurityTestType, string> = {
@@ -292,6 +341,9 @@ export const SYSTEM_AUDIT_ACTIVITIES: SystemAuditActivity[] = [
     privilege: 'Incident management system access; report generation and export rights',
     links: [
       { label: 'Data integrity checks', href: '/system-audit/analytics?type=data_integrity', icon: FileCheck2, permission: 'sysaudit:read' },
+      { label: 'High-value transactions (Dynafin)', href: '/system-audit/analytics?type=high_value_transactions', icon: Banknote, permission: 'sysaudit:read' },
+      { label: 'Duplicate & unusual postings (Dynafin)', href: '/system-audit/analytics?type=duplicate_postings', icon: Copy, permission: 'sysaudit:read' },
+      { label: 'Staff advances & retirement (Dynafin)', href: '/system-audit/analytics?type=staff_advances', icon: HandCoins, permission: 'sysaudit:read' },
       { label: 'Incident management review (IMOC)', href: '/system-audit/analytics?type=incident_log', icon: Siren, permission: 'sysaudit:read' },
       { label: 'Backup & restore verification', href: '/system-audit/analytics?type=backup_log', icon: HardDriveDownload, permission: 'sysaudit:read' },
       { label: 'Findings register export', href: '/audit/findings', icon: FileSearch, permission: 'finding:read' },

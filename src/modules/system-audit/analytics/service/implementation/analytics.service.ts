@@ -130,18 +130,22 @@ export class SystemAuditAnalyticsService implements ISystemAuditAnalyticsService
     private readonly findingService: IFindingService,
   ) {}
 
-  listAnalysisTypes(): AnalysisTypeResponseDto[] {
+  async listAnalysisTypes(): Promise<AnalysisTypeResponseDto[]> {
     const live = this.liveSources.supportedSources();
-    return Object.values(ANALYZERS).map((a) => ({
-      type: a.type,
-      label: a.label,
-      description: a.description,
-      controls: a.controls,
-      fields: a.fields,
-      rules: a.rules,
-      defaultParameters: a.parametersSchema.parse({}),
-      liveSources: live[a.type] ?? [],
-    }));
+    return Promise.all(
+      Object.values(ANALYZERS).map(async (a) => ({
+        type: a.type,
+        label: a.label,
+        description: a.description,
+        controls: a.controls,
+        fields: a.fields,
+        rules: a.rules,
+        // Show the organisation's configured thresholds, not just the built-in ones, so the form
+        // never displays a value different from the one the run will actually use.
+        defaultParameters: { ...(a.parametersSchema.parse({}) as Record<string, unknown>), ...(await this.liveSources.parameterDefaultsFor(a.type)) },
+        liveSources: live[a.type] ?? [],
+      })),
+    );
   }
 
   previewExtract(dto: PreviewExtractDto, file: ExtractFile): ExtractPreviewResponseDto {
@@ -180,7 +184,8 @@ export class SystemAuditAnalyticsService implements ISystemAuditAnalyticsService
       mappedFields = new Set(Object.entries(mapping).filter(([, h]) => h).map(([k]) => k));
     }
 
-    const parameters = this._parseParameters(analyzer, dto.parameters ?? {}, {});
+    // Organisation-configured defaults (e.g. the high-value threshold) apply to uploads too.
+    const parameters = this._parseParameters(analyzer, dto.parameters ?? {}, await this.liveSources.parameterDefaultsFor(dto.analysisType));
     const context: AnalyzerContext = { now: new Date(), mappedFields };
     await this._enrichContext(dto.analysisType, parameters, context);
     let baselineRunId: string | null = null;
@@ -236,7 +241,11 @@ export class SystemAuditAnalyticsService implements ISystemAuditAnalyticsService
     const context: AnalyzerContext = { now: new Date(), mappedFields: extract.mappedFields };
     await this._enrichContext(dto.analysisType, parameters, context);
     const result = this._analyse(analyzer, extract.records, parameters, context);
-    const usesWindow = dto.analysisType === AnalysisType.SecurityEventLog || dto.analysisType === AnalysisType.IncidentLog;
+    const usesWindow =
+      dto.analysisType === AnalysisType.SecurityEventLog ||
+      dto.analysisType === AnalysisType.IncidentLog ||
+      dto.analysisType === AnalysisType.HighValueTransactions ||
+      dto.analysisType === AnalysisType.DuplicatePostings;
     if (usesWindow) result.summary.lookbackDays = dto.days;
 
     const runId = randomUUID();

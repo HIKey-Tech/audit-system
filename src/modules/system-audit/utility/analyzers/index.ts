@@ -8,6 +8,9 @@ import { securityEventLogAnalyzer } from './security-event-log.analyzer';
 import { configurationAnalyzer } from './configuration.analyzer';
 import { vulnerabilityScanAnalyzer } from './vulnerability-scan.analyzer';
 import { dataIntegrityAnalyzer } from './data-integrity.analyzer';
+import { highValueTransactionsAnalyzer } from './high-value-transactions.analyzer';
+import { duplicatePostingsAnalyzer } from './duplicate-postings.analyzer';
+import { staffAdvancesAnalyzer } from './staff-advances.analyzer';
 
 // Each definition is typed with its own parameter shape; the registry erases
 // that to `unknown` because parameters are validated by the definition's own
@@ -21,6 +24,9 @@ export const ANALYZERS: Record<AnalysisType, AnalyzerDefinition<unknown>> = {
   [AnalysisType.Configuration]: configurationAnalyzer as AnalyzerDefinition<unknown>,
   [AnalysisType.VulnerabilityScan]: vulnerabilityScanAnalyzer as AnalyzerDefinition<unknown>,
   [AnalysisType.DataIntegrity]: dataIntegrityAnalyzer as AnalyzerDefinition<unknown>,
+  [AnalysisType.HighValueTransactions]: highValueTransactionsAnalyzer as AnalyzerDefinition<unknown>,
+  [AnalysisType.DuplicatePostings]: duplicatePostingsAnalyzer as AnalyzerDefinition<unknown>,
+  [AnalysisType.StaffAdvances]: staffAdvancesAnalyzer as AnalyzerDefinition<unknown>,
 };
 
 export { DEFAULT_SOD_RULES, IAMS_SOD_RULES } from './access-listing.analyzer';

@@ -10,6 +10,10 @@ export enum AnalysisType {
   Configuration = 'configuration',
   VulnerabilityScan = 'vulnerability_scan',
   DataIntegrity = 'data_integrity',
+  // Financial analyses over Dynafin data (uploaded export, or live once the API exists).
+  HighValueTransactions = 'high_value_transactions',
+  DuplicatePostings = 'duplicate_postings',
+  StaffAdvances = 'staff_advances',
 }
 
 /** Where a run's records came from. Every source is read-only. */
@@ -18,6 +22,7 @@ export enum AnalysisSource {
   Iams = 'iams',
   EntraId = 'entra_id',
   Imoc = 'imoc',
+  Dynafin = 'dynafin',
 }
 
 export enum RunTrigger {

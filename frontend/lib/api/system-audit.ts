@@ -14,9 +14,12 @@ export type AnalysisType =
   | 'security_event_log'
   | 'configuration'
   | 'vulnerability_scan'
-  | 'data_integrity';
+  | 'data_integrity'
+  | 'high_value_transactions'
+  | 'duplicate_postings'
+  | 'staff_advances';
 
-export type AnalysisSource = 'upload' | 'iams' | 'entra_id' | 'imoc';
+export type AnalysisSource = 'upload' | 'iams' | 'entra_id' | 'imoc' | 'dynafin';
 export type LiveSource = Exclude<AnalysisSource, 'upload'>;
 export type Severity = 'critical' | 'high' | 'medium' | 'low';
 export type Disposition = 'open' | 'confirmed' | 'false_positive' | 'explained';

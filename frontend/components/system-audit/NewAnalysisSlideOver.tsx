@@ -18,7 +18,7 @@ import {
   type ExtractPreview,
   type LiveSource,
 } from '@/lib/api/system-audit';
-import { ANALYSIS_META, SOURCE_LABELS } from '@/lib/system-audit';
+import { ANALYSIS_META, DYNAFIN_ANALYSES, SOURCE_LABELS } from '@/lib/system-audit';
 import { ParametersEditor, type ParametersResult } from './ParametersEditor';
 
 type SourceChoice = 'upload' | LiveSource;
@@ -202,6 +202,8 @@ export const NewAnalysisSlideOver = ({
   };
 
   const sourceChoices: SourceChoice[] = ['upload', ...(info?.liveSources ?? [])];
+  // Live Dynafin is not available until its API is connected; say so rather than leaving the option out silently.
+  const dynafinComingSoon = DYNAFIN_ANALYSES.includes(type) && !sourceChoices.includes('dynafin');
   const toggle = (list: string[], value: string): string[] =>
     list.includes(value) ? list.filter((v) => v !== value) : [...list, value];
 
@@ -244,8 +246,12 @@ export const NewAnalysisSlideOver = ({
           </div>
         )}
 
-        {sourceChoices.length > 1 && (
-          <FormField label="Data source" required>
+        {(sourceChoices.length > 1 || dynafinComingSoon) && (
+          <FormField
+            label="Data source"
+            required
+            hint={dynafinComingSoon ? 'Live Dynafin data is coming soon. For now, export the listing from Dynafin (CSV or Excel) and upload it here.' : undefined}
+          >
             <div className="flex flex-wrap gap-2">
               {sourceChoices.map((s) => (
                 <button
@@ -259,6 +265,17 @@ export const NewAnalysisSlideOver = ({
                   {SOURCE_LABELS[s]}
                 </button>
               ))}
+              {dynafinComingSoon && (
+                <button
+                  type="button"
+                  disabled
+                  title="Coming soon — available once the Dynafin connection is set up"
+                  className="flex cursor-not-allowed items-center gap-2 rounded-md border border-dashed border-border px-3 py-1.5 text-xs font-medium text-text-muted opacity-70"
+                >
+                  {SOURCE_LABELS.dynafin}
+                  <Badge tone="gray">Coming soon</Badge>
+                </button>
+              )}
             </div>
           </FormField>
         )}

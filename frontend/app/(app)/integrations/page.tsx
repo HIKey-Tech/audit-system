@@ -37,6 +37,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { Tabs } from '@/components/ui/Tabs';
 import { SlideOver } from '@/components/ui/SlideOver';
 import { useSession, hasPermission } from '@/components/providers/AuthProvider';
+import { DynafinStatusRow } from '@/components/integrations/DynafinStatusRow';
 import {
   imocApi,
   ImocIngestionRule,
@@ -343,6 +344,8 @@ export default function IntegrationsPage(): JSX.Element {
         </span>
         <Badge tone="amber">Coming soon</Badge>
       </div>
+
+      <DynafinStatusRow />
 
       {/* Top Connection Status Banner */}
       <Card>

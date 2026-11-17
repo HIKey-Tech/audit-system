@@ -48,6 +48,8 @@ interface CheckDefinition {
   analysisType: AnalysisType;
   source: AnalysisSource;
   lookback?: 'securityEventLookbackDays' | 'incidentLookbackDays';
+  /** Fixed look-back for checks that are not tied to a configurable window. */
+  fixedDays?: number;
   connection: () => { connected: boolean; note: string | null };
 }
 
@@ -93,6 +95,20 @@ export const MONITORING_CHECKS: CheckDefinition[] = [
       config.imoc.enabled
         ? { connected: true, note: null }
         : { connected: false, note: 'The IMOC integration is not enabled (IMOC_ENABLED)' },
+  },
+  {
+    // Spec §1.6: a DAILY alert for potential duplicate postings, escalated to Internal Audit.
+    // Weekly/monthly Dynafin reports are run on demand until the monitor supports those cadences.
+    key: 'dynafin_duplicate_postings',
+    label: 'Dynafin duplicate-posting alert',
+    description: 'Yesterday’s Dynafin postings: the same reference, vendor invoice or amount/account/payee posted more than once, reversals, and split payments.',
+    analysisType: AnalysisType.DuplicatePostings,
+    source: AnalysisSource.Dynafin,
+    fixedDays: 1,
+    connection: () =>
+      config.dynafin.enabled
+        ? { connected: true, note: null }
+        : { connected: false, note: 'The Dynafin integration is not enabled (DYNAFIN_ENABLED)' },
   },
 ];
 
@@ -259,8 +275,8 @@ export class ContinuousMonitoringService implements IContinuousMonitoringService
       const run = await this.analyticsService.runLiveAnalysis(
         {
           analysisType: check.analysisType,
-          source: check.source as AnalysisSource.Iams | AnalysisSource.EntraId | AnalysisSource.Imoc,
-          days: check.lookback ? cfg[check.lookback] : 30,
+          source: check.source as AnalysisSource.Iams | AnalysisSource.EntraId | AnalysisSource.Imoc | AnalysisSource.Dynafin,
+          days: check.lookback ? cfg[check.lookback] : (check.fixedDays ?? 30),
         },
         actor,
         trigger,

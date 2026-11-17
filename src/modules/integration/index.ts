@@ -8,6 +8,9 @@ import { ProjectPlusController } from './projectplus/controller/projectplus.cont
 import { ProjectPlusService } from './projectplus/service/implementation/projectplus.service';
 import { ProjectPlusLinkService } from './projectplus/service/implementation/projectplus-link.service';
 import { createProjectPlusClient } from './projectplus/service/client/projectplus.client';
+import { DynafinController } from './dynafin/controller/dynafin.controller';
+import { DynafinService } from './dynafin/service/implementation/dynafin.service';
+import { createDynafinClient } from './dynafin/service/client/dynafin.client';
 import { EvidenceService } from '../audit/evidence/service/implementation/evidence.service';
 import { EngagementService } from '../audit/engagement/service/implementation/engagement.service';
 import { ChecklistService } from '../audit/checklists/service/implementation/checklist.service';
@@ -47,6 +50,7 @@ export const createIntegrationModule = (): Router => {
       engagementService,
     ).router,
   );
+  router.use('/integration/dynafin', new DynafinController(new DynafinService(createDynafinClient())).router);
   return router;
 };
 

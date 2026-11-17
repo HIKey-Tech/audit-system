@@ -22,4 +22,10 @@ export interface ILiveSourceService {
     source: AnalysisSource,
     options: { days: number; actor: SystemAuditActor },
   ): Promise<LiveExtract>;
+  /**
+   * Organisation-configured parameter defaults for an analysis (e.g. the high-value
+   * threshold). Applied to uploads as well as live runs so a configured threshold means
+   * the same thing whichever way the data arrives. Anything the auditor passes wins.
+   */
+  parameterDefaultsFor(type: AnalysisType): Promise<Record<string, unknown>>;
 }

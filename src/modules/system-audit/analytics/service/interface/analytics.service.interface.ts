@@ -40,7 +40,7 @@ export interface ServedExtract {
  * confirmed ones as findings; nothing is ever written back to the source.
  */
 export interface ISystemAuditAnalyticsService {
-  listAnalysisTypes(): AnalysisTypeResponseDto[];
+  listAnalysisTypes(): Promise<AnalysisTypeResponseDto[]>;
   previewExtract(dto: PreviewExtractDto, file: ExtractFile): ExtractPreviewResponseDto;
   runUploadAnalysis(dto: RunUploadAnalysisDto, file: ExtractFile, actor: SystemAuditActor): Promise<RunDetailResponseDto>;
   /** `trigger = scheduled` is used by continuous monitoring; the run then has no creator. */

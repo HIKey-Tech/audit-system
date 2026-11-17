@@ -46,7 +46,7 @@ export const RunUploadAnalysisSchema = z.object({
 
 export const RunLiveAnalysisSchema = z.object({
   analysisType: z.nativeEnum(AnalysisType),
-  source: z.enum([AnalysisSource.Iams, AnalysisSource.EntraId, AnalysisSource.Imoc]),
+  source: z.enum([AnalysisSource.Iams, AnalysisSource.EntraId, AnalysisSource.Imoc, AnalysisSource.Dynafin]),
   title: z.string().trim().min(1).max(200).optional(),
   engagementId: z.string().uuid().optional(),
   /** Look-back window for event and incident sources. */

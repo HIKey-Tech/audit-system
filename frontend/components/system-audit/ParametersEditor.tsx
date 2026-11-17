@@ -5,12 +5,21 @@ import { FormField } from '@/components/ui/FormField';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { summaryLabel } from './shared';
 
-type Kind = 'number' | 'boolean' | 'lines' | 'json' | 'severity' | 'text';
+type Kind = 'number' | 'boolean' | 'lines' | 'json' | 'severity' | 'text' | 'choice';
 
 const SEVERITY_KEYS = new Set(['minimumSeverity', 'notifyOnSeverity']);
 
+/** Text parameters that only accept a fixed set of values — shown as a list, not a free text box. */
+const CHOICES: Record<string, Array<{ value: string; label: string }>> = {
+  mode: [
+    { value: 'all', label: 'All transactions (above the high-value threshold)' },
+    { value: 'expenditure', label: 'Expenditure in the nine named categories (higher threshold)' },
+  ],
+};
+
 const kindOf = (key: string, value: unknown): Kind => {
   if (SEVERITY_KEYS.has(key)) return 'severity';
+  if (typeof value === 'string' && CHOICES[key]) return 'choice';
   if (typeof value === 'number') return 'number';
   if (typeof value === 'boolean') return 'boolean';
   if (Array.isArray(value) && value.every((v) => typeof v === 'string')) return 'lines';
@@ -118,6 +127,17 @@ export const ParametersEditor = ({
               <Select value={value} onChange={(e) => set(key, e.target.value)}>
                 {['critical', 'high', 'medium', 'low'].map((s) => (
                   <option key={s} value={s}>{s}</option>
+                ))}
+              </Select>
+            </FormField>
+          );
+        }
+        if (kind === 'choice') {
+          return (
+            <FormField key={key} label={label}>
+              <Select value={value} onChange={(e) => set(key, e.target.value)}>
+                {CHOICES[key].map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </Select>
             </FormField>

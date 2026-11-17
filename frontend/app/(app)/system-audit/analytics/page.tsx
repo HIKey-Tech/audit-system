@@ -134,6 +134,7 @@ export default function SystemAuditAnalyticsPage(): JSX.Element {
             <option value="iams">IAMS (live)</option>
             <option value="entra_id">Entra ID (live)</option>
             <option value="imoc">IMOC (live)</option>
+            <option value="dynafin">Dynafin (live)</option>
           </Select>
           <Select value={values.review} aria-label="Review status" onChange={(e) => set({ review: e.target.value, page: '1' })}>
             <option value="">Any review status</option>

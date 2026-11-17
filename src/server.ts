@@ -35,6 +35,7 @@ import { createRiskModule } from './modules/risk';
 import { createWorkflowModule } from './modules/workflow';
 import { createMessagingModule, templateService } from './modules/messaging';
 import { syncLifecycleNotificationPermission } from './modules/audit/utility/lifecycle-notify.utility';
+import { ensureDynafinConfigDefaults } from './modules/system-audit/utility/dynafin-config.utility';
 import { createDashboardModule } from './modules/dashboard';
 import { createSettingsModule } from './modules/settings';
 import { createIntegrationModule } from './modules/integration';
@@ -239,6 +240,8 @@ const startServer = async (): Promise<http.Server> => {
   void syncLifecycleNotificationPermission().catch((err: unknown) => {
     logger.warn('Lifecycle notification permission startup sync failed', { err });
   });
+  // Create-only: adds the Dynafin report thresholds to Settings → Config if absent; never overwrites an admin's value.
+  void ensureDynafinConfigDefaults();
 
   // Seed today's idempotent learning snapshot and early warnings immediately;
   // users should not have to wait for the next scheduled hour after deployment
