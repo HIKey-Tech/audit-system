@@ -26,6 +26,33 @@ export const assertNotSelfApproval = (submittedById: string, actorId: string): v
 };
 
 /**
+ * Segregation of duties across a multi-level chain: one person may not sign more
+ * than one level of the same approval. Without this, a user holding several of
+ * the chain's permissions (a super admin holds all of them, or one person given
+ * both the oversight and final report permissions) could carry an item through
+ * every level alone, defeating the point of a layered sign-off. As with
+ * self-approval, only approving is gated — rejecting is always allowed.
+ *
+ * `approver_id` on an approved step is the person who actually signed it (the
+ * approve flow overwrites a permission-pool step's null with the actor).
+ */
+export const assertNotPriorSigner = (
+  steps: ReadonlyArray<{ level: number; status: string; approver_id: string | null }>,
+  currentLevel: number,
+  actorId: string,
+): void => {
+  const alreadySigned = steps.some(
+    (step) =>
+      step.level < currentLevel && step.status === 'approved' && step.approver_id === actorId,
+  );
+  if (alreadySigned) {
+    throw AppError.forbidden(
+      'You already signed an earlier level of this approval and cannot also sign a later one (segregation of duties). A different authorized user must approve this level.',
+    );
+  }
+};
+
+/**
  * Admin-configurable escalation matrix. Maps escalation tiers to the role names
  * whose holders are notified once an escalation passes the entity's own
  * assignees (lead auditor / engagement manager / current approver). Stored in

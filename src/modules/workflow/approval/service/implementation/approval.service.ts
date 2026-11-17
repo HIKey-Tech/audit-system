@@ -23,7 +23,7 @@ import {
   WorkflowApprovalStepStatus,
   WorkflowEntityType,
 } from '../../../domain/enum/workflow.enum';
-import { assertHasPermission, assertNotSelfApproval } from '../../../utility/workflow.utility';
+import { assertHasPermission, assertNotPriorSigner, assertNotSelfApproval } from '../../../utility/workflow.utility';
 import { ApprovalEditsDto, CreateApprovalRequestDto } from '../../dto/request/approval.request.dto';
 import {
   ApprovalResponseDto,
@@ -297,6 +297,8 @@ export class ApprovalService implements IApprovalService {
     // may not also approve it. Rejecting your own submission is fine — only the
     // approval sign-off is gated. A different authorized user must sign.
     assertNotSelfApproval(approval.submitted_by_id, actor.id);
+    // …and no one person may sign two levels of the same chain.
+    assertNotPriorSigner(approval.steps, currentStep.level, actor.id);
 
     const nextStep = approval.steps.find((step) => step.level === approval.current_level + 1);
     const now = new Date();
