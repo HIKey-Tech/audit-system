@@ -25,6 +25,7 @@ import { formatDate } from '@/lib/utils/format';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { PlanFormSlideOver } from '@/components/audit/plans/PlanFormSlideOver';
 import { AddPlanItemSlideOver } from '@/components/audit/plans/AddPlanItemSlideOver';
+import { workflowApi } from '@/lib/api/workflow';
 import { PopulateFromUniverseSlideOver } from '@/components/audit/plans/PopulateFromUniverseSlideOver';
 import { CreateEngagementSlideOver } from '@/components/audit/plans/CreateEngagementSlideOver';
 import { ApproveSignPanel } from '@/components/workflow/ApproveSignPanel';
@@ -45,7 +46,7 @@ export default function PlanDetailPage(): JSX.Element {
   const canEditItems = hasPermission('plan:add_item');
   const canSubmitPlan = hasPermission('plan:submit');
   const canCreateEngagement = hasPermission('engagement:create');
-  const isAdmin = hasPermission('plan:approve');
+  const isAdmin = hasPermission('plan:approve') || hasPermission('plan:approve:final');
 
   const [editPlanOpen, setEditPlanOpen] = useState(false);
   const [deletePlanOpen, setDeletePlanOpen] = useState(false);
@@ -68,6 +69,17 @@ export default function PlanDetailPage(): JSX.Element {
     queryFn: () => plansApi.get(id),
     enabled: Boolean(id),
   });
+
+  // Whose turn is it? The chain says which permission the waiting level needs (Head first, then the DG),
+  // so the Approve button only shows to the person who can actually sign now. Shares the cache with <ApprovalChain>.
+  const chainQuery = useQuery({
+    queryKey: ['approval-chain', 'audit_plan', id],
+    queryFn: () => workflowApi.getApprovalChain('audit_plan', id),
+    enabled: Boolean(id),
+  });
+  const waitingLevel = chainQuery.data?.levels.find((l) => l.status === 'pending');
+  const isMyTurnToApprove =
+    isAdmin && (!waitingLevel?.requiredPermission || hasPermission(waitingLevel.requiredPermission));
 
   const submitMut = useMutation({
     mutationFn: () => plansApi.submit(id),
@@ -315,13 +327,15 @@ export default function PlanDetailPage(): JSX.Element {
             )}
             {data.status === 'submitted' && isAdmin && (
               <>
-                <Button
-                  variant="success"
-                  leftIcon={<Check className="h-4 w-4" />}
-                  onClick={() => setApproveOpen((v) => !v)}
-                >
-                  Approve &amp; Sign
-                </Button>
+                {isMyTurnToApprove && (
+                  <Button
+                    variant="success"
+                    leftIcon={<Check className="h-4 w-4" />}
+                    onClick={() => setApproveOpen((v) => !v)}
+                  >
+                    Approve &amp; Sign
+                  </Button>
+                )}
                 <Button
                   variant="danger"
                   leftIcon={<X className="h-4 w-4" />}
@@ -335,7 +349,7 @@ export default function PlanDetailPage(): JSX.Element {
         }
       />
 
-      {approveOpen && data.status === 'submitted' && isAdmin && (
+      {approveOpen && data.status === 'submitted' && isMyTurnToApprove && (
         <div className="mb-6">
           <ApproveSignPanel
             entityType="audit_plan"

@@ -322,6 +322,11 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     who: 'Anyone with formal executive authority to approve and sanction organizational audit plans',
     summary: 'Allows formally approving audit plans. For anyone authorized to sanction annual audit programmes.',
   },
+  'plan:approve:final': {
+    what: 'Give final approval to an audit programme after the Head of Internal Audit has approved it',
+    who: 'The Director General, as the final approver of annual and periodic audit programmes',
+    summary: 'Allows the final (Director General) approval of audit programmes. Held by the DG only.',
+  },
   'plan:reject': {
     what: 'Return a submitted audit plan for revision, scope adjustments, or budget modifications',
     who: 'Anyone with executive sign-off authority requiring adjustments before authorization',

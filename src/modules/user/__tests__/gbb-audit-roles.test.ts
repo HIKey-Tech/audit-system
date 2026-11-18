@@ -118,9 +118,10 @@ describe('report sign-off chain: manager → Head of IA → DG, three different 
   });
 });
 
-describe('planning: auditors draft, the Head approves, the DG backs up', () => {
-  it('plan:approve is held by the Head and the DG only, and neither can create plans', () => {
-    expect(holders('plan:approve').sort()).toEqual(['dg', 'head_internal_audit']);
+describe('planning: auditors draft, the Head approves, then the DG gives final approval', () => {
+  it('plan:approve is the Head only and plan:approve:final the DG only, and neither can create plans', () => {
+    expect(holders('plan:approve')).toEqual(['head_internal_audit']);
+    expect(holders('plan:approve:final')).toEqual(['dg']);
     expect(perms('head_internal_audit').has('plan:create')).toBe(false);
     expect(perms('dg').has('plan:create')).toBe(false);
   });
@@ -130,6 +131,7 @@ describe('planning: auditors draft, the Head approves, the DG backs up', () => {
       for (const p of ['plan:create', 'plan:update', 'plan:add_item', 'plan:submit', 'engagement:create', 'engagement:update']) {
         expect(perms(k).has(p)).toBe(true);
       }
+      expect(perms(k).has('plan:approve:final')).toBe(false);
       expect(perms(k).has('plan:approve')).toBe(false); // keeps the UI treating them as field auditors
     }
   });
@@ -163,7 +165,7 @@ describe('segregation of duties as the system’s own access review sees it', ()
 
 describe('what auditors must NOT be able to do', () => {
   const forbidden = [
-    'plan:approve', 'plan:reject', 'report:issue', 'report:approve:oversight', 'report:approve:final',
+    'plan:approve', 'plan:approve:final', 'plan:reject', 'report:issue', 'report:approve:oversight', 'report:approve:final',
     'approval:cancel', // cancels ANY pending approval, with no ownership check
     'settings:manage', 'report_template:manage',
     'user:create', 'user:update', 'user:delete', 'user:deactivate', 'user:admin',

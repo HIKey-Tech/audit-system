@@ -48,7 +48,7 @@ export const DEFAULT_SOD_RULES: SodRule[] = [
 
 /** Permission-level conflicts inside IAMS itself (used by the IAMS access-review source). */
 export const IAMS_SOD_RULES: SodRule[] = [
-  { name: 'Create and approve audit plans', sideA: ['plan:create'], sideB: ['plan:approve'], severity: ExceptionSeverity.High },
+  { name: 'Create and approve audit plans', sideA: ['plan:create'], sideB: ['plan:approve', 'plan:approve:final'], severity: ExceptionSeverity.High },
   {
     name: 'Generate and approve audit reports',
     sideA: ['report:create'],

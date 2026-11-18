@@ -579,7 +579,9 @@ export class PlanningService implements IPlanningService {
   }
 
   async approvePlan(planId: string, actor: ActorContext): Promise<PlanResponseDto> {
-    assertHasPermission(actor.permissions, 'plan:approve');
+    if (!actor.permissions.includes('*') && !actor.permissions.includes('plan:approve') && !actor.permissions.includes('plan:approve:final')) {
+      assertHasPermission(actor.permissions, 'plan:approve');
+    }
     const plan = await this._getPlanForMutation(planId);
     if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be approved');
 

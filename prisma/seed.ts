@@ -142,6 +142,7 @@ export const PERMISSIONS: PermissionSeed[] = [
   permission('plan:add_item', 'Add items to audit plans', 'audit'),
   permission('plan:submit', 'Submit audit plans for approval', 'audit'),
   permission('plan:approve', 'Approve audit plans', 'audit'),
+  permission('plan:approve:final', 'Final (Director General) approval of audit programmes, after the Head of Internal Audit', 'audit'),
   permission('plan:reject', 'Reject audit plans', 'audit'),
   permission('engagement:read', 'View audit engagements', 'audit'),
   permission('engagement:create', 'Create audit engagements', 'audit'),
@@ -1075,7 +1076,7 @@ const SYSTEM_CONFIGS: Array<{
   {
     key: 'approval_matrix',
     value: JSON.stringify({
-      auditPlan: ['plan:approve'],
+      auditPlan: ['plan:approve', 'plan:approve:final'],
       workingPaper: ['engagement_manager'],
       auditReport: ['engagement_manager', 'report:approve:oversight', 'report:approve:final'],
       findingClosure: ['engagement_manager'],

@@ -329,7 +329,8 @@ export interface ApprovalMatrix {
 }
 
 export const DEFAULT_APPROVAL_MATRIX: ApprovalMatrix = {
-  auditPlan: ['plan:approve'],
+  // Programme: Head of Internal Audit, then the Director General for final approval.
+  auditPlan: ['plan:approve', 'plan:approve:final'],
   workingPaper: [ENGAGEMENT_MANAGER_APPROVER],
   auditReport: [ENGAGEMENT_MANAGER_APPROVER, 'report:approve:oversight', 'report:approve:final'],
   findingClosure: [ENGAGEMENT_MANAGER_APPROVER],

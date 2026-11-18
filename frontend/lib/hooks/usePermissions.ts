@@ -31,6 +31,7 @@ export const userHasPermission = (user: SessionUser | null, permission: string):
 /** Convenience: is this user an admin-level role? (super_admin, audit_admin, audit_manager, cae) */
 export const isAdminLevel = (user: SessionUser | null): boolean =>
   userHasPermission(user, 'plan:approve') ||
+  userHasPermission(user, 'plan:approve:final') ||
   userHasPermission(user, 'settings:read') ||
   userHasPermission(user, 'user:admin');
 
@@ -42,7 +43,8 @@ export const canManageAuditProgramme = (user: SessionUser | null): boolean =>
 /** Is this user a fieldwork-level auditor? (audit_lead or auditor) */
 export const isFieldAuditor = (user: SessionUser | null): boolean =>
   userHasPermission(user, 'working_paper:create') &&
-  !userHasPermission(user, 'plan:approve');
+  !userHasPermission(user, 'plan:approve') &&
+  !userHasPermission(user, 'plan:approve:final');
 
 /** Is this user an auditee? */
 export const isAuditee = (user: SessionUser | null): boolean =>

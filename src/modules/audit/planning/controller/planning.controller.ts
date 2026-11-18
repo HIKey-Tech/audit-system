@@ -1,5 +1,5 @@
 import { Router, Request, Response, NextFunction } from 'express';
-import { authenticate, requirePermission } from '../../../../shared/middleware/auth.middleware';
+import { authenticate, requirePermission, requireAnyPermission } from '../../../../shared/middleware/auth.middleware';
 import { validate } from '../../../../shared/middleware/validate.middleware';
 import { buildResponse } from '../../../../shared/types/api-response.type';
 import {
@@ -120,9 +120,9 @@ export class PlanningController {
     /**
      * @route  POST /audit/plans/:id/approve
      * @desc   Approve audit plan
-     * @access Private - plan:approve
+     * @access Private - plan:approve (Head) or plan:approve:final (DG); the approval chain decides whose turn it is
      */
-    this.router.post('/:id/approve', requirePermission('plan:approve'), this._approvePlan.bind(this));
+    this.router.post('/:id/approve', requireAnyPermission('plan:approve', 'plan:approve:final'), this._approvePlan.bind(this));
 
     /**
      * @route  POST /audit/plans/:id/reject

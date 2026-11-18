@@ -1131,7 +1131,12 @@ export class ApprovalService implements IApprovalService {
       throw AppError.forbidden('You do not have access to this approval');
     }
 
-    if (entityType === WorkflowEntityType.AuditPlan && actor.permissions.includes('plan:approve')) return;
+    if (
+      entityType === WorkflowEntityType.AuditPlan &&
+      (actor.permissions.includes('plan:approve') || actor.permissions.includes('plan:approve:final'))
+    ) {
+      return;
+    }
     throw AppError.forbidden('You do not have access to this approval');
   }
 

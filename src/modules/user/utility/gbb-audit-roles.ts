@@ -22,9 +22,11 @@
 //    also rewrites any role that holds `report:issue` / oversight, so the Head
 //    holds issue+oversight (never final) and the DG holds final only.
 //
-//  • Planning: auditors DRAFT (create/submit) plans and engagements; the Head
-//    APPROVES. The Head does not hold `plan:create` and the DG backs up
-//    `plan:approve`, so a plan can never dead-end on "no other approver".
+//  • Planning: auditors DRAFT (create/submit) plans and engagements. A programme
+//    then needs TWO signers in order: the Head of Internal Audit (`plan:approve`)
+//    and the DG for final approval (`plan:approve:final`). Neither holds
+//    `plan:create`, and the DG does not hold `plan:approve`, so the DG cannot sign
+//    the Head's level and the order is enforced.
 //
 //  • Visibility: `*:read_all` is granted to every auditor. Without it the shared
 //    risk register is empty for everyone but the risk's owner, an engagement
@@ -160,13 +162,13 @@ const HEAD_INTERNAL_AUDIT: readonly string[] = [
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Director General — final sign-off on the reports routed to them, read-wide
-// oversight, plan approval as the Head's back-up. Final ONLY (never oversight).
+// Director General — final sign-off on the reports routed to them and on audit
+// programmes (after the Head), read-wide oversight. Final ONLY (never oversight).
 // ─────────────────────────────────────────────────────────────────────────────
 const DG: readonly string[] = [
   'report:read', 'report:export', 'report:approve:final',
   'approval:read', 'approval:approve', 'approval:reject',
-  'plan:read', 'plan:approve', 'plan:reject',
+  'plan:read', 'plan:approve:final', 'plan:reject',
   'universe:read',
   'engagement:read', 'engagement:read_all', 'engagement:notify_lifecycle',
   'checklist:read', 'working_paper:read', 'evidence:read', 'assignment:read',
@@ -443,7 +445,7 @@ export const checkTeamReadiness = (members: readonly TeamMember[]): ReadinessFin
     }
   }
   for (const a of auditors) {
-    const leaked = ['plan:approve', 'report:issue', 'report:approve:oversight', 'report:approve:final', 'settings:manage'].filter((p) =>
+    const leaked = ['plan:approve', 'plan:approve:final', 'report:issue', 'report:approve:oversight', 'report:approve:final', 'settings:manage'].filter((p) =>
       a.permissions.has(p),
     );
     if (leaked.length > 0) {
@@ -470,9 +472,8 @@ export const checkTeamReadiness = (members: readonly TeamMember[]): ReadinessFin
   const holders = (perm: string): TeamMember[] => members.filter((m) => m.permissions.has(perm));
   if (holders('report:approve:oversight').length === 0) err('No active user holds report:approve:oversight — every report would stall at level 2.');
   if (holders('report:issue').length === 0) err('No active user holds report:issue — approved reports could never be issued.');
-  if (holders('plan:approve').length < 2) {
-    warn('Fewer than 2 people hold plan:approve; a plan submitted by one of them would have no other approver.');
-  }
+  if (holders('plan:approve').length === 0) err('No active user holds plan:approve — every programme would stall at level 1 (Head of Internal Audit).');
+  if (holders('plan:approve:final').length === 0) warn('No active user holds plan:approve:final yet — programmes will stall at the final (DG) level until the DG has an account.');
   return out;
 };
 
