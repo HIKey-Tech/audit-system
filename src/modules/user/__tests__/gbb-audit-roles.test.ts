@@ -7,6 +7,7 @@ import {
   GBB_ESCALATION_MATRIX,
   GBB_ROLES,
   GBB_ROLE_MARKER,
+  HEAD_NOT_HELD,
   GbbRoleKey,
   GbbRoleSpec,
   PlannerRoleState,
@@ -147,9 +148,12 @@ describe('segregation of duties as the system’s own access review sees it', ()
   const violated = (key: GbbRoleKey): string[] =>
     IAMS_SOD_RULES.filter((rule) => rule.sideA.some((p) => perms(key).has(p)) && rule.sideB.some((p) => perms(key).has(p))).map((r) => r.name);
 
-  it('the Head of IA and the DG trip none of the rules', () => {
-    expect(violated('head_internal_audit')).toEqual([]);
+  it('the DG trips none of the rules; the Head trips exactly one, by design', () => {
     expect(violated('dg')).toEqual([]);
+    // The Head administers users AND roles (he must be able to assign and change a person's role), so the access
+    // review will list him for "Create users and grant roles". That is a decision, not an oversight: the reviewer
+    // can accept it. He still holds no create half of the plan, report, working paper or finding pairs.
+    expect(violated('head_internal_audit')).toEqual(['Create users and grant roles']);
   });
 
   it('auditors trip exactly the three create/approve pairs that rotating lead/manager requires — and nothing else', () => {
@@ -178,11 +182,14 @@ describe('what auditors must NOT be able to do', () => {
     expect(forbidden.filter((p) => perms(k).has(p))).toEqual([]);
   });
 
-  it('nobody but a super admin gets platform administration', () => {
+  it('platform administration is the Head of Internal Audit\'s and no one else\'s', () => {
     const platform = ['user:create', 'user:delete', 'user:deactivate', 'user:admin', 'role:create', 'role:update',
       'role:delete', 'role:assign', 'job:admin', 'notification_template:write', 'notification_template:delete',
-      'document:delete', 'auth:logout_all'];
-    for (const r of GBB_ROLES) expect(platform.filter((p) => r.permissions.includes(p))).toEqual([]);
+      'document:delete'];
+    for (const r of GBB_ROLES.filter((x) => x.key !== 'head_internal_audit')) {
+      expect(platform.filter((p) => r.permissions.includes(p))).toEqual([]);
+    }
+    expect(platform.filter((p) => !perms('head_internal_audit').has(p))).toEqual([]);
   });
 });
 
@@ -200,12 +207,17 @@ describe('every auditor gets everything meant for an auditor (no "can’t click"
   });
 
   it('domain extras go only where intended', () => {
-    expect(holders('control:manage').sort()).toEqual(['compliance_auditor', 'head_internal_audit']);
+    // Every auditor maintains the shared Control Library and asset registry.
+    expect(holders('control:manage').sort()).toEqual(['compliance_auditor', 'financial_auditor', 'head_internal_audit', 'system_auditor']);
     // (sectest:manage is deliberately System Auditor only — see the segregation test below.)
-    for (const p of ['sysaudit:admin', 'sysdoc:manage', 'imoc:sync', 'imoc:rules', 'imoc:ingest', 'asset:admin', 'asset:import']) {
+    for (const p of ['sysaudit:admin', 'sysdoc:manage', 'imoc:sync', 'imoc:rules', 'imoc:ingest', 'asset:admin']) {
       expect(holders(p).sort()).toEqual(['head_internal_audit', 'system_auditor'].sort());
     }
     expect(perms('financial_auditor').size).toBe(AUDITOR_CORE.length);
+  });
+
+  it('every auditor can create and maintain assets', () => {
+    for (const k of AUDITORS) for (const p of ['asset:create', 'asset:update', 'asset:import']) expect(perms(k).has(p)).toBe(true);
   });
 
   it('a security test can be coordinated by an auditor and authorised by someone else', () => {
@@ -281,9 +293,11 @@ describe('the auditee role cannot be hijacked by these roles', () => {
   it('the permissions the auditee role must hold are real and sufficient for the documented auditee flow', () => {
     for (const p of AUDITEE_REQUIRED_PERMISSIONS) expect(CATALOGUE.has(p)).toBe(true);
     expect([...AUDITEE_REQUIRED_PERMISSIONS].sort()).toEqual([
-      'document:read', 'document:write', 'engagement:read', 'evidence:upload',
+      'dashboard:read', 'document:read', 'document:write', 'engagement:read', 'evidence:upload',
       'finding:read', 'followup:evidence', 'followup:read', 'followup:respond',
-    ]);
+      // so their home page, notification bell and Requests page open without an access error
+      'notification:read', 'notification:update', 'request:act', 'request:create', 'request:read', 'request:receive',
+    ].sort());
   });
 });
 
@@ -480,3 +494,44 @@ describe('checkTeamReadiness (run after the emails are attached)', () => {
     expect(errors(t)).toEqual([]);
   });
 });
+
+describe('the Head of Internal Audit can do everything he is meant to (no red error, no missing button)', () => {
+  const catalogue: string[] = [...CATALOGUE];
+
+  it('every permission the system has is held by the Head, except the ones listed with a reason', () => {
+    const missing = catalogue.filter((slug) => !perms('head_internal_audit').has(slug) && !HEAD_NOT_HELD.includes(slug));
+    expect(missing).toEqual([]);
+  });
+
+  it('the exclusions are real permissions, and the Head holds none of them', () => {
+    expect(HEAD_NOT_HELD.filter((p) => !catalogue.includes(p))).toEqual([]);
+    expect(HEAD_NOT_HELD.filter((p) => perms('head_internal_audit').has(p))).toEqual([]);
+  });
+
+  it('he can assign and change a person\'s role, create, deactivate and reset users', () => {
+    for (const p of ['role:assign', 'user:admin', 'user:create', 'user:update', 'user:deactivate', 'user:delete', 'user:reset_2fa', 'role:read', 'role:create', 'role:update']) {
+      expect(perms('head_internal_audit').has(p)).toBe(true);
+    }
+  });
+
+  it('he is still never eligible to be lead auditor or engagement manager', () => {
+    const h = perms('head_internal_audit');
+    expect(h.has('working_paper:create')).toBe(false);
+    expect(['working_paper:approve', 'report:approve', 'finding:close'].every((p) => h.has(p))).toBe(false);
+  });
+
+  it('he approves and issues, and holds none of the make-halves of what he approves', () => {
+    const h = perms('head_internal_audit');
+    for (const p of ['plan:approve', 'report:approve:oversight', 'report:issue']) expect(h.has(p)).toBe(true);
+    for (const p of ['plan:create', 'plan:submit', 'report:create', 'report:submit']) expect(h.has(p)).toBe(false);
+  });
+});
+
+describe('the DG can open every page without an access error', () => {
+  it('holds the read permissions behind the pages a DG reaches', () => {
+    for (const p of ['control:read', 'user:read', 'role:read', 'risk_category:read', 'escalation_policy:read', 'projectplus:read']) {
+      expect(perms('dg').has(p)).toBe(true);
+    }
+  });
+});
+

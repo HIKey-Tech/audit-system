@@ -80,13 +80,13 @@ export const AUDITOR_CORE: readonly string[] = [
   'followup:read', 'followup:verify',
   // Reports — author, submit, and level-1 (engagement manager) approval. NOT issue / oversight / final.
   'report:read', 'report:create', 'report:update', 'report:submit', 'report:approve', 'report:reject', 'report:export',
-  // Libraries (read) & risk register (shared)
-  'control:read',
+  // Control Library (every auditor adds Acts, frameworks and controls for their audits) & risk register (shared)
+  'control:read', 'control:manage',
   'risk:read', 'risk:read_all', 'risk:create', 'risk:update', 'risk:assess', 'risk:export',
   'risk_category:read', 'risk_category:write',
   'risk_monitoring:read',
-  // Assets, integrations, analytics
-  'asset:read', 'asset:link', 'asset:attest', 'asset:export',
+  // Assets (every auditor maintains the registry), integrations, analytics
+  'asset:read', 'asset:create', 'asset:update', 'asset:import', 'asset:link', 'asset:attest', 'asset:export',
   'integration:read',
   'imoc:read', 'imoc:link', 'imoc:capture', 'imoc:export',
   'projectplus:read', 'projectplus:link',
@@ -108,22 +108,28 @@ export const AUDITOR_CORE: readonly string[] = [
   'log:read', 'log:export',
 ];
 
-/** System Auditor only: baselines, security-test coordination, system documentation, IMOC operations, asset registry upkeep. */
+/** System Auditor only: baselines, security-test coordination, system documentation, IMOC operations, asset registry administration. */
 const SYSTEM_AUDITOR_EXTRA: readonly string[] = [
   'sysaudit:admin',
   'sectest:manage',
   'sysdoc:manage',
   'imoc:sync', 'imoc:rules', 'imoc:ingest',
-  'asset:create', 'asset:update', 'asset:import', 'asset:admin',
+  'asset:admin',
 ];
 
-/** Compliance Auditor only: owns the compliance frameworks / control library. */
-const COMPLIANCE_AUDITOR_EXTRA: readonly string[] = ['control:manage'];
+/** Compliance Auditor: nothing beyond the shared core (the Control Library is maintained by every auditor). */
+const COMPLIANCE_AUDITOR_EXTRA: readonly string[] = [];
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Head of Internal Audit — approvals, oversight, issue, configuration.
-// Deliberately NOT eligible to be lead/manager and holds no "create" half of any
-// segregation pair (no plan/report/working-paper/finding create, no user create).
+// Head of Internal Audit — the overseer of the whole system: approvals, oversight, issue, configuration and full
+// user and role administration. He holds every permission in the catalogue EXCEPT the ones listed in
+// HEAD_NOT_HELD below, each excluded for a concrete reason:
+//   • the "maker" half of something he approves (programmes, reports, working papers, finding closure), so a
+//     programme or report he wrote could not be approved by anyone else; and
+//   • working_paper:create / the manager approval set, which would make him eligible to be named lead auditor or
+//     engagement manager (a manager cannot also sign the oversight level);
+//   • the auditee-only response actions.
+// The interface hides those buttons for him; every other button he can see is one he is allowed to use.
 // ─────────────────────────────────────────────────────────────────────────────
 const HEAD_INTERNAL_AUDIT: readonly string[] = [
   'universe:read', 'universe:create', 'universe:update', 'universe:delete',
@@ -159,6 +165,37 @@ const HEAD_INTERNAL_AUDIT: readonly string[] = [
   'log:read', 'log:summary', 'log:export',
   'job:read',
   'settings:read', 'settings:manage', 'report_template:manage',
+  // Full user and role administration (assign or change a person's role, create, deactivate, reset 2FA)
+  'user:create', 'user:deactivate', 'user:delete', 'user:reset_2fa', 'user:admin',
+  'role:create', 'role:update', 'role:delete', 'role:assign',
+  // Administration of templates, notifications, background jobs and documents
+  'document_template:write', 'document_template:delete',
+  'notification_template:write', 'notification_template:delete', 'notification_queue:read',
+  'job:admin', 'document:delete',
+  // Fieldwork he may step into or direct without conflicting with an approval he gives
+  'checklist:create', 'checklist:update',
+  'evidence:request', 'evidence:upload',
+  'finding:create', 'followup:verify',
+  'asset:attest',
+  'auth:logout', 'auth:logout_all',
+];
+
+/**
+ * The only permissions in the catalogue the Head of Internal Audit does not hold, and why (see the note above).
+ * The tests check that he holds everything else, so a permission added to the system later cannot silently
+ * leave him unable to use a new screen.
+ */
+export const HEAD_NOT_HELD: readonly string[] = [
+  'plan:create', 'plan:add_item', 'plan:update', 'plan:submit',
+  'report:create', 'report:update', 'report:submit', 'report:approve',
+  'working_paper:create', 'working_paper:update', 'working_paper:submit', 'working_paper:approve', 'working_paper:reject',
+  'finding:close',
+  'followup:respond', 'followup:evidence',
+  // He authorises security tests and reviews analyses; coordinating or running them is the maker side.
+  'sectest:manage', 'sysaudit:run',
+  // The final approval level of a programme and of a report is the DG's; the Head signs the oversight level, and
+  // no one may sign two levels of the same chain.
+  'plan:approve:final', 'report:approve:final',
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -184,6 +221,9 @@ const DG: readonly string[] = [
   'dashboard:read',
   'document:read',
   'user:directory',
+  // Read-wide, so no page the DG opens shows an access error
+  'control:read', 'risk_category:read', 'imoc:read', 'imoc:export', 'projectplus:read',
+  'user:read', 'role:read', 'permission:read', 'document_template:read', 'escalation_policy:read',
   'notification:read', 'notification:update',
   'log:read', 'log:export',
 ];
@@ -195,7 +235,7 @@ export const GBB_ROLES: readonly GbbRoleSpec[] = [
     mode: 'create',
     title: 'Head, Internal Audit',
     description:
-      'Head of Internal Audit — approves audit programmes, level-2 oversight sign-off and issues audit reports, oversight of every engagement, risk, assets and configuration. Not assignable as lead or engagement manager.',
+      'Head of Internal Audit — approves audit programmes, level-2 oversight sign-off and issues audit reports, oversight of every engagement, risk, assets and configuration, and full user and role administration. Not assignable as lead or engagement manager.',
     permissions: uniq(HEAD_INTERNAL_AUDIT),
   },
   {
@@ -500,6 +540,7 @@ export const toTeamMember = (u: {
  * to the auditee role if one is missing — it never removes anything from it.
  */
 export const AUDITEE_REQUIRED_PERMISSIONS: readonly string[] = [
+  // See their audit and respond to it
   'engagement:read',
   'finding:read',
   'followup:read',
@@ -508,4 +549,12 @@ export const AUDITEE_REQUIRED_PERMISSIONS: readonly string[] = [
   'evidence:upload',
   'document:read',
   'document:write',
+  // Open their pages without access errors: the home page, the notification bell and the Requests page
+  'dashboard:read',
+  'notification:read',
+  'notification:update',
+  'request:read',
+  'request:create',
+  'request:receive',
+  'request:act',
 ];

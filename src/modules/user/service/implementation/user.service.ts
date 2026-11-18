@@ -928,6 +928,11 @@ export class UserService implements IUserService {
       throw AppError.forbidden('Only a super admin can grant or remove the super admin role');
     }
 
+    // A holder of `user:admin` (the Head of Internal Audit, who administers users and roles) may assign any role
+    // except super admin. Without this the Head could not assign an auditor role at all: those roles contain
+    // fieldwork permissions he deliberately does not hold himself.
+    if (actor.permissions.includes('user:admin')) return;
+
     const actorPerms = new Set(actor.permissions);
     for (const role of roles) {
       for (const rp of role.role_permissions) {

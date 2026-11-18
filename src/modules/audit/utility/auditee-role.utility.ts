@@ -1,5 +1,6 @@
 import { prisma } from '../../../shared/prisma/prisma.client';
 import { logger } from '../../../shared/utils/logger.util';
+import { AUDITEE_REQUIRED_PERMISSIONS } from '../../user/utility/gbb-audit-roles';
 import { revokeUserSessions } from '../../../shared/security/session-guard';
 
 let auditeePermissionsVerified = false;
@@ -11,16 +12,7 @@ let auditeePermissionsVerified = false;
 const ensureAuditeeRolePermissions = async (auditeeRoleId: string): Promise<void> => {
   if (auditeePermissionsVerified) return;
   try {
-    const requiredSlugs = [
-      'engagement:read',
-      'finding:read',
-      'followup:read',
-      'followup:respond',
-      'followup:evidence',
-      'evidence:upload',
-      'document:read',
-      'document:write',
-    ];
+    const requiredSlugs = [...AUDITEE_REQUIRED_PERMISSIONS];
     const perms = await prisma.permission.findMany({
       where: { slug: { in: requiredSlugs } },
       select: { id: true },

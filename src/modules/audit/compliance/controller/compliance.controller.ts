@@ -79,7 +79,7 @@ export class ComplianceController {
      */
     this.router.post(
       '/compliance/extract-preview',
-      requireAnyPermission('settings:update', 'settings:manage', 'engagement:create', 'checklist:update', 'checklist:create', 'control:manage'),
+      requireAnyPermission('settings:manage', 'engagement:create', 'checklist:update', 'checklist:create', 'control:manage'),
       documentUpload.single('file'),
       this._extractPreview.bind(this),
     );
