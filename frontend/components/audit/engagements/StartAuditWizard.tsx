@@ -5,7 +5,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { toast } from 'sonner';
-import { Award, Check, Plus, Trash2, ListChecks, Upload, Library } from 'lucide-react';
+import { Award, Check, ChevronDown, ChevronUp, Plus, Search, Trash2, ListChecks, Upload, Library } from 'lucide-react';
 
 import { SlideOver } from '@/components/ui/SlideOver';
 import { Button } from '@/components/ui/Button';
@@ -230,10 +230,26 @@ export const StartAuditWizard = ({
     setChecklistTouched(true);
     setChecklistControls((prev) => prev.filter((_, i) => i !== idx));
   };
+  const [controlsExpanded, setControlsExpanded] = useState(false);
+  const [controlSearch, setControlSearch] = useState('');
+  // A new control goes to the top and the list opens, so it is visible straight away
+  // (with hundreds of controls, a row added at the bottom would look like nothing happened).
   const addControl = () => {
     setChecklistTouched(true);
-    setChecklistControls((prev) => [...prev, { controlReference: '', controlDescription: '', testProcedure: '' }]);
+    setControlSearch('');
+    setControlsExpanded(true);
+    setChecklistControls((prev) => [{ controlReference: '', controlDescription: '', testProcedure: '' }, ...prev]);
   };
+  const visibleControls = useMemo(() => {
+    const q = controlSearch.trim().toLowerCase();
+    const indexed = checklistControls.map((c, idx) => ({ c, idx }));
+    if (!q) return indexed;
+    return indexed.filter(
+      ({ c }) =>
+        c.controlReference.toLowerCase().includes(q) ||
+        c.controlDescription.toLowerCase().includes(q),
+    );
+  }, [checklistControls, controlSearch]);
 
   const frameworksQuery = useQuery({
     queryKey: ['compliance', 'frameworks'],
@@ -243,8 +259,14 @@ export const StartAuditWizard = ({
 
   const importFromFramework = useMutation({
     mutationFn: async (fwId: string) => {
-      const res = await complianceApi.listControls({ frameworkId: fwId, pageSize: 200, isActive: true });
-      return res.items;
+      // The API returns at most 200 controls a page; fetch every page so a large framework is not cut short.
+      const all: Awaited<ReturnType<typeof complianceApi.listControls>>['items'] = [];
+      for (let page = 1; page <= 50; page++) {
+        const res = await complianceApi.listControls({ frameworkId: fwId, pageSize: 200, page, isActive: true });
+        all.push(...res.items);
+        if (res.items.length < 200) break;
+      }
+      return all;
     },
     onSuccess: (items) => {
       if (items.length === 0) {
@@ -765,7 +787,10 @@ export const StartAuditWizard = ({
               </div>
             </div>
             <p className="mb-2 text-xs text-text-secondary">
-              Prefilled from the {auditTypeLabel(effectiveAuditType)} template. Upload an Act/Policy, import from a Control Library framework, or customize controls below.
+              These are the controls your team will test, and they become this engagement&apos;s checklist. They were
+              filled in from the {auditTypeLabel(effectiveAuditType)} controls in the Control Library, so you can
+              usually leave them as they are. Only use the options below to change them: upload an Act/Policy to
+              add controls from it, import a whole framework, or add a single control.
             </p>
             <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-alt p-2.5">
               <Library className="h-4 w-4 text-text-secondary" />
@@ -805,38 +830,76 @@ export const StartAuditWizard = ({
               </p>
             ) : (
               <div className="space-y-3">
-                {checklistControls.map((c, idx) => (
-                  <div key={idx} className="space-y-2 rounded-lg border border-border bg-surface p-3">
-                    <div className="flex items-start gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3">
+                  <p className="text-xs text-text-secondary">
+                    <span className="font-semibold text-text-primary">{checklistControls.length} controls</span> will be
+                    added to this engagement. Nothing more is needed here unless you want to change them.
+                  </p>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="secondary"
+                    rightIcon={controlsExpanded ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                    onClick={() => setControlsExpanded((v) => !v)}
+                  >
+                    {controlsExpanded ? 'Hide controls' : 'View / edit controls'}
+                  </Button>
+                </div>
+                {controlsExpanded && (
+                  <>
+                    <div className="relative">
+                      <Search className="pointer-events-none absolute left-2.5 top-2.5 h-3.5 w-3.5 text-text-muted" />
                       <Input
-                        value={c.controlReference}
-                        onChange={(e) => updateControl(idx, 'controlReference', e.target.value)}
-                        placeholder="Control reference (e.g. ISO27001-A.9.2)"
+                        value={controlSearch}
+                        onChange={(e) => setControlSearch(e.target.value)}
+                        placeholder="Search controls by reference or wording…"
+                        className="pl-8"
                       />
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="ghost"
-                        onClick={() => removeControl(idx)}
-                        aria-label="Remove control"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
                     </div>
-                    <Textarea
-                      rows={2}
-                      value={c.controlDescription}
-                      onChange={(e) => updateControl(idx, 'controlDescription', e.target.value)}
-                      placeholder="Control description"
-                    />
-                    <Textarea
-                      rows={2}
-                      value={c.testProcedure}
-                      onChange={(e) => updateControl(idx, 'testProcedure', e.target.value)}
-                      placeholder="Test procedure"
-                    />
-                  </div>
-                ))}
+                    {visibleControls.length === 0 && (
+                      <p className="rounded-lg border border-dashed border-border bg-surface-alt px-3 py-4 text-center text-xs text-text-muted">
+                        No controls match your search.
+                      </p>
+                    )}
+                    {visibleControls.slice(0, 50).map(({ c, idx }) => (
+                      <div key={idx} className="space-y-2 rounded-lg border border-border bg-surface p-3">
+                        <div className="flex items-start gap-2">
+                          <Input
+                            value={c.controlReference}
+                            onChange={(e) => updateControl(idx, 'controlReference', e.target.value)}
+                            placeholder="Control reference (e.g. ISO27001-A.9.2)"
+                          />
+                          <Button
+                            type="button"
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => removeControl(idx)}
+                            aria-label="Remove control"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                        <Textarea
+                          rows={2}
+                          value={c.controlDescription}
+                          onChange={(e) => updateControl(idx, 'controlDescription', e.target.value)}
+                          placeholder="Control description"
+                        />
+                        <Textarea
+                          rows={2}
+                          value={c.testProcedure}
+                          onChange={(e) => updateControl(idx, 'testProcedure', e.target.value)}
+                          placeholder="Test procedure"
+                        />
+                      </div>
+                    ))}
+                    {visibleControls.length > 50 && (
+                      <p className="text-center text-xs text-text-muted">
+                        Showing the first 50 of {visibleControls.length}. Use the search box to find a specific control.
+                      </p>
+                    )}
+                  </>
+                )}
               </div>
             )}
           </div>

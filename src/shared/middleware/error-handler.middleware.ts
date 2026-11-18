@@ -54,6 +54,18 @@ export const errorHandlerMiddleware = (
     return;
   }
 
+  // Request body too large (rejected by the JSON parser): say so instead of a generic 500.
+  if ((err as { type?: string }).type === 'entity.too.large') {
+    logger.warn('Request body too large', { path: req.path, requestId });
+    res.status(413).json({
+      success: false,
+      message: 'The request is too large to process. Reduce the amount of data and try again.',
+      timestamp: new Date().toISOString(),
+      requestId,
+    } as ApiResponse);
+    return;
+  }
+
   // Unknown errors
   logger.error('Unexpected error', { err, requestId, path: req.path });
 
