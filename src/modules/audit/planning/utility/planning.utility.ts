@@ -137,3 +137,26 @@ export const computeEntityRecommendation = (
     reasons,
   };
 };
+
+// ─────────────────────────────────────────────────────────────
+// "Unfinished programme" reminders
+// ─────────────────────────────────────────────────────────────
+
+/** What is still left to do on a programme that has not been submitted for approval. */
+export const describePlanTodos = (plan: { status: string; itemCount: number; rejectionReason?: string | null }): string[] => {
+  const todos: string[] = [];
+  if (plan.status === 'rejected') {
+    const reason = plan.rejectionReason?.trim();
+    todos.push(reason ? `It was rejected (${reason}) — revise it` : 'It was rejected — revise it');
+  }
+  if (plan.itemCount === 0) todos.push('Link it to the audit universe: add at least one entity');
+  todos.push(plan.status === 'rejected' ? 'Resubmit it for approval' : 'Submit it for approval');
+  return todos;
+};
+
+/**
+ * The daily reminder job runs every day; a draft is only chased on day 1, day 3, day 7 and then
+ * weekly, so nobody is emailed every morning for the same programme. Needs no stored state.
+ */
+export const shouldRemindDraftPlan = (ageInDays: number): boolean =>
+  ageInDays === 1 || ageInDays === 3 || (ageInDays >= 7 && ageInDays % 7 === 0);

@@ -328,6 +328,25 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDefinition[] = [
       'In-app variant of OLA reminder. Variables: engagementTitle, engagementReference, daysRemaining.',
   },
 
+  // audit.plan.draft_reminder
+  {
+    eventKey: 'audit.plan.draft_reminder',
+    channel: 'email',
+    name: 'Unfinished Audit Programme — Email',
+    subject: 'Reminder: your audit programme "{{planTitle}}" has not been submitted',
+    body: 'Dear {{recipientName}},\n\nYour audit programme "{{planTitle}}" ({{planYear}}) was created {{daysInDraft}} day(s) ago and is still in draft — it has not been submitted for approval, so nobody can review it yet.\n\nWhat is left to do:\n{{todoList}}\n\nOpen it in IAMS: {{planLink}}\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Chases the creator of an audit programme that is still a draft. Variables: recipientName, planTitle, planYear, daysInDraft, todoList, planLink.',
+  },
+  {
+    eventKey: 'audit.plan.draft_reminder',
+    channel: 'in_app',
+    name: 'Unfinished Audit Programme — In-App',
+    subject: null,
+    body: 'Your audit programme "{{planTitle}}" is still a draft ({{daysInDraft}} day(s)). It has not been submitted for approval.',
+    description: 'In-app variant of the unfinished-programme reminder. Variables: planTitle, daysInDraft.',
+  },
+
   // user.mfa.grace_reminder
   {
     eventKey: 'user.mfa.grace_reminder',

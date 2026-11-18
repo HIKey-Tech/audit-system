@@ -340,6 +340,7 @@ Folder: `src/modules/background/`
 - Registered jobs (via `registerAllJobs()`):
   - `BG:TOKEN:CLEANUP:HOURLY` — deletes expired / revoked refresh tokens. **Working.**
   - `BG:AUDIT:REMINDER:DAILY` — sends in-app + email reminders for audit engagements with SLA deadlines within 3 days. **Working.**
+  - `BG:AUDIT:PLAN_DRAFT_REMINDER:DAILY` (09:00) — emails + notifies the creator of an audit programme that is still a draft, on day 1, day 3, day 7 and then weekly (no stored state; the cadence is computed from the programme's age). Companion to the in-app reminder strip (`PlanReminderBanner`, fed by `GET /audit/plans/pending`) that lists the person's own draft/rejected programmes and what is left to do: link entities from the audit universe, then submit for approval. Template event key `audit.plan.draft_reminder`.
   - `BG:WORKFLOW:ESCALATION:HOURLY` — calls `workflowEscalationService.checkAndEscalate()` every hour for breached engagement SLAs and stalled approvals. **Working logic; runtime depends on database connectivity.**
   - `BG:LOG:ARCHIVE:WEEKLY` — pulls audit logs older than 90 days. **Partially working** — reads logs, does not yet push to data warehouse (TODO).
   - `BG:DOCUMENT:VERSION:PRUNE:WEEKLY` — calls `DocumentService.pruneOldVersions()` every Sunday at 03:00. Reads `version_retention` from `system_config`; no-op when disabled (default). **Working.**

@@ -24,6 +24,7 @@ import { PlanResponseDto, mapPlanToResponse } from '../../dto/response/planning.
 import {
   classifyUniverseDueStatus,
   computeEntityRecommendation,
+  describePlanTodos,
   recommendedPriorityFromRiskScore,
 } from '../../utility/planning.utility';
 import {
@@ -32,6 +33,7 @@ import {
 } from '../../utility/recommendations-cache.utility';
 import {
   IPlanningService,
+  PendingPlanDto,
   PlanUniverseCandidateDto,
   PlanningRecommendationDto,
 } from '../interface/planning.service.interface';
@@ -57,6 +59,38 @@ export class PlanningService implements IPlanningService {
    * means without a redeploy. The per-entity component breakdown and reasons
    * are returned so the ranking is explainable, not a black box.
    */
+  /**
+   * The caller's own programmes that are still drafts (or were rejected), so the app can remind them
+   * to finish and submit. Read-only; nothing is changed.
+   */
+  async getMyPendingPlans(actor: ActorContext): Promise<PendingPlanDto[]> {
+    const plans = await prisma.audit_Plan.findMany({
+      where: { deleted_at: null, created_by_id: actor.id, status: { in: [PlanStatus.Draft, PlanStatus.Rejected] } },
+      select: {
+        id: true,
+        title: true,
+        year: true,
+        audit_type: true,
+        status: true,
+        created_at: true,
+        rejection_reason: true,
+        _count: { select: { items: true } },
+      },
+      orderBy: { created_at: 'asc' },
+    });
+    return plans.map((p) => ({
+      id: p.id,
+      title: p.title,
+      year: p.year,
+      auditType: p.audit_type,
+      status: p.status as 'draft' | 'rejected',
+      createdAt: p.created_at.toISOString(),
+      itemCount: p._count.items,
+      rejectionReason: p.rejection_reason,
+      todo: describePlanTodos({ status: p.status, itemCount: p._count.items, rejectionReason: p.rejection_reason }),
+    }));
+  }
+
   async getRecommendations(): Promise<PlanningRecommendationDto[]> {
     const cached = getCachedRecommendations();
     if (cached) return cached;

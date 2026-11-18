@@ -116,7 +116,22 @@ export interface PlanningRecommendation {
   reasons: string[];
 }
 
+/** One of the caller's own programmes that still needs action, with what is left to do. */
+export interface PendingPlan {
+  id: string;
+  title: string;
+  year: number;
+  auditType: string;
+  status: 'draft' | 'rejected';
+  createdAt: string;
+  itemCount: number;
+  rejectionReason: string | null;
+  todo: string[];
+}
+
 export const plansApi = {
+  /** The caller's own draft or rejected programmes and what is left to do on each. */
+  pending: () => api.get<PendingPlan[]>('/audit/plans/pending'),
   /** Composite audit-priority ranking of universe entities, highest first. */
   recommendations: () => api.get<PlanningRecommendation[]>('/audit/plans/recommendations'),
   universeCandidates: (planId: string) =>

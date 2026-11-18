@@ -59,7 +59,21 @@ export interface PlanUniverseCandidateDto {
   }>;
 }
 
+/** One of the caller's own programmes that still needs action, with what is left to do. */
+export interface PendingPlanDto {
+  id: string;
+  title: string;
+  year: number;
+  auditType: string;
+  status: 'draft' | 'rejected';
+  createdAt: string;
+  itemCount: number;
+  rejectionReason: string | null;
+  todo: string[];
+}
+
 export interface IPlanningService {
+  getMyPendingPlans(actor: ActorContext): Promise<PendingPlanDto[]>;
   getRecommendations(): Promise<PlanningRecommendationDto[]>;
   getUniverseCandidates(planId: string): Promise<PlanUniverseCandidateDto[]>;
   createPlan(dto: CreatePlanRequestDto, actor: ActorContext): Promise<PlanResponseDto>;

@@ -14,6 +14,7 @@ import { imocIngestionService } from '../../../integration/imoc/service/implemen
 import { warehouseService } from '../../../warehouse/service/implementation/warehouse.service';
 import { predictiveService } from '../../../predictive';
 import { continuousMonitoringService } from '../../../system-audit';
+import { describePlanTodos, shouldRemindDraftPlan } from '../../../audit/planning/utility/planning.utility';
 
 /**
  * Job Key Naming Convention:
@@ -27,6 +28,7 @@ export const JOB_KEYS = {
   TOKEN_CLEANUP_HOURLY: 'BG:TOKEN:CLEANUP:HOURLY',
   AUDIT_REMINDER_DAILY: 'BG:AUDIT:REMINDER:DAILY',
   AUDIT_FINDING_OVERDUE_DAILY: 'BG:AUDIT:FINDING_OVERDUE:DAILY',
+  AUDIT_PLAN_DRAFT_REMINDER_DAILY: 'BG:AUDIT:PLAN_DRAFT_REMINDER:DAILY',
   USER_MFA_GRACE_REMINDER_DAILY: 'BG:USER:MFA_GRACE_REMINDER:DAILY',
   MESSAGING_NOTIFICATION_QUEUE_EVERY_MINUTE: 'BG:MESSAGING:NOTIFICATION:QUEUE:EVERY_MINUTE',
   WORKFLOW_ESCALATION_HOURLY: 'BG:WORKFLOW:ESCALATION:HOURLY',
@@ -444,6 +446,82 @@ export const registerAllJobs = (): void => {
         engagementsFound: engagements.length,
         notificationsSent,
       });
+    },
+  });
+
+  // BG:AUDIT:PLAN_DRAFT_REMINDER:DAILY — chase the creator of an audit programme that is still a draft
+  schedulerService.register({
+    key: JOB_KEYS.AUDIT_PLAN_DRAFT_REMINDER_DAILY,
+    name: 'Unfinished Audit Programme Reminder',
+    description:
+      'Emails and notifies the creator of an audit programme that is still a draft (never submitted for approval), on day 1, day 3, day 7 and then weekly',
+    cronExpression: '0 9 * * *', // Every day at 09:00
+    handler: async () => {
+      const now = new Date();
+      const drafts = await prisma.audit_Plan.findMany({
+        where: {
+          deleted_at: null,
+          status: 'draft',
+          created_at: { lte: new Date(now.getTime() - 24 * 60 * 60 * 1000) },
+          created_by: { is_active: true, deleted_at: null },
+        },
+        select: {
+          id: true,
+          title: true,
+          year: true,
+          status: true,
+          created_at: true,
+          rejection_reason: true,
+          _count: { select: { items: true } },
+          created_by: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
+        },
+      });
+
+      let notificationsSent = 0;
+      let reminded = 0;
+
+      for (const plan of drafts) {
+        const daysInDraft = Math.floor((now.getTime() - plan.created_at.getTime()) / 86_400_000);
+        if (!shouldRemindDraftPlan(daysInDraft)) continue;
+
+        const todos = describePlanTodos({ status: plan.status, itemCount: plan._count.items, rejectionReason: plan.rejection_reason });
+        const owner = plan.created_by;
+        const variables = {
+          recipientName: owner.display_name ?? `${owner.first_name} ${owner.last_name}`.trim(),
+          planTitle: plan.title,
+          planYear: String(plan.year),
+          daysInDraft: String(daysInDraft),
+          todoList: todos.map((t) => `- ${t}`).join('\n'),
+          planLink: `${config.app.frontendUrl.replace(/\/$/, '')}/audit/plans/${plan.id}`,
+        };
+
+        try {
+          await notificationQueueService.enqueue('in_app', {
+            userId: owner.id,
+            title: 'Audit programme not yet submitted',
+            body: `Your audit programme "${plan.title}" is still a draft (${daysInDraft} day(s)). It has not been submitted for approval.`,
+            type: 'warning',
+            referenceType: 'audit_plan',
+            referenceId: plan.id,
+            metadata: { daysInDraft, todos },
+            eventKey: 'audit.plan.draft_reminder',
+            variables,
+          });
+          await notificationQueueService.enqueue('email', {
+            to: owner.email,
+            subject: `Reminder: your audit programme "${plan.title}" has not been submitted`,
+            text: `Your audit programme "${plan.title}" is still a draft (${daysInDraft} day(s)). Still to do:\n${variables.todoList}\n${variables.planLink}`,
+            eventKey: 'audit.plan.draft_reminder',
+            variables,
+          });
+          notificationsSent += 2;
+          reminded += 1;
+        } catch (err) {
+          logger.error('Unfinished audit programme reminder failed', { err, planId: plan.id, ownerId: owner.id });
+        }
+      }
+
+      logger.info('Unfinished audit programme reminder job completed', { draftsChecked: drafts.length, reminded, notificationsSent });
     },
   });
 

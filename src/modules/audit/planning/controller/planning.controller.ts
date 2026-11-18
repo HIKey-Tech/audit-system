@@ -48,6 +48,13 @@ export class PlanningController {
     this.router.get('/recommendations', requirePermission('plan:read'), this._getRecommendations.bind(this));
 
     /**
+     * @route  GET /audit/plans/pending
+     * @desc   The caller's own programmes that are still draft or rejected, with what is left to do — registered before /:id
+     * @access Private - plan:create
+     */
+    this.router.get('/pending', requirePermission('plan:create'), this._getMyPendingPlans.bind(this));
+
+    /**
      * @route  GET /audit/plans/:id/universe-candidates
      * @desc   List active universe entities with due-cycle classification & coverage for this programme year
      * @access Private - plan:read
@@ -228,6 +235,15 @@ export class PlanningController {
     try {
       const candidates = await this.planningService.getUniverseCandidates(req.params.id);
       res.status(200).json(buildResponse(candidates));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getMyPendingPlans(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const plans = await this.planningService.getMyPendingPlans(req.user!);
+      res.status(200).json(buildResponse(plans));
     } catch (err) {
       next(err);
     }
