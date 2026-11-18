@@ -715,6 +715,15 @@ App wiring:
 
 ---
 
+### Stakeholder changes (Nov 2026)
+
+- **Programme approval:** Head of Internal Audit (`plan:approve`) then the DG (`plan:approve:final`, held by the DG role only). The final level waits for whoever gets the permission, so a programme can be submitted before the DG has signed in. A migration updates a stored approval matrix that still has the old single level.
+- **Adding to an approved programme:** new items carry `pending_approval` (an amendment). The programme stays approved and usable; the new items go Head then DG, cannot start an audit until approved, and are edited or removed only before submission. Rejection keeps the programme approved and shows the reason.
+- **Starting an audit:** an amber "Start this audit?" confirmation when the creator's auditor role does not match the audit type (never a block). Controls: the wizard starts empty or with the standard checklist; the creator ticks Control Library frameworks, and the library owner can set default frameworks per audit type (`default_control_frameworks` system config).
+- **Group audits:** `audit_engagement_auditees` (further people being audited) and `audit_engagement_areas` (further entities covered) sit beside the main auditee and primary entity; findings carry `area_universe_id`. Every further auditee is notified, gets the Auditee role, can open the audit, sees only findings assigned to them, and is told when the report is issued. The report adds an Areas Covered section and an Area column. One closure for the whole audit.
+- **Onboarding:** the auditee invitation email states they are the responsible person and gives sign-in steps. At every directory sign-in a person named as an auditee (engagement, finding, group audit) is given the Auditee role.
+- **My Documents (`modules/workspace`, `/workspace`):** owner-only documents in an in-browser editor (TipTap), from the GBB template or a blank page; pictures can sit in the text, behind it or in front of it (covers, watermarks); Word (.docx) is built in the browser from the editor content and a .docx can be opened or inserted (server-side `mammoth`). Import also appears as "Import Word" in the working paper / report editor. No office server; the editor loads only on these pages.
+
 ## 3. Current local database snapshot
 
 Snapshot queried on 2026-05-01 after the full smoke test:

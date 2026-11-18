@@ -38,6 +38,7 @@ import { syncLifecycleNotificationPermission } from './modules/audit/utility/lif
 import { ensureDynafinConfigDefaults } from './modules/system-audit/utility/dynafin-config.utility';
 import { createDashboardModule } from './modules/dashboard';
 import { createSettingsModule } from './modules/settings';
+import { createWorkspaceModule } from './modules/workspace';
 import { createIntegrationModule } from './modules/integration';
 import { createPredictiveModule, predictiveService } from './modules/predictive';
 import { createSystemAuditModule } from './modules/system-audit';
@@ -188,6 +189,7 @@ const buildApp = (): Application => {
   app.use(apiPrefix, createBackgroundModule());
   app.use(apiPrefix, createDashboardModule());
   app.use(apiPrefix, createSettingsModule());
+  app.use(apiPrefix, createWorkspaceModule());
   app.use(apiPrefix, createIntegrationModule());
   app.use(apiPrefix, createPredictiveModule());
   app.use(apiPrefix, createSystemAuditModule());

@@ -62,6 +62,7 @@ model User {
   engagements_managed             Audit_Engagement[]       @relation("EngagementManager")
   engagements_as_auditee          Audit_Engagement[]       @relation("EngagementAuditee")
   engagements_as_extra_auditee    Audit_Engagement_Auditee[] @relation("EngagementExtraAuditee")
+  workspace_documents             Workspace_Document[]     @relation("WorkspaceDocumentOwner")
   engagements_created             Audit_Engagement[]       @relation("EngagementCreatedBy")
   working_papers_created          Audit_Working_Paper[]    @relation("WorkingPaperCreatedBy")
   working_papers_reviewed         Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
@@ -2291,4 +2292,22 @@ model Audit_Engagement_Area {
   @@unique([engagement_id, universe_id])
   @@index([universe_id])
   @@map("audit_engagement_areas")
+}
+
+// A person's own working document in the in-app editor (the Documents workspace). Owner-only: nobody else can open it.
+// `content` is the editor's HTML; `template` records whether it was started from the GBB template or a blank page.
+model Workspace_Document {
+  id         String    @id @default(uuid())
+  owner_id   String
+  title      String
+  content    String    @db.NVarChar(Max)
+  template   String    @default("blank") // blank | gbb
+  deleted_at DateTime?
+  created_at DateTime  @default(now())
+  updated_at DateTime  @updatedAt
+
+  owner User @relation("WorkspaceDocumentOwner", fields: [owner_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@index([owner_id, updated_at])
+  @@map("workspace_documents")
 }

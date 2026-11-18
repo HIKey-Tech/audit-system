@@ -16,6 +16,7 @@ import {
   Outdent,
   Table as TableIcon,
   Image as ImageIcon,
+  FileUp,
   Minus,
   Eraser,
   Save,
@@ -33,6 +34,8 @@ import {
   FilePlus2,
 } from 'lucide-react';
 import { Button } from './Button';
+import { toast } from 'sonner';
+import { workspaceApi } from '@/lib/api/workspace';
 
 export type PageMarginPreset = 'normal' | 'narrow' | 'moderate' | 'wide';
 
@@ -670,6 +673,27 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
     reader.readAsDataURL(file);
   };
 
+  // Brings a Word (.docx) file into the document at the cursor, keeping its headings, lists, tables and pictures.
+  const wordInputRef = useRef<HTMLInputElement>(null);
+  const handleWordFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || readOnly) return;
+    try {
+      const imported = await workspaceApi.importWord(file);
+      if (editorRef.current) {
+        collapseSelectionToEnd();
+        const ok = document.execCommand('insertHTML', false, imported.html);
+        if (!ok) editorRef.current.innerHTML += imported.html;
+        emitChange();
+      }
+      toast.success('Word file added to the document');
+      if (imported.warnings[0]) toast.warning(`Some Word features could not be carried over: ${imported.warnings[0]}`);
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : 'Could not import that file');
+    }
+  };
+
   const handleInsertPageBreak = () => {
     if (readOnly) return;
     const breakHtml = '<p><br /></p><hr data-page-break="true" /><p><br /></p>';
@@ -1122,6 +1146,18 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
             >
               <ImageIcon className="h-3.5 w-3.5 text-emerald-600" />
               Insert Image
+            </button>
+
+            {/* Import a Word file at the cursor */}
+            <input ref={wordInputRef} type="file" accept=".docx" onChange={handleWordFileSelect} className="hidden" />
+            <button
+              type="button"
+              onClick={() => wordInputRef.current?.click()}
+              title="Import a Word (.docx) file at the cursor, keeping its headings, lists, tables and pictures"
+              className="inline-flex h-7 items-center gap-1 rounded border border-slate-200 bg-white px-2 text-xs font-medium text-slate-700 hover:bg-slate-50"
+            >
+              <FileUp className="h-3.5 w-3.5 text-emerald-600" />
+              Import Word
             </button>
 
             {/* Insert Page Break */}

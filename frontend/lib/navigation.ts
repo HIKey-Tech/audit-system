@@ -141,6 +141,7 @@ export const NAV: NavItem[] = [
   },
 
   { type: 'link', label: 'Notifications', href: '/notifications', icon: Bell, badgeKey: 'notifications', visKey: 'notifications', description: 'System and workflow alerts addressed to you.' },
+  { type: 'link', label: 'My Documents', href: '/workspace', icon: FileText, matchPrefix: '/workspace', description: 'Write and keep your own documents in a Word-style editor, from the GBB template or a blank page.' },
   { type: 'link', label: 'Risk Register', href: '/risk', icon: ShieldAlert, matchPrefix: '/risk', visKey: 'riskRegister', description: 'Enterprise risks with likelihood × impact scoring.' },
   { type: 'link', label: 'How IAMS works', href: '/help', icon: CircleHelp, description: 'The audit lifecycle explained — who does what, and where.' },
   { type: 'link', label: 'Help Centre', href: '/help/center', icon: LifeBuoy, matchPrefix: '/help/center', description: 'Ask a question or browse step-by-step guides with screenshots.' },
