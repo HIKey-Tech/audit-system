@@ -62,6 +62,11 @@ export const EngagementQuerySchema = z.object({
   auditType: z.enum(FILTERABLE_AUDIT_TYPES).optional(),
   leadAuditorId: z.string().uuid().optional(),
   auditManagerId: z.string().uuid().optional(),
+  /** Free text matched against the reference number and title. */
+  search: z.string().trim().max(200).optional(),
+  priority: z.nativeEnum(AuditPriority).optional(),
+  /** Past its OLA deadline and not yet reported or closed. */
+  overdue: z.enum(['true', 'false']).optional().transform((v) => v === 'true'),
   sortBy: z.enum(['created_at', 'planned_start_date', 'sla_deadline', 'reference_number']).default('created_at'),
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });

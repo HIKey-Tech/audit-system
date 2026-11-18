@@ -609,6 +609,15 @@ export class EngagementService implements IEngagementService {
       ...(query.auditType && { audit_type: query.auditType }),
       ...(query.leadAuditorId && { lead_auditor_id: query.leadAuditorId }),
       ...(query.auditManagerId && { audit_manager_id: query.auditManagerId }),
+      ...(query.priority && { priority: query.priority }),
+      // In an AND so it cannot be overwritten by the access scope below, which also uses OR.
+      ...(query.search && {
+        AND: [{ OR: [{ title: { contains: query.search } }, { reference_number: { contains: query.search } }] }],
+      }),
+      ...(query.overdue && {
+        sla_deadline: { lt: new Date() },
+        status: query.status ?? { notIn: [EngagementStatus.Reported, EngagementStatus.Closed] },
+      }),
       ...(scope ?? {}),
     };
 
