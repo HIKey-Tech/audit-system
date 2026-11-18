@@ -66,26 +66,30 @@ export const PlanReminderBanner = (): JSX.Element | null => {
       : `${plans.length} audit programmes haven't been submitted for approval yet`;
 
   return (
-    <div role="status" className="mb-4 rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
-      <div className="flex items-center gap-2 px-3 py-2">
-        <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
-        <button
-          type="button"
-          className="flex min-w-0 flex-1 items-center gap-2 text-left"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-        >
-          <span className="truncate font-medium">{summary}</span>
-          <span className="shrink-0 text-xs text-amber-700">{open ? 'Hide steps' : 'See what is left'}</span>
-          <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden />
-        </button>
-        <button type="button" onClick={hide} aria-label="Hide this reminder for now" className="rounded p-1 text-amber-700 hover:bg-amber-100">
-          <X className="h-4 w-4" />
-        </button>
+    // The wrapper reserves only the one-line strip's height; the expanded steps float over the page,
+    // so opening them never moves the buttons underneath.
+    <div role="status" className="relative z-20 mb-4">
+      <div className="rounded-lg border border-amber-200 bg-amber-50 text-sm text-amber-900">
+        <div className="flex items-center gap-2 px-3 py-2">
+          <ClipboardList className="h-4 w-4 shrink-0" aria-hidden />
+          <button
+            type="button"
+            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+            aria-expanded={open}
+            onClick={() => setOpen((v) => !v)}
+          >
+            <span className="truncate font-medium">{summary}</span>
+            <span className="shrink-0 text-xs text-amber-700">{open ? 'Hide steps' : 'See what is left'}</span>
+            <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', open && 'rotate-180')} aria-hidden />
+          </button>
+          <button type="button" onClick={hide} aria-label="Hide this reminder for now" className="rounded p-1 text-amber-700 hover:bg-amber-100">
+            <X className="h-4 w-4" />
+          </button>
+        </div>
       </div>
 
       {open && (
-        <ul className="space-y-3 border-t border-amber-200 px-3 py-3">
+        <ul className="absolute left-0 right-0 top-full mt-1 space-y-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-3 text-sm text-amber-900 shadow-lg">
           {plans.map((p) => (
             <li key={p.id}>
               <Link href={`/audit/plans/${p.id}`} className="font-semibold underline-offset-2 hover:underline">
