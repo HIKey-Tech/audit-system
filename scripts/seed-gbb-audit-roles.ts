@@ -10,7 +10,8 @@
 //   • head_internal_audit, financial_auditor, compliance_auditor, dg  → CREATED (or, on a
 //     re-run, re-asserted). If a role with one of those names already exists and was NOT
 //     created by this script, it stops and tells you — it never overwrites someone else's role.
-//   • The existing System Auditor role → its permissions are OVERRIDDEN with the new set.
+//   • The existing System Auditor role → its permissions are OVERRIDDEN with the new set and it is
+//     RENAMED to system_auditor (people who hold it keep it). Refuses if system_auditor already exists.
 //   • The `auditee` role → verified; any of the 8 permissions the system needs that are
 //     missing are ADDED. Nothing is ever removed from it.
 //   • super_admin and every other role → NEVER touched.
@@ -149,6 +150,7 @@ const run = async (): Promise<number> => {
       line(`  [${tag}] ${target.padEnd(24)} ${p.spec.permissions.length} permissions` +
         (p.action === 'update' ? `  (+${p.add.length} / -${p.remove.length})` : '') + holders);
       if (p.spec.mode === 'override' && p.existing) line(`            ↳ overriding the existing System Auditor role (matched by name "${p.existing.name}")`);
+      if (p.rename) line(`            ↳ will be RENAMED to "${p.rename}" (its members keep the role)`);
       if (p.remove.length > 0) line(`            ↳ will REMOVE: ${p.remove.join(', ')}`);
     }
 
@@ -226,8 +228,11 @@ const run = async (): Promise<number> => {
             data: { name: p.spec.name, description: `${GBB_ROLE_MARKER} ${p.spec.description}`, is_system: false },
           });
           roleId = created.id;
-        } else if (p.spec.mode === 'override' && !(p.existing?.description ?? '').trim()) {
-          await tx.role.update({ where: { id: roleId }, data: { description: p.spec.description } });
+        } else if (p.spec.mode === 'override') {
+          const data: { name?: string; description?: string } = {};
+          if (p.rename) data.name = p.rename;
+          if (!(p.existing?.description ?? '').trim()) data.description = p.spec.description;
+          if (Object.keys(data).length > 0) await tx.role.update({ where: { id: roleId }, data });
         }
         if (p.remove.length > 0) {
           await tx.role_Permission.deleteMany({ where: { role_id: roleId, permission: { slug: { in: p.remove } } } });

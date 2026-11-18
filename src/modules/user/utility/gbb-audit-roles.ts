@@ -266,6 +266,8 @@ export interface PlannedRole {
   spec: GbbRoleSpec;
   action: 'create' | 'update' | 'unchanged';
   existing?: PlannerRoleState;
+  /** Override only: the existing role is renamed to this exact name (e.g. "System Auditor" → "system_auditor"). */
+  rename?: string;
   add: string[];
   remove: string[];
 }
@@ -345,6 +347,20 @@ export const planGbbRoleChanges = (
     }
     if (existing) claimed.add(existing.id);
 
+    // The override keeps the role's members but gives it the standard snake_case name.
+    let rename: string | undefined;
+    if (existing && spec.mode === 'override' && existing.name !== spec.name) {
+      const clash = state.roles.find((r) => r.id !== existing!.id && r.name.toLowerCase() === spec.name.toLowerCase());
+      if (clash) {
+        conflicts.push(
+          `"${existing.name}" would be renamed to "${spec.name}", but a different role named "${clash.name}" already exists. ` +
+            'Resolve the duplicate first.',
+        );
+        continue;
+      }
+      rename = spec.name;
+    }
+
     if (!existing) {
       planned.push({ spec, action: 'create', add: [...spec.permissions], remove: [] });
       continue;
@@ -357,7 +373,8 @@ export const planGbbRoleChanges = (
     planned.push({
       spec,
       existing,
-      action: add.length === 0 && remove.length === 0 ? 'unchanged' : 'update',
+      rename,
+      action: add.length === 0 && remove.length === 0 && !rename ? 'unchanged' : 'update',
       add,
       remove,
     });

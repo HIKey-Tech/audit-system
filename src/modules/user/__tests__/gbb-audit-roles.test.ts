@@ -325,13 +325,35 @@ describe('planGbbRoleChanges', () => {
     expect(plan.roles.find((r) => r.spec.key === 'system_auditor')).toBeUndefined();
   });
 
-  it('--system-auditor-role resolves that ambiguity, and fails clearly if the name is wrong', () => {
+  it('--system-auditor-role picks which role to override, and fails clearly if the name is wrong', () => {
     const roles = [roleState({ name: 'system_auditor' }), roleState({ name: 'System Auditor' })];
-    const ok = planGbbRoleChanges({ existingPermissionSlugs: allSlugs, roles }, catalogue, GBB_ROLES, { systemAuditorRoleName: 'System Auditor' });
-    expect(ok.ok).toBe(true);
-    expect(ok.roles.find((r) => r.spec.key === 'system_auditor')?.existing?.name).toBe('System Auditor');
+    const exact = planGbbRoleChanges({ existingPermissionSlugs: allSlugs, roles }, catalogue, GBB_ROLES, { systemAuditorRoleName: 'system_auditor' });
+    expect(exact.ok).toBe(true);
+    expect(exact.roles.find((r) => r.spec.key === 'system_auditor')?.rename).toBeUndefined();
     const bad = planGbbRoleChanges({ existingPermissionSlugs: allSlugs, roles }, catalogue, GBB_ROLES, { systemAuditorRoleName: 'nope' });
     expect(bad.ok).toBe(false);
+  });
+
+  it('renames a differently spelled System Auditor to system_auditor, keeping its members', () => {
+    for (const name of ['System Auditor', 'SYSTEM AUDITOR', 'systems_auditor', 'system auditor']) {
+      const existing = roleState({ name, holderCount: 2 });
+      const sys = fresh([existing]).roles.find((r) => r.spec.key === 'system_auditor')!;
+      expect(sys.rename).toBe('system_auditor');
+      expect(sys.existing?.id).toBe(existing.id);
+      expect(sys.action).toBe('update');
+    }
+  });
+
+  it('does not rename a role that already has the exact name, and a rename alone still counts as a change', () => {
+    const exactName = roleState({ name: 'system_auditor', permissionSlugs: [...GBB_ROLES.find((r) => r.key === 'system_auditor')!.permissions] });
+    const unchanged = fresh([exactName]).roles.find((r) => r.spec.key === 'system_auditor')!;
+    expect(unchanged.rename).toBeUndefined();
+    expect(unchanged.action).toBe('unchanged');
+    const spaced = roleState({ name: 'System Auditor', permissionSlugs: [...GBB_ROLES.find((r) => r.key === 'system_auditor')!.permissions] });
+    const renamedOnly = fresh([spaced]).roles.find((r) => r.spec.key === 'system_auditor')!;
+    expect(renamedOnly.add).toEqual([]);
+    expect(renamedOnly.remove).toEqual([]);
+    expect(renamedOnly.action).toBe('update');
   });
 
   it('never touches a role it did not create, even on a name clash (case-insensitive)', () => {
