@@ -4,7 +4,7 @@ import { errorHandlerMiddleware } from '../error-handler.middleware';
 
 // Creating an engagement sends the whole control checklist (hundreds of controls with their text),
 // which is far larger than Express's default 100kb JSON limit and used to surface as a generic 500.
-const buildApp = (limit: string) => {
+const buildApp = (limit: string | number) => {
   const app = express();
   app.use(express.json({ limit }));
   app.post('/echo', (req, res) => res.status(200).json({ count: req.body.controls.length }));
@@ -15,7 +15,7 @@ const buildApp = (limit: string) => {
 const controls = (n: number) =>
   Array.from({ length: n }, (_, i) => ({ ref: `C-${i}`, text: 'x'.repeat(600) }));
 
-const post = async (limit: string, n: number): Promise<{ status: number; body: any }> => {
+const post = async (limit: string | number, n: number): Promise<{ status: number; body: any }> => {
   const server = buildApp(limit).listen(0);
   try {
     const { port } = server.address() as AddressInfo;
@@ -35,6 +35,12 @@ describe('large request bodies', () => {
     const res = await post('10mb', 720);
     expect(res.status).toBe(200);
     expect(res.body.count).toBe(720);
+  });
+
+  it('has no size limit when the limit is Infinity', async () => {
+    const res = await post(Infinity, 3000);
+    expect(res.status).toBe(200);
+    expect(res.body.count).toBe(3000);
   });
 
   it('answers 413 with a clear message instead of a generic 500 when a body is too large', async () => {

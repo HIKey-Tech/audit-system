@@ -21,7 +21,7 @@ const EngagementBaseSchema = z.object({
   plannedEndDate: z.string().datetime(),
   slaDeadline: z.string().datetime(),
   plannedHours: z.number().int().positive().max(100000).optional(),
-  checklistControls: z.array(ChecklistControlSchema).max(2000).optional(),
+  checklistControls: z.array(ChecklistControlSchema).optional(),
 });
 
 const EngagementScopeSchema = z.object({

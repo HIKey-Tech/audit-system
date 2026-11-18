@@ -241,31 +241,15 @@ export const getChecklistTemplateControls = async (
 };
 
 /**
- * Authoritative control source for populating an engagement's checklist.
- *
- * Prefers the structured compliance_controls library (active controls for the
- * audit type); falls back to the legacy checklist_templates JSON / built-in
- * CONTROL_SETS when the library has no controls for that type. Callers still
- * snapshot the returned text onto the checklist row, so a populated engagement
- * is unaffected by later edits to the library.
+ * The starting controls for a new engagement of this audit type: the standard template (saved override
+ * from Settings, else the built-in set). This is deliberately NOT the whole Control Library. The library
+ * holds every framework and Act the team has added (hundreds of controls); an auditor chooses which of
+ * those apply to an engagement by importing a framework or uploading an Act, so a new audit never
+ * starts with everything in the library on it.
  */
 export const getEngagementControls = async (
   auditType: AuditType,
-): Promise<ChecklistTemplateControl[]> => {
-  const dbControls = await prisma.compliance_Control.findMany({
-    where: { audit_type: auditType, is_active: true, deleted_at: null },
-    orderBy: { control_reference: 'asc' },
-    select: { control_reference: true, control_description: true, test_procedure: true },
-  });
-  if (dbControls.length > 0) {
-    return dbControls.map((control) => ({
-      controlReference: control.control_reference,
-      controlDescription: control.control_description,
-      testProcedure: control.test_procedure,
-    }));
-  }
-  return getChecklistTemplateControls(auditType);
-};
+): Promise<ChecklistTemplateControl[]> => getChecklistTemplateControls(auditType);
 
 export const CHECKLIST_TEMPLATE_CONFIG_KEY = 'checklist_templates';
 

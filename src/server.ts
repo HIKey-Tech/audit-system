@@ -66,9 +66,8 @@ const buildApp = (): Application => {
   );
   app.use(compression());
   app.use(cookieParser());
-  // Engagement creation carries the whole control checklist (hundreds of controls with their text),
-  // which is far larger than the 100kb default.
-  app.use(express.json({ limit: '10mb' }));
+  // No practical size limit on JSON bodies (Express's 100kb default broke large control checklists).
+  app.use(express.json({ limit: Infinity }));
   app.use(express.urlencoded({ extended: true }));
 
   const morganStream: StreamOptions = {

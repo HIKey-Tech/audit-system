@@ -72,7 +72,12 @@ export const StartAuditWizard = ({
   // per-engagement checklist controls (customisable, pre-filled from the template)
   const [checklistControls, setChecklistControls] = useState<ChecklistTemplateControl[]>([]);
   const [checklistTouched, setChecklistTouched] = useState(false);
-  const [selectedFrameworkId, setSelectedFrameworkId] = useState('');
+  // Frameworks/Acts the creator has ticked, and the control references each one brought in (so unticking
+  // removes exactly those controls).
+  const [selectedFrameworkIds, setSelectedFrameworkIds] = useState<string[]>([]);
+  const [frameworkRefs, setFrameworkRefs] = useState<Record<string, string[]>>({});
+  const [loadingFrameworkId, setLoadingFrameworkId] = useState<string | null>(null);
+  const [frameworkSearch, setFrameworkSearch] = useState('');
   // created
   const [created, setCreated] = useState<AuditEngagement | null>(null);
 
@@ -97,7 +102,11 @@ export const StartAuditWizard = ({
     setSlaTouched(false);
     setChecklistControls([]);
     setChecklistTouched(false);
-    setSelectedFrameworkId('');
+    setSelectedFrameworkIds([]);
+    setFrameworkRefs({});
+    setFrameworkSearch('');
+    setControlSearch('');
+    setControlsExpanded(false);
     setCreated(null);
   };
 
@@ -201,26 +210,14 @@ export const StartAuditWizard = ({
     enabled: open,
   });
 
-  // Checklist controls that would populate this engagement — pulled once we reach
-  // the Review step and the audit type is known, used to pre-fill the editor.
+  // The standard checklist this audit type falls back to when no framework is chosen — used only to tell
+  // the creator what they get by default. It is not pre-filled into the editor.
   const controlsPreview = useQuery({
     queryKey: ['checklist-controls', effectiveAuditType],
     queryFn: () => checklistsApi.previewControls(effectiveAuditType),
     enabled: open && step === 3 && Boolean(effectiveAuditType),
     staleTime: 5 * 60_000,
   });
-
-  // Changing the audit type discards prior edits so the correct template loads.
-  useEffect(() => {
-    setChecklistTouched(false);
-  }, [effectiveAuditType]);
-
-  // Seed the editor from the template until the creator edits it.
-  useEffect(() => {
-    if (step === 3 && !checklistTouched && controlsPreview.data) {
-      setChecklistControls(controlsPreview.data);
-    }
-  }, [step, checklistTouched, controlsPreview.data]);
 
   const updateControl = (idx: number, field: keyof ChecklistTemplateControl, value: string) => {
     setChecklistTouched(true);
@@ -252,43 +249,64 @@ export const StartAuditWizard = ({
   }, [checklistControls, controlSearch]);
 
   const frameworksQuery = useQuery({
-    queryKey: ['compliance', 'frameworks'],
-    queryFn: () => complianceApi.listFrameworks(),
+    queryKey: ['compliance', 'coverage'],
+    queryFn: () => complianceApi.coverage(),
     enabled: open && step === 3,
   });
+  const availableFrameworks = useMemo(() => {
+    const q = frameworkSearch.trim().toLowerCase();
+    return (frameworksQuery.data?.frameworks ?? [])
+      .filter((f) => f.isActive && f.activeControls > 0)
+      .filter((f) => !q || f.code.toLowerCase().includes(q) || f.name.toLowerCase().includes(q))
+      .sort((x, y) => x.code.localeCompare(y.code));
+  }, [frameworksQuery.data, frameworkSearch]);
 
-  const importFromFramework = useMutation({
-    mutationFn: async (fwId: string) => {
+  const toggleFramework = async (fwId: string) => {
+    if (loadingFrameworkId) return;
+    setChecklistTouched(true);
+    if (selectedFrameworkIds.includes(fwId)) {
+      // Untick: take out the controls this framework brought in (unless another ticked one also has them).
+      const mine = new Set(frameworkRefs[fwId] ?? []);
+      const keep = new Set(
+        selectedFrameworkIds.filter((id) => id !== fwId).flatMap((id) => frameworkRefs[id] ?? []),
+      );
+      setChecklistControls((prev) =>
+        prev.filter((c) => {
+          const ref = c.controlReference.toUpperCase();
+          return !mine.has(ref) || keep.has(ref);
+        }),
+      );
+      setSelectedFrameworkIds((prev) => prev.filter((id) => id !== fwId));
+      setFrameworkRefs(({ [fwId]: _removed, ...rest }) => rest);
+      return;
+    }
+    setLoadingFrameworkId(fwId);
+    try {
       // The API returns at most 200 controls a page; fetch every page so a large framework is not cut short.
-      const all: Awaited<ReturnType<typeof complianceApi.listControls>>['items'] = [];
+      const all: ChecklistTemplateControl[] = [];
       for (let page = 1; page <= 50; page++) {
         const res = await complianceApi.listControls({ frameworkId: fwId, pageSize: 200, page, isActive: true });
-        all.push(...res.items);
-        if (res.items.length < 200) break;
-      }
-      return all;
-    },
-    onSuccess: (items) => {
-      if (items.length === 0) {
-        toast.info('No active controls found in the selected framework');
-        return;
-      }
-      setChecklistTouched(true);
-      setChecklistControls((prev) => {
-        const existingRefs = new Set(prev.map((c) => c.controlReference.toUpperCase()));
-        const additions = items
-          .filter((c) => !existingRefs.has(c.controlReference.toUpperCase()))
-          .map((c) => ({
+        all.push(
+          ...res.items.map((c) => ({
             controlReference: c.controlReference,
             controlDescription: c.controlDescription,
             testProcedure: c.testProcedure,
-          }));
-        toast.success(`Imported ${additions.length} control(s) from framework`);
-        return [...prev, ...additions];
+          })),
+        );
+        if (res.items.length < 200) break;
+      }
+      setChecklistControls((prev) => {
+        const existing = new Set(prev.map((c) => c.controlReference.toUpperCase()));
+        return [...prev, ...all.filter((c) => !existing.has(c.controlReference.toUpperCase()))];
       });
-    },
-    onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to load framework controls'),
-  });
+      setSelectedFrameworkIds((prev) => [...prev, fwId]);
+      setFrameworkRefs((prev) => ({ ...prev, [fwId]: all.map((c) => c.controlReference.toUpperCase()) }));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : 'Failed to load framework controls');
+    } finally {
+      setLoadingFrameworkId(null);
+    }
+  };
 
   const importFromDocument = useMutation({
     mutationFn: async (file: File) => {
@@ -762,7 +780,7 @@ export const StartAuditWizard = ({
               <div className="flex items-center gap-1.5">
                 <ListChecks className="h-4 w-4 text-primary" />
                 <h3 className="text-sm font-semibold text-text-primary">
-                  Checklist controls{checklistControls.length > 0 ? ` (${checklistControls.length})` : ''}
+                  Controls to test{checklistControls.length > 0 ? ` (${checklistControls.length})` : ''}
                 </h3>
               </div>
               <div className="flex flex-wrap items-center gap-2">
@@ -787,53 +805,66 @@ export const StartAuditWizard = ({
               </div>
             </div>
             <p className="mb-2 text-xs text-text-secondary">
-              These are the controls your team will test, and they become this engagement&apos;s checklist. They were
-              filled in from the {auditTypeLabel(effectiveAuditType)} controls in the Control Library, so you can
-              usually leave them as they are. Only use the options below to change them: upload an Act/Policy to
-              add controls from it, import a whole framework, or add a single control.
+              Tick the framework or Act this audit is tested against. Its controls are added to this engagement&apos;s
+              checklist. You can tick more than one, upload an Act/Policy that is not in the library yet, or add a
+              single control.
             </p>
-            <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-border bg-surface-alt p-2.5">
-              <Library className="h-4 w-4 text-text-secondary" />
-              <Select
-                value={selectedFrameworkId}
-                onChange={(e) => setSelectedFrameworkId(e.target.value)}
-                className="flex-1 min-w-[200px] h-8 text-xs"
-              >
-                <option value="">Import controls from Control Library framework…</option>
-                {(frameworksQuery.data ?? [])
-                  .filter((f) => f.isActive)
-                  .map((f) => (
-                    <option key={f.id} value={f.id}>
-                      {f.code} — {f.name}
-                    </option>
-                  ))}
-              </Select>
-              <Button
-                type="button"
-                size="sm"
-                variant="secondary"
-                disabled={!selectedFrameworkId}
-                isLoading={importFromFramework.isPending}
-                onClick={() => {
-                  if (selectedFrameworkId) importFromFramework.mutate(selectedFrameworkId);
-                }}
-              >
-                Import Framework
-              </Button>
+
+            <div className="mb-3 rounded-lg border border-border bg-surface-alt p-2.5">
+              <div className="mb-2 flex items-center gap-2">
+                <Library className="h-4 w-4 shrink-0 text-text-secondary" />
+                <Input
+                  value={frameworkSearch}
+                  onChange={(e) => setFrameworkSearch(e.target.value)}
+                  placeholder="Search frameworks and Acts…"
+                  className="h-8 text-xs"
+                />
+              </div>
+              <div className="max-h-56 space-y-1 overflow-y-auto pr-1">
+                {frameworksQuery.isLoading && <p className="px-1 py-2 text-xs text-text-muted">Loading the Control Library…</p>}
+                {!frameworksQuery.isLoading && availableFrameworks.length === 0 && (
+                  <p className="px-1 py-2 text-xs text-text-muted">No frameworks match.</p>
+                )}
+                {availableFrameworks.map((f) => {
+                  const checked = selectedFrameworkIds.includes(f.id);
+                  return (
+                    <label
+                      key={f.id}
+                      className={`flex cursor-pointer items-center gap-2.5 rounded-md border px-2.5 py-2 text-xs ${
+                        checked ? 'border-primary bg-white' : 'border-transparent bg-white/60 hover:bg-white'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        className="h-3.5 w-3.5 accent-[#4F6228]"
+                        checked={checked}
+                        disabled={loadingFrameworkId !== null}
+                        onChange={() => void toggleFramework(f.id)}
+                      />
+                      <span className="font-mono font-semibold text-primary">{f.code}</span>
+                      <span className="min-w-0 flex-1 truncate text-text-primary">{f.name}</span>
+                      <span className="shrink-0 text-text-muted">
+                        {loadingFrameworkId === f.id ? 'Adding…' : `${f.activeControls} controls`}
+                      </span>
+                    </label>
+                  );
+                })}
+              </div>
             </div>
 
-            {controlsPreview.isLoading ? (
-              <p className="text-xs text-text-muted">Loading template…</p>
-            ) : checklistControls.length === 0 ? (
-              <p className="rounded-lg border border-dashed border-border bg-surface-alt px-3 py-4 text-center text-xs text-text-muted">
-                No controls. The engagement will fall back to the standard {effectiveAuditType} template — or add controls above.
+            {checklistControls.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border bg-surface-alt px-3 py-4 text-center text-xs text-text-secondary">
+                {controlsPreview.data
+                  ? `Nothing chosen. This audit will use the standard ${auditTypeLabel(effectiveAuditType)} checklist (${controlsPreview.data.length} controls).`
+                  : 'Nothing chosen. This audit will use the standard checklist for its type.'}{' '}
+                Tick a framework above to test against it instead.
               </p>
             ) : (
               <div className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-border bg-surface p-3">
                   <p className="text-xs text-text-secondary">
                     <span className="font-semibold text-text-primary">{checklistControls.length} controls</span> will be
-                    added to this engagement. Nothing more is needed here unless you want to change them.
+                    added to this engagement.
                   </p>
                   <Button
                     type="button"
