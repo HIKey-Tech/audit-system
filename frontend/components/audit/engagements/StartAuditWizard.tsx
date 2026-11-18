@@ -21,6 +21,8 @@ import { workflowApi } from '@/lib/api/workflow';
 import { usersApi } from '@/lib/api/users';
 import { auditTypeLabel, SELECTABLE_AUDIT_TYPES, type SelectableAuditTypeKey } from '@/lib/audit-domains';
 import { getMatchScore, isRelevantSkill } from './assignment-matching';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useAuditTypeMismatch } from '@/lib/hooks/useAuditTypeMismatch';
 import type { AuditEngagement, ChecklistTemplateControl } from '@/lib/types/domain';
 
 type Mode = 'plan' | 'ad_hoc';
@@ -78,6 +80,9 @@ export const StartAuditWizard = ({
   const [frameworkRefs, setFrameworkRefs] = useState<Record<string, string[]>>({});
   const [loadingFrameworkId, setLoadingFrameworkId] = useState<string | null>(null);
   const [frameworkSearch, setFrameworkSearch] = useState('');
+  // Frameworks set as the default for this audit type are ticked once when the Review step opens.
+  const defaultsAppliedFor = useRef<string | null>(null);
+  const [defaultsApplied, setDefaultsApplied] = useState(false);
   // created
   const [created, setCreated] = useState<AuditEngagement | null>(null);
 
@@ -105,6 +110,8 @@ export const StartAuditWizard = ({
     setSelectedFrameworkIds([]);
     setFrameworkRefs({});
     setFrameworkSearch('');
+    defaultsAppliedFor.current = null;
+    setDefaultsApplied(false);
     setControlSearch('');
     setControlsExpanded(false);
     setCreated(null);
@@ -200,6 +207,7 @@ export const StartAuditWizard = ({
     }
     return auditType;
   }, [mode, planDetail.data, planItemId, auditType]);
+  const typeMismatch = useAuditTypeMismatch(effectiveAuditType);
 
   // Audit staff are the users whose role grants fieldwork permissions (same list the lead picker
   // uses, so one cache entry) — never matched on role names, which admins can create freely.
@@ -228,6 +236,7 @@ export const StartAuditWizard = ({
     setChecklistControls((prev) => prev.filter((_, i) => i !== idx));
   };
   const [controlsExpanded, setControlsExpanded] = useState(false);
+  const [confirmMismatch, setConfirmMismatch] = useState(false);
   const [controlSearch, setControlSearch] = useState('');
   // A new control goes to the top and the list opens, so it is visible straight away
   // (with hundreds of controls, a row added at the bottom would look like nothing happened).
@@ -251,6 +260,11 @@ export const StartAuditWizard = ({
   const frameworksQuery = useQuery({
     queryKey: ['compliance', 'coverage'],
     queryFn: () => complianceApi.coverage(),
+    enabled: open && step === 3,
+  });
+  const defaultsQuery = useQuery({
+    queryKey: ['compliance', 'default-frameworks'],
+    queryFn: () => complianceApi.getDefaultFrameworks(),
     enabled: open && step === 3,
   });
   const availableFrameworks = useMemo(() => {
@@ -307,6 +321,19 @@ export const StartAuditWizard = ({
       setLoadingFrameworkId(null);
     }
   };
+
+  useEffect(() => {
+    if (!open || step !== 3 || !effectiveAuditType || !defaultsQuery.data) return;
+    if (defaultsAppliedFor.current === effectiveAuditType) return;
+    defaultsAppliedFor.current = effectiveAuditType;
+    const ids = (defaultsQuery.data[effectiveAuditType] ?? []).filter((id) => !selectedFrameworkIds.includes(id));
+    if (ids.length === 0) return;
+    void (async () => {
+      for (const id of ids) await toggleFramework(id);
+      setDefaultsApplied(true);
+    })();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, step, effectiveAuditType, defaultsQuery.data]);
 
   const importFromDocument = useMutation({
     mutationFn: async (file: File) => {
@@ -491,7 +518,11 @@ export const StartAuditWizard = ({
               </Button>
             )}
             {step === 3 && (
-              <Button size="sm" onClick={() => create.mutate()} isLoading={create.isPending}>
+              <Button
+                size="sm"
+                onClick={() => (typeMismatch ? setConfirmMismatch(true) : create.mutate())}
+                isLoading={create.isPending}
+              >
                 Create engagement
               </Button>
             )}
@@ -808,6 +839,11 @@ export const StartAuditWizard = ({
               Tick the framework or Act this audit is tested against. Its controls are added to this engagement&apos;s
               checklist. You can tick more than one, upload an Act/Policy that is not in the library yet, or add a
               single control.
+              {defaultsApplied && selectedFrameworkIds.length > 0 && (
+                <span className="mt-1 block font-medium text-primary">
+                  Some are already ticked: they are the defaults set for {auditTypeLabel(effectiveAuditType)}. Untick any that do not apply.
+                </span>
+              )}
             </p>
 
             <div className="mb-3 rounded-lg border border-border bg-surface-alt p-2.5">
@@ -967,6 +1003,21 @@ export const StartAuditWizard = ({
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={confirmMismatch}
+        variant="warning"
+        title="Start this audit?"
+        description={typeMismatch}
+        confirmLabel="Yes, start the audit"
+        cancelLabel="Go back"
+        isLoading={create.isPending}
+        onCancel={() => setConfirmMismatch(false)}
+        onConfirm={() => {
+          setConfirmMismatch(false);
+          create.mutate();
+        }}
+      />
     </SlideOver>
   );
 };

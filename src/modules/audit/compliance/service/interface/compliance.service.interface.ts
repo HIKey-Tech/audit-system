@@ -20,6 +20,8 @@ import { PaginationMeta } from '../../../../../shared/types/api-response.type';
 
 export interface IComplianceService {
   listFrameworks(): Promise<FrameworkResponseDto[]>;
+  getDefaultFrameworks(): Promise<Record<string, string[]>>;
+  setDefaultFrameworks(defaults: Record<string, string[]>, actor: ActorContext): Promise<Record<string, string[]>>;
   createFramework(dto: CreateFrameworkRequestDto, actor: ActorContext): Promise<FrameworkResponseDto>;
   updateFramework(id: string, dto: UpdateFrameworkRequestDto, actor: ActorContext): Promise<FrameworkResponseDto>;
   getCoverage(): Promise<ComplianceCoverageDto>;

@@ -22,6 +22,7 @@ import { humanizeStatus } from '@/lib/utils/status';
 import { cn } from '@/lib/utils/cn';
 import { auditTypeLabel, SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
 import type { ChecklistTemplateControl } from '@/lib/types/domain';
+import { DefaultFrameworksCard } from '@/components/audit/compliance/DefaultFrameworksCard';
 
 const CATEGORIES = ['regulatory', 'act', 'policy', 'standard', 'it', 'financial', 'compliance', 'governance'] as const;
 
@@ -146,6 +147,8 @@ export default function CompliancePage(): JSX.Element {
           <ShieldCheck className="h-5 w-5 text-primary" />
         </Card>
       </div>
+
+      <DefaultFrameworksCard canManage={canManage} />
 
       <Card padded className="mb-4">
         <p className="mb-3 text-xs font-semibold uppercase tracking-wider text-text-muted">Coverage by framework</p>

@@ -86,3 +86,8 @@ export type UpdateFrameworkRequestDto = z.infer<typeof UpdateFrameworkRequestSch
 export type CreateControlRequestDto = z.infer<typeof CreateControlRequestSchema>;
 export type UpdateControlRequestDto = z.infer<typeof UpdateControlRequestSchema>;
 export type ControlQueryDto = z.infer<typeof ControlQuerySchema>;
+
+/** audit type → framework ids pre-selected when an audit of that type is started */
+export const DefaultFrameworksRequestSchema = z.object({
+  defaults: z.record(z.string(), z.array(z.string().uuid())),
+});

@@ -5,6 +5,7 @@ import { logger } from '../../../../../shared/utils/logger.util';
 import { PaginationMeta, buildPaginationMeta } from '../../../../../shared/types/api-response.type';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { assertHasPermission } from '../../../utility/audit.utility';
+import { getDefaultFrameworksConfig, setDefaultFrameworksConfig } from '../../../utility/audit-config.utility';
 import {
   ControlQueryDto,
   CreateControlRequestDto,
@@ -33,6 +34,33 @@ import { IComplianceService } from '../interface/compliance.service.interface';
 const frameworkSelect = { code: true, name: true } as const;
 
 export class ComplianceService implements IComplianceService {
+  /** Frameworks pre-selected for each audit type; ids of frameworks that no longer exist or are inactive are dropped. */
+  async getDefaultFrameworks(): Promise<Record<string, string[]>> {
+    const config = await getDefaultFrameworksConfig();
+    const ids = [...new Set(Object.values(config).flatMap((v) => v ?? []))];
+    if (ids.length === 0) return {};
+    const live = new Set(
+      (await prisma.compliance_Framework.findMany({
+        where: { id: { in: ids }, is_active: true, deleted_at: null },
+        select: { id: true },
+      })).map((f) => f.id),
+    );
+    const result: Record<string, string[]> = {};
+    for (const [type, list] of Object.entries(config)) result[type] = (list ?? []).filter((id) => live.has(id));
+    return result;
+  }
+
+  async setDefaultFrameworks(defaults: Record<string, string[]>, actor: ActorContext): Promise<Record<string, string[]>> {
+    assertHasPermission(actor.permissions, 'control:manage');
+    const ids = [...new Set(Object.values(defaults).flat())];
+    if (ids.length > 0) {
+      const found = await prisma.compliance_Framework.count({ where: { id: { in: ids }, deleted_at: null } });
+      if (found !== ids.length) throw AppError.badRequest('One or more selected frameworks do not exist');
+    }
+    const saved = await setDefaultFrameworksConfig(defaults, actor.id);
+    return Object.fromEntries(Object.entries(saved).map(([k, v]) => [k, v ?? []]));
+  }
+
   async listFrameworks(): Promise<FrameworkResponseDto[]> {
     const frameworks = await prisma.compliance_Framework.findMany({
       where: { deleted_at: null },

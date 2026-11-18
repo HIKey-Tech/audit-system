@@ -11,7 +11,7 @@ interface ConfirmDialogProps {
   description?: ReactNode;
   confirmLabel?: string;
   cancelLabel?: string;
-  variant?: 'danger' | 'primary';
+  variant?: 'danger' | 'primary' | 'warning';
   isLoading?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
@@ -50,7 +50,11 @@ export const ConfirmDialog = ({
       <div className="absolute inset-0 bg-slate-900/40 animate-fade-in" onClick={onCancel} aria-hidden />
       <div className="relative w-full max-w-md rounded-lg bg-white p-5 shadow-2xl animate-fade-in">
         <div className="flex items-start gap-3">
-          <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-full bg-red-50 text-danger">
+          <div
+            className={`mt-0.5 flex h-9 w-9 items-center justify-center rounded-full ${
+              variant === 'warning' ? 'bg-amber-50 text-amber-600' : 'bg-red-50 text-danger'
+            }`}
+          >
             <AlertTriangle className="h-4 w-4" aria-hidden />
           </div>
           <div className="min-w-0 flex-1">

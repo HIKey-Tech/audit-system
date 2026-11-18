@@ -7,6 +7,7 @@ import {
   ControlQuerySchema,
   CreateControlRequestSchema,
   CreateFrameworkRequestSchema,
+  DefaultFrameworksRequestSchema,
   LinkRiskRequestSchema,
   UpdateControlRequestSchema,
   UpdateFrameworkRequestSchema,
@@ -100,6 +101,20 @@ export class ComplianceController {
      * @desc   List compliance frameworks
      * @access Private - control:read
      */
+    /**
+     * @route  GET /audit/compliance/default-frameworks
+     * @desc   Frameworks pre-selected per audit type when an audit is started
+     * @access Private - control:read or engagement:create
+     */
+    this.router.get('/compliance/default-frameworks', requireAnyPermission('control:read', 'engagement:create'), this._getDefaultFrameworks.bind(this));
+
+    /**
+     * @route  PUT /audit/compliance/default-frameworks
+     * @desc   Set the frameworks pre-selected per audit type
+     * @access Private - control:manage
+     */
+    this.router.put('/compliance/default-frameworks', requirePermission('control:manage'), validate(DefaultFrameworksRequestSchema), this._setDefaultFrameworks.bind(this));
+
     this.router.get('/compliance/frameworks', requireAnyPermission('control:read', 'engagement:create', 'checklist:read', 'checklist:update'), this._listFrameworks.bind(this));
 
     /**
@@ -194,6 +209,23 @@ export class ComplianceController {
     try {
       await this.complianceService.unlinkRisk(req.params.id, req.params.riskId, req.user!);
       res.status(200).json(buildResponse(null, 'Risk mapping removed'));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _getDefaultFrameworks(_req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      res.status(200).json(buildResponse(await this.complianceService.getDefaultFrameworks()));
+    } catch (err) {
+      next(err);
+    }
+  }
+
+  private async _setDefaultFrameworks(req: Request, res: Response, next: NextFunction): Promise<void> {
+    try {
+      const saved = await this.complianceService.setDefaultFrameworks(req.body.defaults, req.user!);
+      res.status(200).json(buildResponse(saved, 'Default frameworks saved'));
     } catch (err) {
       next(err);
     }

@@ -568,6 +568,7 @@ export default function PlanDetailPage(): JSX.Element {
           defaultTitle={createEngOpen.title}
           defaultStartDate={createEngOpen.plannedStartDate}
           defaultEndDate={createEngOpen.plannedEndDate}
+          auditType={data.auditType}
         />
       )}
 

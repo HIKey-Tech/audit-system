@@ -439,3 +439,43 @@ export const parseChecklistTemplateSnapshot = (
   }));
   return controls.length > 0 ? controls : null;
 };
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Default Control Library frameworks per audit type
+// ─────────────────────────────────────────────────────────────────────────────
+export const DEFAULT_FRAMEWORKS_CONFIG_KEY = 'default_control_frameworks';
+
+/** audit type → ids of the Control Library frameworks pre-selected when an audit of that type is started. */
+export type DefaultFrameworksConfig = Partial<Record<string, string[]>>;
+
+export const getDefaultFrameworksConfig = async (): Promise<DefaultFrameworksConfig> => {
+  const parsed = await getJsonConfig<DefaultFrameworksConfig>(DEFAULT_FRAMEWORKS_CONFIG_KEY, {});
+  const clean: DefaultFrameworksConfig = {};
+  for (const [type, ids] of Object.entries(parsed)) {
+    if (Array.isArray(ids)) clean[type] = ids.filter((id): id is string => typeof id === 'string');
+  }
+  return clean;
+};
+
+export const setDefaultFrameworksConfig = async (
+  config: DefaultFrameworksConfig,
+  actorId: string,
+): Promise<DefaultFrameworksConfig> => {
+  const clean: DefaultFrameworksConfig = {};
+  for (const [type, ids] of Object.entries(config)) {
+    if (!Array.isArray(ids)) continue;
+    clean[type] = [...new Set(ids)];
+  }
+  await prisma.system_Config.upsert({
+    where: { key: DEFAULT_FRAMEWORKS_CONFIG_KEY },
+    create: {
+      key: DEFAULT_FRAMEWORKS_CONFIG_KEY,
+      value: JSON.stringify(clean),
+      description: 'Control Library frameworks pre-selected for each audit type when an audit is started.',
+      updated_by_id: actorId,
+    },
+    update: { value: JSON.stringify(clean), updated_by_id: actorId },
+  });
+  logger.info('Default control frameworks updated', { actorId });
+  return clean;
+};

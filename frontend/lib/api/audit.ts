@@ -781,6 +781,9 @@ export interface RiskCoverage {
 }
 
 export const complianceApi = {
+  getDefaultFrameworks: () => api.get<Record<string, string[]>>('/audit/compliance/default-frameworks'),
+  setDefaultFrameworks: (defaults: Record<string, string[]>) =>
+    api.put<Record<string, string[]>>('/audit/compliance/default-frameworks', { defaults }),
   coverage: () => api.get<ComplianceCoverage>('/audit/compliance/coverage'),
   testedCoverage: () => api.get<TestedCoverage>('/audit/compliance/tested-coverage'),
   riskCoverage: () => api.get<RiskCoverage>('/audit/compliance/risk-coverage'),

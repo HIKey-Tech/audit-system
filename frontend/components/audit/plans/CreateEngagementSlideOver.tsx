@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
@@ -16,6 +16,8 @@ import { Input } from '@/components/ui/Input';
 import { UserSelect } from '@/components/common/UserSelect';
 import { ScoredUserSelect } from '@/components/common/ScoredUserSelect';
 import { plansApi } from '@/lib/api/audit';
+import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { useAuditTypeMismatch } from '@/lib/hooks/useAuditTypeMismatch';
 
 /** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
 function toISODatetime(dateStr: string): string {
@@ -42,6 +44,8 @@ interface Props {
   defaultTitle?: string;
   defaultStartDate?: string;
   defaultEndDate?: string;
+  /** The programme's audit type, used to warn when the creator is not that type of auditor. */
+  auditType?: string;
 }
 
 export const CreateEngagementSlideOver = ({
@@ -52,8 +56,12 @@ export const CreateEngagementSlideOver = ({
   defaultTitle,
   defaultStartDate,
   defaultEndDate,
+  auditType,
 }: Props): JSX.Element => {
   const qc = useQueryClient();
+  const typeMismatch = useAuditTypeMismatch(auditType);
+  const [confirmMismatch, setConfirmMismatch] = useState(false);
+  const [pending, setPending] = useState<FormValues | null>(null);
   const router = useRouter();
 
   const {
@@ -113,7 +121,16 @@ export const CreateEngagementSlideOver = ({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
   });
 
-  const onSubmit = handleSubmit((v) => create.mutate(v), toastOnInvalid);
+  // Valid form values are handed to `start`, which asks for confirmation first when the creator is not this type of auditor.
+  const start = (v: FormValues) => {
+    if (typeMismatch) {
+      setPending(v);
+      setConfirmMismatch(true);
+    } else {
+      create.mutate(v);
+    }
+  };
+  const onSubmit = handleSubmit(start, toastOnInvalid);
 
   const lead = watch('leadAuditorId');
   const manager = watch('auditManagerId');
@@ -181,6 +198,20 @@ export const CreateEngagementSlideOver = ({
           <Input type="date" error={errors.slaDeadline?.message} {...register('slaDeadline')} />
         </FormField>
       </form>
+      <ConfirmDialog
+        open={confirmMismatch}
+        variant="warning"
+        title="Start this audit?"
+        description={typeMismatch}
+        confirmLabel="Yes, start the audit"
+        cancelLabel="Go back"
+        isLoading={create.isPending}
+        onCancel={() => setConfirmMismatch(false)}
+        onConfirm={() => {
+          setConfirmMismatch(false);
+          if (pending) create.mutate(pending);
+        }}
+      />
     </SlideOver>
   );
 };
