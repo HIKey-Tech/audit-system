@@ -2,6 +2,8 @@
 
 import { Shield, FileText, BookOpen, SlidersHorizontal, Workflow, ListChecks, Network } from 'lucide-react';
 import { PageHeader } from '@/components/ui/PageHeader';
+import { EmptyState } from '@/components/ui/EmptyState';
+import { usePermission } from '@/hooks/usePermission';
 import { Tabs, type TabItem } from '@/components/ui/Tabs';
 import { useQueryFilters } from '@/lib/hooks/useQueryFilters';
 import { RoleManagementTab } from '@/components/settings/roles/RoleManagementTab';
@@ -30,6 +32,20 @@ export default function SettingsPage(): JSX.Element {
   // Tab in the URL so an admin can link a colleague straight to a settings area.
   const { values, set } = useQueryFilters({ tab: 'roles' });
   const activeTab = (TAB_KEYS.includes(values.tab as TabKey) ? values.tab : 'roles') as TabKey;
+  const canOpen = usePermission('settings:read');
+
+  // Reached by typing the address: say so plainly, instead of tabs that all fail to load.
+  if (!canOpen) {
+    return (
+      <div>
+        <PageHeader title="Settings" subtitle="Roles, templates and system configuration." />
+        <EmptyState
+          title="You don't have access to Settings"
+          description="Settings is for the Head of Internal Audit and administrators. If you need something changed, ask them."
+        />
+      </div>
+    );
+  }
 
   return (
     <div>

@@ -142,6 +142,10 @@ export interface NavVisibility {
   eventMonitoring: boolean;
   securityTests: boolean;
   systemDocs: boolean;
+  sampling: boolean;
+  controlLibrary: boolean;
+  evidenceRepository: boolean;
+  auditModules: boolean;
 }
 
 export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
@@ -171,6 +175,10 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
       eventMonitoring: false,
       securityTests: false,
       systemDocs: false,
+      sampling: false,
+      controlLibrary: false,
+      evidenceRepository: false,
+      auditModules: false,
     };
   }
 
@@ -202,6 +210,11 @@ export const getNavVisibility = (user: SessionUser | null): NavVisibility => {
     eventMonitoring: userHasPermission(user, 'log:read'),
     securityTests: userHasPermission(user, 'sectest:read'),
     systemDocs: userHasPermission(user, 'sysdoc:read'),
+    // Internal audit tools: an auditee (who can read their own engagement) has no use for them. Same rules as ROUTE_RULES.
+    sampling: userHasPermission(user, 'evidence:request'),
+    controlLibrary: userHasPermission(user, 'control:read'),
+    evidenceRepository: userHasPermission(user, 'working_paper:read'),
+    auditModules: userHasPermission(user, 'checklist:read'),
   };
 };
 

@@ -27,6 +27,8 @@ export const FollowUpTab = ({ engagement }: { engagement: AuditEngagementDetail 
   const evidence = useQuery({
     queryKey: ['engagements', engagement.id, 'evidence'],
     queryFn: () => evidenceApi.listByEngagement(engagement.id),
+    // Internal evidence is for the audit team; an auditee uploads through their own follow-up and cannot list it.
+    enabled: hasPermission(session, 'evidence:read'),
   });
 
   const findingRows = findings.data ?? engagement.findings ?? [];

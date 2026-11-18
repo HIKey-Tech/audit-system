@@ -148,6 +148,8 @@ export const NewFindingSlideOver = ({
     queryKey: ['users', 'directory'],
     queryFn: () => usersApi.directory(),
     staleTime: 5 * 60_000,
+    // The form is mounted even while closed; only ask for the directory when someone is actually raising a finding.
+    enabled: open,
   });
   const userName = (id: string): string => {
     const u = usersList.data?.find((x) => x.id === id);

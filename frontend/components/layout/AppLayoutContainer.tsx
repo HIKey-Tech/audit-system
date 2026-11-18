@@ -7,6 +7,7 @@ import { Header } from './Header';
 import { CommandPalette } from './CommandPalette';
 import { NotificationWatcher } from './NotificationWatcher';
 import { PlanReminderBanner } from './PlanReminderBanner';
+import { RouteAccessGuard } from './RouteAccessGuard';
 import { KeyboardShortcuts } from './KeyboardShortcuts';
 import { cn } from '@/lib/utils/cn';
 
@@ -31,7 +32,7 @@ export const AppLayoutContainer = ({
         <main className="flex-1 px-4 py-6 sm:px-6 lg:px-8">
           <div className="mx-auto w-full max-w-[1600px]">
             <PlanReminderBanner />
-            {children}
+            <RouteAccessGuard>{children}</RouteAccessGuard>
           </div>
         </main>
       </div>

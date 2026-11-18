@@ -22,12 +22,15 @@ import { TimeTrackingCard } from './TimeTrackingCard';
 
 export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const { user } = usePermissions();
+  const canReadAssignments = usePermission('assignment:read');
   const canManageAssignments = usePermission('assignment:create') || usePermission('assignment:delete');
   const [showAssignments, setShowAssignments] = useState(false);
 
   const assignments = useQuery({
     queryKey: ['engagements', engagement.id, 'assignments'],
     queryFn: () => workflowApi.listByEngagement(engagement.id),
+    // An auditee cannot read the assignment list; asking would only fail. The core roles come with the engagement.
+    enabled: canReadAssignments,
   });
 
   const myAssignment = assignments.data?.find((a) => a.userId === user.id);
