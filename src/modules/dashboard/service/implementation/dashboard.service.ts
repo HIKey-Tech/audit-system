@@ -607,6 +607,7 @@ export class DashboardService {
         { lead_auditor_id: userId },
         { audit_manager_id: userId },
         { auditee_id: userId },
+        { additional_auditees: { some: { user_id: userId } } },
         { workflow_assignments: { some: { user_id: userId } } },
       ],
       // A "reported" (review issued) engagement is still active work: the auditee
@@ -894,6 +895,7 @@ export class DashboardService {
       OR: [
         { lead_auditor_id: userId },
         { auditee_id: userId },
+        { additional_auditees: { some: { user_id: userId } } },
         { workflow_assignments: { some: { user_id: userId } } },
       ],
     };

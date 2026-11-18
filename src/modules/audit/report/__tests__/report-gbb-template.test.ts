@@ -38,6 +38,7 @@ const data = {
     auditee: person('Chidi', 'Auditee'),
   },
   findings: [],
+  areasCovered: [] as Array<{ name: string; findingCount: number }>,
   assetsInScope: [{ assetTag: 'SRV-1', name: 'Core server', assetType: 'server', criticality: 'high', scopeRole: 'primary' }],
 };
 
@@ -113,5 +114,32 @@ describe('audit report in the GBB template', () => {
     }
     const buf = await renderPdf(def);
     expect(buf.subarray(0, 5).toString()).toBe('%PDF-');
+  });
+
+  it('a group audit lists every area covered and tags each finding with its area (Word and PDF)', async () => {
+    const group = {
+      ...data,
+      areasCovered: [{ name: 'Information Technology', findingCount: 1 }, { name: 'Payroll Unit', findingCount: 1 }],
+      findings: [
+        { id: 'f1', title: 'Weak passwords', category: 'it', severity: 'high', status: 'open', dueDate: new Date('2026-12-01'), areaName: 'Information Technology', description: 'd', rootCause: 'r', riskImplication: 'x', recommendation: 'y', auditee: person('Chidi', 'Auditee'), followUp: null },
+        { id: 'f2', title: 'Late payments', category: 'financial', severity: 'medium', status: 'open', dueDate: new Date('2026-12-01'), areaName: 'Payroll Unit', description: 'd', rootCause: 'r', riskImplication: 'x', recommendation: 'y', auditee: person('Chidi', 'Auditee'), followUp: null },
+      ],
+    };
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const doc = service._buildDocxDocument(group as any, config, approval, new Map());
+    const xml = new PizZip(Buffer.from(await Packer.toBuffer(doc))).file('word/document.xml')!.asText();
+    expect(xml).toContain('Areas Covered');
+    expect(xml).toContain('Payroll Unit');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const def = service._buildPdfDocDefinition(group as any, config, approval, new Map());
+    const text = JSON.stringify(def.content);
+    expect(text).toContain('Areas Covered');
+    expect(text).toContain('Payroll Unit');
+  });
+
+  it('a single-area audit has no Areas Covered section', async () => {
+    const doc = service._buildDocxDocument(data, config, approval, new Map());
+    const xml = new PizZip(Buffer.from(await Packer.toBuffer(doc))).file('word/document.xml')!.asText();
+    expect(xml).not.toContain('Areas Covered');
   });
 });

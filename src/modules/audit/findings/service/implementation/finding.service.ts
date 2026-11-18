@@ -33,6 +33,7 @@ const findingInclude = {
   engagement: { select: { reference_number: true } },
   checklist: { select: { control_reference: true, control_description: true } },
   risk: { select: { title: true } },
+  area: { select: { name: true } },
   auditee: { select: { display_name: true, first_name: true, last_name: true, email: true } },
   created_by: { select: { display_name: true, first_name: true, last_name: true, email: true } },
   responders: {
@@ -46,6 +47,16 @@ const findingInclude = {
 export class FindingService implements IFindingService {
   constructor(private readonly approvalService: IApprovalService = workflowApprovalService) {}
 
+  /** The area must be the engagement's primary entity or one of the further areas it covers. */
+  private async _assertAreaInEngagement(universeId: string, engagementId: string): Promise<void> {
+    const engagement = await prisma.audit_Engagement.findFirst({
+      where: { id: engagementId, deleted_at: null },
+      select: { universe_id: true, areas: { select: { universe_id: true } } },
+    });
+    const allowed = new Set([engagement?.universe_id, ...(engagement?.areas ?? []).map((a) => a.universe_id)]);
+    if (!allowed.has(universeId)) throw AppError.badRequest('That area is not part of this audit.');
+  }
+
   async createFinding(engagementId: string, dto: CreateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto> {
     assertHasPermission(actor.permissions, 'finding:create');
     await this._assertEngagementAllowsFindings(engagementId);
@@ -58,6 +69,9 @@ export class FindingService implements IFindingService {
     if (dto.riskId) {
       await this._assertRiskExists(dto.riskId);
     }
+    if (dto.areaUniverseId) {
+      await this._assertAreaInEngagement(dto.areaUniverseId, engagementId);
+    }
 
     // Findings stay internal until the report is issued, so no auditee alert is sent here:
     // ReportService.issueReport notifies every responder once the report goes out.
@@ -68,6 +82,7 @@ export class FindingService implements IFindingService {
           working_paper_id: dto.workingPaperId,
           checklist_id: dto.checklistId,
           risk_id: dto.riskId,
+          area_universe_id: dto.areaUniverseId ?? null,
           title: dto.title,
           description: dto.description,
           category: dto.category,
@@ -114,11 +129,15 @@ export class FindingService implements IFindingService {
     if (dto.riskId) {
       await this._assertRiskExists(dto.riskId);
     }
+    if (dto.areaUniverseId) {
+      await this._assertAreaInEngagement(dto.areaUniverseId, finding.engagement_id);
+    }
 
     const findingData: Prisma.Audit_FindingUncheckedUpdateInput = {
       ...(dto.workingPaperId !== undefined && { working_paper_id: dto.workingPaperId }),
       ...(dto.checklistId !== undefined && { checklist_id: dto.checklistId }),
       ...(dto.riskId !== undefined && { risk_id: dto.riskId }),
+      ...(dto.areaUniverseId !== undefined && { area_universe_id: dto.areaUniverseId }),
       ...(dto.title !== undefined && { title: dto.title }),
       ...(dto.description !== undefined && { description: dto.description }),
       ...(dto.category !== undefined && { category: dto.category }),

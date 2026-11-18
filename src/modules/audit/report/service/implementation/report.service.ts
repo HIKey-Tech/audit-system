@@ -345,6 +345,34 @@ export class ReportService implements IReportService {
       );
     }
 
+    // Group audit: the other people being audited are told the report is out as well.
+    const extraAuditees = await prisma.audit_Engagement_Auditee.findMany({
+      where: { engagement_id: report.engagement_id },
+      select: { user: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } } },
+    });
+    for (const { user } of extraAuditees) {
+      const name = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+      await notificationQueueService.enqueueSafe('in_app', {
+        userId: user.id,
+        title: 'Audit report issued',
+        body: `Audit report "${report.title}" has been issued.`,
+        type: 'info',
+        referenceType: 'audit_engagement',
+        referenceId: report.engagement_id,
+        eventKey: 'audit.report.issued',
+        variables: { ...reportVariables, auditeeName: name },
+      });
+      if (user.email) {
+        await notificationQueueService.enqueueSafe('email', {
+          to: user.email,
+          subject: `Audit Report Issued: ${report.title}`,
+          text: `Audit report "${report.title}" has been issued.`,
+          eventKey: 'audit.report.issued',
+          variables: { ...reportVariables, auditeeName: name },
+        });
+      }
+    }
+
     await this._notifyFindingResponders(report.engagement_id, report.engagement.reference_number);
 
     logger.info('Audit report issued', { reportId: id, actorId: actor.id });
@@ -399,7 +427,7 @@ export class ReportService implements IReportService {
           { workflow_assignments: { some: { user_id: actor.id } } },
           {
             AND: [
-              { auditee_id: actor.id },
+              { OR: [{ auditee_id: actor.id }, { additional_auditees: { some: { user_id: actor.id } } }] },
               { report: { status: ReportStatus.Issued } },
             ],
           },

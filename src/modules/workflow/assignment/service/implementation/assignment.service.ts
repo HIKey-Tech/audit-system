@@ -75,6 +75,7 @@ export class AssignmentService implements IAssignmentService {
           lead_auditor_id: true,
           audit_manager_id: true,
           auditee_id: true,
+          additional_auditees: { select: { user_id: true } },
         },
       }),
       prisma.user.findFirst({
@@ -103,7 +104,10 @@ export class AssignmentService implements IAssignmentService {
     }
     // Segregation of duties: the engagement's own lead, manager and auditee already
     // hold a role on it and cannot also be added to the team.
-    if ([engagement.lead_auditor_id, engagement.audit_manager_id, engagement.auditee_id].includes(dto.userId)) {
+    if (
+      [engagement.lead_auditor_id, engagement.audit_manager_id, engagement.auditee_id].includes(dto.userId) ||
+      engagement.additional_auditees.some((a) => a.user_id === dto.userId)
+    ) {
       throw AppError.badRequest('This user already holds the lead auditor, audit manager or auditee role on this engagement');
     }
     const isAuditStaff = await prisma.user_Role.count({
@@ -237,6 +241,7 @@ export class AssignmentService implements IAssignmentService {
         lead_auditor_id: true,
         audit_manager_id: true,
         auditee_id: true,
+        additional_auditees: { select: { user_id: true } },
       },
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
@@ -262,7 +267,7 @@ export class AssignmentService implements IAssignmentService {
     if (incomingUser.is_super_admin) {
       throw AppError.badRequest('A platform administrator cannot be assigned to an audit team');
     }
-    if (incomingUser.id === engagement.auditee_id) {
+    if (incomingUser.id === engagement.auditee_id || engagement.additional_auditees.some((a) => a.user_id === incomingUser.id)) {
       throw AppError.badRequest('The auditee on this engagement cannot be assigned to the audit team');
     }
 

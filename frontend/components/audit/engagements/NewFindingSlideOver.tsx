@@ -48,6 +48,7 @@ const Schema = z.object({
   recommendation: z.string().min(1, 'Recommendation is required'),
   auditeeId: z.string().min(1),
   additionalAuditeeIds: z.array(z.string()).optional(),
+  areaUniverseId: z.string().optional().or(z.literal('')),
   dueDate: z.string().min(1),
   checklistId: z.string().optional().or(z.literal('')),
   workingPaperId: z.string().optional().or(z.literal('')),
@@ -95,6 +96,7 @@ export const NewFindingSlideOver = ({
     recommendation: '',
     auditeeId: engagement.auditeeId,
     additionalAuditeeIds: [],
+    areaUniverseId: '',
     dueDate: '',
     checklistId: prefill?.checklistId ?? '',
     workingPaperId: '',
@@ -164,6 +166,7 @@ export const NewFindingSlideOver = ({
         recommendation: v.recommendation,
         auditeeId: v.auditeeId,
         additionalAuditeeIds: v.additionalAuditeeIds,
+        areaUniverseId: v.areaUniverseId || undefined,
         dueDate: toISODatetime(v.dueDate),
         checklistId: v.checklistId || undefined,
         workingPaperId: v.workingPaperId || undefined,
@@ -294,6 +297,21 @@ export const NewFindingSlideOver = ({
         <FormField label="Recommendation" required error={errors.recommendation?.message}>
           <Textarea rows={3} {...register('recommendation')} />
         </FormField>
+        {(engagement.areas?.length ?? 0) > 0 && (
+          <FormField
+            label="Area"
+            tooltip="This audit covers several areas. Say which one this finding belongs to, so it is tracked and reported on its own."
+          >
+            <Select {...register('areaUniverseId')}>
+              <option value="">{engagement.universeName ?? 'Main entity'} (main)</option>
+              {engagement.areas?.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </Select>
+          </FormField>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Auditee" required error={errors.auditeeId?.message}>
             <UserSelect value={auditeeId} onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })} />

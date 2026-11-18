@@ -61,6 +61,7 @@ model User {
   engagements_led                 Audit_Engagement[]       @relation("EngagementLead")
   engagements_managed             Audit_Engagement[]       @relation("EngagementManager")
   engagements_as_auditee          Audit_Engagement[]       @relation("EngagementAuditee")
+  engagements_as_extra_auditee    Audit_Engagement_Auditee[] @relation("EngagementExtraAuditee")
   engagements_created             Audit_Engagement[]       @relation("EngagementCreatedBy")
   working_papers_created          Audit_Working_Paper[]    @relation("WorkingPaperCreatedBy")
   working_papers_reviewed         Audit_Working_Paper[]    @relation("WorkingPaperReviewedBy")
@@ -891,6 +892,8 @@ model Audit_Universe {
   created_by        User                   @relation("UniverseCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   plan_items        Audit_Plan_Item[]
   engagements       Audit_Engagement[]
+  engagement_areas  Audit_Engagement_Area[]
+  findings_in_area  Audit_Finding[]        @relation("FindingArea")
   risks             Risk_Register[]
   asset_links       Audit_Universe_Asset[]
   system_documents  System_Document[]
@@ -1006,6 +1009,9 @@ model Audit_Engagement {
   lead_auditor         User                  @relation("EngagementLead", fields: [lead_auditor_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   audit_manager        User                  @relation("EngagementManager", fields: [audit_manager_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   auditee              User                  @relation("EngagementAuditee", fields: [auditee_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  // A group audit: further people being audited, and further areas (entities) covered besides the primary ones.
+  additional_auditees  Audit_Engagement_Auditee[]
+  areas                Audit_Engagement_Area[]
   created_by           User                  @relation("EngagementCreatedBy", fields: [created_by_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   working_papers       Audit_Working_Paper[]
   evidence             Audit_Evidence[]
@@ -1271,6 +1277,8 @@ model Audit_Time_Entry {
 model Audit_Finding {
   id               String    @id @default(uuid())
   engagement_id    String
+  // Which area of a group audit the finding belongs to (null = the engagement's primary entity).
+  area_universe_id String?
   working_paper_id String?
   checklist_id     String? // failed control test this finding was raised against (the "criteria")
   risk_id          String? // links the finding into the risk register (feedback loop)
@@ -1292,6 +1300,7 @@ model Audit_Finding {
   updated_at       DateTime  @updatedAt
 
   engagement    Audit_Engagement     @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  area          Audit_Universe?     @relation("FindingArea", fields: [area_universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   working_paper Audit_Working_Paper? @relation(fields: [working_paper_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   checklist     Audit_Checklist?     @relation(fields: [checklist_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
   risk          Risk_Register?       @relation("RiskFindings", fields: [risk_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
@@ -1313,6 +1322,7 @@ model Audit_Finding {
   @@index([category])
   @@index([checklist_id])
   @@index([risk_id])
+  @@index([area_universe_id])
   @@map("audit_findings")
 }
 
@@ -2250,3 +2260,35 @@ model Imoc_Ticket_Risk_Link {
   @@map("imoc_ticket_risk_links")
 }
 
+
+// People being audited in addition to the engagement's main auditee (the "main contact"). A group audit — a department,
+// or a process run by many people — has one engagement and one consolidated report, with all of them listed here.
+model Audit_Engagement_Auditee {
+  id            String   @id @default(uuid())
+  engagement_id String
+  user_id       String
+  created_at    DateTime @default(now())
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  user       User             @relation("EngagementExtraAuditee", fields: [user_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([engagement_id, user_id])
+  @@index([user_id])
+  @@map("audit_engagement_auditees")
+}
+
+// Further areas (audit universe entities) an engagement covers besides its primary entity, so one audit can span
+// several units, processes or systems and still produce one consolidated report.
+model Audit_Engagement_Area {
+  id            String   @id @default(uuid())
+  engagement_id String
+  universe_id   String
+  created_at    DateTime @default(now())
+
+  engagement Audit_Engagement @relation(fields: [engagement_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+  universe   Audit_Universe   @relation(fields: [universe_id], references: [id], onUpdate: NoAction, onDelete: NoAction)
+
+  @@unique([engagement_id, universe_id])
+  @@index([universe_id])
+  @@map("audit_engagement_areas")
+}

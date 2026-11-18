@@ -183,6 +183,9 @@ export interface ChecklistControlInput {
 }
 
 export interface CreateEngagementFromPlanDto {
+  /** Group audit: further people being audited, and further areas covered. */
+  additionalAuditeeIds?: string[];
+  additionalUniverseIds?: string[];
   title: string;
   leadAuditorId: string;
   auditManagerId: string;
@@ -199,6 +202,8 @@ export interface CreateEngagementFromPlanDto {
 }
 
 export interface CreateAdhocEngagementDto {
+  additionalAuditeeIds?: string[];
+  additionalUniverseIds?: string[];
   title: string;
   leadAuditorId: string;
   auditManagerId: string;
@@ -215,6 +220,8 @@ export interface CreateAdhocEngagementDto {
 }
 
 export interface UpdateEngagementDto {
+  additionalAuditeeIds?: string[];
+  additionalUniverseIds?: string[];
   title?: string;
   leadAuditorId?: string;
   auditManagerId?: string;
@@ -445,6 +452,8 @@ export interface CreateFindingDto {
   auditeeId: string;
   /** Co-responders who may also answer this finding alongside the primary auditee. */
   additionalAuditeeIds?: string[];
+  /** Group audit: the area of the engagement this finding belongs to (omit for the primary entity). */
+  areaUniverseId?: string;
   dueDate: string;
   workingPaperId?: string;
   /** Source control test this finding was raised from. */

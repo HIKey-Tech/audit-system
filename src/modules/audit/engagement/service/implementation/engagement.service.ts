@@ -69,6 +69,8 @@ const engagementInclude = {
   lead_auditor: userNameSelect,
   audit_manager: userNameSelect,
   auditee: userNameSelect,
+  additional_auditees: { include: { user: userNameSelect } },
+  areas: { include: { universe: { select: { id: true, name: true } } } },
 };
 
 export class EngagementService implements IEngagementService {
@@ -127,6 +129,50 @@ export class EngagementService implements IEngagementService {
     if (!auditeeId) return;
     const auditee = await this.userService.getUserById(auditeeId);
     if (!auditee.isActive) throw AppError.badRequest('Assigned auditee account is deactivated');
+  }
+
+  /**
+   * Group audit: normalises and validates the further people being audited and the further areas covered. The main
+   * auditee and primary entity are never listed twice, and a lead auditor or manager cannot also be an auditee.
+   * Returns `undefined` for a set that was not supplied (so an update leaves it alone).
+   */
+  private async _validateGroupScope(
+    dto: { additionalAuditeeIds?: string[]; additionalUniverseIds?: string[] },
+    ctx: { leadId: string; managerId: string; auditeeId: string; universeId: string },
+  ): Promise<{ auditeeIds?: string[]; universeIds?: string[] }> {
+    const result: { auditeeIds?: string[]; universeIds?: string[] } = {};
+    if (dto.additionalAuditeeIds !== undefined) {
+      const ids = [...new Set(dto.additionalAuditeeIds)].filter((id) => id !== ctx.auditeeId);
+      if (ids.includes(ctx.leadId) || ids.includes(ctx.managerId)) {
+        throw AppError.badRequest('The lead auditor or audit manager cannot also be one of the people being audited.');
+      }
+      for (const id of ids) await this._assertAuditeeActive(id);
+      result.auditeeIds = ids;
+    }
+    if (dto.additionalUniverseIds !== undefined) {
+      const ids = [...new Set(dto.additionalUniverseIds)].filter((id) => id !== ctx.universeId);
+      for (const id of ids) await this._assertUniverseActive(id);
+      result.universeIds = ids;
+    }
+    return result;
+  }
+
+  /** Tells each newly added group-audit auditee they are being audited (same email and steps as the main auditee). */
+  private async _notifyAdditionalAuditees(
+    engagement: Parameters<EngagementService['_notifyEngagementParties']>[0],
+    userIds: string[],
+  ): Promise<void> {
+    if (userIds.length === 0) return;
+    const users = await prisma.user.findMany({
+      where: { id: { in: userIds } },
+      select: { id: true, first_name: true, last_name: true, display_name: true, email: true },
+    });
+    for (const user of users) {
+      await this._notifyEngagementParties(
+        { ...engagement, auditee_id: user.id, auditee: user },
+        { notifyAuditee: true, notifyLead: false, notifyManager: false },
+      );
+    }
   }
 
   private async _notifyEngagementParties(
@@ -324,10 +370,19 @@ export class EngagementService implements IEngagementService {
     await this._assertLeadAuditorEligible(dto.leadAuditorId);
     await this._assertAuditeeActive(dto.auditeeId);
 
+    const group = await this._validateGroupScope(dto, {
+      leadId: dto.leadAuditorId,
+      managerId: dto.auditManagerId,
+      auditeeId: dto.auditeeId,
+      universeId: planItem.universe_id,
+    });
+
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.$transaction(async (tx) => {
       const created = await tx.audit_Engagement.create({
         data: {
+          ...(group.auditeeIds?.length && { additional_auditees: { create: group.auditeeIds.map((user_id) => ({ user_id })) } }),
+          ...(group.universeIds?.length && { areas: { create: group.universeIds.map((universe_id) => ({ universe_id })) } }),
           reference_number: referenceNumber,
           title: dto.title,
           universe_id: planItem.universe_id,
@@ -357,8 +412,9 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Audit engagement created from plan item', { engagementId: engagement.id, planItemId, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_from_plan', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
-    await ensureAuditeeRoleAssigned([engagement.auditee_id], actor.id);
+    await ensureAuditeeRoleAssigned([engagement.auditee_id, ...(group.auditeeIds ?? [])], actor.id);
     await this._notifyEngagementParties(engagement);
+    await this._notifyAdditionalAuditees(engagement, group.auditeeIds ?? []);
     await notifyEngagementLifecycleChange(engagement.id, null, engagement.status, actor.id);
     return mapEngagementToResponse(engagement);
   }
@@ -372,9 +428,18 @@ export class EngagementService implements IEngagementService {
     await this._assertLeadAuditorEligible(dto.leadAuditorId);
     await this._assertAuditeeActive(dto.auditeeId);
 
+    const group = await this._validateGroupScope(dto, {
+      leadId: dto.leadAuditorId,
+      managerId: dto.auditManagerId,
+      auditeeId: dto.auditeeId,
+      universeId: dto.universeId,
+    });
+
     const referenceNumber = await this._nextReferenceNumber(new Date(dto.plannedStartDate).getUTCFullYear());
     const engagement = await prisma.audit_Engagement.create({
       data: {
+        ...(group.auditeeIds?.length && { additional_auditees: { create: group.auditeeIds.map((user_id) => ({ user_id })) } }),
+        ...(group.universeIds?.length && { areas: { create: group.universeIds.map((universe_id) => ({ universe_id })) } }),
         reference_number: referenceNumber,
         title: dto.title,
         universe_id: dto.universeId,
@@ -397,8 +462,9 @@ export class EngagementService implements IEngagementService {
 
     logger.info('Ad-hoc audit engagement created', { engagementId: engagement.id, actorId: actor.id });
     auditLogService.logAsync({ userId: actor.id, action: 'audit.engagement.create_adhoc', module: 'audit', entityType: 'audit_engagement', entityId: engagement.id });
-    await ensureAuditeeRoleAssigned([engagement.auditee_id], actor.id);
+    await ensureAuditeeRoleAssigned([engagement.auditee_id, ...(group.auditeeIds ?? [])], actor.id);
     await this._notifyEngagementParties(engagement);
+    await this._notifyAdditionalAuditees(engagement, group.auditeeIds ?? []);
     await notifyEngagementLifecycleChange(engagement.id, null, engagement.status, actor.id);
     return mapEngagementToResponse(engagement);
   }
@@ -410,7 +476,8 @@ export class EngagementService implements IEngagementService {
       select: {
         audit_manager_id: true, title: true, status: true, priority: true,
         lead_auditor_id: true, auditee_id: true, planned_start_date: true,
-        planned_end_date: true, sla_deadline: true, planned_hours: true,
+        planned_end_date: true, sla_deadline: true, planned_hours: true, universe_id: true,
+        additional_auditees: { select: { user_id: true } },
       },
     });
     if (!existing) throw AppError.notFound('Audit engagement');
@@ -425,7 +492,27 @@ export class EngagementService implements IEngagementService {
     const managerChanged =
       dto.auditManagerId !== undefined && dto.auditManagerId !== existing.audit_manager_id;
 
+    const group = await this._validateGroupScope(dto, {
+      leadId: dto.leadAuditorId ?? existing.lead_auditor_id,
+      managerId: dto.auditManagerId ?? existing.audit_manager_id,
+      auditeeId: dto.auditeeId ?? existing.auditee_id,
+      universeId: existing.universe_id,
+    });
+    const previousExtraAuditees = new Set(existing.additional_auditees.map((a) => a.user_id));
+    const newlyAddedAuditees = (group.auditeeIds ?? []).filter((uid) => !previousExtraAuditees.has(uid));
+
     const engagement = await prisma.$transaction(async (tx) => {
+      // Group audit: replace the set of further auditees / areas when supplied.
+      if (group.auditeeIds !== undefined) {
+        await tx.audit_Engagement_Auditee.deleteMany({ where: { engagement_id: id, user_id: { notIn: group.auditeeIds } } });
+        await tx.audit_Engagement_Auditee.createMany({ data: newlyAddedAuditees.map((user_id) => ({ engagement_id: id, user_id })) });
+      }
+      if (group.universeIds !== undefined) {
+        await tx.audit_Engagement_Area.deleteMany({ where: { engagement_id: id, universe_id: { notIn: group.universeIds } } });
+        const have = new Set((await tx.audit_Engagement_Area.findMany({ where: { engagement_id: id }, select: { universe_id: true } })).map((a) => a.universe_id));
+        await tx.audit_Engagement_Area.createMany({ data: group.universeIds.filter((u) => !have.has(u)).map((universe_id) => ({ engagement_id: id, universe_id })) });
+      }
+
       const updated = await tx.audit_Engagement.update({
         where: { id },
         data: {
@@ -464,9 +551,10 @@ export class EngagementService implements IEngagementService {
     const auditeeChanged = dto.auditeeId !== undefined && dto.auditeeId !== existing.auditee_id;
     const leadChanged = dto.leadAuditorId !== undefined && dto.leadAuditorId !== existing.lead_auditor_id;
 
-    if (auditeeChanged) {
-      await ensureAuditeeRoleAssigned([engagement.auditee_id], actor.id);
+    if (auditeeChanged || newlyAddedAuditees.length > 0) {
+      await ensureAuditeeRoleAssigned([...(auditeeChanged ? [engagement.auditee_id] : []), ...newlyAddedAuditees], actor.id);
     }
+    await this._notifyAdditionalAuditees(engagement, newlyAddedAuditees);
 
     if (auditeeChanged || leadChanged || managerChanged) {
       await this._notifyEngagementParties(engagement, {
@@ -549,6 +637,7 @@ export class EngagementService implements IEngagementService {
         { lead_auditor_id: actor.id },
         { audit_manager_id: actor.id },
         { auditee_id: actor.id },
+        { additional_auditees: { some: { user_id: actor.id } } },
         { workflow_assignments: { some: { user_id: actor.id } } },
       ],
     };

@@ -22,6 +22,7 @@ import { usersApi } from '@/lib/api/users';
 import { auditTypeLabel, SELECTABLE_AUDIT_TYPES, type SelectableAuditTypeKey } from '@/lib/audit-domains';
 import { getMatchScore, isRelevantSkill } from './assignment-matching';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
+import { ChipList } from './ChipList';
 import { useAuditTypeMismatch } from '@/lib/hooks/useAuditTypeMismatch';
 import type { AuditEngagement, ChecklistTemplateControl } from '@/lib/types/domain';
 
@@ -65,6 +66,9 @@ export const StartAuditWizard = ({
   const [auditManagerId, setAuditManagerId] = useState('');
   const [auditeeId, setAuditeeId] = useState('');
   const [supportingIds, setSupportingIds] = useState<string[]>([]);
+  // Group audit: further areas covered and further people being audited.
+  const [extraAreaIds, setExtraAreaIds] = useState<string[]>([]);
+  const [extraAuditeeIds, setExtraAuditeeIds] = useState<string[]>([]);
   const [candidateSearch, setCandidateSearch] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -92,6 +96,8 @@ export const StartAuditWizard = ({
     setPlanId('');
     setPlanItemId('');
     setUniverseId('');
+    setExtraAreaIds([]);
+    setExtraAuditeeIds([]);
     setAuditType(initialAuditType ?? 'compliance');
     setPriority('medium');
     setAdhocReason('');
@@ -160,7 +166,7 @@ export const StartAuditWizard = ({
   const universe = useQuery({
     queryKey: ['universe', 'active', 'all'],
     queryFn: () => universeApi.list({ pageSize: 100, status: 'active' }),
-    enabled: open && mode === 'ad_hoc',
+    enabled: open,
   });
 
   const entityOptions: ComboboxOption[] = useMemo(
@@ -173,6 +179,13 @@ export const StartAuditWizard = ({
     [universe.data],
   );
   const selectedEntity = (universe.data?.items ?? []).find((e) => e.id === universeId) ?? null;
+  // The entity the audit is primarily about (from the plan item, or the one picked for an ad-hoc audit).
+  const primaryEntityId =
+    mode === 'plan' ? (planDetail.data?.items ?? []).find((i) => i.id === planItemId)?.universeId ?? '' : universeId;
+  const areaOptions: ComboboxOption[] = entityOptions.filter(
+    (o) => o.value !== primaryEntityId && !extraAreaIds.includes(o.value),
+  );
+  const entityName = (id: string): string => (universe.data?.items ?? []).find((e) => e.id === id)?.name ?? '…';
 
   const usersQuery = useQuery({
     queryKey: ['users', 'all'],
@@ -415,6 +428,8 @@ export const StartAuditWizard = ({
             plannedHours: Number(plannedHours) > 0 ? Math.round(Number(plannedHours)) : undefined,
             planItemId,
             checklistControls: checklistControlsArg,
+            additionalAuditeeIds: extraAuditeeIds.length > 0 ? extraAuditeeIds : undefined,
+            additionalUniverseIds: extraAreaIds.length > 0 ? extraAreaIds : undefined,
           })
         : await engagementsApi.createAdhoc({
             title: title.trim(),
@@ -430,6 +445,8 @@ export const StartAuditWizard = ({
             priority,
             adhocReason: adhocReason.trim(),
             checklistControls: checklistControlsArg,
+            additionalAuditeeIds: extraAuditeeIds.length > 0 ? extraAuditeeIds : undefined,
+            additionalUniverseIds: extraAreaIds.length > 0 ? extraAreaIds : undefined,
           });
 
       // Assign the supporting auditors picked in step 2.
@@ -674,6 +691,26 @@ export const StartAuditWizard = ({
               </FormField>
             </>
           )}
+
+          {(mode === 'ad_hoc' ? Boolean(universeId) : Boolean(planItemId)) && (
+            <FormField
+              label="Other areas covered by this audit (optional)"
+              tooltip="One audit can cover several entities, such as a department and its units, or several systems. Add the other areas here and the audit produces one consolidated report for all of them."
+            >
+              <Combobox
+                value=""
+                onChange={(id) => id && setExtraAreaIds((prev) => [...prev, id])}
+                options={areaOptions}
+                placeholder="Add another area…"
+                emptyText={universe.isLoading ? 'Loading…' : 'No other entities'}
+              />
+              <ChipList
+                items={extraAreaIds.map((id) => ({ id, label: entityName(id) }))}
+                onRemove={(id) => setExtraAreaIds((prev) => prev.filter((x) => x !== id))}
+                emptyText="Just the entity above. Add more only if this one audit covers several areas."
+              />
+            </FormField>
+          )}
         </div>
       )}
 
@@ -692,7 +729,23 @@ export const StartAuditWizard = ({
             </FormField>
           </div>
           <FormField label="Auditee" required tooltip="Primary contact in the audited area who provides evidence and management responses.">
-            <UserSelect value={auditeeId} onChange={setAuditeeId} excludeIds={[leadAuditorId, auditManagerId].filter(Boolean)} />
+            <UserSelect value={auditeeId} onChange={setAuditeeId} excludeIds={[leadAuditorId, auditManagerId, ...extraAuditeeIds].filter(Boolean)} />
+          </FormField>
+          <FormField
+            label="Other people being audited (optional)"
+            tooltip="When a department or a process is run by several people, add them all here. Each is told they are being audited and gets access to this audit, and sees only the findings assigned to them. Someone not in the system yet? Use the email option in the list."
+          >
+            <UserSelect
+              value=""
+              onChange={(id) => id && setExtraAuditeeIds((prev) => (prev.includes(id) ? prev : [...prev, id]))}
+              placeholder="Add another person…"
+              excludeIds={[leadAuditorId, auditManagerId, auditeeId, ...extraAuditeeIds].filter(Boolean)}
+            />
+            <ChipList
+              items={extraAuditeeIds.map((id) => ({ id, label: userName(id) }))}
+              onRemove={(id) => setExtraAuditeeIds((prev) => prev.filter((x) => x !== id))}
+              emptyText="Just the main auditee above. Add more if several people answer for this audit."
+            />
           </FormField>
           <FormField
             label={`Supporting auditors${supportingIds.length > 0 ? ` (${supportingIds.length} selected)` : ''}`}
@@ -798,6 +851,8 @@ export const StartAuditWizard = ({
             <Row label="Lead auditor" value={userName(leadAuditorId)} />
             <Row label="Audit manager" value={userName(auditManagerId)} />
             <Row label="Auditee" value={userName(auditeeId)} />
+            {extraAuditeeIds.length > 0 && <Row label="Other auditees" value={extraAuditeeIds.map(userName).join(', ')} />}
+            {extraAreaIds.length > 0 && <Row label="Other areas" value={extraAreaIds.map(entityName).join(', ')} />}
             <Row
               label="Supporting auditors"
               value={supportingIds.length > 0 ? supportingIds.map(userName).join(', ') : 'None'}

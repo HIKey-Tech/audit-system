@@ -22,6 +22,9 @@ export interface FindingResponseDto {
   auditeeName?: string;
   /** Co-responders beyond the primary auditee (empty when the include is absent). */
   additionalAuditees?: Array<{ id: string; name?: string }>;
+  /** Group audit: the area this finding belongs to (null = the engagement's primary entity). */
+  areaUniverseId?: string | null;
+  areaName?: string | null;
   status: string;
   dueDate: string;
   createdById: string;
@@ -54,6 +57,8 @@ export const mapFindingToResponse = (finding: {
   checklist?: { control_reference: string; control_description: string } | null;
   risk_id: string | null;
   risk?: { title: string } | null;
+  area_universe_id?: string | null;
+  area?: { name: string } | null;
   title: string;
   description: string;
   category: string;
@@ -94,6 +99,8 @@ export const mapFindingToResponse = (finding: {
   auditeeId: finding.auditee_id,
   auditeeName: formatUserName(finding.auditee),
   additionalAuditees: finding.responders?.map((r) => ({ id: r.user_id, name: formatUserName(r.user) })),
+  areaUniverseId: finding.area_universe_id ?? null,
+  areaName: finding.area?.name ?? null,
   status: finding.status,
   dueDate: finding.due_date.toISOString(),
   createdById: finding.created_by_id,

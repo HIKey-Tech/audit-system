@@ -54,6 +54,10 @@ export interface EngagementResponseDto {
   leadAuditorName?: string | null;
   auditManagerName?: string | null;
   auditeeName?: string | null;
+  /** Group audit: other people being audited besides the main auditee. */
+  additionalAuditees: Array<{ id: string; name: string; email: string | null }>;
+  /** Group audit: other areas covered besides the primary entity. */
+  areas: Array<{ id: string; name: string }>;
   plannedStartDate: string;
   plannedEndDate: string;
   actualStartDate: string | null;
@@ -111,6 +115,8 @@ export const mapEngagementToResponse = (
     lead_auditor?: UserNameFields | null;
     audit_manager?: UserNameFields | null;
     auditee?: UserNameFields | null;
+    additional_auditees?: Array<{ user: UserNameFields & { id: string; email?: string | null } }>;
+    areas?: Array<{ universe: { id: string; name: string } }>;
   },
   extras?: {
     findingCounts?: FindingSeverityCount[];
@@ -140,6 +146,12 @@ export const mapEngagementToResponse = (
   leadAuditorName: fullName(engagement.lead_auditor),
   auditManagerName: fullName(engagement.audit_manager),
   auditeeName: fullName(engagement.auditee),
+  additionalAuditees: (engagement.additional_auditees ?? []).map((a) => ({
+    id: a.user.id,
+    name: fullName(a.user) ?? 'User',
+    email: a.user.email ?? null,
+  })),
+  areas: (engagement.areas ?? []).map((a) => ({ id: a.universe.id, name: a.universe.name })),
   plannedStartDate: engagement.planned_start_date.toISOString(),
   plannedEndDate: engagement.planned_end_date.toISOString(),
   actualStartDate: engagement.actual_start_date?.toISOString() ?? null,

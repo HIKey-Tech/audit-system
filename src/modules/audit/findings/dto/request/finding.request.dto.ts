@@ -16,6 +16,8 @@ export const CreateFindingRequestSchema = z.object({
   auditeeId: z.string().uuid(),
   /** Co-responders who may also answer this finding alongside the primary auditee. */
   additionalAuditeeIds: z.array(z.string().uuid()).optional(),
+  /** Group audit: which area of the engagement this finding belongs to (omit for the primary entity). */
+  areaUniverseId: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime(),
 });
 
@@ -33,6 +35,7 @@ export const UpdateFindingRequestSchema = z.object({
   auditeeId: z.string().uuid().optional(),
   /** When provided, replaces the full set of co-responders for this finding. */
   additionalAuditeeIds: z.array(z.string().uuid()).optional(),
+  areaUniverseId: z.string().uuid().nullable().optional(),
   dueDate: z.string().datetime().optional(),
 });
 

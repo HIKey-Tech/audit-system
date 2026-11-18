@@ -60,6 +60,8 @@ interface ReportFinding {
   status: string;
   dueDate: Date;
   controlReference?: string | null;
+  /** Group audit: the area this finding belongs to (the primary entity's name when untagged). */
+  areaName?: string | null;
   auditee: { displayName: string | null; firstName: string; lastName: string };
   followUp: {
     managementResponse: string | null;
@@ -101,6 +103,8 @@ interface ReportData {
   };
   findings: ReportFinding[];
   assetsInScope: ReportAsset[];
+  /** Group audit: every area covered and how many findings each has. Empty for a single-area audit. */
+  areasCovered: Array<{ name: string; findingCount: number }>;
 }
 
 interface ReportAsset {
@@ -245,6 +249,7 @@ export class ReportGenerationService implements IReportGenerationService {
         engagement: {
           include: {
             universe: { select: { name: true } },
+            areas: { include: { universe: { select: { name: true } } } },
             lead_auditor: {
               select: { display_name: true, first_name: true, last_name: true, job_title: true },
             },
@@ -258,6 +263,7 @@ export class ReportGenerationService implements IReportGenerationService {
               where: { deleted_at: null },
               include: {
                 auditee: { select: { display_name: true, first_name: true, last_name: true } },
+                area: { select: { name: true } },
                 checklist: { select: { control_reference: true } },
                 follow_up: {
                   include: {
@@ -301,6 +307,17 @@ export class ReportGenerationService implements IReportGenerationService {
     const sortedFindings = [...report.engagement.findings].sort(
       (a, b) => (SEVERITY_ORDER[a.severity] ?? 99) - (SEVERITY_ORDER[b.severity] ?? 99),
     );
+
+    // Group audit: list every area and how many findings each has, so one consolidated report covers them all.
+    const primaryArea = report.engagement.universe.name;
+    const extraAreas = report.engagement.areas.map((a) => a.universe.name);
+    const areasCovered =
+      extraAreas.length === 0
+        ? []
+        : [primaryArea, ...extraAreas].map((name) => ({
+            name,
+            findingCount: sortedFindings.filter((f) => (f.area?.name ?? primaryArea) === name).length,
+          }));
 
     return {
       report: {
@@ -356,6 +373,7 @@ export class ReportGenerationService implements IReportGenerationService {
         status: f.status,
         dueDate: f.due_date,
         controlReference: (f as { checklist?: { control_reference?: string } | null }).checklist?.control_reference ?? null,
+        areaName: f.area?.name ?? primaryArea,
         auditee: {
           displayName: f.auditee.display_name,
           firstName: f.auditee.first_name,
@@ -385,6 +403,7 @@ export class ReportGenerationService implements IReportGenerationService {
             }
           : null,
       })),
+      areasCovered,
       assetsInScope: report.engagement.asset_links.map((link) => ({
         assetTag: link.asset.asset_tag,
         name: link.asset.name,
@@ -524,6 +543,9 @@ export class ReportGenerationService implements IReportGenerationService {
       title: section.title,
       children: this._buildDocxSectionContent(section.key, data),
     }));
+    if (data.areasCovered.length > 0) {
+      sections.push({ title: 'Areas Covered', children: [this._buildDocxAreasCoveredTable(data.areasCovered)] });
+    }
     if (data.assetsInScope.length > 0) {
       sections.push({ title: 'Assets in Scope', children: [this._buildDocxAssetsInScopeTable(data.assetsInScope)] });
     }
@@ -716,7 +738,7 @@ export class ReportGenerationService implements IReportGenerationService {
       case 'methodology':
         return this._htmlOrTextToDocxBlocks(data.report.methodology);
       case 'findings_summary':
-        return [this._buildDocxFindingsSummaryTable(data.findings)];
+        return [this._buildDocxFindingsSummaryTable(data.findings, data.areasCovered.length > 0)];
       case 'detailed_findings':
         return this._buildDocxDetailedFindings(data.findings);
       case 'conclusion':
@@ -726,11 +748,12 @@ export class ReportGenerationService implements IReportGenerationService {
     }
   }
 
-  private _buildDocxFindingsSummaryTable(findings: ReportFinding[]): Table {
+  private _buildDocxFindingsSummaryTable(findings: ReportFinding[], showArea = false): Table {
     const headerRow = new TableRow({
       children: [
         this._docxHeaderCell('No.'),
         this._docxHeaderCell('Finding Title'),
+        ...(showArea ? [this._docxHeaderCell('Area')] : []),
         this._docxHeaderCell('Category'),
         this._docxHeaderCell('Severity'),
         this._docxHeaderCell('Status'),
@@ -749,6 +772,14 @@ export class ReportGenerationService implements IReportGenerationService {
             children: [new Paragraph({ children: [new TextRun({ text: f.title })] })],
             verticalAlign: VerticalAlign.CENTER,
           }),
+          ...(showArea
+            ? [
+                new TableCell({
+                  children: [new Paragraph({ children: [new TextRun({ text: f.areaName ?? '' })] })],
+                  verticalAlign: VerticalAlign.CENTER,
+                }),
+              ]
+            : []),
           new TableCell({
             children: [new Paragraph({ children: [new TextRun({ text: FINDING_CATEGORY_LABEL[f.category] ?? f.category })] })],
             verticalAlign: VerticalAlign.CENTER,
@@ -781,6 +812,19 @@ export class ReportGenerationService implements IReportGenerationService {
         insideHorizontal: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
         insideVertical: { style: BorderStyle.SINGLE, size: 1, color: 'CCCCCC' },
       },
+    });
+  }
+
+  /** Group audit: one row per area covered, with its number of findings. */
+  private _buildDocxAreasCoveredTable(areas: Array<{ name: string; findingCount: number }>): Table {
+    const cell = (text: string): TableCell =>
+      new TableCell({ children: [new Paragraph({ children: [new TextRun({ text })] })], verticalAlign: VerticalAlign.CENTER });
+    return new Table({
+      rows: [
+        new TableRow({ children: [this._docxHeaderCell('Area'), this._docxHeaderCell('Findings')] }),
+        ...areas.map((a) => new TableRow({ children: [cell(a.name), cell(String(a.findingCount))] })),
+      ],
+      width: { size: 100, type: WidthType.PERCENTAGE },
     });
   }
 
@@ -1255,17 +1299,20 @@ export class ReportGenerationService implements IReportGenerationService {
     /** A label cell for the metadata / details tables. */
     const labelCell = (text: string): PdfTableCell => ({ text, bold: true, color: primary, fillColor: '#F8F9FA' });
 
+    const showArea = data.areasCovered.length > 0;
     const findingsSummaryTable: Content = {
       table: {
         headerRows: 1,
-        widths: [22, '*', 80, 64, 70, 64],
+        widths: showArea ? [20, '*', 62, 60, 56, 52, 56] : [22, '*', 80, 64, 70, 64],
         body: [
-          ['No.', 'Finding Title', 'Category', 'Severity', 'Status', 'Due Date'].map(
-            (h): PdfTableCell => ({ text: h, bold: true, color: '#FFFFFF', fillColor: primary }),
-          ),
+          (showArea
+            ? ['No.', 'Finding Title', 'Area', 'Category', 'Severity', 'Status', 'Due Date']
+            : ['No.', 'Finding Title', 'Category', 'Severity', 'Status', 'Due Date']
+          ).map((h): PdfTableCell => ({ text: h, bold: true, color: '#FFFFFF', fillColor: primary })),
           ...data.findings.map((f, idx): PdfTableCell[] => [
             { text: String(idx + 1) },
             { text: f.title },
+            ...(showArea ? [{ text: f.areaName ?? '' } as PdfTableCell] : []),
             { text: FINDING_CATEGORY_LABEL[f.category] ?? f.category },
             severityBadge(f.severity),
             { text: FINDING_STATUS_LABEL[f.status] ?? f.status },
@@ -1385,6 +1432,25 @@ export class ReportGenerationService implements IReportGenerationService {
 
     // Assets in scope — always appended when the engagement has linked assets,
     // so scope reaches the report even if the template omits an assets section.
+    if (data.areasCovered.length > 0) {
+      pdfSections.push({
+        title: 'Areas Covered',
+        content: [
+          {
+            table: {
+              headerRows: 1,
+              widths: ['*', 'auto'],
+              body: [
+                ['Area', 'Findings'].map((h) => ({ text: h, bold: true, fillColor: '#f1f5f9' })),
+                ...data.areasCovered.map((a) => [a.name, String(a.findingCount)]),
+              ],
+            },
+            layout: borderedTableLayout,
+            margin: [0, 4, 0, 0],
+          },
+        ],
+      });
+    }
     if (data.assetsInScope.length > 0) {
       pdfSections.push({ title: 'Assets in Scope', content: [{
         table: {

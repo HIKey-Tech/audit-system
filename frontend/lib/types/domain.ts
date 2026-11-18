@@ -371,6 +371,10 @@ export interface AuditEngagement {
   referenceNumber: string;
   title: string;
   universeId: string;
+  /** Group audit: other people being audited besides the main auditee. */
+  additionalAuditees?: Array<{ id: string; name: string; email: string | null }>;
+  /** Group audit: other areas covered besides the primary entity. */
+  areas?: Array<{ id: string; name: string }>;
   planItemId: string | null;
   planTitle: string | null;
   auditType: string;
@@ -610,6 +614,9 @@ export interface AuditFinding {
   auditeeName: string;
   /** Co-responders beyond the primary auditee. */
   additionalAuditees?: Array<{ id: string; name?: string }>;
+  /** Group audit: the area this finding belongs to (null = the engagement's primary entity). */
+  areaUniverseId?: string | null;
+  areaName?: string | null;
   dueDate: string;
   createdById: string;
   createdByName: string;

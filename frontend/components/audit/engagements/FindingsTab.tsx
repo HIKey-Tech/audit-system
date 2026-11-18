@@ -74,7 +74,14 @@ export const FindingsTab = ({ engagement }: { engagement: AuditEngagementDetail 
                     className="flex flex-wrap items-center gap-3 px-5 py-4 transition-colors hover:bg-surface-alt/40"
                   >
                     <div className="min-w-0 flex-1">
-                      <p className="truncate text-sm font-medium text-text-primary">{f.title}</p>
+                      <p className="truncate text-sm font-medium text-text-primary">
+                        {f.title}
+                        {f.areaName && (
+                          <span className="ml-2 rounded bg-surface-alt px-1.5 py-0.5 text-[10px] font-medium text-text-secondary ring-1 ring-border">
+                            {f.areaName}
+                          </span>
+                        )}
+                      </p>
                       <p className="text-[11px] text-text-muted">
                         {f.auditeeName}
                         {f.controlReference && (

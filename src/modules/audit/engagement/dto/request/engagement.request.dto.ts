@@ -22,6 +22,10 @@ const EngagementBaseSchema = z.object({
   slaDeadline: z.string().datetime(),
   plannedHours: z.number().int().positive().max(100000).optional(),
   checklistControls: z.array(ChecklistControlSchema).optional(),
+  /** Group audit: further people being audited besides the main auditee. */
+  additionalAuditeeIds: z.array(z.string().uuid()).optional(),
+  /** Group audit: further areas (audit universe entities) covered besides the primary one. */
+  additionalUniverseIds: z.array(z.string().uuid()).optional(),
 });
 
 const EngagementScopeSchema = z.object({
@@ -49,6 +53,8 @@ export const UpdateEngagementRequestSchema = z.object({
   priority: z.nativeEnum(AuditPriority).optional(),
   adhocReason: z.string().max(5000).nullable().optional(),
   plannedHours: z.number().int().positive().max(100000).nullable().optional(),
+  additionalAuditeeIds: z.array(z.string().uuid()).optional(),
+  additionalUniverseIds: z.array(z.string().uuid()).optional(),
 });
 
 export const UpdateEngagementStatusRequestSchema = z.object({

@@ -37,6 +37,9 @@ export const UserSelect = ({
   const [email, setEmail] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  // Names follow the email address until the person typing edits them by hand.
+  const [firstNameEdited, setFirstNameEdited] = useState(false);
+  const [lastNameEdited, setLastNameEdited] = useState(false);
   const [department, setDepartment] = useState('');
   const [jobTitle, setJobTitle] = useState('');
 
@@ -53,12 +56,8 @@ export const UserSelect = ({
       .split(/[._-]+/)
       .filter(Boolean)
       .map((p) => p.charAt(0).toUpperCase() + p.slice(1));
-    if (parts.length >= 1 && !firstName) {
-      setFirstName(parts[0]);
-    }
-    if (parts.length >= 2 && !lastName) {
-      setLastName(parts.slice(1).join(' '));
-    }
+    if (!firstNameEdited) setFirstName(parts[0] ?? '');
+    if (!lastNameEdited) setLastName(parts.length >= 2 ? parts.slice(1).join(' ') : '');
   };
 
   const provision = useMutation({
@@ -96,6 +95,8 @@ export const UserSelect = ({
       setEmail('');
       setFirstName('');
       setLastName('');
+      setFirstNameEdited(false);
+      setLastNameEdited(false);
       setDepartment('');
       setJobTitle('');
     },
@@ -168,12 +169,18 @@ export const UserSelect = ({
             <Input
               placeholder="First name"
               value={firstName}
-              onChange={(e) => setFirstName(e.target.value)}
+              onChange={(e) => {
+                setFirstNameEdited(true);
+                setFirstName(e.target.value);
+              }}
             />
             <Input
               placeholder="Last name"
               value={lastName}
-              onChange={(e) => setLastName(e.target.value)}
+              onChange={(e) => {
+                setLastNameEdited(true);
+                setLastName(e.target.value);
+              }}
             />
             <Input
               placeholder="Department (optional)"

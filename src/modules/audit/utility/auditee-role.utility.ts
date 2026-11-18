@@ -119,7 +119,9 @@ export const ensureAuditeeRoleAssigned = async (
 export const ensureAuditeeRoleIfNamed = async (userId: string): Promise<void> => {
   try {
     const [engagements, findings] = await Promise.all([
-      prisma.audit_Engagement.count({ where: { auditee_id: userId, deleted_at: null } }),
+      prisma.audit_Engagement.count({
+        where: { deleted_at: null, OR: [{ auditee_id: userId }, { additional_auditees: { some: { user_id: userId } } }] },
+      }),
       prisma.audit_Finding.count({
         where: { deleted_at: null, OR: [{ auditee_id: userId }, { responders: { some: { user_id: userId } } }] },
       }),

@@ -64,6 +64,7 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
     ...(engagement.leadAuditorName ? [{ key: 'lead', name: engagement.leadAuditorName, role: 'Lead Auditor' }] : []),
     ...(engagement.auditManagerName ? [{ key: 'manager', name: engagement.auditManagerName, role: 'Audit Manager' }] : []),
     ...(engagement.auditeeName ? [{ key: 'auditee', name: engagement.auditeeName, role: 'Auditee' }] : []),
+    ...(engagement.additionalAuditees ?? []).map((a) => ({ key: `aud-${a.id}`, name: a.name, role: 'Auditee' })),
     ...(assignments.data ?? [])
       .filter((a) => !coreIds.has(a.userId))
       .map((a) => ({ key: a.id, name: a.userName, role: humanizeStatus(a.role) })),
@@ -127,8 +128,12 @@ export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail 
             <dd className="mt-1 text-sm text-text-primary">{engagement.isAdhoc ? 'Yes' : 'No'}</dd>
           </div>
           <div>
-            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Auditable entity</dt>
-            <dd className="mt-1 text-sm text-text-primary">{engagement.universeName ?? '—'}</dd>
+            <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
+              {(engagement.areas?.length ?? 0) > 0 ? 'Areas covered' : 'Auditable entity'}
+            </dt>
+            <dd className="mt-1 text-sm text-text-primary">
+              {[engagement.universeName, ...(engagement.areas ?? []).map((a) => a.name)].filter(Boolean).join(', ') || '—'}
+            </dd>
           </div>
           <div>
             <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">Start</dt>

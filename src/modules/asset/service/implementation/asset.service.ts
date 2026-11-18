@@ -767,6 +767,7 @@ export class AssetService implements IAssetService {
         // The auditee can see which assets are in scope for their own engagement (read-only:
         // linking needs asset:link, which auditees do not hold).
         { auditee_id: actor.id },
+        { additional_auditees: { some: { user_id: actor.id } } },
         { workflow_assignments: { some: { user_id: actor.id } } },
       ],
     };
