@@ -56,6 +56,8 @@ const ensureAuditeeRolePermissions = async (auditeeRoleId: string): Promise<void
 export const ensureAuditeeRoleAssigned = async (
   userIds: (string | null | undefined)[],
   assignedById?: string,
+  /** Skip revoking sessions when the person is signing in right now: the token about to be issued already carries the role. */
+  options: { revokeSessions?: boolean } = {},
 ): Promise<void> => {
   const uniqueIds = Array.from(
     new Set(userIds.filter((id): id is string => typeof id === 'string' && id.trim().length > 0)),
@@ -100,11 +102,30 @@ export const ensureAuditeeRoleAssigned = async (
             assigned_by: assignedById ?? null,
           },
         });
-        await revokeUserSessions(userId);
+        if (options.revokeSessions !== false) await revokeUserSessions(userId);
         logger.info('Auto-assigned auditee role to user', { userId, assignedById });
       }
     }
   } catch (err) {
     logger.warn('Failed to auto-assign auditee role', { userIds: uniqueIds, err });
+  }
+};
+
+/**
+ * Called when someone signs in. If they have been named as an auditee (on an engagement, as the auditee or a
+ * co-responder on a finding) but do not hold the Auditee role yet, they are given it now, so they see their audit
+ * the moment they log in. Costs two small counts, never throws, and does nothing for everyone else.
+ */
+export const ensureAuditeeRoleIfNamed = async (userId: string): Promise<void> => {
+  try {
+    const [engagements, findings] = await Promise.all([
+      prisma.audit_Engagement.count({ where: { auditee_id: userId, deleted_at: null } }),
+      prisma.audit_Finding.count({
+        where: { deleted_at: null, OR: [{ auditee_id: userId }, { responders: { some: { user_id: userId } } }] },
+      }),
+    ]);
+    if (engagements + findings > 0) await ensureAuditeeRoleAssigned([userId], undefined, { revokeSessions: false });
+  } catch (err) {
+    logger.warn('Auditee role check at sign-in failed', { userId, err });
   }
 };

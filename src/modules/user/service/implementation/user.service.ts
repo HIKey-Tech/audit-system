@@ -27,7 +27,7 @@ import {
   ReplaceRolePermissionsRequestDto,
   ProvisionAuditeeRequestDto,
 } from '../../dto/request/user.request.dto';
-import { ensureAuditeeRoleAssigned } from '../../../audit/utility/auditee-role.utility';
+import { ensureAuditeeRoleAssigned, ensureAuditeeRoleIfNamed } from '../../../audit/utility/auditee-role.utility';
 import {
   UserResponseDto,
   UserDirectoryDto,
@@ -776,6 +776,7 @@ export class UserService implements IUserService {
       });
 
       await this._applyDirectoryRoles(updated.id, profile);
+      await ensureAuditeeRoleIfNamed(updated.id);
       const refreshed = await prisma.user.findUniqueOrThrow({
         where: { id: updated.id },
         include: userWithRolesInclude,
@@ -857,6 +858,7 @@ export class UserService implements IUserService {
       });
 
       await this._applyLdapDirectoryRoles(updated.id, profile);
+      await ensureAuditeeRoleIfNamed(updated.id);
       const refreshed = await prisma.user.findUniqueOrThrow({
         where: { id: updated.id },
         include: userWithRolesInclude,
