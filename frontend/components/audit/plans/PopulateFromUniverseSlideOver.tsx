@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Search, CheckSquare, Square, Sparkles } from 'lucide-react';
+import { Search, CheckSquare, Square, Sparkles, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { SlideOver } from '@/components/ui/SlideOver';
@@ -102,10 +102,15 @@ export const PopulateFromUniverseSlideOver = ({
     [candidates],
   );
 
+  // An entity can be in a programme once, so ones already in it are shown (to explain why) but cannot be picked.
+  const isLocked = (c: PlanUniverseCandidate): boolean => c.alreadyInThisPlanCount > 0;
+  const selectableVisible = useMemo(() => filteredCandidates.filter((c) => !isLocked(c)), [filteredCandidates]);
+
   const selectedList = Object.values(selected);
   const selectedCount = selectedList.length;
 
   const toggleCandidate = (c: PlanUniverseCandidate) => {
+    if (isLocked(c)) return;
     setSelected((prev) => {
       if (prev[c.universeId]) {
         const next = { ...prev };
@@ -147,7 +152,7 @@ export const PopulateFromUniverseSlideOver = ({
   const selectAllVisible = () => {
     setSelected((prev) => {
       const next = { ...prev };
-      for (const c of filteredCandidates) {
+      for (const c of selectableVisible) {
         if (!next[c.universeId]) {
           next[c.universeId] = {
             universeId: c.universeId,
@@ -244,6 +249,24 @@ export const PopulateFromUniverseSlideOver = ({
     { key: 'on_demand', label: 'On-Demand' },
   ];
 
+  // Says what is actually true for the current search and filter, instead of always pointing at "All Active".
+  const emptyMessage = ((): string => {
+    const q = search.trim();
+    if (q) {
+      return filter === 'all' ? `No entities match "${q}".` : `No entities match "${q}" in this view. Try "All Active".`;
+    }
+    switch (filter) {
+      case 'due':
+        return 'Nothing is due or recommended right now. Try "All Active".';
+      case 'unscheduled':
+        return `Every active entity is already in a ${planYear} programme.`;
+      case 'on_demand':
+        return 'No entities are set to on-demand.';
+      default:
+        return 'No active entities to show.';
+    }
+  })();
+
   return (
     <SlideOver
       open={open}
@@ -300,11 +323,16 @@ export const PopulateFromUniverseSlideOver = ({
                 onChange={(e) => setDefaultEnd(e.target.value)}
               />
             </div>
-            {selectedCount > 0 && (
-              <Button type="button" size="sm" variant="secondary" onClick={applyDefaultsToSelected}>
-                Apply to selected
-              </Button>
-            )}
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              onClick={applyDefaultsToSelected}
+              disabled={selectedCount === 0}
+              title={selectedCount === 0 ? 'Tick entities first' : undefined}
+            >
+              Apply to selected
+            </Button>
           </div>
           <p className="mt-1.5 text-[11px] text-text-secondary">
             Newly checked entities inherit these dates automatically; expand any selected entity below to customise its dates, priority, or notes.
@@ -319,7 +347,7 @@ export const PopulateFromUniverseSlideOver = ({
             value={search}
             onChange={(e) => setSearch(e.target.value)}
           />
-          <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="flex flex-wrap gap-1.5">
               {tabItems.map((tab) => (
                 <button
@@ -336,35 +364,33 @@ export const PopulateFromUniverseSlideOver = ({
                 </button>
               ))}
             </div>
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              {dueUnscheduled.length > 0 && (
-                <button
-                  type="button"
-                  onClick={selectAllDue}
-                  className="font-medium text-primary hover:underline"
-                >
-                  Select all due ({dueUnscheduled.length})
-                </button>
-              )}
-              {filteredCandidates.length > 0 && (
-                <button
-                  type="button"
-                  onClick={selectAllVisible}
-                  className="font-medium text-text-secondary hover:text-text-primary hover:underline"
-                >
-                  Select visible ({filteredCandidates.length})
-                </button>
-              )}
-              {selectedCount > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setSelected({})}
-                  className="font-medium text-danger hover:underline"
-                >
-                  Clear
-                </button>
-              )}
-            </div>
+          </div>
+          {/* Always the same three controls in the same order, so nothing moves when the filter or selection changes. */}
+          <div className="flex items-center gap-4 text-xs">
+            <button
+              type="button"
+              onClick={selectAllDue}
+              disabled={dueUnscheduled.length === 0}
+              className="font-medium text-primary hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline"
+            >
+              Select all due ({dueUnscheduled.length})
+            </button>
+            <button
+              type="button"
+              onClick={selectAllVisible}
+              disabled={selectableVisible.length === 0}
+              className="font-medium text-text-secondary hover:text-text-primary hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline"
+            >
+              Select visible ({selectableVisible.length})
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelected({})}
+              disabled={selectedCount === 0}
+              className="font-medium text-danger hover:underline disabled:cursor-not-allowed disabled:text-text-muted disabled:no-underline"
+            >
+              Clear
+            </button>
           </div>
         </div>
 
@@ -390,13 +416,14 @@ export const PopulateFromUniverseSlideOver = ({
           <div className="rounded-lg border border-dashed border-border p-6 text-center text-xs text-text-secondary">
             {candidates.length === 0
               ? 'No active entities exist in the Audit Universe yet.'
-              : 'No entities match the active filter. Try switching to "All Active".'}
+              : emptyMessage}
           </div>
         ) : (
           <div className="space-y-2">
             {filteredCandidates.map((c) => {
               const draft = selected[c.universeId];
               const isChecked = Boolean(draft);
+              const locked = isLocked(c);
               const badge = DUE_BADGE[c.dueStatus];
               const extraOwners = Math.max(0, (c.owners?.length ?? 1) - 1);
 
@@ -404,17 +431,30 @@ export const PopulateFromUniverseSlideOver = ({
                 <div
                   key={c.universeId}
                   className={`rounded-lg border p-3 transition-colors ${
-                    isChecked ? 'border-primary bg-primary/5' : 'border-border bg-white'
+                    locked
+                      ? 'border-border bg-surface-alt/60'
+                      : isChecked
+                        ? 'border-primary bg-primary/5'
+                        : 'border-border bg-white'
                   }`}
                 >
                   <div className="flex items-start gap-2.5">
                     <button
                       type="button"
                       onClick={() => toggleCandidate(c)}
-                      className="mt-0.5 text-primary focus:outline-none"
-                      aria-label={isChecked ? `Deselect ${c.name}` : `Select ${c.name}`}
+                      disabled={locked}
+                      className="mt-0.5 text-primary focus:outline-none disabled:cursor-not-allowed"
+                      aria-label={
+                        locked
+                          ? `${c.name} is already in this programme`
+                          : isChecked
+                            ? `Deselect ${c.name}`
+                            : `Select ${c.name}`
+                      }
                     >
-                      {isChecked ? (
+                      {locked ? (
+                        <Lock className="h-4 w-4 text-text-muted" />
+                      ) : isChecked ? (
                         <CheckSquare className="h-4 w-4" />
                       ) : (
                         <Square className="h-4 w-4 text-text-muted" />
@@ -426,7 +466,10 @@ export const PopulateFromUniverseSlideOver = ({
                         <button
                           type="button"
                           onClick={() => toggleCandidate(c)}
-                          className="text-left text-sm font-medium text-text-primary hover:text-primary"
+                          disabled={locked}
+                          className={`text-left text-sm font-medium ${
+                            locked ? 'cursor-not-allowed text-text-secondary' : 'text-text-primary hover:text-primary'
+                          }`}
                         >
                           {c.name}
                         </button>
@@ -448,7 +491,7 @@ export const PopulateFromUniverseSlideOver = ({
                         <div className="mt-1.5 flex flex-wrap gap-1.5">
                           {c.alreadyInThisPlanCount > 0 && (
                             <Badge tone="purple">
-                              In this programme ({c.alreadyInThisPlanCount})
+                              Already in this programme — edit that item instead
                             </Badge>
                           )}
                           {c.alreadyInYearPlans.map((p) => (

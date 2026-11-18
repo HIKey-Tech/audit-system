@@ -217,8 +217,20 @@ export const AddPlanItemSlideOver = ({
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed to update item'),
   });
 
+  // An entity can be in a programme once. While editing, an item may keep its own entity.
+  const watchedUniverseId = watch('universeId');
+  const watchedCandidate = watchedUniverseId ? candidateById.get(watchedUniverseId) : undefined;
+  const isDuplicate =
+    Boolean(watchedCandidate) &&
+    (watchedCandidate?.alreadyInThisPlanCount ?? 0) > 0 &&
+    (!isEdit || watchedUniverseId !== item?.universeId);
+
   const onSubmit = handleSubmit(
     (v) => {
+      if (isDuplicate) {
+        toast.error(`'${watchedCandidate?.name}' is already in this programme. Edit the existing item instead.`);
+        return;
+      }
       if (isEdit) update.mutate(v);
       else create.mutate(v);
     },
@@ -244,7 +256,7 @@ export const AddPlanItemSlideOver = ({
           <Button variant="secondary" size="sm" onClick={onClose}>
             Cancel
           </Button>
-          <Button onClick={onSubmit} isLoading={create.isPending || update.isPending} size="sm">
+          <Button onClick={onSubmit} isLoading={create.isPending || update.isPending} disabled={isDuplicate} size="sm">
             {isEdit ? 'Save changes' : 'Add item'}
           </Button>
         </div>
@@ -297,7 +309,15 @@ export const AddPlanItemSlideOver = ({
           />
         </FormField>
 
+        {isDuplicate && (
+          <div role="alert" className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800">
+            <strong>{selectedCandidate?.name}</strong> is already in this programme. Each entity can be in a programme
+            once — edit the existing item instead, or pick a different entity.
+          </div>
+        )}
+
         {selectedCandidate &&
+          !isDuplicate &&
           (selectedCandidate.alreadyInThisPlanCount > 0 || selectedCandidate.alreadyInYearPlans.length > 0) && (
             <div className="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-xs text-blue-800">
               {selectedCandidate.alreadyInThisPlanCount > 0 && (

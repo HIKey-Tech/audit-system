@@ -375,6 +375,7 @@ export class PlanningService implements IPlanningService {
     assertHasPermission(actor.permissions, 'plan:add_item');
     await this._assertDraftPlan(planId);
     await this._assertUniverseActive(dto.universeId);
+    await this._assertNotAlreadyInPlan(planId, [dto.universeId]);
 
     const created = await prisma.audit_Plan_Item.create({
       data: {
@@ -405,6 +406,9 @@ export class PlanningService implements IPlanningService {
     await this._assertDraftPlan(planId);
 
     const uniqueUniverseIds = [...new Set(dto.items.map((i) => i.universeId))];
+    if (uniqueUniverseIds.length !== dto.items.length) {
+      throw AppError.badRequest('The same entity was selected more than once. Each entity can be in a programme once.');
+    }
     const universeRows = await prisma.audit_Universe.findMany({
       where: { id: { in: uniqueUniverseIds }, deleted_at: null },
       select: { id: true, name: true, status: true },
@@ -420,6 +424,8 @@ export class PlanningService implements IPlanningService {
         );
       }
     }
+
+    await this._assertNotAlreadyInPlan(planId, uniqueUniverseIds);
 
     await prisma.$transaction(async (tx) => {
       await tx.audit_Plan_Item.createMany({
@@ -466,6 +472,7 @@ export class PlanningService implements IPlanningService {
 
     if (dto.universeId !== undefined && dto.universeId !== existing.universe_id) {
       await this._assertUniverseActive(dto.universeId);
+      await this._assertNotAlreadyInPlan(planId, [dto.universeId], itemId);
     }
 
     const nextStart = dto.plannedStartDate ? new Date(dto.plannedStartDate) : existing.planned_start_date;
@@ -655,6 +662,23 @@ export class PlanningService implements IPlanningService {
     if (!PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) {
       throw AppError.badRequest('Plan must be in draft or rejected status to be changed');
     }
+  }
+
+  /**
+   * An entity appears in a programme once. Refuses when any of the given entities is already a plan item of
+   * this programme (ignoring `exceptItemId`, so an item can keep its own entity while being edited).
+   */
+  private async _assertNotAlreadyInPlan(planId: string, universeIds: string[], exceptItemId?: string): Promise<void> {
+    if (universeIds.length === 0) return;
+    const existing = await prisma.audit_Plan_Item.findMany({
+      where: { plan_id: planId, universe_id: { in: universeIds }, ...(exceptItemId && { id: { not: exceptItemId } }) },
+      select: { universe: { select: { name: true } } },
+    });
+    if (existing.length === 0) return;
+    const names = [...new Set(existing.map((i) => `'${i.universe.name}'`))].join(', ');
+    throw AppError.conflict(
+      `${names} ${existing.length === 1 ? 'is' : 'are'} already in this programme. Each entity can be in a programme once — edit the existing item instead.`,
+    );
   }
 
   private async _assertUniverseActive(universeId: string): Promise<void> {
