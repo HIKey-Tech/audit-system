@@ -864,6 +864,12 @@ export class ApprovalService implements IApprovalService {
       // submitter (SoD). Ensure at least one *other* holder exists so the level
       // can't dead-end on a submitter who is barred from approving their own item.
       const hasHolder = await this._hasActiveUserWithPermission(db, level, submittedById);
+      if (!hasHolder && entityType === WorkflowEntityType.AuditPlan && specs.length > 0) {
+        // The final (DG) level of a programme may be reached before the DG has an account: the step simply
+        // waits, and appears in their approvals as soon as they sign in with the permission.
+        specs.push({ approverId: null, requiredPermission: level });
+        continue;
+      }
       if (!hasHolder) {
         throw AppError.badRequest(
           `No active user (other than you) holding permission '${level}' is available for ${entityType} approval (segregation of duties).`,
