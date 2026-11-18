@@ -312,6 +312,44 @@ export const NewFindingSlideOver = ({
             </Select>
           </FormField>
         )}
+        {(engagement.additionalAuditees?.length ?? 0) > 0 && (
+          <FormField
+            label="Who should answer this finding?"
+            tooltip="This audit has several people being audited. Tick everyone who should respond. The first is the main contact; the others can also respond. Each gets the finding when the report is issued."
+          >
+            <div className="space-y-1.5 rounded-lg border border-border bg-surface-alt p-2.5">
+              {[{ id: engagement.auditeeId, name: engagement.auditeeName ?? 'Main auditee', main: true }, ...(engagement.additionalAuditees ?? []).map((a) => ({ ...a, main: false }))].map((p) => {
+                const checked = p.id === auditeeId || additionalAuditeeIds.includes(p.id);
+                return (
+                  <label key={p.id} className="flex cursor-pointer items-center gap-2 text-sm text-text-primary">
+                    <input
+                      type="checkbox"
+                      className="h-3.5 w-3.5 accent-[#4F6228]"
+                      checked={checked}
+                      onChange={() => {
+                        if (!checked) {
+                          // Add as a co-responder (or as the main contact if nobody is set).
+                          if (!auditeeId) setValue('auditeeId', p.id, { shouldValidate: true });
+                          else setValue('additionalAuditeeIds', [...additionalAuditeeIds, p.id]);
+                        } else if (p.id === auditeeId) {
+                          // Unticking the main contact: the next ticked person takes over; there must always be one.
+                          const [next, ...rest] = additionalAuditeeIds;
+                          if (!next) return toast.error('A finding needs at least one person to answer it');
+                          setValue('auditeeId', next, { shouldValidate: true });
+                          setValue('additionalAuditeeIds', rest);
+                        } else {
+                          setValue('additionalAuditeeIds', additionalAuditeeIds.filter((x) => x !== p.id));
+                        }
+                      }}
+                    />
+                    <span>{p.name}</span>
+                    {p.id === auditeeId && <span className="text-[10px] font-medium uppercase text-primary">main contact</span>}
+                  </label>
+                );
+              })}
+            </div>
+          </FormField>
+        )}
         <div className="grid grid-cols-2 gap-3">
           <FormField label="Auditee" required error={errors.auditeeId?.message}>
             <UserSelect value={auditeeId} onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })} />

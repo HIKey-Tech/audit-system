@@ -157,6 +157,58 @@ export class EngagementService implements IEngagementService {
     return result;
   }
 
+  /**
+   * Taking an area or a person out of a group audit must not orphan work already recorded: an area with findings
+   * against it, or a person who is still answering findings or evidence requests, has to be dealt with first.
+   */
+  private async _assertGroupRemovalsSafe(
+    engagementId: string,
+    group: { auditeeIds?: string[]; universeIds?: string[] },
+    previousExtraAuditees: Set<string>,
+  ): Promise<void> {
+    if (group.universeIds !== undefined) {
+      const kept = new Set(group.universeIds);
+      const current = await prisma.audit_Engagement_Area.findMany({
+        where: { engagement_id: engagementId },
+        select: { universe_id: true, universe: { select: { name: true } } },
+      });
+      for (const area of current.filter((a) => !kept.has(a.universe_id))) {
+        const findings = await prisma.audit_Finding.count({
+          where: { engagement_id: engagementId, deleted_at: null, area_universe_id: area.universe_id },
+        });
+        if (findings > 0) {
+          throw AppError.badRequest(
+            `'${area.universe.name}' cannot be removed: ${findings} finding(s) are recorded against it. Move or delete them first.`,
+          );
+        }
+      }
+    }
+    if (group.auditeeIds !== undefined) {
+      const kept = new Set(group.auditeeIds);
+      for (const userId of [...previousExtraAuditees].filter((u) => !kept.has(u))) {
+        const [findings, requests, user] = await Promise.all([
+          prisma.audit_Finding.count({
+            where: {
+              engagement_id: engagementId,
+              deleted_at: null,
+              status: { notIn: ['verified', 'closed'] },
+              OR: [{ auditee_id: userId }, { responders: { some: { user_id: userId } } }],
+            },
+          }),
+          prisma.audit_Evidence_Request.count({
+            where: { engagement_id: engagementId, deleted_at: null, assigned_to_id: userId, status: { in: ['open', 'submitted'] } },
+          }),
+          prisma.user.findUnique({ where: { id: userId }, select: { display_name: true, first_name: true, last_name: true } }),
+        ]);
+        if (findings + requests > 0) {
+          throw AppError.badRequest(
+            `${formatUserName(user)} cannot be removed: they are still answering ${findings} finding(s) and ${requests} evidence request(s). Reassign those first.`,
+          );
+        }
+      }
+    }
+  }
+
   /** Tells each newly added group-audit auditee they are being audited (same email and steps as the main auditee). */
   private async _notifyAdditionalAuditees(
     engagement: Parameters<EngagementService['_notifyEngagementParties']>[0],
@@ -500,6 +552,7 @@ export class EngagementService implements IEngagementService {
     });
     const previousExtraAuditees = new Set(existing.additional_auditees.map((a) => a.user_id));
     const newlyAddedAuditees = (group.auditeeIds ?? []).filter((uid) => !previousExtraAuditees.has(uid));
+    await this._assertGroupRemovalsSafe(id, group, previousExtraAuditees);
 
     const engagement = await prisma.$transaction(async (tx) => {
       // Group audit: replace the set of further auditees / areas when supplied.
@@ -602,8 +655,10 @@ export class EngagementService implements IEngagementService {
       });
 
       if (newStatus === EngagementStatus.Closed) {
-        await tx.audit_Universe.update({
-          where: { id: engagement.universe_id },
+        // A group audit covers several areas: all of them count as audited, not only the primary entity.
+        const areas = await tx.audit_Engagement_Area.findMany({ where: { engagement_id: id }, select: { universe_id: true } });
+        await tx.audit_Universe.updateMany({
+          where: { id: { in: [engagement.universe_id, ...areas.map((a) => a.universe_id)] } },
           data: { last_audited_at: new Date() },
         });
       }

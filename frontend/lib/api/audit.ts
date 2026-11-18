@@ -402,6 +402,8 @@ export interface EvidenceRequestAssignee {
   department: string | null;
   jobTitle: string | null;
   isAuditee: boolean;
+  /** Group audit: one of the other people being audited (not the main auditee). */
+  isGroupAuditee?: boolean;
 }
 
 export const evidenceRequestsApi = {

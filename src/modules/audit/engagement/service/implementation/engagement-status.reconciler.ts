@@ -52,8 +52,10 @@ export const reconcileEngagementStatus = async (engagementId: string, actorId: s
         },
       });
       if (target === EngagementStatus.Closed) {
-        await tx.audit_Universe.update({
-          where: { id: engagement.universe_id },
+        // A group audit covers several areas: all of them count as audited, not only the primary entity.
+        const areas = await tx.audit_Engagement_Area.findMany({ where: { engagement_id: engagementId }, select: { universe_id: true } });
+        await tx.audit_Universe.updateMany({
+          where: { id: { in: [engagement.universe_id, ...areas.map((a) => a.universe_id)] } },
           data: { last_audited_at: new Date() },
         });
       }

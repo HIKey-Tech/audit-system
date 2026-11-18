@@ -521,7 +521,64 @@ export const registerAllJobs = (): void => {
         }
       }
 
-      logger.info('Unfinished audit programme reminder job completed', { draftsChecked: drafts.length, reminded, notificationsSent });
+      // New items added to an APPROVED programme that were never submitted: chase the creator the same way.
+      // The programme itself stays approved and in use; only the additions are waiting on someone.
+      const withAdditions = await prisma.audit_Plan.findMany({
+        where: {
+          deleted_at: null,
+          status: 'approved',
+          items: { some: { pending_approval: true } },
+          created_by: { is_active: true, deleted_at: null },
+        },
+        select: {
+          id: true,
+          title: true,
+          year: true,
+          created_by: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true } },
+          items: { where: { pending_approval: true }, select: { created_at: true } },
+        },
+      });
+      for (const plan of withAdditions) {
+        const open = await prisma.workflow_Approval.count({ where: { entity_type: 'audit_plan', entity_id: plan.id, status: 'pending' } });
+        if (open > 0) continue; // already submitted: the approvers are being chased by the approval engine
+        const oldest = Math.min(...plan.items.map((i) => i.created_at.getTime()));
+        const daysWaiting = Math.floor((now.getTime() - oldest) / 86_400_000);
+        if (!shouldRemindDraftPlan(daysWaiting)) continue;
+        const owner = plan.created_by;
+        const variables = {
+          recipientName: owner.display_name ?? `${owner.first_name} ${owner.last_name}`.trim(),
+          planTitle: plan.title,
+          planYear: String(plan.year),
+          pendingCount: String(plan.items.length),
+          daysWaiting: String(daysWaiting),
+          planLink: `${config.app.frontendUrl.replace(/\/$/, '')}/audit/plans/${plan.id}`,
+        };
+        try {
+          await notificationQueueService.enqueue('in_app', {
+            userId: owner.id,
+            title: 'New programme items not yet submitted',
+            body: `${plan.items.length} new item(s) in "${plan.title}" have not been submitted for approval (${daysWaiting} day(s)).`,
+            type: 'warning',
+            referenceType: 'audit_plan',
+            referenceId: plan.id,
+            eventKey: 'audit.plan.additions_reminder',
+            variables,
+          });
+          await notificationQueueService.enqueue('email', {
+            to: owner.email,
+            subject: `Reminder: new items in "${plan.title}" have not been submitted for approval`,
+            text: `${plan.items.length} new item(s) in the approved programme "${plan.title}" have not been submitted for approval (${daysWaiting} day(s)). Open it and use "Submit new items for approval": ${variables.planLink}`,
+            eventKey: 'audit.plan.additions_reminder',
+            variables,
+          });
+          notificationsSent += 2;
+          reminded += 1;
+        } catch (err) {
+          logger.error('Programme additions reminder failed', { err, planId: plan.id, ownerId: owner.id });
+        }
+      }
+
+      logger.info('Unfinished audit programme reminder job completed', { draftsChecked: drafts.length, additionsChecked: withAdditions.length, reminded, notificationsSent });
     },
   });
 
@@ -623,6 +680,10 @@ export const registerAllJobs = (): void => {
           auditee: {
             select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
           },
+          // Co-responders (the other people answering this finding in a group audit) are reminded as well.
+          responders: {
+            select: { user: { select: { id: true, email: true, display_name: true, first_name: true, last_name: true, is_active: true } } },
+          },
           engagement: {
             select: {
               reference_number: true,
@@ -649,9 +710,12 @@ export const registerAllJobs = (): void => {
         const statusLabel = isOverdue ? `overdue by ${daysOverdue} day(s)` : `due in ${daysRemaining} day(s)`;
         // Findings are internal until the report is issued, so the auditee isn't chased before then.
         const reportIssued = ['reported', 'closed'].includes(finding.engagement.status);
-        const recipients = reportIssued
-          ? [finding.auditee, finding.engagement.lead_auditor]
-          : [finding.engagement.lead_auditor];
+        const responderUsers = finding.responders.map((r) => r.user).filter((u) => u.is_active);
+        const recipients = (
+          reportIssued
+            ? [finding.auditee, ...responderUsers, finding.engagement.lead_auditor]
+            : [finding.engagement.lead_auditor]
+        ).filter((u, i, all) => all.findIndex((x) => x.id === u.id) === i);
 
         for (const recipient of recipients) {
           const recipientName =

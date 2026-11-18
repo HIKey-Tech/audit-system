@@ -524,7 +524,12 @@ export class ReportGenerationService implements IReportGenerationService {
       ],
       distribution: [
         { name: 'Board Audit Committee & Executive Management', version: `Version ${version}`, date: versionDate },
-        { name: `Audited Entity (${data.engagement.universe.name})`, version: `Version ${version}`, date: versionDate },
+        // A group audit's consolidated report goes to every area covered, not just the primary entity.
+        ...(data.areasCovered.length > 0 ? data.areasCovered.map((a) => a.name) : [data.engagement.universe.name]).map((entity) => ({
+          name: `Audited Entity (${entity})`,
+          version: `Version ${version}`,
+          date: versionDate,
+        })),
       ],
       approvals,
       lastReviewed: versionDate,

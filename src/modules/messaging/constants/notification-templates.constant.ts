@@ -347,6 +347,25 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDefinition[] = [
     description: 'In-app variant of the unfinished-programme reminder. Variables: planTitle, daysInDraft.',
   },
 
+  // audit.plan.additions_reminder
+  {
+    eventKey: 'audit.plan.additions_reminder',
+    channel: 'email',
+    name: 'Programme Additions Not Submitted — Email',
+    subject: 'Reminder: new items in "{{planTitle}}" have not been submitted for approval',
+    body: 'Dear {{recipientName}},\n\nYou added {{pendingCount}} new item(s) to the approved audit programme "{{planTitle}}" ({{planYear}}) {{daysWaiting}} day(s) ago, but have not submitted them for approval. Until they are approved by the Head of Internal Audit and then the DG, no audit can be started from them. The rest of the programme is unaffected.\n\nOpen the programme and use "Submit new items for approval": {{planLink}}\n\nRegards,\nIAMS — Internal Audit System',
+    description:
+      'Chases the creator of an approved programme whose newly added items have not been submitted. Variables: recipientName, planTitle, planYear, pendingCount, daysWaiting, planLink.',
+  },
+  {
+    eventKey: 'audit.plan.additions_reminder',
+    channel: 'in_app',
+    name: 'Programme Additions Not Submitted — In-App',
+    subject: null,
+    body: '{{pendingCount}} new item(s) in "{{planTitle}}" have not been submitted for approval ({{daysWaiting}} day(s)).',
+    description: 'In-app variant of the programme-additions reminder. Variables: planTitle, pendingCount, daysWaiting.',
+  },
+
   // user.mfa.grace_reminder
   {
     eventKey: 'user.mfa.grace_reminder',

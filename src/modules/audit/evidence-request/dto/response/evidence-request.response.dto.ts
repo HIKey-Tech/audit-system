@@ -40,6 +40,8 @@ export interface AssignableUserDto {
   jobTitle: string | null;
   /** True for the engagement's default auditee. */
   isAuditee: boolean;
+  /** Group audit: one of the other people being audited (not the main auditee). */
+  isGroupAuditee: boolean;
 }
 
 const userName = (u: { display_name: string | null; first_name: string; last_name: string }): string =>

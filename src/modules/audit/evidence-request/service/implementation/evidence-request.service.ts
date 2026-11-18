@@ -74,35 +74,42 @@ export class EvidenceRequestService implements IEvidenceRequestService {
     assertHasPermission(actor.permissions, 'evidence:request');
     const engagement = await prisma.audit_Engagement.findFirst({
       where: { id: engagementId, deleted_at: null },
-      select: { id: true, auditee_id: true },
+      select: { id: true, auditee_id: true, additional_auditees: { select: { user_id: true } } },
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
 
-    // ponytail: active users, capped at 200 for the picker. Evidence requests are
-    // low-frequency; add a search param like the assignment-candidates endpoint if
-    // GBB's directory ever outgrows a single dropdown.
-    const users = await prisma.user.findMany({
-      where: { deleted_at: null, is_active: true },
-      select: {
-        id: true,
-        display_name: true,
-        first_name: true,
-        last_name: true,
-        email: true,
-        department: true,
-        job_title: true,
-      },
-      orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
-      take: 200,
-    });
+    // The people being audited (the main auditee and, in a group audit, the others) are always in the list and
+    // always first: in an organisation of over a thousand people a list capped alphabetically could leave them out.
+    // Everyone else follows, capped at 200 for the picker.
+    const groupIds = [engagement.auditee_id, ...engagement.additional_auditees.map((a) => a.user_id)];
+    const select = {
+      id: true,
+      display_name: true,
+      first_name: true,
+      last_name: true,
+      email: true,
+      department: true,
+      job_title: true,
+    } as const;
+    const [group, others] = await Promise.all([
+      prisma.user.findMany({ where: { id: { in: groupIds }, deleted_at: null, is_active: true }, select }),
+      prisma.user.findMany({
+        where: { id: { notIn: groupIds }, deleted_at: null, is_active: true },
+        select,
+        orderBy: [{ first_name: 'asc' }, { last_name: 'asc' }],
+        take: 200,
+      }),
+    ]);
+    group.sort((a, b) => groupIds.indexOf(a.id) - groupIds.indexOf(b.id));
 
-    return users.map((u) => ({
+    return [...group, ...others].map((u) => ({
       id: u.id,
       displayName: u.display_name || `${u.first_name} ${u.last_name}`.trim(),
       email: u.email,
       department: u.department,
       jobTitle: u.job_title,
       isAuditee: u.id === engagement.auditee_id,
+      isGroupAuditee: groupIds.includes(u.id) && u.id !== engagement.auditee_id,
     }));
   }
 

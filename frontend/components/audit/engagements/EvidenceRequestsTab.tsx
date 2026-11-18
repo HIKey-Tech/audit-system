@@ -176,14 +176,28 @@ export const EvidenceRequestsTab = ({ engagement }: { engagement: AuditEngagemen
                     ? `${engagement.auditeeName} — auditee (default)`
                     : 'Engagement auditee (default)'}
                 </option>
-                {(assignees.data ?? [])
-                  .filter((u) => !u.isAuditee)
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      {u.displayName}
-                      {u.department ? ` — ${u.department}` : ''}
-                    </option>
-                  ))}
+                {(assignees.data ?? []).some((u) => u.isGroupAuditee) && (
+                  <optgroup label="Others being audited">
+                    {(assignees.data ?? [])
+                      .filter((u) => u.isGroupAuditee)
+                      .map((u) => (
+                        <option key={u.id} value={u.id}>
+                          {u.displayName}
+                          {u.department ? ` — ${u.department}` : ''}
+                        </option>
+                      ))}
+                  </optgroup>
+                )}
+                <optgroup label="Anyone else">
+                  {(assignees.data ?? [])
+                    .filter((u) => !u.isAuditee && !u.isGroupAuditee)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.displayName}
+                        {u.department ? ` — ${u.department}` : ''}
+                      </option>
+                    ))}
+                </optgroup>
               </Select>
             </FormField>
           </div>

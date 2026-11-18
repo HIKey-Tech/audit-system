@@ -666,6 +666,13 @@ export class ApprovalService implements IApprovalService {
       include: approvalInclude,
     });
 
+    // A programme cancelled while 'submitted' would be stuck: it can no longer be edited or resubmitted. Return it to
+    // draft. (Additions to an already-approved programme need nothing: it stays approved and the new items can be
+    // submitted again.)
+    if (approval.entity_type === WorkflowEntityType.AuditPlan) {
+      await prisma.audit_Plan.updateMany({ where: { id: approval.entity_id, status: 'submitted' }, data: { status: 'draft' } });
+    }
+
     const recipientIds = new Set<string>();
     for (const step of approval.steps) {
       const ids = await this._stepRecipientIds({
