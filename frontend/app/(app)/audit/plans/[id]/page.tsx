@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { ArrowLeft, Plus, Send, Check, X, Pencil, Trash2, Sparkles, Lock } from 'lucide-react';
+import { ArrowLeft, Plus, Send, Check, X, Pencil, Trash2, Sparkles, Lock, AlertTriangle } from 'lucide-react';
 import { toast } from 'sonner';
 
 import { PageHeader } from '@/components/ui/PageHeader';
@@ -160,6 +160,13 @@ export default function PlanDetailPage(): JSX.Element {
   }
 
   const isEditable = data.status === 'draft' || data.status === 'rejected';
+  // An approved programme stays approved and in use. New entities can still be added; they are flagged as awaiting
+  // approval (Head, then DG) and only those new items can be changed until they are submitted.
+  const isApproved = data.status === 'approved';
+  const canAmend = isApproved && !data.hasOpenAmendment;
+  const canAddItems = (isEditable || canAmend) && canEditItems;
+  const itemChangeable = (i: AuditPlanItem): boolean => isEditable || (canAmend && i.pendingApproval);
+  const awaitingDecision = data.status === 'submitted' || data.hasOpenAmendment;
   const hasEngagements = (data.items ?? []).some((i) => i.engagementCreated);
 
   const itemColumns: Column<AuditPlanItem>[] = [
@@ -174,6 +181,11 @@ export default function PlanDetailPage(): JSX.Element {
           >
             {i.universeName}
           </Link>
+          {i.pendingApproval && (
+            <span className="ml-2 inline-flex items-center rounded bg-amber-50 px-1.5 py-0.5 text-[10px] font-medium text-amber-700 ring-1 ring-amber-200">
+              New · awaiting approval
+            </span>
+          )}
           {i.notes && (
             <p className="mt-0.5 text-xs text-text-muted whitespace-pre-wrap">{i.notes}</p>
           )}
@@ -210,6 +222,9 @@ export default function PlanDetailPage(): JSX.Element {
             </Link>
           );
         }
+        if (i.pendingApproval) {
+          return <span className="text-xs text-amber-700">Awaiting approval</span>;
+        }
         if (data.status === 'approved' && canCreateEngagement) {
           return (
             <Button
@@ -237,7 +252,7 @@ export default function PlanDetailPage(): JSX.Element {
       },
       width: '170px',
     },
-    ...(isEditable && canEditItems
+    ...((isEditable || isApproved) && canEditItems
       ? [
           {
             key: 'actions',
@@ -245,7 +260,7 @@ export default function PlanDetailPage(): JSX.Element {
             align: 'right' as const,
             width: '96px',
             render: (i: AuditPlanItem) =>
-              i.engagementCreated ? (
+              i.engagementCreated || !itemChangeable(i) ? (
                 <span className="text-[11px] text-text-muted">Locked</span>
               ) : (
                 <div className="inline-flex items-center justify-end gap-1">
@@ -325,7 +340,7 @@ export default function PlanDetailPage(): JSX.Element {
                 Submit for approval
               </Button>
             )}
-            {data.status === 'submitted' && isAdmin && (
+            {awaitingDecision && isAdmin && (
               <>
                 {isMyTurnToApprove && (
                   <Button
@@ -349,7 +364,7 @@ export default function PlanDetailPage(): JSX.Element {
         }
       />
 
-      {approveOpen && data.status === 'submitted' && isMyTurnToApprove && (
+      {approveOpen && awaitingDecision && isMyTurnToApprove && (
         <div className="mb-6">
           <ApproveSignPanel
             entityType="audit_plan"
@@ -415,6 +430,48 @@ export default function PlanDetailPage(): JSX.Element {
         </Card>
       </div>
 
+      {isApproved && data.pendingItemsCount > 0 && (
+        <div className="mt-6 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3">
+          <div className="flex min-w-0 items-start gap-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+            <div className="text-sm text-amber-900">
+              {data.hasOpenAmendment ? (
+                <p>
+                  <span className="font-semibold">
+                    {data.pendingItemsCount} new {data.pendingItemsCount === 1 ? 'item is' : 'items are'} waiting for approval.
+                  </span>{' '}
+                  The rest of this programme stays approved and usable. The new items can be audited once the Head of
+                  Internal Audit and then the DG approve them.
+                </p>
+              ) : data.rejectionReason ? (
+                <p>
+                  <span className="font-semibold">The new items were rejected.</span> Reason: {data.rejectionReason}.
+                  Edit or remove them, then submit again.
+                </p>
+              ) : (
+                <p>
+                  <span className="font-semibold">
+                    {data.pendingItemsCount} new {data.pendingItemsCount === 1 ? 'item was' : 'items were'} added after this programme was approved.
+                  </span>{' '}
+                  They cannot be audited until approved. Add everything you need, then submit them together for approval
+                  (Head of Internal Audit, then the DG).
+                </p>
+              )}
+            </div>
+          </div>
+          {!data.hasOpenAmendment && canSubmitPlan && (
+            <Button
+              size="sm"
+              leftIcon={<Send className="h-3.5 w-3.5" />}
+              onClick={() => submitMut.mutate()}
+              isLoading={submitMut.isPending}
+            >
+              Submit new items for approval
+            </Button>
+          )}
+        </div>
+      )}
+
       <Card className="mt-6" padded={false}>
         <div className="flex flex-wrap items-center justify-between gap-3 px-5 pt-5 pb-3">
           <CardHeader
@@ -422,7 +479,7 @@ export default function PlanDetailPage(): JSX.Element {
             subtitle="Audits scheduled from the Audit Universe within this programme — all inherit its audit type"
             className="mb-0"
           />
-          {isEditable && canEditItems ? (
+          {canAddItems ? (
             <div className="flex flex-wrap gap-2">
               <Button
                 size="sm"
@@ -446,7 +503,7 @@ export default function PlanDetailPage(): JSX.Element {
           ) : !isEditable ? (
             <span className="inline-flex items-center gap-1.5 rounded-md bg-surface-alt px-2.5 py-1 text-xs text-text-secondary">
               <Lock className="h-3 w-3" />
-              Items locked while {data.status}
+              {data.hasOpenAmendment ? 'New items are awaiting approval' : `Items locked while ${data.status}`}
             </span>
           ) : null}
         </div>
@@ -461,7 +518,7 @@ export default function PlanDetailPage(): JSX.Element {
               title="No plans yet"
               description="Populate items directly from the Audit Universe or add them individually."
               action={
-                isEditable && canEditItems ? (
+                canAddItems ? (
                   <Button
                     size="sm"
                     leftIcon={<Sparkles className="h-3.5 w-3.5" />}

@@ -303,6 +303,8 @@ export interface AuditPlanItem {
   plannedStartDate: string;
   plannedEndDate: string;
   engagementCreated: boolean;
+  /** Added after the programme was approved; no audit can start from it until the addition is approved. */
+  pendingApproval: boolean;
   engagementId: string | null;
   notes: string | null;
 }
@@ -351,6 +353,10 @@ export interface AuditPlan {
   approvedAt: string | null;
   rejectionReason: string | null;
   itemsCount: number;
+  /** Items added after approval that are not approved yet. */
+  pendingItemsCount: number;
+  /** The additions are submitted and going through Head then DG approval. */
+  hasOpenAmendment: boolean;
   createdAt: string;
   updatedAt: string;
   items?: AuditPlanItem[];

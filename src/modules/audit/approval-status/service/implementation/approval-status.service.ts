@@ -14,14 +14,23 @@ export class ApprovalStatusService implements IApprovalStatusService {
     approvedAt: Date,
   ): Promise<void> {
     if (entityType === 'audit_plan') {
+      const plan = await tx.audit_Plan.findUnique({ where: { id: entityId }, select: { status: true } });
+      // Items added to an already-approved programme become usable now that the additions are approved.
+      await tx.audit_Plan_Item.updateMany({
+        where: { plan_id: entityId, pending_approval: true },
+        data: { pending_approval: false },
+      });
       await tx.audit_Plan.update({
         where: { id: entityId },
-        data: {
-          status: PlanStatus.Approved,
-          approved_by_id: approverId,
-          approved_at: approvedAt,
-          rejection_reason: null,
-        },
+        data:
+          plan?.status === PlanStatus.Approved
+            ? { rejection_reason: null } // additions approved: keep the original approval record
+            : {
+                status: PlanStatus.Approved,
+                approved_by_id: approverId,
+                approved_at: approvedAt,
+                rejection_reason: null,
+              },
       });
       return;
     }
@@ -64,6 +73,13 @@ export class ApprovalStatusService implements IApprovalStatusService {
     reason: string,
   ): Promise<void> {
     if (entityType === 'audit_plan') {
+      const plan = await tx.audit_Plan.findUnique({ where: { id: entityId }, select: { status: true } });
+      if (plan?.status === PlanStatus.Approved) {
+        // Additions to an approved programme were rejected: the programme itself stays approved. The new items
+        // stay flagged so the creator can edit or remove them and submit again.
+        await tx.audit_Plan.update({ where: { id: entityId }, data: { rejection_reason: reason } });
+        return;
+      }
       await tx.audit_Plan.update({
         where: { id: entityId },
         data: {

@@ -6,7 +6,7 @@ import { PaginationMeta, buildPaginationMeta, parsePagination } from '../../../.
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
-import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
+import { WorkflowApprovalStatus, WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext } from '../../../domain/entity/audit.entity';
 import { FindingStatus, PlanStatus, UniverseStatus } from '../../../domain/enum/audit.enum';
 import { PLAN_EDITABLE_STATUSES, assertHasPermission, auditTypeLabel, decimalToNumber } from '../../../utility/audit.utility';
@@ -373,13 +373,14 @@ export class PlanningService implements IPlanningService {
 
   async addPlanItem(planId: string, dto: AddPlanItemRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:add_item');
-    await this._assertDraftPlan(planId);
+    const { amending } = await this._assertPlanChangeable(planId);
     await this._assertUniverseActive(dto.universeId);
     await this._assertNotAlreadyInPlan(planId, [dto.universeId]);
 
     const created = await prisma.audit_Plan_Item.create({
       data: {
         plan_id: planId,
+        pending_approval: amending,
         universe_id: dto.universeId,
         planned_start_date: new Date(dto.plannedStartDate),
         planned_end_date: new Date(dto.plannedEndDate),
@@ -403,7 +404,7 @@ export class PlanningService implements IPlanningService {
 
   async bulkAddPlanItems(planId: string, dto: BulkAddPlanItemsRequestDto, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:add_item');
-    await this._assertDraftPlan(planId);
+    const { amending } = await this._assertPlanChangeable(planId);
 
     const uniqueUniverseIds = [...new Set(dto.items.map((i) => i.universeId))];
     if (uniqueUniverseIds.length !== dto.items.length) {
@@ -431,6 +432,7 @@ export class PlanningService implements IPlanningService {
       await tx.audit_Plan_Item.createMany({
         data: dto.items.map((item) => ({
           plan_id: planId,
+          pending_approval: amending,
           universe_id: item.universeId,
           planned_start_date: new Date(item.plannedStartDate),
           planned_end_date: new Date(item.plannedEndDate),
@@ -460,12 +462,12 @@ export class PlanningService implements IPlanningService {
     actor: ActorContext,
   ): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:add_item');
-    await this._assertDraftPlan(planId);
 
     const existing = await prisma.audit_Plan_Item.findFirst({
       where: { id: itemId, plan_id: planId },
     });
     if (!existing) throw AppError.notFound('Audit plan item');
+    await this._assertPlanChangeable(planId, existing);
     if (existing.engagement_created) {
       throw AppError.badRequest('Cannot edit a plan item after an engagement has been created');
     }
@@ -520,12 +522,12 @@ export class PlanningService implements IPlanningService {
 
   async removePlanItem(planId: string, itemId: string, actor: ActorContext): Promise<void> {
     assertHasPermission(actor.permissions, 'plan:add_item');
-    await this._assertDraftPlan(planId);
 
     const item = await prisma.audit_Plan_Item.findFirst({
       where: { id: itemId, plan_id: planId },
     });
     if (!item) throw AppError.notFound('Audit plan item');
+    await this._assertPlanChangeable(planId, item);
     if (item.engagement_created) {
       throw AppError.badRequest('Cannot remove a plan item after an engagement has been created');
     }
@@ -553,15 +555,27 @@ export class PlanningService implements IPlanningService {
   async submitPlanForApproval(planId: string, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:submit');
     const plan = await this._getPlanForMutation(planId);
-    if (!PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) {
-      throw AppError.badRequest('Only draft or rejected plans can be submitted');
+    // An approved programme with new items is submitted again for approval of just those additions; the
+    // programme itself stays approved and its existing items stay usable meanwhile.
+    const isAmendment = plan.status === PlanStatus.Approved;
+    if (isAmendment) {
+      if (!plan.items.some((i) => i.pending_approval)) {
+        throw AppError.badRequest('There are no new items waiting for approval');
+      }
+      if (await this._hasOpenApproval(planId)) {
+        throw AppError.conflict('The new items have already been submitted for approval');
+      }
+    } else {
+      if (!PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) {
+        throw AppError.badRequest('Only draft or rejected plans can be submitted');
+      }
+      if (plan.items.length === 0) throw AppError.badRequest('Plan must have at least one item before submission');
     }
-    if (plan.items.length === 0) throw AppError.badRequest('Plan must have at least one item before submission');
 
     const { submittedPlan, approval } = await prisma.$transaction(async (tx) => {
       const submittedPlan = await tx.audit_Plan.update({
         where: { id: planId },
-        data: { status: PlanStatus.Submitted, rejection_reason: null },
+        data: isAmendment ? { rejection_reason: null } : { status: PlanStatus.Submitted, rejection_reason: null },
         include: planInclude,
       });
 
@@ -583,7 +597,7 @@ export class PlanningService implements IPlanningService {
       assertHasPermission(actor.permissions, 'plan:approve');
     }
     const plan = await this._getPlanForMutation(planId);
-    if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be approved');
+    await this._assertAwaitingApproval(plan, 'approved');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditPlan, planId);
     await this.approvalService.approve(approval.id, actor);
@@ -597,7 +611,7 @@ export class PlanningService implements IPlanningService {
   async rejectPlan(planId: string, reason: string, actor: ActorContext): Promise<PlanResponseDto> {
     assertHasPermission(actor.permissions, 'plan:reject');
     const plan = await this._getPlanForMutation(planId);
-    if (plan.status !== PlanStatus.Submitted) throw AppError.badRequest('Only submitted plans can be rejected');
+    await this._assertAwaitingApproval(plan, 'rejected');
 
     const approval = await this.approvalService.getApprovalByEntity(WorkflowEntityType.AuditPlan, planId);
     await this.approvalService.reject(approval.id, actor, reason);
@@ -614,7 +628,8 @@ export class PlanningService implements IPlanningService {
       include: planInclude,
     });
     if (!plan) throw AppError.notFound('Audit plan');
-    return mapPlanToResponse(plan);
+    const hasOpenAmendment = plan.status === PlanStatus.Approved && (await this._hasOpenApproval(id));
+    return mapPlanToResponse(plan, undefined, hasOpenAmendment);
   }
 
   async listPlans(query: PlanQueryDto): Promise<{ plans: PlanResponseDto[]; meta: PaginationMeta }> {
@@ -655,6 +670,7 @@ export class PlanningService implements IPlanningService {
     return plan;
   }
 
+  /** Programme-level changes (title, year, delete) are draft/rejected only; items are governed by _assertPlanChangeable. */
   private async _assertDraftPlan(planId: string): Promise<void> {
     const plan = await prisma.audit_Plan.findFirst({
       where: { id: planId, deleted_at: null },
@@ -664,6 +680,54 @@ export class PlanningService implements IPlanningService {
     if (!PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) {
       throw AppError.badRequest('Plan must be in draft or rejected status to be changed');
     }
+  }
+
+  /** The programme's approval is in progress (a first submission, or additions to an approved programme). */
+  private async _hasOpenApproval(planId: string): Promise<boolean> {
+    const open = await prisma.workflow_Approval.count({
+      where: { entity_type: WorkflowEntityType.AuditPlan, entity_id: planId, status: WorkflowApprovalStatus.Pending },
+    });
+    return open > 0;
+  }
+
+  /**
+   * Whether the programme's items may be changed, and whether the change is an addition to an already-approved
+   * programme. A draft or rejected programme can be changed freely. An approved programme stays approved and in
+   * use: new entities can be added (flagged as awaiting approval), and only those new items can be edited or
+   * removed, until they are submitted. Pass the item for an edit or removal.
+   */
+  private async _assertPlanChangeable(
+    planId: string,
+    item?: { pending_approval: boolean } | null,
+  ): Promise<{ amending: boolean }> {
+    const plan = await prisma.audit_Plan.findFirst({
+      where: { id: planId, deleted_at: null },
+      select: { status: true },
+    });
+    if (!plan) throw AppError.notFound('Audit plan');
+    if (PLAN_EDITABLE_STATUSES.includes(plan.status as PlanStatus)) return { amending: false };
+
+    if (plan.status === PlanStatus.Approved) {
+      if (await this._hasOpenApproval(planId)) {
+        throw AppError.badRequest(
+          'The new items are already waiting for approval. Wait for the decision before changing the programme again.',
+        );
+      }
+      if (item && !item.pending_approval) {
+        throw AppError.badRequest(
+          'This item is part of the approved programme and cannot be changed. New entities can be added; they will need approval.',
+        );
+      }
+      return { amending: true };
+    }
+    throw AppError.badRequest('Plan must be in draft or rejected status to be changed');
+  }
+
+  /** A programme is awaiting a decision: first submitted, or already approved with additions under approval. */
+  private async _assertAwaitingApproval(plan: { id: string; status: string }, verb: 'approved' | 'rejected'): Promise<void> {
+    if (plan.status === PlanStatus.Submitted) return;
+    if (plan.status === PlanStatus.Approved && (await this._hasOpenApproval(plan.id))) return;
+    throw AppError.badRequest(`Only submitted plans can be ${verb}`);
   }
 
   /**

@@ -956,6 +956,9 @@ model Audit_Plan_Item {
   priority           String // critical | high | medium | low
   notes              String?  @db.NVarChar(Max)
   engagement_created Boolean  @default(false)
+  // Added to a programme that was already approved: not usable (no audit can start from it) until the
+  // Head of Internal Audit and the DG approve the addition.
+  pending_approval   Boolean  @default(false)
   created_at         DateTime @default(now())
   updated_at         DateTime @updatedAt
 

@@ -315,6 +315,9 @@ export class EngagementService implements IEngagementService {
     });
     if (!planItem) throw AppError.notFound('Audit plan item');
     if (planItem.plan.status !== PlanStatus.Approved) throw AppError.badRequest('Plan must be approved before creating an engagement');
+    if (planItem.pending_approval) {
+      throw AppError.badRequest('This item was added after the programme was approved and is still waiting for approval');
+    }
     if (planItem.engagement_created) throw AppError.conflict('An engagement has already been created from this plan item');
     this._assertDistinctRoles(dto.leadAuditorId, dto.auditManagerId, dto.auditeeId);
     await this._assertManagerCanApprove(dto.auditManagerId);

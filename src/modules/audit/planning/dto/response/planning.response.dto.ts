@@ -10,6 +10,8 @@ export interface PlanItemResponseDto {
   plannedEndDate: string;
   priority: string;
   engagementCreated: boolean;
+  /** Added after the programme was approved; waiting for approval, so no audit can start from it yet. */
+  pendingApproval: boolean;
   engagementId: string | null;
   notes: string | null;
   createdAt: string;
@@ -30,6 +32,10 @@ export interface PlanResponseDto {
   approvedAt: string | null;
   rejectionReason: string | null;
   itemsCount: number;
+  /** Items added after approval that have not been approved yet. */
+  pendingItemsCount: number;
+  /** The additions have been submitted and are going through Head then DG approval. */
+  hasOpenAmendment: boolean;
   createdAt: string;
   updatedAt: string;
   items?: PlanItemResponseDto[];
@@ -46,6 +52,7 @@ export const mapPlanItemToResponse = (
   priority: string;
   notes: string | null;
   engagement_created: boolean;
+  pending_approval?: boolean;
   created_at: Date;
   updated_at: Date;
   universe?: Parameters<typeof mapUniverseToResponse>[0];
@@ -63,6 +70,7 @@ export const mapPlanItemToResponse = (
   plannedEndDate: item.planned_end_date.toISOString(),
   priority: item.priority,
   engagementCreated: item.engagement_created,
+  pendingApproval: item.pending_approval ?? false,
   engagementId: item.engagements?.[0]?.id ?? null,
   notes: item.notes ?? null,
   createdAt: item.created_at.toISOString(),
@@ -89,6 +97,8 @@ export const mapPlanToResponse = (
     _count?: { items: number };
   },
   warnings?: string[],
+  /** True while the plan's approval workflow is pending on an already-approved programme. */
+  hasOpenAmendment = false,
 ): PlanResponseDto => ({
   id: plan.id,
   title: plan.title,
@@ -104,6 +114,8 @@ export const mapPlanToResponse = (
   approvedAt: plan.approved_at?.toISOString() ?? null,
   rejectionReason: plan.rejection_reason,
   itemsCount: plan.items?.length ?? plan._count?.items ?? 0,
+  pendingItemsCount: plan.items?.filter((i) => i.pending_approval).length ?? 0,
+  hasOpenAmendment,
   createdAt: plan.created_at.toISOString(),
   updatedAt: plan.updated_at.toISOString(),
   items: plan.items?.map((item) => mapPlanItemToResponse(item, plan.audit_type)),
