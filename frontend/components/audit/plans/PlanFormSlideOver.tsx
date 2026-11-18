@@ -83,12 +83,10 @@ export const PlanFormSlideOver = ({ open, onClose, plan }: Props): JSX.Element =
         description: v.description?.trim() || undefined,
       }),
     onSuccess: (created) => {
-      toast.success('Programme created');
-      // Surfaced, not blocked: a second programme of the same type and year is
-      // legitimate, but the creator should know they are making one.
-      for (const warning of created.warnings ?? []) {
-        toast.warning(warning);
-      }
+      // Surfaced, not blocked: a second programme of the same type and year is legitimate, but the creator
+      // should know they made one. One toast, so the confirmation is never hidden behind the note.
+      const notes = created.warnings ?? [];
+      toast.success('Programme created', notes.length > 0 ? { description: `Note: ${notes.join('. ')}` } : undefined);
       qc.invalidateQueries({ queryKey: ['plans'] });
       onClose();
     },

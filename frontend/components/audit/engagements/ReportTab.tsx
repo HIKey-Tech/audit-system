@@ -173,7 +173,7 @@ function buildReportWordDocumentHtml(params: {
       findings.length > 0
         ? `<table style="width:100%; border-collapse:collapse; margin:10px 0; font-size:12px;">
             <thead>
-              <tr style="background:#003087; color:#ffffff;">
+              <tr style="background:#4F6228; color:#ffffff;">
                 <th style="border:1px solid #cbd5e1; padding:6px 8px; text-align:left;">#</th>
                 <th style="border:1px solid #cbd5e1; padding:6px 8px; text-align:left;">Finding Title</th>
                 <th style="border:1px solid #cbd5e1; padding:6px 8px; text-align:center;">Severity</th>
@@ -277,6 +277,31 @@ function buildReportWordDocumentHtml(params: {
     `.trim();
   })();
 
+  // Compact one-row-per-finding table for the "Summary of Findings" section (the details follow in their own section).
+  const findingsSummaryHtml = (() => {
+    if (findings.length === 0) {
+      return `<p><em>No findings were raised during this engagement.</em></p>`;
+    }
+    const cell = 'border:1px solid #cbd5e1; padding:6px 8px; text-align:left;';
+    const rows = findings
+      .map(
+        (f, idx) => `<tr>
+          <td style="${cell}">${idx + 1}</td>
+          <td style="${cell}">${escapeHtml(f.title)}</td>
+          <td style="${cell}">${escapeHtml((f.category || '').replace(/_/g, ' '))}</td>
+          <td style="${cell} text-align:center;">${escapeHtml((f.severity || '').toUpperCase())}</td>
+          <td style="${cell}">${escapeHtml((f.status || '').replace(/_/g, ' '))}</td>
+          <td style="${cell}">${f.dueDate ? formatDate(f.dueDate) : '—'}</td>
+        </tr>`,
+      )
+      .join('');
+    return `<table style="width:100%; border-collapse:collapse; margin:10px 0; font-size:12px;">
+      <thead><tr style="background:#4F6228; color:#ffffff;">
+        <th style="${cell}">#</th><th style="${cell}">Finding Title</th><th style="${cell}">Category</th>
+        <th style="${cell} text-align:center;">Severity</th><th style="${cell}">Status</th><th style="${cell}">Due Date</th>
+      </tr></thead><tbody>${rows}</tbody></table>`;
+  })();
+
   // Build Detailed Findings + Auditee Management Responses HTML
   const detailedFindingsHtml = (() => {
     if (findings.length === 0) {
@@ -286,13 +311,13 @@ function buildReportWordDocumentHtml(params: {
       .map(
         (f, idx) => `
         <div style="margin-bottom:14px; padding:10px 12px; border:1px solid #cbd5e1; border-radius:4px; background:#ffffff;">
-          <p style="margin:0 0 6px 0;"><strong>Finding ${idx + 1}: ${escapeHtml(f.title)}</strong> — <span style="color:#003087; font-weight:bold;">[${escapeHtml((f.severity || '').toUpperCase())}]</span></p>
+          <p style="margin:0 0 6px 0;"><strong>Finding ${idx + 1}: ${escapeHtml(f.title)}</strong> — <span style="color:#4F6228; font-weight:bold;">[${escapeHtml((f.severity || '').toUpperCase())}]</span></p>
           <p style="margin:4px 0;"><strong>Category:</strong> ${escapeHtml((f.category || '').replace(/_/g, ' '))} | <strong>Status:</strong> ${escapeHtml((f.status || '').replace(/_/g, ' '))} | <strong>Due Date:</strong> ${f.dueDate ? formatDate(f.dueDate) : '—'} | <strong>Auditee:</strong> ${escapeHtml(f.auditeeName || engagement.auditeeName || 'N/A')}</p>
           <p style="margin:4px 0;"><strong>Observation / Condition:</strong> ${escapeHtml(f.description || '—')}</p>
           <p style="margin:4px 0;"><strong>Root Cause:</strong> ${escapeHtml(f.rootCause || '—')}</p>
           <p style="margin:4px 0;"><strong>Risk / Implication:</strong> ${escapeHtml(f.riskImplication || '—')}</p>
           <p style="margin:4px 0;"><strong>Audit Recommendation:</strong> ${escapeHtml(f.recommendation || '—')}</p>
-          <p style="margin:6px 0 0 0; padding:6px 8px; background:#f8fafc; border-left:3px solid #003087;"><strong>Auditee Management Response:</strong> ${
+          <p style="margin:6px 0 0 0; padding:6px 8px; background:#f8fafc; border-left:3px solid #4F6228;"><strong>Auditee Management Response:</strong> ${
             f.managementResponse
               ? `${escapeHtml(f.managementResponse)}${f.managementResponseAt ? ` <em>(Responded ${formatDate(f.managementResponseAt)})</em>` : ''}`
               : '<em>Awaiting formal management response from auditee.</em>'
@@ -327,6 +352,8 @@ function buildReportWordDocumentHtml(params: {
       content = defaultScopeHtml;
     } else if (keyLower.includes('method') || keyLower.includes('approach')) {
       content = defaultMethodologyHtml;
+    } else if (keyLower.includes('finding') && keyLower.includes('summary')) {
+      content = findingsSummaryHtml;
     } else if (keyLower.includes('finding') || keyLower.includes('observation') || keyLower.includes('exception')) {
       content = detailedFindingsHtml;
     } else if (keyLower.includes('conclu') || keyLower.includes('opinion')) {
@@ -921,7 +948,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
             <select
               value={selectedTemplateId || currentReport?.templateId || ''}
               onChange={(e) => handleTemplateChange(e.target.value)}
-              className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:border-[#1E3A8A] focus:outline-none"
+              className="h-8 rounded-md border border-slate-200 bg-white px-2.5 text-xs text-slate-700 focus:border-[#4F6228] focus:outline-none"
             >
               {(reportTemplates.data ?? []).map((t) => (
                 <option key={t.id} value={t.id}>
@@ -1214,14 +1241,11 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
     }
     return fallback;
   };
-  const normalizeHex = (value: string, fallback: string): string => {
-    const v = value.replace(/^#/, '').trim();
-    return /^[0-9a-fA-F]{6}$/.test(v) ? `#${v}` : fallback;
-  };
 
   const tplHeader = appliedTemplate?.headerConfig ?? null;
   const previewClassification = readStr(tplHeader, 'classification', 'Confidential');
-  const previewPrimary = normalizeHex(readStr(tplHeader, 'primaryColor', '#003087'), '#003087');
+  // GBB's document template fixes the brand colour; colours stored on a report template are not applied.
+  const previewPrimary = '#4F6228';
 
   const sectionTitle = (index: number, fallback: string): string => {
     const s = appliedTemplate?.sections?.[index];
@@ -1768,7 +1792,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                       Document Division:
                     </td>
                     <td className="px-4 py-2 text-slate-900">
-                      {engagement.universeName || 'Internal Audit & Assurance'}
+                      Internal Audit
                     </td>
                   </tr>
                   <tr>
@@ -2184,8 +2208,8 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                           </p>
                         )}
 
-                        <div className="mt-2 rounded border-l-4 border-[#003087] bg-blue-50/50 p-2.5">
-                          <div className="font-bold text-[#003087]">
+                        <div className="mt-2 rounded border-l-4 border-[#4F6228] bg-blue-50/50 p-2.5">
+                          <div className="font-bold text-[#4F6228]">
                             Auditee Management Response:
                           </div>
                           <p className="mt-0.5 text-slate-800 whitespace-pre-wrap">

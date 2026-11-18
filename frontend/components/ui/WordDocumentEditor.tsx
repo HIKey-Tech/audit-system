@@ -417,6 +417,33 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
     [margin, onChange],
   );
 
+  // Typing fires an input event per keystroke. Pushing each one straight into the parent's state re-renders the
+  // whole workspace synchronously and, when the browser delivers several in a burst, trips React's "Maximum update
+  // depth exceeded". So input events are coalesced to one update per animation frame; blur flushes immediately.
+  const emitChangeRef = useRef(emitChange);
+  emitChangeRef.current = emitChange;
+  const pendingEmitFrameRef = useRef<number | null>(null);
+  const scheduleEmit = useCallback(() => {
+    if (pendingEmitFrameRef.current !== null) return;
+    pendingEmitFrameRef.current = window.requestAnimationFrame(() => {
+      pendingEmitFrameRef.current = null;
+      emitChangeRef.current();
+    });
+  }, []);
+  const flushEmit = useCallback(() => {
+    if (pendingEmitFrameRef.current !== null) {
+      window.cancelAnimationFrame(pendingEmitFrameRef.current);
+      pendingEmitFrameRef.current = null;
+    }
+    emitChangeRef.current();
+  }, []);
+  useEffect(
+    () => () => {
+      if (pendingEmitFrameRef.current !== null) window.cancelAnimationFrame(pendingEmitFrameRef.current);
+    },
+    [],
+  );
+
   const clampSelectionAwayFromNextHeading = () => {
     const sel = window.getSelection();
     if (!sel || sel.isCollapsed || sel.rangeCount === 0) return;
@@ -686,7 +713,7 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
           {/* Top Ribbon Tab Indicator & Quick Actions */}
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 pb-1.5">
             <div className="flex items-center gap-3">
-              <span className="inline-flex items-center gap-1.5 rounded bg-[#1E3A8A] px-2.5 py-0.5 text-[11px] font-semibold text-white">
+              <span className="inline-flex items-center gap-1.5 rounded bg-[#4F6228] px-2.5 py-0.5 text-[11px] font-semibold text-white">
                 <FileText className="h-3 w-3" /> Word Document Editor
               </span>
               <span className="text-[11px] text-slate-500 hidden sm:inline">
@@ -1102,9 +1129,9 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
               type="button"
               onClick={handleInsertPageBreak}
               title="Insert Page Break (Creates Page 2 / Ctrl+Enter)"
-              className="inline-flex h-7 items-center gap-1 rounded border border-blue-200 bg-blue-50/70 px-2 text-xs font-semibold text-[#1E3A8A] hover:bg-blue-100 transition-colors"
+              className="inline-flex h-7 items-center gap-1 rounded border border-blue-200 bg-blue-50/70 px-2 text-xs font-semibold text-[#4F6228] hover:bg-blue-100 transition-colors"
             >
-              <FilePlus2 className="h-3.5 w-3.5 text-[#1E3A8A]" />
+              <FilePlus2 className="h-3.5 w-3.5 text-[#4F6228]" />
               Page Break
             </button>
           </div>
@@ -1165,7 +1192,7 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
         >
           {/* Official GBB Document Header */}
           {showHeaderFooter && (
-            <div className="mb-6 border-b-2 border-[#1E3A8A] pb-4 select-none">
+            <div className="mb-6 border-b-2 border-[#4F6228] pb-4 select-none">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-semibold uppercase tracking-wider text-slate-400 mb-2">
                 {!readOnly ? (
                   <input
@@ -1195,7 +1222,7 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
                     <div className="text-xs font-bold uppercase tracking-wide text-slate-800">
                       Galaxy Backbone Limited
                     </div>
-                    <div className="text-sm font-extrabold text-[#1E3A8A]">
+                    <div className="text-sm font-extrabold text-[#4F6228]">
                       {documentTitle || 'Untitled Audit Document'}
                     </div>
                     {engagementTitle && (
@@ -1230,8 +1257,8 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
             suppressContentEditableWarning
             onMouseUp={clampSelectionAwayFromNextHeading}
             onKeyDown={handleEditorKeyDown}
-            onInput={() => emitChange()}
-            onBlur={() => emitChange()}
+            onInput={scheduleEmit}
+            onBlur={flushEmit}
             style={{ minHeight }}
             className="word-editor-surface prose prose-slate max-w-none text-sm text-black focus:outline-none [&_*]:text-black [&_h1]:text-xl [&_h1]:font-bold [&_h1]:text-black [&_h1]:mt-4 [&_h1]:mb-2 [&_h2]:text-base [&_h2]:font-bold [&_h2]:text-black [&_h2]:border-b [&_h2]:border-slate-300 [&_h2]:pb-1 [&_h2]:mt-5 [&_h2]:mb-2 [&_h3]:text-sm [&_h3]:font-semibold [&_h3]:text-black [&_h3]:mt-3 [&_h3]:mb-1 [&_p]:my-2 [&_p]:text-black [&_ul]:list-disc [&_ul]:pl-6 [&_ul]:my-2 [&_ol]:list-decimal [&_ol]:pl-6 [&_ol]:my-2 [&_blockquote]:border-l-4 [&_blockquote]:border-slate-700 [&_blockquote]:bg-slate-50 [&_blockquote]:pl-3 [&_blockquote]:py-1 [&_blockquote]:italic [&_blockquote]:text-black [&_table]:w-full [&_table]:border-collapse [&_th]:border [&_th]:border-slate-300 [&_th]:bg-slate-100 [&_th]:text-black [&_th]:p-2 [&_td]:border [&_td]:border-slate-300 [&_td]:text-black [&_td]:p-2 [&_img]:max-w-full [&_img]:rounded"
           />
@@ -1259,7 +1286,7 @@ export const WordDocumentEditor: React.FC<WordDocumentEditorProps> = ({
       </div>
 
       {/* Word Status Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 bg-[#1E3A8A] px-3 py-1.5 text-[11px] text-white">
+      <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-300 bg-[#4F6228] px-3 py-1.5 text-[11px] text-white">
         <div className="flex items-center gap-3">
           <span className="font-semibold">
             Page 1 of {pageCount}

@@ -4,7 +4,7 @@ import { Markdown } from '@/components/common/Markdown';
 import { formatDate } from '@/lib/utils/format';
 
 /** Brand navy — same value the working-paper PDF export uses. */
-const BRAND = '#1E3A8A';
+const BRAND = '#4F6228';
 
 export interface WorkingPaperDocumentSection {
   title: string;

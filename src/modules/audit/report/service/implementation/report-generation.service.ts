@@ -486,7 +486,7 @@ export class ReportGenerationService implements IReportGenerationService {
       documentId: gbbDocumentId('RPT', data.engagement.referenceNumber),
       version,
       versionDate,
-      division: data.engagement.universe.name || 'Internal Audit & Assurance',
+      division: 'Internal Audit',
       owner: leadAuditorName,
       author: leadAuditorName,
       approvedBy: finalApproverName,
