@@ -31,3 +31,22 @@ export function reconcileAdRoles(
 
   return { toAdd, toRemove };
 }
+
+/**
+ * The roles a user should hold from directory sync, including the baseline role (e.g. `viewer`).
+ *
+ * The baseline only exists so that someone with no role at all can still sign in and read. A person who already
+ * has a real role — from a mapped directory group, or assigned by an administrator — gets just that role, so
+ * their profile shows "System Auditor" and not "System Auditor, Viewer". Because the reconcile step removes
+ * directory-sourced roles that are no longer desired, a baseline added earlier is cleaned up on the next sync.
+ */
+export function withBaselineRole(
+  groupRoleIds: string[],
+  currentRoles: CurrentUserRole[],
+  baselineRoleId: string | null | undefined,
+): string[] {
+  if (!baselineRoleId) return groupRoleIds;
+  const holdsManualRole = currentRoles.some((r) => r.source !== 'azure_ad');
+  if (groupRoleIds.length > 0 || holdsManualRole) return groupRoleIds;
+  return [baselineRoleId];
+}

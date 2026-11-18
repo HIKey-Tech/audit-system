@@ -3,7 +3,7 @@ import { logger } from '../../../../shared/utils/logger.util';
 import { config } from '../../../../shared/config/app.config';
 import { AppError } from '../../../../shared/errors/app.error';
 import { auditLogService } from '../../../logging/service/implementation/audit-log.service';
-import { reconcileAdRoles, CurrentUserRole } from '../../utility/role-reconciler.utility';
+import { reconcileAdRoles, withBaselineRole, CurrentUserRole } from '../../utility/role-reconciler.utility';
 import {
   createGraphDirectoryClient,
   IGraphDirectoryClient,
@@ -141,20 +141,7 @@ export class DirectoryMappingService implements IDirectoryMappingService {
   }
 
   async applyAdRolesToUser(userId: string, groupIds: string[]): Promise<void> {
-    const desiredRoleIds = await this.resolveRolesForGroups(groupIds);
-
-    // Baseline role: every SSO user gets a default role (e.g. viewer) on top of
-    // any group-mapped roles, so all employees have at least read access.
-    const defaultRoleName = config.directorySync.defaultRoleName;
-    if (defaultRoleName) {
-      const defaultRole = await prisma.role.findFirst({
-        where: { name: defaultRoleName },
-        select: { id: true },
-      });
-      if (defaultRole && !desiredRoleIds.includes(defaultRole.id)) {
-        desiredRoleIds.push(defaultRole.id);
-      }
-    }
+    const groupRoleIds = await this.resolveRolesForGroups(groupIds);
 
     const current: CurrentUserRole[] = (
       await prisma.user_Role.findMany({
@@ -162,6 +149,13 @@ export class DirectoryMappingService implements IDirectoryMappingService {
         select: { role_id: true, source: true },
       })
     ).map((r) => ({ roleId: r.role_id, source: r.source }));
+
+    // Baseline role (e.g. viewer): only for someone who would otherwise have no role at all.
+    const defaultRoleName = config.directorySync.defaultRoleName;
+    const defaultRole = defaultRoleName
+      ? await prisma.role.findFirst({ where: { name: defaultRoleName }, select: { id: true } })
+      : null;
+    const desiredRoleIds = withBaselineRole(groupRoleIds, current, defaultRole?.id);
 
     const { toAdd, toRemove } = reconcileAdRoles(current, desiredRoleIds);
     if (toAdd.length === 0 && toRemove.length === 0) return;

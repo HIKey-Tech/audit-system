@@ -1,4 +1,4 @@
-import { reconcileAdRoles } from '../utility/role-reconciler.utility';
+import { reconcileAdRoles, withBaselineRole } from '../utility/role-reconciler.utility';
 
 describe('reconcileAdRoles', () => {
   it('adds a desired role the user does not have yet', () => {
@@ -45,5 +45,40 @@ describe('reconcileAdRoles', () => {
     );
     expect(r.toAdd.sort()).toEqual(['audit_lead']);
     expect(r.toRemove).toEqual(['viewer']);
+  });
+});
+
+describe('withBaselineRole', () => {
+  it('gives the baseline role to someone who would otherwise have no role', () => {
+    expect(withBaselineRole([], [], 'viewer')).toEqual(['viewer']);
+  });
+
+  it('adds nothing on top of a role mapped from a directory group', () => {
+    expect(withBaselineRole(['system_auditor'], [], 'viewer')).toEqual(['system_auditor']);
+  });
+
+  it('adds nothing when an administrator has assigned the person a role', () => {
+    expect(withBaselineRole([], [{ roleId: 'system_auditor', source: 'manual' }], 'viewer')).toEqual([]);
+  });
+
+  it('still counts a manually assigned role alongside an old directory-added viewer', () => {
+    const current = [
+      { roleId: 'system_auditor', source: 'manual' },
+      { roleId: 'viewer', source: 'azure_ad' },
+    ];
+    const desired = withBaselineRole([], current, 'viewer');
+    expect(desired).toEqual([]);
+    // ...so the reconcile step removes the redundant viewer and leaves the real role alone.
+    expect(reconcileAdRoles(current, desired)).toEqual({ toAdd: [], toRemove: ['viewer'] });
+  });
+
+  it('keeps a person whose only role is the baseline from losing it', () => {
+    const current = [{ roleId: 'viewer', source: 'azure_ad' }];
+    const desired = withBaselineRole([], current, 'viewer');
+    expect(reconcileAdRoles(current, desired)).toEqual({ toAdd: [], toRemove: [] });
+  });
+
+  it('does nothing when no baseline role is configured', () => {
+    expect(withBaselineRole([], [], null)).toEqual([]);
   });
 });
