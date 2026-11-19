@@ -20,6 +20,7 @@ import { usersApi } from '@/lib/api/users';
 import { usePermission } from '@/hooks/usePermission';
 import { SELECTABLE_AUDIT_TYPES } from '@/lib/audit-domains';
 import type { AuditChecklistItem, AuditEngagementDetail } from '@/lib/types/domain';
+import { todayInputDate } from '@/lib/utils/format';
 
 /** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
 function toISODatetime(dateStr: string): string {
@@ -97,7 +98,7 @@ export const NewFindingSlideOver = ({
     auditeeId: engagement.auditeeId,
     additionalAuditeeIds: [],
     areaUniverseId: '',
-    dueDate: '',
+    dueDate: todayInputDate(),
     checklistId: prefill?.checklistId ?? '',
     workingPaperId: '',
     riskId: '',

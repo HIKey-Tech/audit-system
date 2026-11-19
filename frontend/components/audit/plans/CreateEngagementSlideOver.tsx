@@ -18,6 +18,7 @@ import { ScoredUserSelect } from '@/components/common/ScoredUserSelect';
 import { plansApi } from '@/lib/api/audit';
 import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { useAuditTypeMismatch } from '@/lib/hooks/useAuditTypeMismatch';
+import { notBefore, todayInputDate } from '@/lib/utils/format';
 
 /** Convert a date-only string (YYYY-MM-DD) to an ISO-8601 datetime string */
 function toISODatetime(dateStr: string): string {
@@ -86,8 +87,8 @@ export const CreateEngagementSlideOver = ({
 
   useEffect(() => {
     if (open) {
-      const start = defaultStartDate ? defaultStartDate.slice(0, 10) : '';
-      const end = defaultEndDate ? defaultEndDate.slice(0, 10) : '';
+      const start = defaultStartDate ? defaultStartDate.slice(0, 10) : todayInputDate();
+      const end = defaultEndDate ? defaultEndDate.slice(0, 10) : notBefore(todayInputDate(), start);
       reset({
         title: defaultTitle ?? '',
         leadAuditorId: '',
@@ -188,7 +189,12 @@ export const CreateEngagementSlideOver = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Start" required error={errors.plannedStartDate?.message}>
-            <Input type="date" error={errors.plannedStartDate?.message} {...register('plannedStartDate')} />
+            <Input type="date" error={errors.plannedStartDate?.message} {...register('plannedStartDate', {
+              onChange: (e) => {
+                setValue('plannedEndDate', notBefore(watch('plannedEndDate'), e.target.value));
+                setValue('slaDeadline', notBefore(watch('slaDeadline'), e.target.value));
+              },
+            })} />
           </FormField>
           <FormField label="End" required error={errors.plannedEndDate?.message}>
             <Input type="date" error={errors.plannedEndDate?.message} {...register('plannedEndDate')} />

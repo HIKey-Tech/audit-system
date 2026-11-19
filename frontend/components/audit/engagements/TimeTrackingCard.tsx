@@ -10,10 +10,10 @@ import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { FormField } from '@/components/ui/FormField';
 import { timeEntriesApi } from '@/lib/api/audit';
-import { formatDate } from '@/lib/utils/format';
+import { formatDate, todayInputDate } from '@/lib/utils/format';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 
-const today = (): string => new Date().toISOString().slice(0, 10);
+const today = todayInputDate;
 
 export const TimeTrackingCard = ({
   engagementId,

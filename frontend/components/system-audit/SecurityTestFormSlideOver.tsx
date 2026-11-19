@@ -13,6 +13,7 @@ import { UserSelect } from '@/components/common/UserSelect';
 import { engagementsApi } from '@/lib/api/audit';
 import { systemAuditApi, type SecurityTest, type SecurityTestType } from '@/lib/api/system-audit';
 import { SECURITY_TEST_TYPE_LABELS } from '@/lib/system-audit';
+import { notBefore, todayInputDate } from '@/lib/utils/format';
 
 const toDateInput = (iso: string | null | undefined): string => (iso ? iso.slice(0, 10) : '');
 
@@ -61,7 +62,7 @@ export const SecurityTestFormSlideOver = ({
             engagementId: test.engagement?.id ?? '',
             notes: test.notes ?? '',
           }
-        : EMPTY,
+        : { ...EMPTY, plannedStart: todayInputDate(), plannedEnd: todayInputDate() },
     );
   }, [open, test]);
 
@@ -149,7 +150,7 @@ export const SecurityTestFormSlideOver = ({
             <UserSelect value={form.coordinatorId} onChange={(v) => set('coordinatorId', v)} placeholder="Me" />
           </FormField>
           <FormField label="Planned start" required>
-            <Input type="date" value={form.plannedStart} onChange={(e) => set('plannedStart', e.target.value)} />
+            <Input type="date" value={form.plannedStart} onChange={(e) => setForm((f) => ({ ...f, plannedStart: e.target.value, plannedEnd: notBefore(f.plannedEnd, e.target.value) }))} />
           </FormField>
           <FormField label="Planned end" required>
             <Input type="date" value={form.plannedEnd} onChange={(e) => set('plannedEnd', e.target.value)} />

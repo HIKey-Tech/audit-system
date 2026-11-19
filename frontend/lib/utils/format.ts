@@ -65,3 +65,9 @@ export const initialsFromName = (
   const out = (a + b).toUpperCase();
   return out || '?';
 };
+
+/** Today's local date as `yyyy-MM-dd`, the value a `<input type="date">` expects. */
+export const todayInputDate = (): string => format(new Date(), 'yyyy-MM-dd');
+
+/** The later of two `yyyy-MM-dd` dates, so an end date never sits before its start date. */
+export const notBefore = (date: string, start: string): string => (!date || (start && date < start) ? start : date);

@@ -25,6 +25,7 @@ import { ConfirmDialog } from '@/components/ui/ConfirmDialog';
 import { ChipList } from './ChipList';
 import { useAuditTypeMismatch } from '@/lib/hooks/useAuditTypeMismatch';
 import type { AuditEngagement, ChecklistTemplateControl } from '@/lib/types/domain';
+import { notBefore, todayInputDate } from '@/lib/utils/format';
 
 type Mode = 'plan' | 'ad_hoc';
 type AuditType = SelectableAuditTypeKey;
@@ -74,9 +75,9 @@ export const StartAuditWizard = ({
   const [pasteText, setPasteText] = useState('');
   const [pasteBusy, setPasteBusy] = useState(false);
   const [candidateSearch, setCandidateSearch] = useState('');
-  const [start, setStart] = useState('');
-  const [end, setEnd] = useState('');
-  const [sla, setSla] = useState('');
+  const [start, setStart] = useState(todayInputDate);
+  const [end, setEnd] = useState(todayInputDate);
+  const [sla, setSla] = useState(todayInputDate);
   const [slaTouched, setSlaTouched] = useState(false);
   const [plannedHours, setPlannedHours] = useState('');
   // per-engagement checklist controls (customisable, pre-filled from the template)
@@ -111,9 +112,9 @@ export const StartAuditWizard = ({
     setAuditeeId('');
     setSupportingIds([]);
     setCandidateSearch('');
-    setStart('');
-    setEnd('');
-    setSla('');
+    setStart(todayInputDate());
+    setEnd(todayInputDate());
+    setSla(todayInputDate());
     setSlaTouched(false);
     setChecklistControls([]);
     setChecklistTouched(false);
@@ -873,7 +874,7 @@ export const StartAuditWizard = ({
           </FormField>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
             <FormField label="Planned start" required>
-              <Input type="date" value={start} onChange={(e) => setStart(e.target.value)} />
+              <Input type="date" value={start} onChange={(e) => { setStart(e.target.value); setEnd((v) => notBefore(v, e.target.value)); }} />
             </FormField>
             <FormField label="Planned end" required>
               <Input type="date" value={end} onChange={(e) => setEnd(e.target.value)} />

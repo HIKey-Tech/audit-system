@@ -15,6 +15,7 @@ import { Combobox, type ComboboxOption } from '@/components/ui/Combobox';
 import { plansApi } from '@/lib/api/audit';
 import { humanizeStatus, riskScoreLabel } from '@/lib/utils/status';
 import type { AuditPlanItem, PlanUniverseCandidate } from '@/lib/types/domain';
+import { notBefore, todayInputDate } from '@/lib/utils/format';
 
 function toISODatetime(dateStr: string): string {
   return dateStr ? `${dateStr}T00:00:00.000Z` : dateStr;
@@ -137,8 +138,8 @@ export const AddPlanItemSlideOver = ({
     defaultValues: {
       universeId: '',
       priority: 'medium',
-      plannedStartDate: '',
-      plannedEndDate: '',
+      plannedStartDate: todayInputDate(),
+      plannedEndDate: todayInputDate(),
       notes: '',
     },
   });
@@ -160,8 +161,8 @@ export const AddPlanItemSlideOver = ({
       reset({
         universeId: '',
         priority: 'medium',
-        plannedStartDate: '',
-        plannedEndDate: '',
+        plannedStartDate: todayInputDate(),
+        plannedEndDate: todayInputDate(),
         notes: '',
       });
     }
@@ -362,7 +363,9 @@ export const AddPlanItemSlideOver = ({
 
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <FormField label="Planned start" required error={errors.plannedStartDate?.message}>
-            <Input type="date" error={errors.plannedStartDate?.message} {...register('plannedStartDate')} />
+            <Input type="date" error={errors.plannedStartDate?.message} {...register('plannedStartDate', {
+              onChange: (e) => setValue('plannedEndDate', notBefore(watch('plannedEndDate'), e.target.value)),
+            })} />
           </FormField>
           <FormField label="Planned end" required error={errors.plannedEndDate?.message}>
             <Input type="date" error={errors.plannedEndDate?.message} {...register('plannedEndDate')} />

@@ -13,6 +13,7 @@ import { Skeleton } from '@/components/ui/Skeleton';
 import { plansApi, type AddPlanItemDto } from '@/lib/api/audit';
 import { humanizeStatus, riskScoreLabel } from '@/lib/utils/status';
 import type { PlanUniverseCandidate, PlanUniverseDueStatus } from '@/lib/types/domain';
+import { notBefore, todayInputDate } from '@/lib/utils/format';
 
 type FilterMode = 'due' | 'unscheduled' | 'all' | 'on_demand';
 type PriorityValue = 'critical' | 'high' | 'medium' | 'low';
@@ -59,16 +60,16 @@ export const PopulateFromUniverseSlideOver = ({
   const qc = useQueryClient();
   const [search, setSearch] = useState('');
   const [filter, setFilter] = useState<FilterMode>('due');
-  const [defaultStart, setDefaultStart] = useState(`${planYear}-01-01`);
-  const [defaultEnd, setDefaultEnd] = useState(`${planYear}-03-31`);
+  const [defaultStart, setDefaultStart] = useState(todayInputDate);
+  const [defaultEnd, setDefaultEnd] = useState(todayInputDate);
   const [selected, setSelected] = useState<Record<string, DraftSelection>>({});
 
   useEffect(() => {
     if (!open) return;
     setSearch('');
     setFilter('due');
-    setDefaultStart(`${planYear}-01-01`);
-    setDefaultEnd(`${planYear}-03-31`);
+    setDefaultStart(todayInputDate());
+    setDefaultEnd(todayInputDate());
     setSelected({});
   }, [open, planYear]);
 
@@ -194,7 +195,10 @@ export const PopulateFromUniverseSlideOver = ({
     setSelected((prev) => {
       const current = prev[universeId];
       if (!current) return prev;
-      return { ...prev, [universeId]: { ...current, [field]: value } };
+      const row = { ...current, [field]: value };
+      // Moving a start date past the end date pulls the end date along with it.
+      if (field === 'plannedStartDate') row.plannedEndDate = notBefore(row.plannedEndDate, String(value));
+      return { ...prev, [universeId]: row };
     });
   };
 
@@ -310,7 +314,10 @@ export const PopulateFromUniverseSlideOver = ({
               <Input
                 type="date"
                 value={defaultStart}
-                onChange={(e) => setDefaultStart(e.target.value)}
+                onChange={(e) => {
+                  setDefaultStart(e.target.value);
+                  setDefaultEnd((v) => notBefore(v, e.target.value));
+                }}
               />
             </div>
             <div className="min-w-[140px] flex-1">
