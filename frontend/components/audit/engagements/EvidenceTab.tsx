@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import { useMemo, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Upload, FileType2, Download, AlertOctagon, Eye } from 'lucide-react';
@@ -186,6 +187,7 @@ export const EvidenceTab = ({ engagement }: { engagement: AuditEngagementDetail 
                     <Download className="h-3.5 w-3.5" />
                     Download
                   </a>
+                  <OpenInEditorButton documentId={ev.documentId} fileName={ev.fileName} />
                   {canDispute && !ev.isDisputed && (
                     <Button
                       size="sm"

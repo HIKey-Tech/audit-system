@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import { useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Download, FileText, Search, Trash2, Upload } from 'lucide-react';
@@ -137,7 +138,7 @@ export default function DocumentsPage(): JSX.Element | null {
       key: 'actions',
       header: '',
       align: 'right',
-      width: canDelete ? '170px' : '120px',
+      width: canDelete ? '340px' : '290px',
       render: (d) => (
         <div className="flex items-center justify-end gap-1">
           <Button
@@ -149,6 +150,7 @@ export default function DocumentsPage(): JSX.Element | null {
           >
             Download
           </Button>
+          <OpenInEditorButton documentId={d.id} fileName={d.fileName} />
           {canDelete && (
             <Button
               variant="ghost"

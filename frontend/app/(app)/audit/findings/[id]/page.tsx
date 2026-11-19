@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import { useState } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
@@ -300,6 +301,10 @@ export default function FindingDetailPage(): JSX.Element {
                 >
                   {followUp.data.remediationEvidence.fileName}
                 </a>
+                <OpenInEditorButton
+                  documentId={followUp.data.remediationEvidence.documentId}
+                  fileName={followUp.data.remediationEvidence.fileName}
+                />
               </div>
             )}
             {followUp.data?.verificationNotes && (

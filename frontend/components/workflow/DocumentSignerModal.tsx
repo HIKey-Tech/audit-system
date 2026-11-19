@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -548,6 +549,16 @@ export function DocumentSignerModal({
                   Save & Sign
                 </Button>
               </>
+            )}
+
+            {documentId && (
+            <OpenInEditorButton
+              variant="button"
+              documentId={documentId ?? ''}
+              fileName={documentName}
+              onOpened={onClose}
+              className="h-8 border-slate-700 bg-slate-800 px-2.5 font-medium text-slate-300 hover:bg-slate-700 hover:text-white"
+            />
             )}
 
             <a

@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import { useEffect, useRef, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import {
@@ -1242,6 +1243,7 @@ const PaperEvidenceLinks = ({
                 <Download className="h-3.5 w-3.5" />
                 Download
               </a>
+              <OpenInEditorButton documentId={ev.documentId} fileName={ev.fileName} />
               {canLink && (
                 <button
                   type="button"

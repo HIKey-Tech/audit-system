@@ -46,6 +46,7 @@ import { formatDateTime, formatRelative, formatFileSize, initialsFromName } from
 import { humanizeStatus } from '@/lib/utils/status';
 import { useSession } from '@/components/providers/AuthProvider';
 import { cn } from '@/lib/utils/cn';
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import type { RequestAction, SignatureVerification, WorkflowRequest } from '@/lib/types/domain';
 
 function getFileBadge(fileName: string) {
@@ -398,6 +399,7 @@ export default function RequestDetailPage(): JSX.Element {
                             <Eye className="h-3.5 w-3.5" /> View
                           </button>
                         )}
+                        <OpenInEditorButton documentId={a.documentId} fileName={a.originalName} />
                         {isSignable && isMyTurn && (
                           <button
                             type="button"

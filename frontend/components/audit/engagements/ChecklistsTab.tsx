@@ -1,5 +1,6 @@
 'use client';
 
+import { OpenInEditorButton } from '@/components/workspace/OpenInEditorButton';
 import { useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
@@ -357,6 +358,12 @@ export const ChecklistsTab = ({ engagement }: { engagement: AuditEngagementDetai
                         <Download className="h-3.5 w-3.5" />
                         {evidenceById.get(item.evidenceId)!.fileName}
                       </a>
+                    )}
+                    {item.evidenceId && evidenceById.get(item.evidenceId) && (
+                      <OpenInEditorButton
+                        documentId={evidenceById.get(item.evidenceId)!.documentId}
+                        fileName={evidenceById.get(item.evidenceId)!.fileName}
+                      />
                     )}
                   </li>
                 ))}
