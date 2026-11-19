@@ -191,6 +191,14 @@ describe('working paper in the GBB template', () => {
     expect(doc).toContain('This working paper has no content.');
     expect(doc).toContain('Pending approval');
   });
+
+  it('a sole auditor’s completed paper says approval was not required, not "Pending approval"', async () => {
+    const soleDone = { ...paper, signOff: [], status: 'approved' };
+    const { doc } = await unzip(await buildWorkingPaperDocx(soleDone));
+    expect(doc).toContain('Not required (completed by the sole auditor)');
+    expect(doc).toContain('Completed');
+    expect(doc).not.toContain('Pending approval');
+  });
 });
 
 describe('signatures sit at the bottom of the document, not in a table', () => {

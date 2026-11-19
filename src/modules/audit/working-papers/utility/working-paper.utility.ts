@@ -242,9 +242,18 @@ export const toGbbModel = (data: WorkingPaperPdfData): GbbDocumentModel => {
     division: 'Internal Audit',
     owner: data.auditorName,
     author: data.auditorName,
-    approvedBy: approvers.length > 0 ? approvers.join(', ') : 'Pending approval',
+    // A paper that is Approved but has no approver was marked complete by a sole auditor (no separate approval).
+    approvedBy:
+      approvers.length > 0
+        ? approvers.join(', ')
+        : data.status === 'approved'
+          ? 'Not required (completed by the sole auditor)'
+          : 'Pending approval',
     classification: GBB_DEFAULT_CLASSIFICATION,
-    status: data.status.charAt(0).toUpperCase() + data.status.slice(1).replace(/_/g, ' '),
+    status:
+      data.status === 'approved' && approvers.length === 0
+        ? 'Completed'
+        : data.status.charAt(0).toUpperCase() + data.status.slice(1).replace(/_/g, ' '),
     changeHistory: [
       {
         version: `Version ${versionNumber}`,
