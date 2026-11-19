@@ -20,7 +20,7 @@ import {
 } from '../../../utility/audit.utility';
 import { getAuditLifecycleRules, serializeChecklistControls } from '../../../utility/audit-config.utility';
 import { getEngagementGateStatus } from './engagement-gates';
-import { resolveViewerContext } from '../../utility/engagement-visibility.util';
+import { approverEngagementIds, resolveViewerContext } from '../../utility/engagement-visibility.util';
 import { IApprovalService } from '../../../../workflow/approval/service/interface/approval.service.interface';
 import { workflowApprovalService } from '../../../../workflow/approval/service/implementation/approval.service';
 import { IChecklistService } from '../../../checklists/service/interface/checklist.service.interface';
@@ -693,8 +693,10 @@ export class EngagementService implements IEngagementService {
    * engagements they are a party to — lead auditor, audit manager, auditee, or a
    * workflow assignee. Returns undefined for unrestricted (read_all) access.
    */
-  private _actorScope(actor: ActorContext): Prisma.Audit_EngagementWhereInput | undefined {
+  private async _actorScope(actor: ActorContext): Promise<Prisma.Audit_EngagementWhereInput | undefined> {
     if (actor.permissions.includes('engagement:read_all')) return undefined;
+    // Audits whose report this person has to sign (or has signed) are theirs to look through, too.
+    const approverOf = await approverEngagementIds(actor);
     return {
       OR: [
         { lead_auditor_id: actor.id },
@@ -703,6 +705,7 @@ export class EngagementService implements IEngagementService {
         { auditee_id: actor.id },
         { additional_auditees: { some: { user_id: actor.id } } },
         { workflow_assignments: { some: { user_id: actor.id } } },
+        ...(approverOf.length > 0 ? [{ id: { in: approverOf } }] : []),
       ],
     };
   }
@@ -738,7 +741,7 @@ export class EngagementService implements IEngagementService {
   }
 
   async getEngagementById(id: string, actor: ActorContext): Promise<EngagementResponseDto> {
-    const scope = this._actorScope(actor);
+    const scope = await this._actorScope(actor);
     let engagement = await prisma.audit_Engagement.findFirst({
       where: { id, deleted_at: null, ...(scope ?? {}) },
       include: engagementInclude,
@@ -758,7 +761,7 @@ export class EngagementService implements IEngagementService {
 
   async listEngagements(query: EngagementQueryDto, actor: ActorContext): Promise<{ engagements: EngagementResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
-    const scope = this._actorScope(actor);
+    const scope = await this._actorScope(actor);
     const where: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
       ...(query.status && { status: query.status }),

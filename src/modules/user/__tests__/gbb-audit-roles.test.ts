@@ -206,16 +206,19 @@ describe('every auditor gets everything meant for an auditor (no "can’t click"
     }
   });
 
-  it('only the Head and the DG read every engagement and hear about every one: an auditor sees only their own', () => {
+  it('only the Head reads every engagement and hears about every one: an auditor sees only their own', () => {
     for (const k of AUDITORS) {
       expect(perms(k).has('engagement:read_all')).toBe(false);
       expect(perms(k).has('engagement:notify_lifecycle')).toBe(false);
       expect(perms(k).has('engagement:read')).toBe(true);
     }
-    for (const k of ['head_internal_audit', 'dg'] as const) {
-      expect(perms(k).has('engagement:read_all')).toBe(true);
-      expect(perms(k).has('engagement:notify_lifecycle')).toBe(true);
-    }
+    expect(perms('head_internal_audit').has('engagement:read_all')).toBe(true);
+    expect(perms('head_internal_audit').has('engagement:notify_lifecycle')).toBe(true);
+  });
+
+  it('the DG is not told about audits as they happen and does not read every engagement', () => {
+    expect(perms('dg').has('engagement:read_all')).toBe(false);
+    expect(perms('dg').has('engagement:notify_lifecycle')).toBe(false);
   });
 
   it('domain extras go only where intended', () => {
@@ -253,8 +256,8 @@ describe('every auditor gets everything meant for an auditor (no "can’t click"
     expect(nav.filter((p) => !perms('head_internal_audit').has(p))).toEqual([]);
   });
 
-  it('the DG can open any engagement and read everything a sign-off needs', () => {
-    const need = ['engagement:read', 'engagement:read_all', 'finding:read', 'finding:read_all', 'report:read', 'report:export',
+  it('the DG can read and sign what is routed to them', () => {
+    const need = ['engagement:read', 'finding:read', 'report:read', 'report:export', 'report:approve:final',
       'approval:read', 'approval:approve', 'approval:reject', 'dashboard:read', 'checklist:read', 'working_paper:read',
       'evidence:read', 'committee_pack:read', 'document:read'];
     expect(need.filter((p) => !perms('dg').has(p))).toEqual([]);

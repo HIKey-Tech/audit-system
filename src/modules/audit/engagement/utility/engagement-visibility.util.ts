@@ -39,6 +39,43 @@ export const repositoryEngagementScope = (
 };
 
 /**
+ * The engagements whose REPORT has an approval step the actor has to sign now, or has already signed or rejected.
+ * An approver (the DG) is not on the audit team, but must be able to look through the whole audit that was sent to
+ * them: its report, working papers, checklists and evidence. Only a step at the current level counts for a waiting
+ * pool step, so an audit does not open up to them before it reaches their turn.
+ */
+export const approverEngagementIds = async (actor: ActorContext): Promise<string[]> => {
+  const steps = await prisma.workflow_Approval_Step.findMany({
+    where: {
+      approval: { entity_type: 'audit_report' },
+      OR: [
+        { approver_id: actor.id },
+        ...(actor.permissions.length > 0
+          ? [{ approver_id: null, status: 'pending', required_permission: { in: actor.permissions } }]
+          : []),
+      ],
+    },
+    select: { level: true, approver_id: true, approval: { select: { entity_id: true, current_level: true } } },
+  });
+  const reportIds = [
+    ...new Set(
+      steps
+        .filter((st) => st.approver_id === actor.id || st.level === st.approval.current_level)
+        .map((st) => st.approval.entity_id),
+    ),
+  ];
+  if (reportIds.length === 0) return [];
+  const reports = await prisma.audit_Report.findMany({
+    where: { id: { in: reportIds }, deleted_at: null },
+    select: { engagement_id: true },
+  });
+  return [...new Set(reports.map((r) => r.engagement_id))];
+};
+
+export const isReportApproverOf = async (engagementId: string, actor: ActorContext): Promise<boolean> =>
+  (await approverEngagementIds(actor)).includes(engagementId);
+
+/**
  * Resolves how a viewer sees one engagement's internal artifacts.
  *
  * Secure by default: only the audit team (lead, manager, or an assigned member)
@@ -59,8 +96,11 @@ export const resolveViewerContext = async (
     actor.id === parties.audit_manager_id ||
     (await isAssignee(engagementId, actor.id));
 
-  const role: ViewerContext['role'] = isOversight ? 'oversight' : isTeam ? 'team' : 'auditee';
-  const full = isOversight || isTeam;
+  // The DG (or anyone) who has this audit's report to sign can look through the whole audit, read-only.
+  const isApprover = !isOversight && !isTeam && (await isReportApproverOf(engagementId, actor));
+
+  const role: ViewerContext['role'] = isOversight || isApprover ? 'oversight' : isTeam ? 'team' : 'auditee';
+  const full = isOversight || isTeam || isApprover;
   return {
     role,
     canViewWorkingPapers: full,

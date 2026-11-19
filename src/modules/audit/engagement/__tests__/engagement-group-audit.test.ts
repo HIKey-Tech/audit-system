@@ -1,5 +1,9 @@
 jest.mock('../../../../shared/prisma/prisma.client', () => ({
-  prisma: { audit_Universe: { findFirst: jest.fn() } },
+  prisma: {
+    audit_Universe: { findFirst: jest.fn() },
+    workflow_Approval_Step: { findMany: jest.fn().mockResolvedValue([]) },
+    audit_Report: { findMany: jest.fn().mockResolvedValue([]) },
+  },
 }));
 
 import { prisma } from '../../../../shared/prisma/prisma.client';
@@ -57,13 +61,27 @@ describe('group audit scope', () => {
 describe('who can see a group audit', () => {
   const actor = { id: 'u9', permissions: ['engagement:read'] };
 
-  it('a person named as an additional auditee can open the engagement', () => {
-    const scope = service._actorScope(actor);
+  it('a person named as an additional auditee can open the engagement', async () => {
+    const scope = await service._actorScope(actor);
     expect(scope.OR).toContainEqual({ additional_auditees: { some: { user_id: 'u9' } } });
   });
 
-  it('oversight still sees everything', () => {
-    expect(service._actorScope({ id: 'u9', permissions: ['engagement:read_all'] })).toBeUndefined();
+  it('the person who created the engagement still sees it', async () => {
+    const scope = await service._actorScope(actor);
+    expect(scope.OR).toContainEqual({ created_by_id: 'u9' });
+  });
+
+  it('oversight still sees everything', async () => {
+    expect(await service._actorScope({ id: 'u9', permissions: ['engagement:read_all'] })).toBeUndefined();
+  });
+
+  it('an approver also sees the audits whose report they have to sign', async () => {
+    (prisma.workflow_Approval_Step.findMany as jest.Mock).mockResolvedValueOnce([
+      { level: 2, approver_id: null, approval: { entity_id: 'r1', current_level: 2 } },
+    ]);
+    (prisma.audit_Report.findMany as jest.Mock).mockResolvedValueOnce([{ engagement_id: 'e7' }]);
+    const scope = await service._actorScope({ id: 'dg', permissions: ['report:approve:final'] });
+    expect(scope.OR).toContainEqual({ id: { in: ['e7'] } });
   });
 });
 

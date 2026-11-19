@@ -6,6 +6,8 @@ jest.mock('../../../../shared/prisma/prisma.client', () => {
   return {
     prisma: {
       audit_Engagement: { findMany, count },
+      workflow_Approval_Step: { findMany: jest.fn().mockResolvedValue([]) },
+      audit_Report: { findMany: jest.fn().mockResolvedValue([]) },
       $transaction: jest.fn(async (ops: Promise<unknown>[]) => Promise.all(ops)),
     },
   };

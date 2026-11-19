@@ -201,14 +201,16 @@ export const HEAD_NOT_HELD: readonly string[] = [
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Director General — final sign-off on the reports routed to them and on audit
-// programmes (after the Head), read-wide oversight. Final ONLY (never oversight).
+// programmes (after the Head). Final ONLY (never oversight). The DG never does an audit and is not told about
+// audits as they happen: the one thing they get is the notice that a report (or programme) needs their approval.
+// They open an engagement only through that approval, so they hold neither engagement:read_all nor the lifecycle notices.
 // ─────────────────────────────────────────────────────────────────────────────
 const DG: readonly string[] = [
   'report:read', 'report:export', 'report:approve:final',
   'approval:read', 'approval:approve', 'approval:reject',
   'plan:read', 'plan:approve:final', 'plan:reject',
   'universe:read',
-  'engagement:read', 'engagement:read_all', 'engagement:notify_lifecycle',
+  'engagement:read',
   'checklist:read', 'working_paper:read', 'evidence:read', 'assignment:read',
   'finding:read', 'finding:read_all', 'finding:export',
   'followup:read',

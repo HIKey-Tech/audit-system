@@ -416,10 +416,10 @@ export class ReportService implements IReportService {
     return this._decorateReport(updated);
   }
 
-  private _actorReportScope(actor: ActorContext): Prisma.Audit_ReportWhereInput | undefined {
+  private async _actorReportScope(actor: ActorContext): Promise<Prisma.Audit_ReportWhereInput | undefined> {
     if (actor.permissions.includes('engagement:read_all')) return undefined;
 
-    return {
+    const team: Prisma.Audit_ReportWhereInput = {
       engagement: {
         OR: [
           { lead_auditor_id: actor.id },
@@ -434,10 +434,31 @@ export class ReportService implements IReportService {
         ],
       },
     };
+
+    // An approver can open the reports they have to sign (the step that is waiting for them now) and the ones they
+    // already signed or rejected, even though they are not on the audit team. The DG reads reports this way.
+    const steps = await prisma.workflow_Approval_Step.findMany({
+      where: {
+        approval: { entity_type: 'audit_report' },
+        OR: [
+          { approver_id: actor.id },
+          { approver_id: null, status: 'pending', required_permission: { in: actor.permissions } },
+        ],
+      },
+      select: { level: true, approver_id: true, approval: { select: { entity_id: true, current_level: true } } },
+    });
+    const approvalReportIds = [
+      ...new Set(
+        steps
+          .filter((st) => st.approver_id === actor.id || st.level === st.approval.current_level)
+          .map((st) => st.approval.entity_id),
+      ),
+    ];
+    return approvalReportIds.length > 0 ? { OR: [team, { id: { in: approvalReportIds } }] } : team;
   }
 
   async getReport(engagementId: string, actor: ActorContext): Promise<ReportResponseDto> {
-    const scope = this._actorReportScope(actor);
+    const scope = await this._actorReportScope(actor);
     const report = await prisma.audit_Report.findFirst({
       where: {
         engagement_id: engagementId,
@@ -451,7 +472,7 @@ export class ReportService implements IReportService {
   }
 
   async getReportById(id: string, actor: ActorContext): Promise<ReportResponseDto> {
-    const scope = this._actorReportScope(actor);
+    const scope = await this._actorReportScope(actor);
     const report = await prisma.audit_Report.findFirst({
       where: {
         id,
@@ -466,7 +487,7 @@ export class ReportService implements IReportService {
 
   async listReports(query: ReportQueryDto, actor: ActorContext): Promise<{ reports: ReportResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
-    const scope = this._actorReportScope(actor);
+    const scope = await this._actorReportScope(actor);
     const where: Prisma.Audit_ReportWhereInput = {
       deleted_at: null,
       ...(query.status && { status: query.status }),
@@ -498,7 +519,7 @@ export class ReportService implements IReportService {
   }
 
   async listComments(reportId: string, actor: ActorContext): Promise<ReportCommentDto[]> {
-    const scope = this._actorReportScope(actor);
+    const scope = await this._actorReportScope(actor);
     const report = await prisma.audit_Report.findFirst({
       where: { id: reportId, deleted_at: null, ...(scope ?? {}) },
       select: { id: true },
@@ -508,7 +529,7 @@ export class ReportService implements IReportService {
   }
 
   async addComment(reportId: string, body: string, actor: ActorContext): Promise<ReportCommentDto> {
-    const scope = this._actorReportScope(actor);
+    const scope = await this._actorReportScope(actor);
     const report = await prisma.audit_Report.findFirst({
       where: { id: reportId, deleted_at: null, ...(scope ?? {}) },
       include: {
@@ -602,7 +623,7 @@ export class ReportService implements IReportService {
   }
 
   async exportReport(id: string, format: 'docx' | 'pdf', actor: ActorContext): Promise<ExportedAuditFile> {
-    const scope = this._actorReportScope(actor);
+    const scope = await this._actorReportScope(actor);
     const exists = await prisma.audit_Report.count({
       where: { id, deleted_at: null, ...(scope ?? {}) },
     });
