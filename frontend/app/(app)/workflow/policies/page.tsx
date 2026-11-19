@@ -17,6 +17,9 @@ import type { EscalationPolicy } from '@/lib/types/domain';
 
 const AUDIT_TYPES = [...SELECTABLE_AUDIT_TYPES.map((t) => t.value), 'all'];
 
+// What the server uses when nothing has been saved (escalation.service DEFAULT_THRESHOLDS).
+const SYSTEM_DEFAULT = { level1Hours: 24, level2Hours: 72, level3Hours: 120, level4Hours: 168 };
+
 export default function EscalationPoliciesPage(): JSX.Element | null {
   const router = useRouter();
   const { hasPermission } = usePermissions();
@@ -53,6 +56,27 @@ export default function EscalationPoliciesPage(): JSX.Element | null {
     <div>
       <PageHeader title="Escalation policies" subtitle="Wait times before escalation per audit type." />
 
+      <Card className="mb-4">
+        <div className="space-y-2 text-sm text-text-secondary">
+          <p className="font-medium text-text-primary">How escalation works</p>
+          <p>
+            <span className="font-medium text-text-primary">Audit past its OLA deadline.</span> Step 1 goes to the
+            people in charge of that audit (its lead auditor and audit manager). Steps 2, 3 and 4 go to the Head of
+            Internal Audit. A sole auditor&apos;s audit goes to the Head of Internal Audit at every step. Uses the row
+            for the audit&apos;s type; a type with nothing saved uses the All row.
+          </p>
+          <p>
+            <span className="font-medium text-text-primary">Approval waiting in someone&apos;s inbox.</span> Step 1
+            reminds the person who has to approve. Steps 2, 3 and 4 go to the Head of Internal Audit. Approvals always
+            use the All row.
+          </p>
+          <p>
+            Hours count from the OLA deadline (or from when the approval arrived) for step 1, and from the previous step
+            for each step after that. Nothing is sent after step 4.
+          </p>
+        </div>
+      </Card>
+
       {policies.isLoading ? (
         <Card>
           <Skeleton className="h-12 w-full" />
@@ -77,9 +101,9 @@ export default function EscalationPoliciesPage(): JSX.Element | null {
               <tbody className="divide-y divide-border bg-white">
                 {AUDIT_TYPES.map((t) => (
                   <PolicyRow
-                    key={t}
+                    key={`${t}-${findPolicy(t)?.updatedAt ?? ''}-${findPolicy('all')?.updatedAt ?? ''}`}
                     auditType={t}
-                    policy={findPolicy(t)}
+                    policy={findPolicy(t) ?? (t === 'all' ? undefined : findPolicy('all'))}
                     onSave={(dto) => upsert.mutate(dto)}
                     isSaving={upsert.isPending}
                   />
@@ -104,14 +128,16 @@ const PolicyRow = ({
   onSave: (dto: { auditType: string; level1Hours: number; level2Hours: number; level3Hours: number; level4Hours: number }) => void;
   isSaving: boolean;
 }): JSX.Element => {
-  const [l1, setL1] = useState(policy?.level1Hours ?? 24);
-  const [l2, setL2] = useState(policy?.level2Hours ?? 48);
-  const [l3, setL3] = useState(policy?.level3Hours ?? 72);
-  const [l4, setL4] = useState(policy?.level4Hours ?? 96);
+  const [l1, setL1] = useState(policy?.level1Hours ?? SYSTEM_DEFAULT.level1Hours);
+  const [l2, setL2] = useState(policy?.level2Hours ?? SYSTEM_DEFAULT.level2Hours);
+  const [l3, setL3] = useState(policy?.level3Hours ?? SYSTEM_DEFAULT.level3Hours);
+  const [l4, setL4] = useState(policy?.level4Hours ?? SYSTEM_DEFAULT.level4Hours);
 
   return (
     <tr>
-      <td className="px-4 py-3 font-medium text-text-primary">{auditTypeLabel(auditType)}</td>
+      <td className="px-4 py-3 font-medium text-text-primary">
+        {auditType === 'all' ? 'All (and every approval)' : auditTypeLabel(auditType)}
+      </td>
       <td className="px-4 py-3"><Input type="number" value={l1} onChange={(e) => setL1(Number(e.target.value))} className="w-24 h-8" /></td>
       <td className="px-4 py-3"><Input type="number" value={l2} onChange={(e) => setL2(Number(e.target.value))} className="w-24 h-8" /></td>
       <td className="px-4 py-3"><Input type="number" value={l3} onChange={(e) => setL3(Number(e.target.value))} className="w-24 h-8" /></td>

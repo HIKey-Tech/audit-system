@@ -12,7 +12,8 @@ import {
   WorkflowEscalationEntityType,
   WorkflowEscalationReason,
 } from '../../../domain/enum/workflow.enum';
-import { assertHasPermission, getEscalationMatrix, hasElapsed } from '../../../utility/workflow.utility';
+import { assertHasPermission, hasElapsed } from '../../../utility/workflow.utility';
+import { LIFECYCLE_NOTIFY_PERMISSION } from '../../../../audit/utility/lifecycle-notify.utility';
 import { UpsertEscalationPolicyRequestDto } from '../../dto/request/escalation.request.dto';
 import {
   EscalationPolicyResponseDto,
@@ -339,21 +340,29 @@ export class EscalationService implements IEscalationService {
       last_name: true,
     } as const;
 
-    const matrix = await getEscalationMatrix();
-
     if (entityType === WorkflowEscalationEntityType.AuditEngagement) {
       const engagement = await prisma.audit_Engagement.findFirst({
         where: { id: entityId, deleted_at: null },
         select: {
+          lead_auditor_id: true,
+          audit_manager_id: true,
           lead_auditor: { select: targetSelect },
           audit_manager: { select: targetSelect },
+          _count: { select: { workflow_assignments: true } },
         },
       });
       if (!engagement) throw AppError.notFound('Audit engagement');
-      if (level === 1) return [engagement.lead_auditor];
-      if (level === 2) return [engagement.audit_manager];
-      if (level === 3) return this._getUsersByRoles(matrix.auditEngagement.level3);
-      return this._getUsersByRoles(matrix.auditEngagement.beyond);
+      // A sole auditor (lead = manager, no team) has nobody above them on the audit: every step goes to the Head of
+      // Internal Audit. A team audit first tells the people in charge of it (its lead and its manager — positions on
+      // this audit, not roles), then the Head of Internal Audit at every later step.
+      const sole =
+        engagement.lead_auditor_id === engagement.audit_manager_id && engagement._count.workflow_assignments === 0;
+      if (level === 1 && !sole) {
+        return engagement.lead_auditor_id === engagement.audit_manager_id
+          ? [engagement.lead_auditor]
+          : [engagement.lead_auditor, engagement.audit_manager];
+      }
+      return this._getHeadsOfInternalAudit();
     }
 
     if (entityType === WorkflowEscalationEntityType.WorkflowRequest) {
@@ -397,9 +406,8 @@ export class EscalationService implements IEscalationService {
       if (currentStep.required_permission) return this._getUsersByPermission(currentStep.required_permission);
       return [];
     }
-    if (level === 3) return this._getUsersByRoles(matrix.workflowApproval.level3);
-    if (level === 4) return this._getUsersByRoles(matrix.workflowApproval.level4);
-    return this._getUsersByRoles(matrix.workflowApproval.otherwise);
+    // Step 1 reminded whoever has to approve; every later step goes to the Head of Internal Audit.
+    return this._getHeadsOfInternalAudit();
   }
   private async _assertCanViewEscalationHistory(
     entityType: WorkflowEscalationEntityType,
@@ -459,13 +467,19 @@ export class EscalationService implements IEscalationService {
     throw AppError.forbidden('You do not have access to these escalations');
   }
 
-  private async _getUsersByRoles(roleNames: string[]): Promise<NotificationTarget[]> {
-    if (roleNames.length === 0) return [];
+  /**
+   * The Head of Internal Audit, found by permission rather than role name: the only people who hold
+   * `engagement:notify_lifecycle` (oversight of every audit). The super admin account is left out.
+   */
+  private async _getHeadsOfInternalAudit(): Promise<NotificationTarget[]> {
     return prisma.user.findMany({
       where: {
         deleted_at: null,
         is_active: true,
-        user_roles: { some: { role: { name: { in: roleNames } } } },
+        is_super_admin: false,
+        user_roles: {
+          some: { role: { role_permissions: { some: { permission: { slug: LIFECYCLE_NOTIFY_PERMISSION } } } } },
+        },
       },
       select: {
         id: true,
