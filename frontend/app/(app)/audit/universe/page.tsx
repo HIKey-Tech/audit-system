@@ -90,7 +90,7 @@ export default function UniverseListPage(): JSX.Element {
     },
     {
       key: 'owner',
-      header: 'Owners',
+      header: 'Owners (audited)',
       render: (e) => {
         const allNames =
           e.owners && e.owners.length > 0
@@ -204,7 +204,7 @@ export default function UniverseListPage(): JSX.Element {
     <div>
       <PageHeader
         title="Audit Universe"
-        subtitle="Departments, systems, processes, assets and projects in the audit scope."
+        subtitle="Departments, units, systems, processes, assets and projects in the audit scope."
         actions={
           canCreate ? (
             <Button
@@ -241,6 +241,7 @@ export default function UniverseListPage(): JSX.Element {
             <option value="">All categories</option>
             <option value="department">Department</option>
             <option value="system">System</option>
+            <option value="unit">Unit</option>
             <option value="process">Process</option>
             <option value="asset">Asset</option>
             <option value="project">Project</option>

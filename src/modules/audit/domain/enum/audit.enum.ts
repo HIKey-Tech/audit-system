@@ -52,6 +52,7 @@ export enum AuditFrequency {
 
 export enum UniverseCategory {
   Department = 'department',
+  Unit = 'unit',
   System = 'system',
   Process = 'process',
   Asset = 'asset',

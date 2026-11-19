@@ -19,7 +19,7 @@ import { universeApi } from '@/lib/api/audit';
 import { usersApi } from '@/lib/api/users';
 import type { AuditUniverseEntity } from '@/lib/types/domain';
 
-const VALID_CATEGORIES = ['department', 'system', 'process', 'asset', 'project'] as const;
+const VALID_CATEGORIES = ['department', 'unit', 'system', 'process', 'asset', 'project'] as const;
 const VALID_FREQUENCIES = ['monthly', 'quarterly', 'biannual', 'annual', 'on_demand'] as const;
 
 const Schema = z.object({
@@ -46,6 +46,14 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
   const usersList = useQuery({
     queryKey: ['users', 'directory'],
     queryFn: () => usersApi.directory(),
+    enabled: open,
+    staleTime: 5 * 60_000,
+  });
+
+  // Used to warn when an Internal Audit person is picked as an owner (owners are the people being audited).
+  const rolesList = useQuery({
+    queryKey: ['users', 'with-roles'],
+    queryFn: () => usersApi.list({ pageSize: 100 }),
     enabled: open,
     staleTime: 5 * 60_000,
   });
@@ -160,6 +168,12 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
   const status = watch('status');
   const auditFrequency = watch('auditFrequency');
 
+  const AUDIT_TEAM_ROLES = ['head_internal_audit', 'financial_auditor', 'compliance_auditor', 'system_auditor', 'dg'];
+  const auditorOwners = ownerIds
+    .map((id) => rolesList.data?.items.find((u) => u.id === id))
+    .filter((u): u is NonNullable<typeof u> => Boolean(u) && (u as { roles: Array<{ name: string }> }).roles.some((r) => AUDIT_TEAM_ROLES.includes(r.name)))
+    .map((u) => u.displayName || `${u.firstName} ${u.lastName}`.trim());
+
   const resolveOwnerName = (id: string): string => {
     const u = usersList.data?.find((x) => x.id === id);
     if (u) return u.displayName || `${u.firstName} ${u.lastName}`.trim() || id;
@@ -225,6 +239,7 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
             <Select error={errors.category?.message} value={category} {...register('category')}>
               <option value="department">Department</option>
               <option value="system">System</option>
+              <option value="unit">Unit</option>
               <option value="process">Process</option>
               <option value="asset">Asset</option>
               <option value="project">Project</option>
@@ -244,10 +259,10 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
         </div>
 
         <FormField
-          label="Owners"
+          label="Owners: who answers for this area (the people being audited)"
           required
           error={errors.ownerIds?.message}
-          hint="Select one or more owners responsible for this entity. The first owner is the primary owner."
+          hint="The owner is the head of this department, unit or system: the person who is audited and who answers for it. Do not pick the auditor who will audit it; Internal Audit chooses its own lead when an audit is started. Owner has not signed in to IAMS yet, so they are not in the list? That is expected: use 'Add by AD corporate email' under the box and type their email. The first owner is the primary owner."
         >
           <UserSelect
             value=""
@@ -288,6 +303,14 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
                 </span>
               ))}
             </div>
+          )}
+          {auditorOwners.length > 0 && (
+            <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
+              <span className="font-semibold">{auditorOwners.join(', ')}</span>{' '}
+              {auditorOwners.length === 1 ? 'is' : 'are'} on the Internal Audit team. An owner is the person being audited
+              (the head of this area), not the auditor in charge. If you meant the auditor, leave them off here; the
+              audit lead is chosen when an audit is started.
+            </p>
           )}
         </FormField>
 

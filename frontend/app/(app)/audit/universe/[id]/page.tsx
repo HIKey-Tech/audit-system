@@ -227,7 +227,7 @@ export default function UniverseDetailPage(): JSX.Element {
             </div>
             <div className="sm:col-span-2">
               <dt className="text-[10px] font-semibold uppercase tracking-wider text-text-secondary">
-                {owners.length > 1 ? 'Owners' : 'Owner'}
+                {owners.length > 1 ? 'Owners' : 'Owner'} (the people being audited)
               </dt>
               <dd className="mt-1.5 flex flex-wrap gap-1.5">
                 {owners.map((owner) => (

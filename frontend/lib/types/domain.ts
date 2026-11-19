@@ -234,7 +234,7 @@ export interface AuditAnalytics {
 // ============================================================
 // Audit
 // ============================================================
-export type AuditCategory = 'department' | 'system' | 'process' | 'asset' | 'project';
+export type AuditCategory = 'department' | 'unit' | 'system' | 'process' | 'asset' | 'project';
 export type AuditEntityStatus = 'active' | 'inactive';
 export type AuditFrequency =
   | 'monthly'

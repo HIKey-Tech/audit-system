@@ -177,7 +177,7 @@ export const CreateEngagementSlideOver = ({
             excludeIds={[lead, auditee].filter(Boolean)}
           />
         </FormField>
-        <FormField label="Auditee" required error={errors.auditeeId?.message}>
+        <FormField label="Main auditee (the owner of the area being audited)" required error={errors.auditeeId?.message}>
           <UserSelect
             value={auditee}
             onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })}
