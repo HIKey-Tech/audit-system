@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils/cn';
 import { PageHeader } from '@/components/ui/PageHeader';
 import { Card } from '@/components/ui/Card';
 import { HelpMarkdown } from '@/components/help/HelpMarkdown';
+import { RoleGuides } from '@/components/help/RoleGuides';
 import { usePermissions } from '@/lib/hooks/usePermissions';
 import { useSession } from '@/components/providers/AuthProvider';
 import { gettingStartedKey } from '@/components/dashboard/GettingStarted';
@@ -30,11 +31,25 @@ const COMMON_TASKS: Task[] = [
 const AUDITOR_TASKS: Task[] = [
   { label: 'Start a new audit', id: 'wizard' },
   { label: 'Test controls and record results', id: 'checklists' },
-  { label: 'Write and submit a working paper', id: 'wp' },
+  { label: 'Start an audit alone (sole auditor) or with a team', id: 'ch-sole' },
+  { label: 'Write a working paper, and what it is for', id: 'wp-explained' },
+  { label: 'Open a Word file someone sent me', id: 'open-word' },
   { label: 'Ask the auditee for documents', id: 'evreq' },
   { label: 'Raise a finding', id: 'finding-raise' },
   { label: 'Draw an audit sample', id: 'sampling' },
   { label: 'Write and issue the review', id: 'review-flow' },
+];
+
+const HEAD_TASKS: Task[] = [
+  { label: 'See every audit and who is told what', id: 'visibility' },
+  { label: 'Approve a programme or sign a report', id: 'approve-do' },
+  { label: 'How a sole auditor’s report reaches me', id: 'ch-sole' },
+];
+
+const DG_TASKS: Task[] = [
+  { label: 'Read and sign a report sent to me', id: 'approve-do' },
+  { label: 'Look through the audit sent to me', id: 'dg-view' },
+  { label: 'What am I told, and when?', id: 'notices' },
 ];
 
 const AUDITEE_TASKS: Task[] = [
@@ -111,6 +126,8 @@ const HelpCenterInner = (): JSX.Element => {
   }, [article]);
 
   const roleTasks: Task[] = [
+    ...(hasPermission('engagement:read_all') ? HEAD_TASKS : []),
+    ...(hasPermission('report:approve:final') && !isFieldAuditor && !hasPermission('engagement:read_all') ? DG_TASKS : []),
     ...(isAuditee ? AUDITEE_TASKS : []),
     ...(isFieldAuditor || canManageAuditProgramme ? AUDITOR_TASKS : []),
     ...(hasPermission('user:read') || hasPermission('settings:read') ? ADMIN_TASKS : []),
@@ -322,6 +339,7 @@ const HelpCenterInner = (): JSX.Element => {
                 <TaskList title="For your role" tasks={roleTasks} onPick={(id) => go({ a: id })} />
               )}
               <TaskList title="Everyone" tasks={COMMON_TASKS} onPick={(id) => go({ a: id })} />
+              <RoleGuides />
 
               <div>
                 <h2 className="mb-2 text-sm font-semibold text-text-primary">Browse the guide</h2>

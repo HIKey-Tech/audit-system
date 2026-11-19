@@ -41,12 +41,39 @@ const STEPS_MANAGER: Step[] = [
   SHORTCUTS,
 ];
 
+/** Auditors who plan and start their own audits (Financial, System, Compliance): the full journey, in order. */
+const STEPS_AUDITOR_START: Step[] = [
+  SIGNATURE,
+  { id: 'universe', label: 'Add what you audit: the universe', hint: 'Entities, with the staff in charge of each.', href: '/audit/universe', help: 'universe-add' },
+  { id: 'programme', label: 'Plan the year: audit programme', hint: 'Create one and fill it with Populate from Universe.', href: '/audit/plans', help: 'prog-create' },
+  { id: 'start', label: 'Start an audit', hint: 'Alone (sole auditor) or with a team.', href: '/audit/engagements', help: 'ch-sole' },
+  { id: 'wp', label: 'Write a working paper', hint: 'Mark it complete (alone) or submit it (team).', href: '/audit/engagements', help: 'wp-explained' },
+  SHORTCUTS,
+];
+
 const STEPS_AUDITOR: Step[] = [
   SIGNATURE,
   { id: 'engagement', label: 'Open your engagement', hint: 'Check “What’s next” to see what it is waiting for.', href: '/audit/engagements', help: 'eng-overview' },
   { id: 'checklist', label: 'Test a control', hint: 'Record Passed, Failed or Not applicable.', href: '/audit/engagements', help: 'checklists' },
   { id: 'wp', label: 'Write a working paper', hint: 'Save as draft, then submit for review.', href: '/audit/engagements', help: 'wp' },
   { id: 'finding', label: 'Raise a finding', hint: 'From a failed control, with root cause and recommendation.', href: '/audit/findings', help: 'finding-raise' },
+  SHORTCUTS,
+];
+
+/** Head of Internal Audit: never does an audit; watches every audit, approves and signs. */
+const STEPS_HEAD: Step[] = [
+  SIGNATURE,
+  { id: 'approvals', label: 'Clear your approvals', hint: 'Programmes and reports waiting for your signature.', href: '/workflow/approvals', help: 'approve-do' },
+  { id: 'all-audits', label: 'See every audit', hint: 'You see all of them; open one and read What’s next.', href: '/audit/engagements', help: 'visibility' },
+  { id: 'notices', label: 'Know what you are told', hint: 'New audits, stage changes and approvals name the people involved.', href: '/notifications', help: 'notices' },
+  SHORTCUTS,
+];
+
+/** Director General: never does an audit; only told when a report needs final approval. */
+const STEPS_DG: Step[] = [
+  SIGNATURE,
+  { id: 'approvals', label: 'Read and sign what is sent to you', hint: 'Reports and programmes waiting for final approval.', href: '/workflow/approvals', help: 'approve-do' },
+  { id: 'dg-view', label: 'Look through the audit behind a report', hint: 'View only: working papers, evidence and findings.', href: '/audit/engagements', help: 'dg-view' },
   SHORTCUTS,
 ];
 
@@ -88,18 +115,21 @@ const read = (key: string): Stored => {
  */
 export const GettingStarted = (): JSX.Element | null => {
   const session = useSession();
-  const { isAuditee, isFieldAuditor, canManageAuditProgramme, isExecutive } = usePermissions();
+  const { isAuditee, isFieldAuditor, canManageAuditProgramme, isExecutive, hasPermission } = usePermissions();
   const key = gettingStartedKey(session.id);
   const [state, setState] = useState<Stored | null>(null);
 
   useEffect(() => setState(read(key)), [key]);
 
   const steps = useMemo(() => {
+    if (hasPermission('report:approve:oversight') && hasPermission('engagement:read_all')) return STEPS_HEAD;
+    if (hasPermission('report:approve:final') && !hasPermission('working_paper:create')) return STEPS_DG;
+    if (canManageAuditProgramme && isFieldAuditor) return STEPS_AUDITOR_START;
     if (canManageAuditProgramme) return STEPS_MANAGER;
     if (isFieldAuditor) return STEPS_AUDITOR;
     if (isExecutive) return STEPS_EXECUTIVE;
     return STEPS_VIEWER;
-  }, [canManageAuditProgramme, isFieldAuditor, isExecutive]);
+  }, [canManageAuditProgramme, isFieldAuditor, isExecutive, hasPermission]);
 
   const save = useCallback(
     (next: Stored) => {

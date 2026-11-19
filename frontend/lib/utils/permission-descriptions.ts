@@ -277,6 +277,11 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     who: 'Anyone needing visibility into the organizational audit landscape and universe entities',
     summary: 'Allows viewing the audit universe. For anyone needing visibility into auditable entities.',
   },
+  'engagement:notify_lifecycle': {
+    what: 'Receive an email and an in-app notice whenever any audit is created, starts, changes stage or closes, naming the auditors and the auditee',
+    who: 'Staff who keep watch over every audit in the department',
+    summary: 'Allows being told about every audit as it starts and moves. For staff who oversee all audits.',
+  },
   'universe:create': {
     what: 'Add new business units, operational processes, or systems to the audit universe',
     who: 'Personnel responsible for mapping and maintaining the organizational audit scope',
@@ -323,7 +328,7 @@ export const PERMISSION_EXPLANATIONS: Record<string, PermissionExplanation> = {
     summary: 'Allows formally approving audit plans. For anyone authorized to sanction annual audit programmes.',
   },
   'plan:approve:final': {
-    what: 'Give final approval to an audit programme after the Head of Internal Audit has approved it',
+    what: 'Give final approval to an audit programme after the earlier approval level has approved it',
     who: 'The Director General, as the final approver of annual and periodic audit programmes',
     summary: 'Allows the final (Director General) approval of audit programmes. Held by the DG only.',
   },
