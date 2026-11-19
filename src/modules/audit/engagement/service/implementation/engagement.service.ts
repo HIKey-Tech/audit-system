@@ -327,7 +327,8 @@ export class EngagementService implements IEngagementService {
       }
 
       // 3. Notify Audit Manager
-      if (targets.notifyManager && engagement.audit_manager_id) {
+      // A sole auditor is both lead and manager: one assignment notice is enough, not two.
+      if (targets.notifyManager && engagement.audit_manager_id && engagement.audit_manager_id !== engagement.lead_auditor_id) {
         await notificationQueueService.enqueueSafe('in_app', {
           userId: engagement.audit_manager_id,
           title: `Audit Manager Assignment: ${engagement.title}`,

@@ -97,7 +97,13 @@ export const DocumentEditor = ({ doc }: { doc: WorkspaceDocument }): JSX.Element
   const importWord = useMutation({
     mutationFn: (file: File) => workspaceApi.importWord(file),
     onSuccess: (r) => {
-      editorRef.current?.chain().focus().insertContent(r.html).run();
+      const ed = editorRef.current;
+      if (ed) {
+        // Add it after the block the caret is in, so a list or table at the caret is not split open.
+        const { $to } = ed.state.selection;
+        const at = $to.depth >= 1 ? $to.after(1) : $to.pos;
+        ed.chain().focus().insertContentAt(at, r.html).run();
+      }
       toast.success('Word file added at the cursor');
       if (r.warnings[0]) toast.warning(`Some Word features could not be carried over: ${r.warnings[0]}`);
     },

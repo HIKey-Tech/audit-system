@@ -423,9 +423,9 @@ export default function IntegrationsPage(): JSX.Element {
                 <span className="text-xs font-medium text-text-muted">Total Ingested Tickets</span>
                 <Database className="h-4 w-4 text-primary" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-text-primary">
+              <div className="mt-2 text-2xl font-bold text-text-primary">
                 {summaryQuery.isLoading ? <Skeleton className="h-8 w-16" /> : summaryQuery.data?.total ?? 0}
-              </p>
+              </div>
               <span className="text-[11px] text-text-muted">In local audit cache</span>
             </Card>
 
@@ -434,13 +434,13 @@ export default function IntegrationsPage(): JSX.Element {
                 <span className="text-xs font-medium text-text-muted">SLA Breached (BREAK)</span>
                 <ShieldAlert className="h-4 w-4 text-danger" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-danger">
+              <div className="mt-2 text-2xl font-bold text-danger">
                 {summaryQuery.isLoading ? (
                   <Skeleton className="h-8 w-16" />
                 ) : (
                   summaryQuery.data?.slaBreachedCount ?? 0
                 )}
-              </p>
+              </div>
               <span className="text-[11px] text-text-muted">High priority audit signals</span>
             </Card>
 
@@ -449,9 +449,9 @@ export default function IntegrationsPage(): JSX.Element {
                 <span className="text-xs font-medium text-text-muted">Open / In Progress</span>
                 <Clock className="h-4 w-4 text-amber-500" />
               </div>
-              <p className="mt-2 text-2xl font-bold text-text-primary">
+              <div className="mt-2 text-2xl font-bold text-text-primary">
                 {summaryQuery.isLoading ? <Skeleton className="h-8 w-16" /> : summaryQuery.data?.openCount ?? 0}
-              </p>
+              </div>
               <span className="text-[11px] text-text-muted">Active tickets</span>
             </Card>
 

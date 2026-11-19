@@ -306,11 +306,20 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
 
         <FormField label="Roles">
           <div ref={roleDropRef} className="relative">
-            <button
-              type="button"
+            <div
+              role="button"
+              tabIndex={0}
+              aria-haspopup="listbox"
+              aria-expanded={roleDropOpen}
               onClick={() => setRoleDropOpen((o) => !o)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' || e.key === ' ') {
+                  e.preventDefault();
+                  setRoleDropOpen((o) => !o);
+                }
+              }}
               className={cn(
-                'w-full rounded-md border bg-white px-3 py-2 text-sm text-left',
+                'w-full cursor-pointer rounded-md border bg-white px-3 py-2 text-sm text-left',
                 'focus:outline-none focus:ring-2 focus:ring-primary/30 focus:border-primary',
                 'border-border hover:border-primary/50 hover:bg-surface-alt transition-colors',
                 'flex items-center justify-between gap-2 min-h-[40px]',
@@ -348,7 +357,7 @@ export const UserFormSlideOver = ({ open, onClose, user }: Props): JSX.Element =
                   roleDropOpen && 'rotate-180',
                 )}
               />
-            </button>
+            </div>
 
             {roleDropOpen && (
               <div className="absolute z-50 mt-2 w-full overflow-hidden rounded-lg border border-border bg-white p-1 shadow-[0_18px_45px_rgba(15,23,42,0.18)] ring-1 ring-black/5 animate-fade-in">
