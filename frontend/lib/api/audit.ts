@@ -188,7 +188,7 @@ export interface CreateEngagementFromPlanDto {
   additionalUniverseIds?: string[];
   title: string;
   leadAuditorId: string;
-  auditManagerId: string;
+  auditManagerId?: string;
   auditeeId: string;
   plannedStartDate: string;
   plannedEndDate: string;
@@ -206,7 +206,7 @@ export interface CreateAdhocEngagementDto {
   additionalUniverseIds?: string[];
   title: string;
   leadAuditorId: string;
-  auditManagerId: string;
+  auditManagerId?: string;
   auditeeId: string;
   plannedStartDate: string;
   plannedEndDate: string;

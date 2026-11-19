@@ -27,7 +27,7 @@ function toISODatetime(dateStr: string): string {
 const Schema = z.object({
   title: z.string().min(2).max(200),
   leadAuditorId: z.string().min(1, 'Lead auditor required'),
-  auditManagerId: z.string().min(1, 'Audit manager required'),
+  auditManagerId: z.string().optional(),
   auditeeId: z.string().min(1, 'Auditee required'),
   plannedStartDate: z.string().min(1),
   plannedEndDate: z.string().min(1),
@@ -105,7 +105,7 @@ export const CreateEngagementSlideOver = ({
       plansApi.createEngagement(itemId, {
         title: v.title,
         leadAuditorId: v.leadAuditorId,
-        auditManagerId: v.auditManagerId,
+        auditManagerId: v.auditManagerId || undefined,
         auditeeId: v.auditeeId,
         plannedStartDate: toISODatetime(v.plannedStartDate),
         plannedEndDate: toISODatetime(v.plannedEndDate),
@@ -165,16 +165,16 @@ export const CreateEngagementSlideOver = ({
             value={lead}
             onChange={(v) => setValue('leadAuditorId', v, { shouldValidate: true })}
             error={errors.leadAuditorId?.message}
-            excludeIds={[manager, auditee].filter(Boolean)}
+            excludeIds={[manager, auditee].filter((x): x is string => Boolean(x))}
           />
         </FormField>
-        <FormField label="Audit manager" required error={errors.auditManagerId?.message}>
+        <FormField label="Audit manager (optional: leave empty if you are auditing alone)" error={errors.auditManagerId?.message}>
           <ScoredUserSelect
             role="audit_manager"
             value={manager}
             onChange={(v) => setValue('auditManagerId', v, { shouldValidate: true })}
             error={errors.auditManagerId?.message}
-            excludeIds={[lead, auditee].filter(Boolean)}
+            excludeIds={[lead, auditee].filter((x): x is string => Boolean(x))}
           />
         </FormField>
         <FormField label="Main auditee: the person being audited (not the auditor)" required error={errors.auditeeId?.message}>
@@ -182,7 +182,7 @@ export const CreateEngagementSlideOver = ({
             value={auditee}
             onChange={(v) => setValue('auditeeId', v, { shouldValidate: true })}
             error={errors.auditeeId?.message}
-            excludeIds={[lead, manager].filter(Boolean)}
+            excludeIds={[lead, manager].filter((x): x is string => Boolean(x))}
           />
         </FormField>
 

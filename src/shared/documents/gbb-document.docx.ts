@@ -31,7 +31,6 @@ import {
   WidthType,
 } from 'docx';
 import {
-  GBB_APPROVAL_HEADERS,
   GBB_CHANGE_CONTROL_NOTE,
   GBB_CHANGE_HISTORY_HEADERS,
   GBB_COLOR,
@@ -51,7 +50,7 @@ import {
   gbbValidityText,
   loadGbbLogo,
 } from './gbb-document.constants';
-import { GbbDocumentModel, GbbSignature, versionLabel } from './gbb-document.model';
+import { GbbDocumentModel, GbbSignature, signOffRows, versionLabel } from './gbb-document.model';
 
 /** One numbered section of the body. `children` is the section's content, built by the caller. */
 export interface GbbDocxSection {
@@ -123,6 +122,9 @@ const signatureParagraph = (signature: GbbSignature): Paragraph =>
       }),
     ],
   });
+
+/** Name / Position / Date, across the full text width (9360 twips). */
+const APPROVAL_LIST_GRID = [3600, 3400, 2360] as const;
 
 interface GridTableOptions {
   grid: readonly number[];
@@ -315,17 +317,17 @@ const frontMatter = (model: GbbDocumentModel): (Paragraph | Table)[] => {
       borderSize: 4,
     }),
 
+    // Signatures are not drawn in this table: they go at the bottom of the document, as in any signed document.
     frontHeading('Approval List'),
     gridTable({
-      grid: GBB_TABLE_GRID.approval,
-      header: GBB_APPROVAL_HEADERS,
+      grid: APPROVAL_LIST_GRID,
+      header: ['Name', 'Position', 'Date'],
       rows: hasRows(
-        model.approvals.map((r) => [r.name, r.position, r.signature ? signatureParagraph(r.signature) : (r.signatureNote ?? ''), r.date]),
-        ['—', '', '', ''],
+        model.approvals.map((r) => [r.name, r.position, r.date]),
+        ['—', '', ''],
       ),
       borderColor: GBB_COLOR.gridBlack,
       borderSize: 4,
-      rowHeight: 720,
     }),
 
     frontHeading('Change Control', { size: GBB_SIZE.bigHeading }),
@@ -413,6 +415,44 @@ const buildFooter = (model: GbbDocumentModel): Footer => {
   });
 };
 
+/**
+ * The sign-off at the very end of the document: for each person, what they did ("Prepared by"), their signature
+ * (or room to sign while it is still pending), a line, their name, position and date. A plain block, not a table.
+ */
+const signOffBlock = (model: GbbDocumentModel): Paragraph[] => {
+  const rows = signOffRows(model);
+  if (rows.length === 0) return [];
+  const out: Paragraph[] = [
+    new Paragraph({ keepNext: true, spacing: { before: 480, after: 60 }, children: [text('Sign-off', { size: GBB_SIZE.frontHeading, bold: true })] }),
+  ];
+  for (const r of rows) {
+    out.push(
+      new Paragraph({ keepNext: true, spacing: { before: 280, after: 40 }, children: [text(`${r.role ?? 'Approved by'}:`, { font: GBB_FONT.body, size: GBB_SIZE.body, italics: true })] }),
+    );
+    out.push(
+      r.signature
+        ? new Paragraph({ keepNext: true, spacing: { after: 0, line: 240 }, children: [new ImageRun({ type: imageType(r.signature.mime), data: r.signature.buffer, transformation: { width: 130, height: 48 } })] })
+        : new Paragraph({
+            keepNext: true,
+            spacing: { before: 360, after: 0 },
+            children: r.signatureNote && !/^\[?digitally/i.test(r.signatureNote) ? [text(`(${r.signatureNote.toLowerCase()})`, { font: GBB_FONT.body, size: 18, italics: true })] : [],
+          }),
+    );
+    out.push(
+      new Paragraph({
+        keepNext: true,
+        spacing: { after: 40 },
+        indent: { right: 5400 },
+        border: { bottom: { style: BorderStyle.SINGLE, size: 6, color: '000000', space: 1 } },
+        children: [],
+      }),
+      new Paragraph({ keepNext: true, spacing: { after: 0 }, children: [text(r.name, { font: GBB_FONT.body, size: GBB_SIZE.body, bold: true })] }),
+      new Paragraph({ spacing: { after: 120 }, children: [text([r.position, r.date && r.date !== '—' ? r.date : ''].filter(Boolean).join('  ·  '), { font: GBB_FONT.body, size: 20 })] }),
+    );
+  }
+  return out;
+};
+
 /** Builds the complete Word document. */
 export const buildGbbDocxDocument = (model: GbbDocumentModel, sections: GbbDocxSection[]): Document => {
   const body: (Paragraph | Table)[] = [];
@@ -423,6 +463,7 @@ export const buildGbbDocxDocument = (model: GbbDocumentModel, sections: GbbDocxS
   body.push(
     heading(GBB_VALIDITY_HEADING, 1),
     new Paragraph({ children: [new TextRun({ text: gbbValidityText(model.lastReviewed) })] }),
+    ...signOffBlock(model),
   );
 
   const pageBorder = { style: BorderStyle.SINGLE, size: 4, color: 'auto', space: GBB_PAGE.borderSpacePt };

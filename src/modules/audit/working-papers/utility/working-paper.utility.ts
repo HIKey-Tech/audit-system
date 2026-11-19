@@ -255,7 +255,8 @@ export const toGbbModel = (data: WorkingPaperPdfData): GbbDocumentModel => {
       { name: data.auditorName, version: versionNumber, date },
       ...(data.signOff ?? []).map((s) => ({ name: s.name, version: versionNumber, date })),
     ],
-    approvals: (data.signOff ?? []).map((s) => ({
+    approvals: (data.signOff ?? []).map((s, i) => ({
+      role: /^(prepared|reviewed|approved)/i.test(s.role) ? s.role : i === 0 ? 'Prepared by' : 'Reviewed by',
       name: s.name,
       position: s.role,
       date: formatGbbDate(s.date) || s.date,

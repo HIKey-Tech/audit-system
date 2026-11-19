@@ -457,7 +457,7 @@ export const StartAuditWizard = ({
         ? await engagementsApi.createFromPlan({
             title: title.trim(),
             leadAuditorId,
-            auditManagerId,
+            auditManagerId: auditManagerId || undefined,
             auditeeId,
             plannedStartDate: toISO(start),
             plannedEndDate: toISO(end),
@@ -471,7 +471,7 @@ export const StartAuditWizard = ({
         : await engagementsApi.createAdhoc({
             title: title.trim(),
             leadAuditorId,
-            auditManagerId,
+            auditManagerId: auditManagerId || undefined,
             auditeeId,
             plannedStartDate: toISO(start),
             plannedEndDate: toISO(end),
@@ -526,7 +526,7 @@ export const StartAuditWizard = ({
     mode === 'plan' ? Boolean(planItemId) : Boolean(universeId) && adhocReason.trim().length >= 5;
   const teamValid =
     title.trim().length >= 2 &&
-    Boolean(leadAuditorId && auditManagerId && auditeeId) &&
+    Boolean(leadAuditorId && auditeeId) &&
     Boolean(start && end && sla) &&
     new Date(end) >= new Date(start) &&
     new Date(sla) >= new Date(start);
@@ -761,7 +761,7 @@ export const StartAuditWizard = ({
             <FormField label="Lead auditor" required tooltip="Owns fieldwork and day-to-day execution of the engagement. Ranked by skill match, workload and capacity.">
               <ScoredUserSelect role="lead_auditor" auditType={effectiveAuditType} priority={priority} value={leadAuditorId} onChange={setLeadAuditorId} excludeIds={[auditManagerId, auditeeId].filter(Boolean)} />
             </FormField>
-            <FormField label="Audit manager" required tooltip="Reviews and signs off the lead auditor's work. Lists only users who can approve.">
+            <FormField label="Audit manager (optional)" tooltip="Reviews and signs off the lead auditor's work. Leave it empty if you are doing this audit alone: you are then the sole auditor and another auditor reviews your working papers and report.">
               <ScoredUserSelect role="audit_manager" auditType={effectiveAuditType} priority={priority} value={auditManagerId} onChange={setAuditManagerId} excludeIds={[leadAuditorId, auditeeId].filter(Boolean)} />
             </FormField>
           </div>
@@ -912,7 +912,7 @@ export const StartAuditWizard = ({
             {mode === 'ad_hoc' && <Row label="Priority" value={priority} />}
             <Row label="Title" value={title} />
             <Row label="Lead auditor" value={userName(leadAuditorId)} />
-            <Row label="Audit manager" value={userName(auditManagerId)} />
+            <Row label="Audit manager" value={auditManagerId ? userName(auditManagerId) : 'None: sole auditor (another auditor reviews)'} />
             <Row label="Main auditee (being audited)" value={userName(auditeeId)} />
             {extraAuditeeIds.length > 0 && <Row label="Other auditees" value={extraAuditeeIds.map(userName).join(', ')} />}
             {extraAreaIds.length > 0 && <Row label="Other areas" value={extraAreaIds.map(entityName).join(', ')} />}

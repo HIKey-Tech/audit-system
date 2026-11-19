@@ -25,6 +25,8 @@ export interface GbbDistributionRow {
 }
 
 export interface GbbApprovalRow {
+  /** What this person did, shown above their signature at the end of the document: "Prepared by", "Reviewed by", "Approved by". */
+  role?: string;
   name: string;
   position: string;
   /** dd/mm/yyyy, or empty while the approval is still pending */
@@ -60,6 +62,13 @@ export interface GbbDocumentModel {
   /** Overrides the standard confidentiality wording on the cover. */
   confidentialityNotice?: string;
 }
+
+/**
+ * The people who signed (or still have to sign) the document, for the sign-off block at the end of the document.
+ * Rows with no real name (the "—" placeholder) are left out.
+ */
+export const signOffRows = (model: GbbDocumentModel): GbbApprovalRow[] =>
+  model.approvals.filter((a) => a.name && a.name !== '—');
 
 /** `Version 2.0` */
 export const versionLabel = (version: string): string => `Version ${version}`;

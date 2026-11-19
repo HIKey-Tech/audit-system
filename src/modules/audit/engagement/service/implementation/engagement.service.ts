@@ -119,9 +119,12 @@ export class EngagementService implements IEngagementService {
     auditManagerId: string | null | undefined,
     auditeeId: string | null | undefined,
   ): void {
-    const ids = [leadAuditorId, auditManagerId, auditeeId].filter((v): v is string => Boolean(v));
-    if (new Set(ids).size !== ids.length) {
-      throw AppError.badRequest('Lead auditor, audit manager and auditee must be three different people');
+    // A sole auditor is both lead and manager, so those two may be the same person. The auditee is always someone else.
+    if (auditeeId && (auditeeId === leadAuditorId || auditeeId === auditManagerId)) {
+      throw AppError.badRequest('The auditee must be a different person from the lead auditor and the audit manager');
+    }
+    if (leadAuditorId && auditManagerId && leadAuditorId !== auditManagerId && new Set([leadAuditorId, auditManagerId]).size !== 2) {
+      throw AppError.badRequest('Lead auditor and audit manager are invalid');
     }
   }
 
@@ -402,10 +405,12 @@ export class EngagementService implements IEngagementService {
 
   async createFromPlanItem(
     planItemId: string,
-    dto: CreateEngagementFromPlanRequestDto,
+    rawDto: CreateEngagementFromPlanRequestDto,
     actor: ActorContext,
   ): Promise<EngagementResponseDto> {
     assertHasPermission(actor.permissions, 'engagement:create');
+    // No manager chosen: the lead auditor is a sole auditor and also the manager.
+    const dto = { ...rawDto, auditManagerId: rawDto.auditManagerId ?? rawDto.leadAuditorId };
 
     const planItem = await prisma.audit_Plan_Item.findUnique({
       where: { id: planItemId },
@@ -471,9 +476,11 @@ export class EngagementService implements IEngagementService {
     return mapEngagementToResponse(engagement);
   }
 
-  async createAdhoc(dto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
+  async createAdhoc(rawDto: CreateAdhocEngagementRequestDto, actor: ActorContext): Promise<EngagementResponseDto> {
     assertHasPermission(actor.permissions, 'engagement:create');
-    if (!dto.adhocReason) throw AppError.badRequest('Ad-hoc reason is required');
+    if (!rawDto.adhocReason) throw AppError.badRequest('Ad-hoc reason is required');
+    // No manager chosen: the lead auditor is a sole auditor and also the manager.
+    const dto = { ...rawDto, auditManagerId: rawDto.auditManagerId ?? rawDto.leadAuditorId };
     await this._assertUniverseActive(dto.universeId);
     this._assertDistinctRoles(dto.leadAuditorId, dto.auditManagerId, dto.auditeeId);
     await this._assertManagerCanApprove(dto.auditManagerId);

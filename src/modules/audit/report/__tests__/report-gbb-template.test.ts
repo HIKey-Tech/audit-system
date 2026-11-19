@@ -79,17 +79,20 @@ describe('audit report in the GBB template', () => {
     expect(model.approvedBy).toBe('Bola Manager');
     expect(model.status).toBe('Approved');
     expect(model.changeHistory.map((r: { version: string }) => r.version)).toEqual(['Version 1.0', 'Version 2.0']);
-    expect(model.approvals).toHaveLength(2);
-    expect(model.approvals[0].signature).not.toBeNull();
-    expect(model.approvals[1].signatureNote).toBe('Pending Approval');
+    // The person who prepared the report comes first, then each approver in order.
+    expect(model.approvals).toHaveLength(3);
+    expect(model.approvals.map((a: { role: string }) => a.role)).toEqual(['Prepared by', 'Reviewed by', 'Approved by']);
+    expect(model.approvals[1].signature).not.toBeNull();
+    expect(model.approvals[2].signatureNote).toBe('Pending Approval');
   });
 
   it('falls back to pending approvers before submission, honouring the sign-off mode', () => {
     const caeOnly = service._buildGbbModel({ ...data, report: { ...data.report, signOffMode: 'cae_only' } }, config, null, new Map());
     const withDg = service._buildGbbModel(data, config, null, new Map());
-    expect(caeOnly.approvals).toHaveLength(2);
-    expect(withDg.approvals).toHaveLength(3);
-    expect(withDg.approvals.every((a: { signatureNote: string }) => a.signatureNote === 'Pending Submission')).toBe(true);
+    expect(caeOnly.approvals).toHaveLength(3); // preparer + manager + Head
+    expect(withDg.approvals).toHaveLength(4); // preparer + manager + Head + DG
+    expect(withDg.approvals.slice(1).every((a: { signatureNote: string }) => a.signatureNote === 'Pending Submission')).toBe(true);
+    expect(withDg.approvals[3].name).toBe('Director General');
   });
 
   it('Word export uses Letter, numbered template sections, assets, and a real contents field', async () => {
@@ -102,7 +105,9 @@ describe('audit report in the GBB template', () => {
     }
     expect(xml).not.toContain('1. Executive Summary');
     expect(xml).toContain('GBB/IA/RPT/AUD-2026-003');
-    expect(xml).toContain('Pending Approval');
+    expect(xml).toContain('Sign-off');
+    expect(xml).toContain('Prepared by:');
+    expect(xml).toContain('(pending approval)');
   });
 
   it('PDF export is a Letter document with the same numbered sections', async () => {

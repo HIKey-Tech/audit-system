@@ -15,7 +15,8 @@ export const ChecklistControlSchema = z.object({
 const EngagementBaseSchema = z.object({
   title: z.string().min(1).max(200),
   leadAuditorId: z.string().uuid(),
-  auditManagerId: z.string().uuid(),
+  /** Optional: when omitted the lead auditor is also the manager (a sole auditor), and another auditor reviews the work. */
+  auditManagerId: z.string().uuid().optional(),
   auditeeId: z.string().uuid(),
   plannedStartDate: z.string().datetime(),
   plannedEndDate: z.string().datetime(),

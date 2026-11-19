@@ -366,6 +366,24 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDefinition[] = [
     description: 'In-app variant of the programme-additions reminder. Variables: planTitle, pendingCount, daysWaiting.',
   },
 
+  // audit.universe.staff_in_charge
+  {
+    eventKey: 'audit.universe.staff_in_charge',
+    channel: 'email',
+    name: 'Staff In Charge of an Audit Universe Entity — Email',
+    subject: 'You have been put in charge of {{entityName}}',
+    body: 'Dear {{recipientName}},\n\nYou have been named the staff in charge of "{{entityName}}" in the IAMS Audit Universe. You will be the Internal Audit contact for this area: its audits, programme items and risk are yours to follow.\n\nOpen it: {{actionUrl}}\n\nRegards,\nIAMS — Internal Audit System',
+    description: 'Sent to a person when they are put in charge of an Audit Universe entity. Variables: recipientName, entityName, actionUrl.',
+  },
+  {
+    eventKey: 'audit.universe.staff_in_charge',
+    channel: 'in_app',
+    name: 'Staff In Charge of an Audit Universe Entity — In-App',
+    subject: null,
+    body: 'You have been named the staff in charge of "{{entityName}}" in the Audit Universe.',
+    description: 'In-app variant of the staff-in-charge notification. Variables: entityName.',
+  },
+
   // user.mfa.grace_reminder
   {
     eventKey: 'user.mfa.grace_reminder',

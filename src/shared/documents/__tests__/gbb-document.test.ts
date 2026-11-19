@@ -64,7 +64,7 @@ describe('GBB document kit — Word', () => {
     const positions = order.map((label) => doc.indexOf(label));
     expect(positions.every((p) => p >= 0)).toBe(true);
     expect([...positions].sort((a, b) => a - b)).toEqual(positions);
-    for (const grid of [GBB_TABLE_GRID.docInfo, GBB_TABLE_GRID.changeHistory, GBB_TABLE_GRID.distribution, GBB_TABLE_GRID.approval]) {
+    for (const grid of [GBB_TABLE_GRID.docInfo, GBB_TABLE_GRID.changeHistory, GBB_TABLE_GRID.distribution, [3600, 3400, 2360]]) {
       grid.forEach((w) => expect(doc).toContain(`w:w="${w}"`));
     }
     expect(doc).toContain(GBB_CONFIDENTIALITY_NOTICE);
@@ -192,3 +192,41 @@ describe('working paper in the GBB template', () => {
     expect(doc).toContain('Pending approval');
   });
 });
+
+describe('signatures sit at the bottom of the document, not in a table', () => {
+  const signed = {
+    ...model,
+    approvals: [
+      { role: 'Prepared by', name: 'Ada Lead', position: 'Lead Auditor', date: '17/11/2026' },
+      { role: 'Approved by', name: 'Kolawole Head', position: 'Head of Internal Audit', date: '18/11/2026', signature: { buffer: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4nGP4z8DwHwAFAAH/q842iQAAAABJRU5ErkJggg==', 'base64'), mime: 'image/png' } },
+    ],
+  };
+
+  it('the approval list has Name, Position and Date only: no signature column', async () => {
+    const { doc } = await unzip(Buffer.from(await Packer.toBuffer(buildGbbDocxDocument(signed, []))));
+    const table = doc.slice(doc.indexOf('Approval List'), doc.indexOf('Change Control'));
+    expect(table).not.toContain('Signature');
+    expect(table).not.toContain('<w:drawing>');
+  });
+
+  it('a sign-off block at the very end names what each person did, with their signature and name beneath', async () => {
+    const { doc } = await unzip(Buffer.from(await Packer.toBuffer(buildGbbDocxDocument(signed, []))));
+    const validity = doc.indexOf('Validity and Document Management');
+    const signOff = doc.indexOf('Sign-off');
+    expect(signOff).toBeGreaterThan(validity);
+    const tail = doc.slice(signOff);
+    expect(tail).toContain('Prepared by:');
+    expect(tail).toContain('Approved by:');
+    expect(tail).toContain('Kolawole Head');
+    expect(tail).toContain('<w:drawing>'); // the signature image
+    expect(tail).not.toContain('<w:tbl>'); // not in a table
+  });
+
+  it('the PDF has the same sign-off block at the end', () => {
+    const text = JSON.stringify(buildGbbPdfDefinition(signed, []).content);
+    expect(text.indexOf('Sign-off')).toBeGreaterThan(text.indexOf('Validity and Document Management'));
+    expect(text).toContain('Prepared by:');
+    expect(text).toContain('Kolawole Head');
+  });
+});
+

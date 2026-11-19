@@ -16,6 +16,8 @@ import {
 import { UniverseResponseDto, mapUniverseToResponse } from '../../dto/response/universe.response.dto';
 import { listUniverseReferenceBlockers, resolveUniverseOwners } from '../../utility/universe.utility';
 import { IUniverseService } from '../interface/universe.service.interface';
+import { notificationQueueService } from '../../../../messaging/service/implementation/notification-queue.service';
+import { config } from '../../../../../shared/config/app.config';
 import { IRegisterService } from '../../../../risk/register/service/interface/register.service.interface';
 
 const userBriefSelect = { id: true, display_name: true, first_name: true, last_name: true } as const;
@@ -36,7 +38,7 @@ export class UniverseService implements IUniverseService {
 
     const resolvedOwners = resolveUniverseOwners(dto);
     if (!resolvedOwners) {
-      throw AppError.badRequest('At least one owner is required');
+      throw AppError.badRequest('At least one staff in charge is required');
     }
     await this._assertOwnersActive([resolvedOwners.primaryOwnerId, ...resolvedOwners.additionalOwnerIds]);
 
@@ -72,6 +74,7 @@ export class UniverseService implements IUniverseService {
     });
 
     invalidatePlanningRecommendationsCache();
+    await this._notifyStaffInCharge(entity.id, entity.name, [resolvedOwners.primaryOwnerId, ...resolvedOwners.additionalOwnerIds], actor.id);
     logger.info('Audit universe entity created', { entityId: entity.id, actorId: actor.id });
     auditLogService.logAsync({
       userId: actor.id,
@@ -99,7 +102,7 @@ export class UniverseService implements IUniverseService {
     });
 
     if (dto.ownerIds !== undefined && !resolvedOwners) {
-      throw AppError.badRequest('At least one owner is required');
+      throw AppError.badRequest('At least one staff in charge is required');
     }
 
     if (resolvedOwners) {
@@ -146,6 +149,12 @@ export class UniverseService implements IUniverseService {
     });
 
     invalidatePlanningRecommendationsCache();
+    if (resolvedOwners) {
+      // Only the people newly put in charge are told; someone who already was is not emailed again.
+      const before_ids = new Set([before.owner_id, ...before.additional_owners.map((o) => o.user_id)]);
+      const now_ids = [resolvedOwners.primaryOwnerId, ...resolvedOwners.additionalOwnerIds];
+      await this._notifyStaffInCharge(id, entity.name, now_ids.filter((uid) => !before_ids.has(uid)), actor.id);
+    }
     logger.info('Audit universe entity updated', { entityId: id, actorId: actor.id });
     auditLogService.logAsync({
       userId: actor.id,
@@ -308,6 +317,44 @@ export class UniverseService implements IUniverseService {
     };
   }
 
+  /** Tells people they have been put in charge of an area. Never tells the person who just did it, and never fails the save. */
+  private async _notifyStaffInCharge(entityId: string, entityName: string, userIds: string[], actorId: string): Promise<void> {
+    const ids = [...new Set(userIds)].filter((id) => id !== actorId);
+    if (ids.length === 0) return;
+    try {
+      const users = await prisma.user.findMany({
+        where: { id: { in: ids }, deleted_at: null, is_active: true },
+        select: { id: true, email: true, display_name: true, first_name: true, last_name: true },
+      });
+      const actionUrl = `${config.app.frontendUrl.replace(/\/$/, '')}/audit/universe/${entityId}`;
+      for (const user of users) {
+        const recipientName = user.display_name ?? `${user.first_name} ${user.last_name}`.trim();
+        const variables = { recipientName, entityName, actionUrl };
+        await notificationQueueService.enqueueSafe('in_app', {
+          userId: user.id,
+          title: `You are in charge of ${entityName}`,
+          body: `You have been named the staff in charge of "${entityName}" in the Audit Universe.`,
+          type: 'info',
+          referenceType: 'audit_universe',
+          referenceId: entityId,
+          eventKey: 'audit.universe.staff_in_charge',
+          variables,
+        });
+        if (user.email) {
+          await notificationQueueService.enqueueSafe('email', {
+            to: user.email,
+            subject: `You have been put in charge of ${entityName}`,
+            text: `Dear ${recipientName},\n\nYou have been named the staff in charge of "${entityName}" in the IAMS Audit Universe. You will be the Internal Audit contact for this area: its audits, programme items and risk are yours to follow.\n\nOpen it: ${actionUrl}\n\nRegards,\nIAMS — Internal Audit System`,
+            eventKey: 'audit.universe.staff_in_charge',
+            variables,
+          });
+        }
+      }
+    } catch (err) {
+      logger.warn('Staff in charge notification failed', { entityId, err });
+    }
+  }
+
   private async _assertOwnersActive(ownerIds: string[]): Promise<void> {
     const uniqueIds = [...new Set(ownerIds)];
     if (uniqueIds.length === 0) return;
@@ -318,7 +365,7 @@ export class UniverseService implements IUniverseService {
     });
     const found = new Set(users.map((u) => u.id));
     if (found.size !== uniqueIds.length) {
-      throw AppError.badRequest('One or more selected owners do not exist or are inactive');
+      throw AppError.badRequest('One or more selected staff in charge do not exist or are inactive');
     }
   }
 }

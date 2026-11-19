@@ -66,3 +66,18 @@ describe('who can see a group audit', () => {
     expect(service._actorScope({ id: 'u9', permissions: ['engagement:read_all'] })).toBeUndefined();
   });
 });
+
+describe('a sole auditor', () => {
+  it('may be both lead auditor and manager', () => {
+    expect(() => service._assertDistinctRoles('ada', 'ada', 'chidi')).not.toThrow();
+  });
+
+  it('still cannot audit themselves: the auditee is always someone else', () => {
+    expect(() => service._assertDistinctRoles('ada', 'ada', 'ada')).toThrow(/different person/);
+    expect(() => service._assertDistinctRoles('ada', 'bola', 'bola')).toThrow(/different person/);
+  });
+
+  it('an ordinary team of three different people is unchanged', () => {
+    expect(() => service._assertDistinctRoles('ada', 'bola', 'chidi')).not.toThrow();
+  });
+});

@@ -474,16 +474,21 @@ export class ReportGenerationService implements IReportGenerationService {
     const lead = data.engagement.leadAuditor;
     const leadAuditorName = lead.displayName || `${lead.firstName} ${lead.lastName}`.trim() || 'Internal Audit Team';
 
-    const approvals: GbbApprovalRow[] = [];
+    // Who prepared the report comes first, then each approver in order: "Prepared by", "Reviewed by", "Approved by".
+    const approvals: GbbApprovalRow[] = [
+      { role: 'Prepared by', name: leadAuditorName, position: lead.jobTitle || 'Lead Auditor', date: versionDate },
+    ];
     const steps = [...(approval?.steps ?? [])].sort((a, b) => a.level - b.level);
     if (steps.length > 0) {
-      for (const step of steps) {
+      for (const [index, step] of steps.entries()) {
         const sig = sigMap.get(step.id);
+        const last = index === steps.length - 1;
         approvals.push({
+          role: last ? (steps.length > 2 ? 'Approved by (final)' : 'Approved by') : 'Reviewed by',
           name: step.approver?.displayName || `Designated Approver (Level ${step.level})`,
           position:
             step.approver?.jobTitle ||
-            (step.level === 1 ? 'Head of Unit / Reviewer' : step.level === 2 ? 'Executive Director' : 'Managing Director / CEO'),
+            (step.level === 1 ? 'Audit Manager' : step.level === 2 ? 'Head of Internal Audit' : 'Director General'),
           date: step.actedAt ? formatGbbDate(step.actedAt) : '—',
           signature: step.status === 'approved' && sig ? { buffer: sig.buffer, mime: sig.type === 'jpg' ? 'image/jpeg' : 'image/png' } : null,
           signatureNote:
@@ -491,12 +496,12 @@ export class ReportGenerationService implements IReportGenerationService {
         });
       }
     } else {
-      const managerName = data.engagement.auditManager.displayName || 'Head of Unit (HOU)';
-      const pending = (name: string, position: string): GbbApprovalRow => ({ name, position, date: '—', signatureNote: 'Pending Submission' });
+      const managerName = data.engagement.auditManager.displayName || 'Audit Manager';
+      const pending = (role: string, name: string, position: string): GbbApprovalRow => ({ role, name, position, date: '—', signatureNote: 'Pending Submission' });
       approvals.push(
-        pending(managerName, 'Head of Unit / Audit Manager'),
-        pending('Head of Internal Audit (CAE)', 'Head of Internal Audit'),
-        ...(data.report.signOffMode === 'cae_only' ? [] : [pending('Managing Director / CEO', 'MD / CEO')]),
+        pending('Reviewed by', managerName, 'Audit Manager'),
+        pending(data.report.signOffMode === 'cae_only' ? 'Approved by' : 'Reviewed by', 'Head of Internal Audit', 'Head of Internal Audit'),
+        ...(data.report.signOffMode === 'cae_only' ? [] : [pending('Approved by (final)', 'Director General', 'Director General')]),
       );
     }
 

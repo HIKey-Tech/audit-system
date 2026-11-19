@@ -9,7 +9,6 @@ import type {
   TDocumentDefinitions,
 } from "pdfmake/interfaces";
 import {
-  GBB_APPROVAL_HEADERS,
   GBB_CHANGE_CONTROL_NOTE,
   GBB_CHANGE_HISTORY_HEADERS,
   GBB_COLOR,
@@ -27,6 +26,7 @@ import {
 import {
   GbbDocumentModel,
   GbbSignature,
+  signOffRows,
   versionLabel,
 } from "./gbb-document.model";
 
@@ -242,28 +242,16 @@ const frontMatter = (model: GbbDocumentModel): Content[] => {
       ),
       BLACK,
     ),
+    // Signatures are not drawn in this table: they go at the bottom of the document.
     frontHeading("Approval List"),
     table(
-      GBB_TABLE_GRID.approval,
-      GBB_APPROVAL_HEADERS,
+      [3600, 3400, 2360],
+      ["Name", "Position", "Date"],
       rowsOr(
-        model.approvals.map((r) => [
-          r.name,
-          r.position,
-          r.signature
-            ? ({
-                image: dataUrl(r.signature),
-                width: 90,
-                height: 34,
-              } as TableCell)
-            : (r.signatureNote ?? ""),
-          r.date,
-        ]),
-        4,
+        model.approvals.map((r) => [r.name, r.position, r.date]),
+        3,
       ),
       BLACK,
-      0,
-      36,
     ),
     frontHeading("Change Control", 14),
     { text: GBB_CHANGE_CONTROL_NOTE, fontSize: 11, margin: [0, 0, 0, 8] },
@@ -299,6 +287,35 @@ const numberedHeading = (
   ...(pageBreak ? { pageBreak: "before" as const } : {}),
 });
 
+/** The sign-off at the end of the document: what each person did, their signature, a line, name, position and date. */
+const signOffContent = (model: GbbDocumentModel): Content[] => {
+  const rows = signOffRows(model);
+  if (rows.length === 0) return [];
+  const out: Content[] = [{ text: "Sign-off", bold: true, fontSize: 12, margin: [0, 26, 0, 4], unbreakable: true } as Content];
+  for (const r of rows) {
+    out.push({
+      unbreakable: true,
+      margin: [0, 12, 0, 6],
+      stack: [
+        { text: `${r.role ?? "Approved by"}:`, italics: true, fontSize: 11, margin: [0, 0, 0, 2] },
+        r.signature
+          ? ({ image: dataUrl(r.signature), width: 120, height: 44, margin: [0, 0, 0, 0] } as Content)
+          : ({
+              text: r.signatureNote && !/^\[?digitally/i.test(r.signatureNote) ? `(${r.signatureNote.toLowerCase()})` : " ",
+              italics: true,
+              fontSize: 9,
+              color: GREY,
+              margin: [0, 18, 0, 0],
+            } as Content),
+        { canvas: [{ type: "line", x1: 0, y1: 2, x2: 260, y2: 2, lineWidth: 0.7, lineColor: BLACK }] },
+        { text: r.name, bold: true, fontSize: 11, margin: [0, 3, 0, 0] },
+        { text: [r.position, r.date && r.date !== "—" ? r.date : ""].filter(Boolean).join("  ·  "), fontSize: 10 },
+      ],
+    } as Content);
+  }
+  return out;
+};
+
 /** Builds the complete pdfmake document definition (render it with `renderPdf`). */
 export const buildGbbPdfDefinition = (
   model: GbbDocumentModel,
@@ -322,6 +339,7 @@ export const buildGbbPdfDefinition = (
   });
   addHeading(GBB_VALIDITY_HEADING, 1, false);
   body.push({ text: gbbValidityText(model.lastReviewed), fontSize: 11 });
+  body.push(...signOffContent(model));
 
   const org = model.orgName ?? GBB_ORG_NAME;
   const textWidth = pt(
