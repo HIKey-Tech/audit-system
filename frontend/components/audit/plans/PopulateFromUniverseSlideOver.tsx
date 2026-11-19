@@ -342,7 +342,7 @@ export const PopulateFromUniverseSlideOver = ({
         {/* Search + Filter Pills + Bulk Quick Select */}
         <div className="space-y-2.5">
           <Input
-            placeholder="Search Audit Universe by name, category, or owner…"
+            placeholder="Search Audit Universe by name, category, or staff in charge…"
             leftIcon={<Search className="h-4 w-4" />}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -482,7 +482,7 @@ export const PopulateFromUniverseSlideOver = ({
                       <p className="mt-1 text-xs text-text-secondary">
                         {humanizeStatus(c.category)} · Risk {c.riskScore} ({riskScoreLabel(c.riskScore)}) ·{' '}
                         {humanizeStatus(c.auditFrequency)}
-                        {c.ownerName ? ` · Owner: ${c.ownerName}` : ''}
+                        {c.ownerName ? ` · Staff in charge: ${c.ownerName}` : ''}
                         {extraOwners > 0 ? ` (+${extraOwners})` : ''}
                         {c.openFindingsCount > 0 ? ` · ${c.openFindingsCount} open finding(s)` : ''}
                       </p>

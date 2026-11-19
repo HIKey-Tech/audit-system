@@ -26,7 +26,7 @@ const Schema = z.object({
   name: z.string().min(2, 'Name is required').max(200),
   description: z.string().max(5000).optional().or(z.literal('')),
   category: z.enum(VALID_CATEGORIES),
-  ownerIds: z.array(z.string().min(1)).min(1, 'At least one owner is required').max(25),
+  ownerIds: z.array(z.string().min(1)).min(1, 'At least one staff in charge is required').max(25),
   auditFrequency: z.enum(VALID_FREQUENCIES),
   status: z.enum(['active', 'inactive']),
 });
@@ -46,14 +46,6 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
   const usersList = useQuery({
     queryKey: ['users', 'directory'],
     queryFn: () => usersApi.directory(),
-    enabled: open,
-    staleTime: 5 * 60_000,
-  });
-
-  // Used to warn when an Internal Audit person is picked as an owner (owners are the people being audited).
-  const rolesList = useQuery({
-    queryKey: ['users', 'with-roles'],
-    queryFn: () => usersApi.list({ pageSize: 100 }),
     enabled: open,
     staleTime: 5 * 60_000,
   });
@@ -168,12 +160,6 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
   const status = watch('status');
   const auditFrequency = watch('auditFrequency');
 
-  const AUDIT_TEAM_ROLES = ['head_internal_audit', 'financial_auditor', 'compliance_auditor', 'system_auditor', 'dg'];
-  const auditorOwners = ownerIds
-    .map((id) => rolesList.data?.items.find((u) => u.id === id))
-    .filter((u): u is NonNullable<typeof u> => Boolean(u) && (u as { roles: Array<{ name: string }> }).roles.some((r) => AUDIT_TEAM_ROLES.includes(r.name)))
-    .map((u) => u.displayName || `${u.firstName} ${u.lastName}`.trim());
-
   const resolveOwnerName = (id: string): string => {
     const u = usersList.data?.find((x) => x.id === id);
     if (u) return u.displayName || `${u.firstName} ${u.lastName}`.trim() || id;
@@ -259,17 +245,18 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
         </div>
 
         <FormField
-          label="Owners: who answers for this area (the people being audited)"
+          label="Staff in charge"
           required
           error={errors.ownerIds?.message}
-          hint="The owner is the head of this department, unit or system: the person who is audited and who answers for it. Do not pick the auditor who will audit it; Internal Audit chooses its own lead when an audit is started. Owner has not signed in to IAMS yet, so they are not in the list? That is expected: use 'Add by AD corporate email' under the box and type their email. The first owner is the primary owner."
+          hint="The Internal Audit staff member responsible for this area. The first person is the primary. The people being audited are chosen later, as the main auditee, when an audit of this area is started."
         >
           <UserSelect
             value=""
+            allowProvision={false}
             excludeIds={ownerIds}
             onChange={addOwner}
             error={errors.ownerIds?.message}
-            placeholder={ownerIds.length === 0 ? 'Select primary owner…' : 'Add another owner…'}
+            placeholder={ownerIds.length === 0 ? 'Select staff in charge…' : 'Add another staff in charge…'}
           />
           {ownerIds.length > 0 && (
             <div className="mt-2 flex flex-wrap gap-1.5">
@@ -303,14 +290,6 @@ export const UniverseFormSlideOver = ({ open, onClose, entity }: Props): JSX.Ele
                 </span>
               ))}
             </div>
-          )}
-          {auditorOwners.length > 0 && (
-            <p className="mt-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-              <span className="font-semibold">{auditorOwners.join(', ')}</span>{' '}
-              {auditorOwners.length === 1 ? 'is' : 'are'} on the Internal Audit team. An owner is the person being audited
-              (the head of this area), not the auditor in charge. If you meant the auditor, leave them off here; the
-              audit lead is chosen when an audit is started.
-            </p>
           )}
         </FormField>
 

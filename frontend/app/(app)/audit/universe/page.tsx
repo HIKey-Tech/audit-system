@@ -90,7 +90,7 @@ export default function UniverseListPage(): JSX.Element {
     },
     {
       key: 'owner',
-      header: 'Owners (audited)',
+      header: 'Staff in charge',
       render: (e) => {
         const allNames =
           e.owners && e.owners.length > 0
