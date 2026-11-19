@@ -1,4 +1,5 @@
 import { prisma } from '../../../../../shared/prisma/prisma.client';
+import { approverEngagementIds } from '../../../engagement/utility/engagement-visibility.util';
 import { AppError } from '../../../../../shared/errors/app.error';
 import { logger } from '../../../../../shared/utils/logger.util';
 import { auditLogService } from '../../../../logging/service/implementation/audit-log.service';
@@ -411,7 +412,8 @@ export class FollowUpService implements IFollowUpService {
             { workflow_assignments: { some: { user_id: actor.id } } },
           ],
         },
-      })) > 0;
+      })) > 0 ||
+      (await approverEngagementIds(actor)).includes(followUp.finding.engagement_id);
 
     if (!isTeamOrResponder) throw AppError.notFound('Audit follow-up');
 

@@ -44,7 +44,7 @@ export const repositoryEngagementScope = (
  * them: its report, working papers, checklists and evidence. Only a step at the current level counts for a waiting
  * pool step, so an audit does not open up to them before it reaches their turn.
  */
-export const approverEngagementIds = async (actor: ActorContext): Promise<string[]> => {
+export const approverEngagementIds = async (actor: { id: string; permissions: string[] }): Promise<string[]> => {
   const steps = await prisma.workflow_Approval_Step.findMany({
     where: {
       approval: { entity_type: 'audit_report' },

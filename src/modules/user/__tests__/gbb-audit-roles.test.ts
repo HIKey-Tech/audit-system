@@ -216,9 +216,11 @@ describe('every auditor gets everything meant for an auditor (no "can’t click"
     expect(perms('head_internal_audit').has('engagement:notify_lifecycle')).toBe(true);
   });
 
-  it('the DG is not told about audits as they happen and does not read every engagement', () => {
+  it('the DG is not told about audits as they happen and does not read every engagement or every finding', () => {
     expect(perms('dg').has('engagement:read_all')).toBe(false);
     expect(perms('dg').has('engagement:notify_lifecycle')).toBe(false);
+    expect(perms('dg').has('finding:read_all')).toBe(false);
+    expect(perms('dg').has('finding:read')).toBe(true);
   });
 
   it('domain extras go only where intended', () => {

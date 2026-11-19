@@ -212,7 +212,7 @@ const DG: readonly string[] = [
   'universe:read',
   'engagement:read',
   'checklist:read', 'working_paper:read', 'evidence:read', 'assignment:read',
-  'finding:read', 'finding:read_all', 'finding:export',
+  'finding:read', 'finding:export',
   'followup:read',
   'committee_pack:read',
   'risk:read', 'risk:read_all', 'risk:export', 'risk_monitoring:read',

@@ -2,6 +2,7 @@ import { Prisma } from '@prisma/client';
 import { prisma } from '../../../../shared/prisma/prisma.client';
 import { cache } from '../../../../shared/cache/cache.client';
 import { DashboardActorContext } from '../../domain/entity/dashboard.entity';
+import { approverEngagementIds } from '../../../audit/engagement/utility/engagement-visibility.util';
 import {
   daysBetween,
   isRestrictedAuditee,
@@ -138,7 +139,7 @@ export class DashboardService {
     const restrictToLead = isRestrictedAuditor(actor.permissions);
     const engagementWhereBase: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
-      ...(restrictToLead ? this._memberEngagementScope(actor.id) : {}),
+      ...(restrictToLead ? await this._memberEngagementScope(actor) : {}),
     };
 
     const [
@@ -228,8 +229,12 @@ export class DashboardService {
     const monthEnd = startOfNextMonth(now);
 
     const restrictToAuditee = isRestrictedAuditee(actor.permissions);
+    // Someone who does not hold "read all findings" (for example the Director General) counts only the findings of
+    // the audits they are part of or have to sign.
+    const restrictToMembership = !restrictToAuditee && !actor.permissions.includes('finding:read_all');
     const findingWhereBase: Prisma.Audit_FindingWhereInput = {
       deleted_at: null,
+      ...(restrictToMembership ? { engagement: await this._memberEngagementScope(actor) } : {}),
       // Findings stay internal until the report is issued (engagement reported/closed).
       ...(restrictToAuditee ? { auditee_id: actor.id, engagement: { status: { in: ['under_review', 'reported', 'closed'] } } } : {}),
     };
@@ -890,13 +895,16 @@ export class DashboardService {
   }
 
   // Engagements a scoped user is part of: leading, assigned to, or the auditee on.
-  private _memberEngagementScope(userId: string): Prisma.Audit_EngagementWhereInput {
+  /** The audits this person is part of, plus the audits whose report they have to sign (or have signed). */
+  private async _memberEngagementScope(actor: DashboardActorContext): Promise<Prisma.Audit_EngagementWhereInput> {
+    const approverOf = await approverEngagementIds(actor);
     return {
       OR: [
-        { lead_auditor_id: userId },
-        { auditee_id: userId },
-        { additional_auditees: { some: { user_id: userId } } },
-        { workflow_assignments: { some: { user_id: userId } } },
+        { lead_auditor_id: actor.id },
+        { auditee_id: actor.id },
+        { additional_auditees: { some: { user_id: actor.id } } },
+        { workflow_assignments: { some: { user_id: actor.id } } },
+        ...(approverOf.length > 0 ? [{ id: { in: approverOf } }] : []),
       ],
     };
   }
@@ -908,7 +916,7 @@ export class DashboardService {
     const restrictToLead = isRestrictedAuditor(actor.permissions);
     const where: Prisma.Audit_EngagementWhereInput = {
       deleted_at: null,
-      ...(restrictToLead ? this._memberEngagementScope(actor.id) : {}),
+      ...(restrictToLead ? await this._memberEngagementScope(actor) : {}),
     };
 
     const engagements = await prisma.audit_Engagement.findMany({

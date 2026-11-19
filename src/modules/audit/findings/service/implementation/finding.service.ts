@@ -20,7 +20,7 @@ import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus, AUDITEE_VISIBLE_ENGAGEMENT_STATUSES } from '../../../domain/enum/audit.enum';
 import { FINDING_TRANSITIONS, assertHasPermission, assertTransition, isFindingAuditee, isFindingOversight } from '../../../utility/audit.utility';
 import { ensureAuditeeRoleAssigned } from '../../../utility/auditee-role.utility';
-import { resolveViewerContext } from '../../../engagement/utility/engagement-visibility.util';
+import { resolveViewerContext , approverEngagementIds } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateFindingRequestDto,
   FindingQueryDto,
@@ -289,7 +289,7 @@ export class FindingService implements IFindingService {
             { workflow_assignments: { some: { user_id: actor.id } } },
           ],
         },
-      }) > 0;
+      }) > 0 || (await approverEngagementIds(actor)).includes(finding.engagement_id);
       if (!allowed) throw AppError.notFound('Audit finding');
     }
 
@@ -298,7 +298,7 @@ export class FindingService implements IFindingService {
 
   async listAllFindings(query: FindingQueryDto, actor: ActorContext): Promise<{ findings: FindingResponseDto[]; meta: PaginationMeta }> {
     const { skip, take, page, pageSize } = parsePagination(query);
-    const where = this._buildFindingWhere(query, actor);
+    const where = await this._buildFindingWhere(query, actor);
 
     const [total, findings] = await prisma.$transaction([
       prisma.audit_Finding.count({ where }),
@@ -319,7 +319,7 @@ export class FindingService implements IFindingService {
 
   async exportFindings(query: FindingQueryDto, format: ExportFormat, actor: ActorContext): Promise<TabularExportFile> {
     const findings = await prisma.audit_Finding.findMany({
-      where: this._buildFindingWhere(query, actor),
+      where: await this._buildFindingWhere(query, actor),
       include: findingInclude,
       orderBy: { [query.sortBy]: query.sortOrder },
       take: EXPORT_MAX_ROWS,
@@ -376,7 +376,7 @@ export class FindingService implements IFindingService {
 
     const findings = await prisma.audit_Finding.findMany({
       where: {
-        ...this._buildFindingWhere(query, actor),
+        ...(await this._buildFindingWhere(query, actor)),
         engagement_id: engagementId,
       },
       include: findingInclude,
@@ -385,7 +385,7 @@ export class FindingService implements IFindingService {
     return findings.map(mapFindingToResponse);
   }
 
-  private _buildFindingWhere(query: FindingQueryDto, actor: ActorContext): Prisma.Audit_FindingWhereInput {
+  private async _buildFindingWhere(query: FindingQueryDto, actor: ActorContext): Promise<Prisma.Audit_FindingWhereInput> {
     const isOversight = isFindingOversight(actor.permissions);
     const isAuditee = isFindingAuditee(actor.permissions);
 
@@ -413,11 +413,14 @@ export class FindingService implements IFindingService {
         engagement: { status: { in: [...AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } },
       });
     } else if (!isOversight) {
+      // Findings of the audits they are part of, and of an audit whose report they have to sign (or have signed).
+      const approverOf = await approverEngagementIds(actor);
       and.push({
         engagement: {
           OR: [
             { lead_auditor_id: actor.id },
             { workflow_assignments: { some: { user_id: actor.id } } },
+            ...(approverOf.length > 0 ? [{ id: { in: approverOf } }] : []),
           ],
         },
       });
