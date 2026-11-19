@@ -34,12 +34,12 @@ import { Input, Textarea, Select } from '@/components/ui/Input';
 import { InfoHint } from '@/components/ui/InfoHint';
 import { DocumentWorkspaceModal } from '@/components/ui/DocumentWorkspaceModal';
 import {
-  WordDocumentEditor,
   sectionsToWordHtml,
   wordHtmlToSections,
   plainOrMarkdownToHtml,
   isRichHtml,
 } from '@/components/ui/WordDocumentEditor';
+import { WordDocumentEditor } from '@/components/workspace/ReportDocumentEditor';
 import { reportTemplatesApi } from '@/lib/api/settings';
 import { reportsApi, findingsApi, followUpApi } from '@/lib/api/audit';
 import { assetsApi } from '@/lib/api/assets';
@@ -1068,7 +1068,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
               currentReport ? () => updateReportMut.mutate() : () => generate.mutate('draft')
             }
             savingDraft={currentReport ? updateReportMut.isPending : generate.isPending}
-            minHeight="640px"
+            minHeight="calc(100vh - 215px)"
           />
         </div>
 
@@ -1195,7 +1195,7 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
                 classification="INTERNAL AUDIT CONFIDENTIAL"
                 onSaveDraft={() => generate.mutate('draft')}
                 savingDraft={generate.isPending}
-                minHeight="540px"
+                minHeight="calc(100vh - 215px)"
               />
 
               <div className="flex flex-wrap items-center justify-end gap-2 pt-2">

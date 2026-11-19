@@ -27,9 +27,15 @@
 .doc-page .ProseMirror ul[data-type='taskList'] li { display: flex; gap: 8px; align-items: flex-start; }
 .doc-page .ProseMirror ul[data-type='taskList'] li > label { margin-top: 3px; }
 .doc-page .ProseMirror ul[data-type='taskList'] li > div { flex: 1; }
-.doc-page .ProseMirror .page-break { border-top: 2px dashed #9ca3af; margin: 22px -96px; height: 0; position: relative; }
-.doc-page .ProseMirror .page-break::after { content: 'Page break'; position: absolute; right: 96px; top: -9px; background: #fff; padding: 0 6px; font-size: 10px; color: #6b7280; }
 .doc-page .ProseMirror img { max-width: 100%; height: auto; }
 .doc-page .ProseMirror img[data-layout='behind'], .doc-page .ProseMirror img[data-layout='front'] { max-width: none; }
 .doc-page .ProseMirror img.ProseMirror-selectednode { outline: 2px solid #4f6228; }
 .doc-page .ProseMirror p.is-editor-empty:first-child::before { content: attr(data-placeholder); color: #9ca3af; float: left; height: 0; pointer-events: none; }
+
+/* A manual page break: the next page starts below it. */
+.doc-page .ProseMirror hr[data-page-break] { border: 0; border-top: 1px dashed #c7ccd4; margin: 6px 0; height: 0; }
+.doc-page .ProseMirror hr[data-page-break].ProseMirror-selectednode { border-top: 2px dashed #4f6228; }
+/* Where one page ends and the next begins. */
+.doc-page .page-gap { margin: 0 -96px; display: flex; flex-direction: column; user-select: none; pointer-events: none; }
+.doc-page .page-gap-foot { display: flex; align-items: flex-end; justify-content: center; box-sizing: border-box; padding-bottom: 34px; font: 10px/1 Calibri, Arial, sans-serif; color: #9ca3af; }
+.doc-page .page-gap-cut { height: 28px; flex: none; background: #e5e7eb; box-shadow: inset 0 5px 5px -5px rgba(0, 0, 0, 0.35), inset 0 -5px 5px -5px rgba(0, 0, 0, 0.35); }

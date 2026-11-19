@@ -116,7 +116,9 @@ export const htmlFragmentToMarkdownAndImages = (
     .replace(/<(?:strong|b)\b[^>]*>([\s\S]*?)<\/(?:strong|b)>/gi, '**$1**')
     .replace(/<(?:em|i)\b[^>]*>([\s\S]*?)<\/(?:em|i)>/gi, '*$1*')
     .replace(/<li\b[^>]*>([\s\S]*?)<\/li>/gi, '\n- $1')
-    .replace(/<hr\b[^>]*>/gi, '\n---\n')
+    // Only a real page break starts a new page in the export; an ordinary horizontal line is a visual rule.
+    .replace(/<hr\b[^>]*data-page-break[^>]*>/gi, '\n---\n')
+    .replace(/<hr\b[^>]*>/gi, '\n')
     .replace(/<br\s*\/?>/gi, '\n')
     .replace(/<\/(?:p|div|ul|ol|blockquote|tr)>/gi, '\n');
 

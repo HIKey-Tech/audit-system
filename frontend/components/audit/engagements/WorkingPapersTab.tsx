@@ -32,11 +32,11 @@ import { ReasonDialog } from '@/components/ui/ReasonDialog';
 import { Input, Select, Textarea } from '@/components/ui/Input';
 import { Skeleton } from '@/components/ui/Skeleton';
 import {
-  WordDocumentEditor,
   sectionsToWordHtml,
   legacyContentToWordHtml,
   plainOrMarkdownToHtml,
 } from '@/components/ui/WordDocumentEditor';
+import { WordDocumentEditor } from '@/components/workspace/ReportDocumentEditor';
 import { checklistsApi, evidenceApi, workingPapersApi } from '@/lib/api/audit';
 import { wpTemplatesApi } from '@/lib/api/settings';
 import { documentsApi } from '@/lib/api/documents';
@@ -749,6 +749,7 @@ const CreateOrEditPaperSlideOver = ({
             readOnly={previewing}
             onSaveDraft={() => submit(false)}
             savingDraft={saving}
+            minHeight="calc(100vh - 100px)"
           />
         </div>
       )}
@@ -973,6 +974,7 @@ const ImportPaperSlideOver = ({
               documentTitle={title || 'Imported Working Paper'}
               onSaveDraft={saveDraft}
               savingDraft={saving}
+              minHeight="calc(100vh - 250px)"
             />
           </div>
         )}
