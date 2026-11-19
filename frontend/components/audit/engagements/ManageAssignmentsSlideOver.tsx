@@ -14,6 +14,7 @@ import { workflowApi } from '@/lib/api/workflow';
 import { initialsFromName } from '@/lib/utils/format';
 import { humanizeStatus } from '@/lib/utils/status';
 import { usePermission } from '@/hooks/usePermission';
+import { useSession } from '@/components/providers/AuthProvider';
 import type { AuditEngagementDetail } from '@/lib/types/domain';
 
 interface Props {
@@ -27,7 +28,13 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
   const canCreate = usePermission('assignment:create');
   const canUpdateEngagement = usePermission('engagement:update');
   const canDelete = usePermission('assignment:delete');
-  const canSubstitute = canCreate || canUpdateEngagement;
+  const session = useSession();
+  const isHead = usePermission('engagement:read_all');
+  // A sole auditor is both lead and manager. Who may reassign: the Head of Internal Audit; for a team audit also the
+  // lead or manager, but replacing the manager is the Head's call. The server enforces the same rules.
+  const soleAudit = engagement.leadAuditorId === engagement.auditManagerId;
+  const isLeadOrManager = session.id === engagement.leadAuditorId || session.id === engagement.auditManagerId;
+  const canSubstitute = (canCreate || canUpdateEngagement) && (isHead || (!soleAudit && isLeadOrManager));
 
   const [removeTarget, setRemoveTarget] = useState<{ id: string; name: string } | null>(null);
   const [roleToAssign, setRoleToAssign] = useState<Record<string, 'lead_auditor' | 'supporting_auditor'>>({});
@@ -177,6 +184,13 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
         </div>
 
         {/* Section: Substitute / Reassign Team Member (Supporting, Lead, or Manager) */}
+        {!canSubstitute && (canCreate || canUpdateEngagement) && (
+          <div className="rounded-lg border border-border bg-surface-alt/60 p-3 text-xs text-text-secondary">
+            {soleAudit
+              ? 'This audit is being done by one auditor alone. Only the Head of Internal Audit can reassign it, for example if that auditor is unwell or on leave.'
+              : 'Only the audit’s lead auditor or manager, or the Head of Internal Audit, can reassign its team.'}
+          </div>
+        )}
         {canSubstitute && (
           <div className="rounded-lg border border-amber-200 bg-amber-50/50 p-4 space-y-3">
             <div>
@@ -184,7 +198,7 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                 Substitute / Reassign Team Member
               </h3>
               <p className="text-[11px] text-text-secondary mt-0.5">
-                If a team member is unavailable or unwell, substitute or add a replacement as Supporting Auditor, Lead Auditor, or Audit Manager. All parties and oversight are notified automatically.
+                If a team member is unavailable or unwell, hand their part to someone else. The new person gets the whole audit and its history, the old person loses access, and everyone involved (including the person being audited and the Head of Internal Audit) is told by email. All parties and oversight are notified automatically.
               </p>
             </div>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
@@ -207,8 +221,14 @@ export const ManageAssignmentsSlideOver = ({ open, onClose, engagement }: Props)
                   }}
                 >
                   <option value="supporting_auditor">Supporting Auditor</option>
-                  <option value="lead_auditor">Lead Auditor (Currently: {engagement.leadAuditorName ?? '—'})</option>
-                  <option value="audit_manager">Audit Manager (Currently: {engagement.auditManagerName ?? '—'})</option>
+                  {soleAudit ? (
+                    <option value="lead_auditor">Sole auditor: lead and manager move together (Currently: {engagement.leadAuditorName ?? '—'})</option>
+                  ) : (
+                    <>
+                      <option value="lead_auditor">Lead Auditor (Currently: {engagement.leadAuditorName ?? '—'})</option>
+                      {isHead && <option value="audit_manager">Audit Manager (Currently: {engagement.auditManagerName ?? '—'})</option>}
+                    </>
+                  )}
                 </Select>
               </div>
               {subRole === 'supporting_auditor' && (

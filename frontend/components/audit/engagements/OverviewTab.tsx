@@ -23,7 +23,11 @@ import { TimeTrackingCard } from './TimeTrackingCard';
 export const OverviewTab = ({ engagement }: { engagement: AuditEngagementDetail }): JSX.Element => {
   const { user } = usePermissions();
   const canReadAssignments = usePermission('assignment:read');
-  const canManageAssignments = usePermission('assignment:create') || usePermission('assignment:delete');
+  const isHead = usePermission('engagement:read_all');
+  // Only the Head of Internal Audit, or the audit's own lead or manager, can change its team.
+  const canManageAssignments =
+    (usePermission('assignment:create') || usePermission('assignment:delete')) &&
+    (isHead || user?.id === engagement.leadAuditorId || user?.id === engagement.auditManagerId);
   const [showAssignments, setShowAssignments] = useState(false);
 
   const assignments = useQuery({

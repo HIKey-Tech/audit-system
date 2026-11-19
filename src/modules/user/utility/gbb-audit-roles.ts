@@ -77,7 +77,7 @@ export const AUDITOR_CORE: readonly string[] = [
   // Evidence
   'evidence:read', 'evidence:upload', 'evidence:dispute', 'evidence:request',
   // Findings & follow-up
-  'finding:read', 'finding:read_all', 'finding:create', 'finding:update', 'finding:close', 'finding:export',
+  'finding:read', 'finding:create', 'finding:update', 'finding:close', 'finding:export',
   'followup:read', 'followup:verify',
   // Reports — author, submit, and level-1 (engagement manager) approval. NOT issue / oversight / final.
   'report:read', 'report:create', 'report:update', 'report:submit', 'report:approve', 'report:reject', 'report:export',

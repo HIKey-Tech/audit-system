@@ -200,9 +200,11 @@ describe('every auditor gets everything meant for an auditor (no "can’t click"
     }
   });
 
-  it('findings and the risk register are department-wide, but engagements are not', () => {
+  it('the risk register is department-wide, but engagements and findings are limited to your own audits', () => {
     for (const k of AUDITORS) {
-      for (const p of ['finding:read_all', 'risk:read_all']) expect(perms(k).has(p)).toBe(true);
+      expect(perms(k).has('risk:read_all')).toBe(true);
+      expect(perms(k).has('finding:read_all')).toBe(false);
+      expect(perms(k).has('finding:read')).toBe(true);
     }
   });
 

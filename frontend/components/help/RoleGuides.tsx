@@ -15,10 +15,10 @@ interface Guide {
 }
 
 const GUIDES: Guide[] = [
-  { role: 'financial_auditor', title: 'Financial Auditor guide', file: 'IAMS_Manual_Financial_Auditor.pdf', pages: '45 pages', blurb: 'From signing in to a full financial audit, alone or with a team.' },
-  { role: 'system_auditor', title: 'System Auditor guide', file: 'IAMS_Manual_System_Auditor.pdf', pages: '47 pages', blurb: 'From signing in to a full systems audit, with the System Audit toolkit.' },
-  { role: 'compliance_auditor', title: 'Compliance Auditor guide', file: 'IAMS_Manual_Compliance_Auditor.pdf', pages: '45 pages', blurb: 'From signing in to a full compliance audit, with the Control Library.' },
-  { role: 'head_internal_audit', title: 'Head of Internal Audit guide', file: 'IAMS_Manual_Head_of_Internal_Audit.pdf', pages: '21 pages', blurb: 'Watching every audit, approving programmes and signing reports.' },
+  { role: 'financial_auditor', title: 'Financial Auditor guide', file: 'IAMS_Manual_Financial_Auditor.pdf', pages: '46 pages', blurb: 'From signing in to a full financial audit, alone or with a team.' },
+  { role: 'system_auditor', title: 'System Auditor guide', file: 'IAMS_Manual_System_Auditor.pdf', pages: '48 pages', blurb: 'From signing in to a full systems audit, with the System Audit toolkit.' },
+  { role: 'compliance_auditor', title: 'Compliance Auditor guide', file: 'IAMS_Manual_Compliance_Auditor.pdf', pages: '46 pages', blurb: 'From signing in to a full compliance audit, with the Control Library.' },
+  { role: 'head_internal_audit', title: 'Head of Internal Audit guide', file: 'IAMS_Manual_Head_of_Internal_Audit.pdf', pages: '22 pages', blurb: 'Watching every audit, approving programmes and signing reports.' },
   { role: 'dg', title: 'Director General guide', file: 'IAMS_Manual_Director_General.pdf', pages: '17 pages', blurb: 'Reading and signing the reports sent to you.' },
   { role: 'auditee', title: 'Auditee guide', file: 'IAMS_Manual_Auditee.pdf', pages: '15 pages', blurb: 'Sending the documents asked of you and responding to findings.' },
 ];

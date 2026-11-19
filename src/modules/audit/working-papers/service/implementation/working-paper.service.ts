@@ -11,7 +11,7 @@ import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.en
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
 import { WP_REVIEWABLE_STATUSES, assertHasPermission, isSoleAuditor } from '../../../utility/audit.utility';
-import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
+import { assertCanViewInternalArtifacts, isEngagementLeadOrManager } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateWorkingPaperRequestDto,
   ImportWorkingPaperMetadataDto,
@@ -149,7 +149,7 @@ export class WorkingPaperService implements IWorkingPaperService {
 
   async updateWorkingPaper(id: string, dto: UpdateWorkingPaperRequestDto, actor: ActorContext): Promise<WorkingPaperResponseDto> {
     const paper = await this._getPaper(id);
-    if (paper.created_by_id !== actor.id) throw AppError.forbidden('Only the creator can update this working paper');
+    if (paper.created_by_id !== actor.id && !(await isEngagementLeadOrManager(paper.engagement_id, actor.id))) throw AppError.forbidden('Only the author, or the audit\'s lead auditor or manager, can update this working paper');
     if (!WP_REVIEWABLE_STATUSES.includes(paper.status as WorkingPaperStatus)) {
       throw AppError.badRequest('Only draft or rejected working papers can be updated');
     }
@@ -183,7 +183,7 @@ export class WorkingPaperService implements IWorkingPaperService {
 
   async submitWorkingPaper(id: string, actor: ActorContext): Promise<WorkingPaperResponseDto> {
     const paper = await this._getPaperWithEngagement(id);
-    if (paper.created_by_id !== actor.id) throw AppError.forbidden('Only the creator can submit this working paper');
+    if (paper.created_by_id !== actor.id && !(await isEngagementLeadOrManager(paper.engagement_id, actor.id))) throw AppError.forbidden('Only the author, or the audit\'s lead auditor or manager, can submit this working paper');
     if (!WP_REVIEWABLE_STATUSES.includes(paper.status as WorkingPaperStatus)) {
       throw AppError.badRequest('Only draft or rejected working papers can be submitted');
     }

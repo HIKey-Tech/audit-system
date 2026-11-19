@@ -20,7 +20,7 @@ import { ActorContext } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, FindingStatus, AUDITEE_VISIBLE_ENGAGEMENT_STATUSES } from '../../../domain/enum/audit.enum';
 import { FINDING_TRANSITIONS, assertHasPermission, assertTransition, isFindingAuditee, isFindingOversight } from '../../../utility/audit.utility';
 import { ensureAuditeeRoleAssigned } from '../../../utility/auditee-role.utility';
-import { resolveViewerContext , approverEngagementIds } from '../../../engagement/utility/engagement-visibility.util';
+import { resolveViewerContext, approverEngagementIds, isEngagementLeadOrManager } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateFindingRequestDto,
   FindingQueryDto,
@@ -117,7 +117,8 @@ export class FindingService implements IFindingService {
 
   async updateFinding(id: string, dto: UpdateFindingRequestDto, actor: ActorContext): Promise<FindingResponseDto> {
     const finding = await this._getFinding(id);
-    const canOverrideOwnership = actor.permissions.includes('finding:read_all');
+    const canOverrideOwnership =
+      actor.permissions.includes('finding:read_all') || (await isEngagementLeadOrManager(finding.engagement_id, actor.id));
     if (finding.created_by_id !== actor.id && !canOverrideOwnership) throw AppError.forbidden('Only the creator or an audit manager can update this finding');
     if (finding.status === FindingStatus.Closed) throw AppError.badRequest('Closed findings cannot be updated');
     if (dto.workingPaperId) {
@@ -256,7 +257,8 @@ export class FindingService implements IFindingService {
   }
 
   async getFindingById(id: string, actor: ActorContext): Promise<FindingResponseDto> {
-    const isAuditee = isFindingAuditee(actor.permissions);
+    const isAlsoAuditor = isFindingAuditee(actor.permissions) && actor.permissions.includes('finding:create');
+    const isAuditee = isFindingAuditee(actor.permissions) && !isAlsoAuditor;
     const finding = await prisma.audit_Finding.findFirst({
       where: {
         id,
@@ -278,7 +280,15 @@ export class FindingService implements IFindingService {
     });
     if (!finding) throw AppError.notFound('Audit finding');
 
-    if (!isAuditee && !actor.permissions.includes('finding:read_all')) {
+    const respondsToThis =
+      isAlsoAuditor &&
+      (await prisma.audit_Finding.count({
+        where: {
+          id: finding.id,
+          AND: [this._auditeeMatch(actor.id), { engagement: { status: { in: [...AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } } }],
+        },
+      })) > 0;
+    if (!isAuditee && !respondsToThis && !actor.permissions.includes('finding:read_all')) {
       const allowed = await prisma.audit_Engagement.count({
         where: {
           id: finding.engagement_id,
@@ -286,6 +296,7 @@ export class FindingService implements IFindingService {
           OR: [
             { lead_auditor_id: actor.id },
             { audit_manager_id: actor.id },
+            { created_by_id: actor.id },
             { workflow_assignments: { some: { user_id: actor.id } } },
           ],
         },
@@ -388,6 +399,8 @@ export class FindingService implements IFindingService {
   private async _buildFindingWhere(query: FindingQueryDto, actor: ActorContext): Promise<Prisma.Audit_FindingWhereInput> {
     const isOversight = isFindingOversight(actor.permissions);
     const isAuditee = isFindingAuditee(actor.permissions);
+    // Someone who is both an auditor (on some audits) and an auditee (on others) sees both sets.
+    const isAlsoAuditor = isAuditee && actor.permissions.includes('finding:create');
 
     // OR-based clauses are collected into AND so they never overwrite each other.
     const and: Prisma.Audit_FindingWhereInput[] = [];
@@ -403,7 +416,25 @@ export class FindingService implements IFindingService {
         ],
       });
     }
-    if (isAuditee) {
+    if (isAlsoAuditor) {
+      const approverOf = await approverEngagementIds(actor);
+      and.push({
+        OR: [
+          { AND: [this._auditeeMatch(actor.id), { engagement: { status: { in: [...AUDITEE_VISIBLE_ENGAGEMENT_STATUSES] } } }] },
+          {
+            engagement: {
+              OR: [
+                { lead_auditor_id: actor.id },
+                { audit_manager_id: actor.id },
+                { created_by_id: actor.id },
+                { workflow_assignments: { some: { user_id: actor.id } } },
+                ...(approverOf.length > 0 ? [{ id: { in: approverOf } }] : []),
+              ],
+            },
+          },
+        ],
+      });
+    } else if (isAuditee) {
       // A responder sees a finding whether they are the primary auditee or a co-responder,
       // but — exactly like the engagement Findings tab — only from Quality Assurance onward.
       // During fieldwork findings are draft/internal, so this gate stops the standalone
@@ -419,6 +450,8 @@ export class FindingService implements IFindingService {
         engagement: {
           OR: [
             { lead_auditor_id: actor.id },
+            { audit_manager_id: actor.id },
+            { created_by_id: actor.id },
             { workflow_assignments: { some: { user_id: actor.id } } },
             ...(approverOf.length > 0 ? [{ id: { in: approverOf } }] : []),
           ],

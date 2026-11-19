@@ -901,6 +901,8 @@ export class DashboardService {
     return {
       OR: [
         { lead_auditor_id: actor.id },
+        { audit_manager_id: actor.id },
+        { created_by_id: actor.id },
         { auditee_id: actor.id },
         { additional_auditees: { some: { user_id: actor.id } } },
         { workflow_assignments: { some: { user_id: actor.id } } },

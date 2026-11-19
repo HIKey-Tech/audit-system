@@ -1,4 +1,5 @@
 import * as crypto from 'crypto';
+import { isEngagementLeadOrManager } from '../../../engagement/utility/engagement-visibility.util';
 import { notifyFindingResponders } from '../../../utility/finding-responder-notify.utility';
 import { format } from 'date-fns';
 import { Prisma } from '@prisma/client';
@@ -174,8 +175,7 @@ export class ReportService implements IReportService {
 
   async updateReport(id: string, dto: UpdateReportRequestDto, actor: ActorContext): Promise<ReportResponseDto> {
     const report = await this._getReport(id);
-    const canOverrideOwnership = actor.permissions.includes('report:approve');
-    if (report.created_by_id !== actor.id && !canOverrideOwnership) throw AppError.forbidden('Only the creator or a report approver can update this report');
+    if (report.created_by_id !== actor.id && !(await isEngagementLeadOrManager(report.engagement_id, actor.id))) throw AppError.forbidden('Only the author, or the audit\'s lead auditor or manager, can update this report');
     if (!REPORT_EDITABLE_STATUSES.includes(report.status as ReportStatus)) throw AppError.badRequest('Only draft or rejected reports can be updated');
 
     const updated = await prisma.audit_Report.update({
@@ -203,8 +203,7 @@ export class ReportService implements IReportService {
 
   async submitReportForApproval(id: string, actor: ActorContext): Promise<ReportResponseDto> {
     const report = await this._getReport(id);
-    const canOverrideOwnership = actor.permissions.includes('report:approve');
-    if (report.created_by_id !== actor.id && !canOverrideOwnership) throw AppError.forbidden('Only the creator or a report approver can submit this report');
+    if (report.created_by_id !== actor.id && !(await isEngagementLeadOrManager(report.engagement_id, actor.id))) throw AppError.forbidden('Only the author, or the audit\'s lead auditor or manager, can submit this report');
 
     if (report.status === ReportStatus.Submitted) {
       await this._assertSubmittedReportHasNoApproval(id);

@@ -57,6 +57,36 @@ const auditStaffRoleFilter: Prisma.RoleWhereInput = {
   role_permissions: { some: { permission: { slug: { in: AUDIT_STAFF_PERMISSIONS } } } },
 };
 
+type TeamLeads = { lead_auditor_id: string; audit_manager_id: string };
+const isOversightActor = (actor: WorkflowActorContext): boolean =>
+  actor.permissions.includes('engagement:read_all') || actor.permissions.includes('*');
+
+/**
+ * Who may add or remove helpers on an audit: the Head of Internal Audit, or the audit's own lead auditor or manager
+ * (for a sole auditor that is the same person). Nobody else, even with the assignment permission.
+ */
+export const assertCanManageTeam = (e: TeamLeads, actor: WorkflowActorContext): void => {
+  if (isOversightActor(actor)) return;
+  if (actor.id === e.lead_auditor_id || actor.id === e.audit_manager_id) return;
+  throw AppError.forbidden('Only the audit\'s lead auditor or manager, or the Head of Internal Audit, can change its team');
+};
+
+/**
+ * Who may REASSIGN an audit (for example when someone is sick or on leave):
+ *  - a sole-auditor audit: only the Head of Internal Audit;
+ *  - a team audit: the lead auditor or the manager, except that replacing the manager is the Head's call.
+ */
+export const assertCanSubstitute = (e: TeamLeads, actor: WorkflowActorContext, role: 'supporting_auditor' | 'lead_auditor' | 'audit_manager'): void => {
+  if (isOversightActor(actor)) return;
+  if (e.lead_auditor_id === e.audit_manager_id) {
+    throw AppError.forbidden('Only the Head of Internal Audit can reassign an audit that one auditor is doing alone');
+  }
+  if (role === 'audit_manager') throw AppError.forbidden('Only the Head of Internal Audit can replace the audit manager');
+  if (actor.id !== e.lead_auditor_id && actor.id !== e.audit_manager_id) {
+    throw AppError.forbidden('Only the audit\'s lead auditor or manager, or the Head of Internal Audit, can reassign its team');
+  }
+};
+
 export class AssignmentService implements IAssignmentService {
   async assignStaff(dto: AssignStaffRequestDto, assignedBy: WorkflowActorContext): Promise<AssignmentResponseDto> {
     assertHasPermission(assignedBy.permissions, 'assignment:create');
@@ -93,6 +123,7 @@ export class AssignmentService implements IAssignmentService {
     ]);
 
     if (!engagement) throw AppError.notFound('Audit engagement');
+    assertCanManageTeam(engagement, assignedBy);
     if (engagement.status === 'closed') {
       throw AppError.badRequest('Cannot change the team of a closed engagement');
     }
@@ -240,11 +271,14 @@ export class AssignmentService implements IAssignmentService {
         sla_deadline: true,
         lead_auditor_id: true,
         audit_manager_id: true,
+        created_by_id: true,
         auditee_id: true,
         additional_auditees: { select: { user_id: true } },
       },
     });
     if (!engagement) throw AppError.notFound('Audit engagement');
+    assertCanSubstitute(engagement, actor, dto.role);
+    const soleAudit = engagement.lead_auditor_id === engagement.audit_manager_id;
     if (engagement.status === 'closed') {
       throw AppError.badRequest('Cannot substitute team members on a closed engagement');
     }
@@ -294,7 +328,35 @@ export class AssignmentService implements IAssignmentService {
         })
       : null;
 
-    if (dto.role === 'audit_manager') {
+    if (soleAudit && dto.role !== 'supporting_auditor') {
+      // One person does the whole audit (lead AND manager). Handing it over moves both roles together, otherwise the
+      // old person would stay as the manager and everything would still wait on them.
+      const requiredPerms = ['working_paper:create', 'working_paper:approve', 'report:approve', 'finding:close'];
+      const missing = requiredPerms.filter((p) => !incomingPerms.has(p));
+      if (missing.length > 0) {
+        throw AppError.badRequest(`The auditor taking over must be able to do a whole audit alone; missing: ${missing.join(', ')}`);
+      }
+      await prisma.$transaction(async (tx) => {
+        await tx.audit_Engagement.update({
+          where: { id: dto.engagementId },
+          data: {
+            lead_auditor_id: dto.incomingUserId,
+            audit_manager_id: dto.incomingUserId,
+            // the person who started the audit hands over its ownership too, so they lose access completely
+            ...(engagement.created_by_id === resolvedOutgoingId ? { created_by_id: dto.incomingUserId } : {}),
+          },
+        });
+        await tx.workflow_Assignment.deleteMany({
+          where: { engagement_id: dto.engagementId, user_id: dto.incomingUserId },
+        });
+        await workflowApprovalService.reassignEngagementManagerApprovals(
+          dto.engagementId,
+          engagement.audit_manager_id,
+          dto.incomingUserId,
+          tx,
+        );
+      });
+    } else if (dto.role === 'audit_manager') {
       const requiredManagerPerms = ['working_paper:approve', 'report:approve', 'finding:close'];
       const missing = requiredManagerPerms.filter((p) => !incomingPerms.has(p));
       if (missing.length > 0) {
@@ -332,7 +394,10 @@ export class AssignmentService implements IAssignmentService {
       await prisma.$transaction(async (tx) => {
         await tx.audit_Engagement.update({
           where: { id: dto.engagementId },
-          data: { lead_auditor_id: dto.incomingUserId },
+          data: {
+            lead_auditor_id: dto.incomingUserId,
+            ...(engagement.created_by_id === resolvedOutgoingId ? { created_by_id: dto.incomingUserId } : {}),
+          },
         });
         await tx.workflow_Assignment.deleteMany({
           where: { engagement_id: dto.engagementId, user_id: dto.incomingUserId },
@@ -381,11 +446,13 @@ export class AssignmentService implements IAssignmentService {
       : 'None (Additional Substitute)';
     const olaDeadlineFormatted = engagement.sla_deadline.toISOString().slice(0, 10);
     const roleLabel =
-      dto.role === 'audit_manager'
-        ? 'Audit Manager'
-        : dto.role === 'lead_auditor'
-          ? 'Lead Auditor'
-          : 'Supporting Auditor';
+      soleAudit && dto.role !== 'supporting_auditor'
+        ? 'Sole Auditor (lead and manager)'
+        : dto.role === 'audit_manager'
+          ? 'Audit Manager'
+          : dto.role === 'lead_auditor'
+            ? 'Lead Auditor'
+            : 'Supporting Auditor';
 
     // Notify incoming user, outgoing user, lead, manager, and oversight holders
     const oversightUsers = await prisma.user.findMany({
@@ -410,6 +477,8 @@ export class AssignmentService implements IAssignmentService {
       ...(resolvedOutgoingId ? [resolvedOutgoingId] : []),
       engagement.lead_auditor_id,
       engagement.audit_manager_id,
+      // The person being audited is told who their audit contact is now.
+      engagement.auditee_id,
       ...oversightUsers.map((u) => u.id),
     ]);
 
@@ -490,10 +559,11 @@ export class AssignmentService implements IAssignmentService {
       where: { id: assignmentId },
       include: {
         user: { select: { id: true, email: true } },
-        engagement: { select: { id: true, title: true, status: true } },
+        engagement: { select: { id: true, title: true, status: true, lead_auditor_id: true, audit_manager_id: true } },
       },
     });
     if (!assignment) throw AppError.notFound('Workflow assignment');
+    assertCanManageTeam(assignment.engagement, removedBy);
     if (assignment.engagement.status === 'closed') {
       throw AppError.badRequest('Cannot change the team of a closed engagement');
     }

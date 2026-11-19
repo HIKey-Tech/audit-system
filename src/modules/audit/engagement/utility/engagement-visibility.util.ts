@@ -72,6 +72,15 @@ export const approverEngagementIds = async (actor: { id: string; permissions: st
   return [...new Set(reports.map((r) => r.engagement_id))];
 };
 
+/** True when the user is the audit's lead auditor or its manager now (so someone who takes over an audit can pick up its drafts). */
+export const isEngagementLeadOrManager = async (engagementId: string, userId: string): Promise<boolean> => {
+  const e = await prisma.audit_Engagement.findFirst({
+    where: { id: engagementId, deleted_at: null },
+    select: { lead_auditor_id: true, audit_manager_id: true },
+  });
+  return Boolean(e && (e.lead_auditor_id === userId || e.audit_manager_id === userId));
+};
+
 export const isReportApproverOf = async (engagementId: string, actor: ActorContext): Promise<boolean> =>
   (await approverEngagementIds(actor)).includes(engagementId);
 
