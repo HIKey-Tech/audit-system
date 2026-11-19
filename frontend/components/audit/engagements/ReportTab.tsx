@@ -855,7 +855,10 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
   }
 
   // Sign-off selector UI helper
-  const renderSignOffSelector = (disabled = false) => (
+  const renderSignOffSelector = (disabled = false) => {
+    // A sole auditor is both lead and manager, so there is no manager review: the report goes to the Head first.
+    const sole = engagement.leadAuditorId === engagement.auditManagerId;
+    return (
     <div className="space-y-1.5">
       <label className="block text-xs font-semibold text-text-primary">
         Report Sign-Off Requirement (Permission-Based Executive Approval Chain)
@@ -884,7 +887,11 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
               {signOffMode === 'cae_only' && <Badge tone="blue">Selected</Badge>}
             </div>
             <p className="mt-0.5 text-[11px] text-text-secondary">
-              Standard Audit: Reviewed by the Engagement Audit Manager, with final sign-off routed to the user holding <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">report:approve:oversight</code> (e.g. Head of Internal Audit / CAE).
+              {sole ? (
+                <>You are the sole auditor, so there is no manager review: the report goes straight to the Head of Internal Audit, who signs it off.</>
+              ) : (
+                <>Standard Audit: Reviewed by the Engagement Audit Manager, with final sign-off routed to the user holding <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">report:approve:oversight</code> (e.g. Head of Internal Audit / CAE).</>
+              )}
             </p>
           </div>
         </button>
@@ -912,13 +919,18 @@ export const ReportTab = ({ engagement }: { engagement: AuditEngagementDetail })
               {signOffMode === 'cae_and_dg' && <Badge tone="blue">Selected</Badge>}
             </div>
             <p className="mt-0.5 text-[11px] text-text-secondary">
-              Executive / Major Audit: Reviewed by the Engagement Audit Manager, endorsed by <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">report:approve:oversight</code>, and final sign-off routed to <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">report:approve:final</code> (e.g. Director General / MD).
+              {sole ? (
+                <>For a major audit: the Head of Internal Audit reviews it first, then the Director General gives the final sign-off.</>
+              ) : (
+                <>Executive / Major Audit: Reviewed by the Engagement Audit Manager, endorsed by <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">report:approve:oversight</code>, and final sign-off routed to <code className="rounded bg-slate-100 px-1 py-0.5 text-[10px]">report:approve:final</code> (e.g. Director General / MD).</>
+              )}
             </p>
           </div>
         </button>
       </div>
     </div>
-  );
+    );
+  };
 
   const renderStudioModal = (currentReport: ExtendedAuditReport | null) => (
     <DocumentWorkspaceModal

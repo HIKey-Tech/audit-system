@@ -757,10 +757,12 @@ export class ApprovalService implements IApprovalService {
     const matrix = await getApprovalMatrix();
     const chain = await this._resolveEntityChain(prisma, matrix, entityType, entityId);
     const managerId = await this._resolveEngagementManager(prisma, entityType, entityId).catch(() => null);
+    const soleAuditor = await this._isSoleAuditor(prisma, entityType, entityId).catch(() => false);
     const levels: ResolvedApprovalLevelDto[] = [];
     let level = 1;
     for (const entry of chain) {
       if (entry === ENGAGEMENT_MANAGER_APPROVER) {
+        if (soleAuditor && entityType === WorkflowEntityType.AuditReport) continue;
         const manager = managerId
           ? await prisma.user.findUnique({ where: { id: managerId }, select: workflowUserSelect })
           : null;
@@ -810,10 +812,14 @@ export class ApprovalService implements IApprovalService {
     // owns the engagement reviews its working paper / report.
     const engagementManagerId = await this._resolveEngagementManager(db, entityType, entityId);
     const managerPermission = ENGAGEMENT_MANAGER_PERMISSION[entityType];
+    const soleAuditor = await this._isSoleAuditor(db, entityType, entityId);
 
     const specs: ApproverLevelSpec[] = [];
     for (const level of chain) {
       if (level === ENGAGEMENT_MANAGER_APPROVER) {
+        // A sole auditor is their own manager, so there is no one to review the report at manager level. That step
+        // is skipped: the report goes straight to the Head of Internal Audit (and the DG, if that sign-off is chosen).
+        if (soleAuditor && entityType === WorkflowEntityType.AuditReport) continue;
         if (!engagementManagerId) {
           throw AppError.badRequest(`No engagement manager available for ${entityType} approval`);
         }
@@ -992,6 +998,22 @@ export class ApprovalService implements IApprovalService {
       if (!plan) throw AppError.notFound('Audit plan');
     }
     return null;
+  }
+
+  /** True when the engagement's lead auditor is also its manager: one person doing the audit alone. */
+  private async _isSoleAuditor(
+    db: Prisma.TransactionClient | typeof prisma,
+    entityType: WorkflowEntityType,
+    entityId: string,
+  ): Promise<boolean> {
+    const select = { engagement: { select: { lead_auditor_id: true, audit_manager_id: true } } } as const;
+    let engagement: { lead_auditor_id: string; audit_manager_id: string } | undefined;
+    if (entityType === WorkflowEntityType.AuditReport) {
+      engagement = (await db.audit_Report.findFirst({ where: { id: entityId, deleted_at: null }, select }))?.engagement;
+    } else if (entityType === WorkflowEntityType.AuditWorkingPaper) {
+      engagement = (await db.audit_Working_Paper.findFirst({ where: { id: entityId, deleted_at: null }, select }))?.engagement;
+    }
+    return Boolean(engagement && engagement.lead_auditor_id === engagement.audit_manager_id);
   }
 
   private async _hasActiveUserWithPermission(

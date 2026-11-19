@@ -416,23 +416,38 @@ export const notifyEngagementLifecycleChange = async (
       actionUrl,
     };
 
-    const title =
-      newStatus === 'in_progress'
+    const isNew = previousStatus === null;
+    const soleAuditor = engagement.lead_auditor_id === engagement.audit_manager_id;
+    // Who is involved, so the Head can see at a glance without opening the audit.
+    const peopleLine = [
+      soleAuditor
+        ? `Auditor: ${baseVariables.leadAuditorName} (sole auditor)`
+        : `Lead auditor: ${baseVariables.leadAuditorName} · Manager: ${baseVariables.managerName}`,
+      ...(supportingTeamNames.length > 0 ? [`Team: ${teamSummary}`] : []),
+      `Auditee: ${baseVariables.auditeeName}`,
+    ].join(' · ');
+
+    const title = isNew
+      ? `New Audit Engagement: ${engagement.reference_number}`
+      : newStatus === 'in_progress'
         ? `Audit Engagement Started: ${engagement.reference_number}`
         : newStatus === 'closed'
           ? `Audit Engagement Closed: ${engagement.reference_number}`
           : `Engagement Stage Updated (${newStageLabel}): ${engagement.reference_number}`;
 
-    const body =
-      newStatus === 'in_progress'
-        ? `Engagement "${engagement.title}" (${engagement.reference_number}) on ${entityName} has started fieldwork. Lead: ${baseVariables.leadAuditorName}, Auditee: ${baseVariables.auditeeName}.`
+    const body = isNew
+      ? `A new audit "${engagement.title}" (${engagement.reference_number}) on ${entityName} has been set up. ${peopleLine}. Planned: ${plannedSchedule}.`
+      : newStatus === 'in_progress'
+        ? `Engagement "${engagement.title}" (${engagement.reference_number}) on ${entityName} has started fieldwork. ${peopleLine}.`
         : newStatus === 'closed'
-          ? `Engagement "${engagement.title}" (${engagement.reference_number}) on ${entityName} has been closed on ${closedDate}.`
-          : `Engagement "${engagement.title}" (${engagement.reference_number}) moved from ${previousStageLabel} to ${newStageLabel}.`;
+          ? `Engagement "${engagement.title}" (${engagement.reference_number}) on ${entityName} has been closed on ${closedDate}. ${peopleLine}.`
+          : `Engagement "${engagement.title}" (${engagement.reference_number}) moved from ${previousStageLabel} to ${newStageLabel}. ${peopleLine}.`;
 
     for (const recipient of recipientsMap.values()) {
       const variables = {
         ...baseVariables,
+        peopleLine,
+        transition: isNew ? 'was created and planned' : `moved from ${previousStageLabel} to ${newStageLabel}`,
         recipientName: recipient.name,
       };
 
@@ -462,7 +477,7 @@ export const notifyEngagementLifecycleChange = async (
             `Audit Type: ${auditTypeLabel}`,
             `Stage Transition: ${previousStageLabel} → ${newStageLabel}`,
             `Lead Auditor: ${baseVariables.leadAuditorName}`,
-            `Audit Manager: ${baseVariables.managerName}`,
+            `Audit Manager: ${soleAuditor ? 'None (sole auditor)' : baseVariables.managerName}`,
             `Supporting Team: ${teamSummary}`,
             `Auditee: ${baseVariables.auditeeName}`,
             `Schedule: ${plannedSchedule}`,

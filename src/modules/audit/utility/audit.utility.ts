@@ -614,3 +614,13 @@ export const emptyChecklistProgress = (): Record<ChecklistResult, number> => ({
   [ChecklistResult.NotApplicable]: 0,
   [ChecklistResult.NotTested]: 0,
 });
+
+/**
+ * True when `actorId` is doing the audit alone: they are both its lead auditor and its manager. A sole auditor has
+ * nobody at manager level, so their working papers are marked complete (not sent for approval) and their report
+ * goes straight to the Head of Internal Audit.
+ */
+export const isSoleAuditor = (
+  engagement: { lead_auditor_id: string; audit_manager_id: string },
+  actorId: string,
+): boolean => engagement.lead_auditor_id === engagement.audit_manager_id && engagement.audit_manager_id === actorId;

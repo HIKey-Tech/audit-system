@@ -67,8 +67,9 @@ export const AUDITOR_CORE: readonly string[] = [
   // Planning (draft; the Head approves)
   'universe:read', 'universe:create', 'universe:update',
   'plan:read', 'plan:create', 'plan:update', 'plan:add_item', 'plan:submit',
-  // Engagements — create/assign/run; read_all so the creator and any manager always see them
-  'engagement:read', 'engagement:read_all', 'engagement:create', 'engagement:update', 'engagement:notify_lifecycle',
+  // Engagements — create/assign/run. An auditor sees only the audits they are part of (lead, manager, team, or the one
+  // they created); only the Head of Internal Audit (and the DG) read every engagement and are told about every one.
+  'engagement:read', 'engagement:create', 'engagement:update',
   'checklist:read', 'checklist:create', 'checklist:update',
   // Working papers — author AND review (lead one audit, manage the next)
   'working_paper:read', 'working_paper:create', 'working_paper:update', 'working_paper:submit',

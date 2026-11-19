@@ -761,7 +761,7 @@ export const StartAuditWizard = ({
             <FormField label="Lead auditor" required tooltip="Owns fieldwork and day-to-day execution of the engagement. Ranked by skill match, workload and capacity.">
               <ScoredUserSelect role="lead_auditor" auditType={effectiveAuditType} priority={priority} value={leadAuditorId} onChange={setLeadAuditorId} excludeIds={[auditManagerId, auditeeId].filter(Boolean)} />
             </FormField>
-            <FormField label="Audit manager (optional)" tooltip="Reviews and signs off the lead auditor's work. Leave it empty if you are doing this audit alone: you are then the sole auditor and another auditor reviews your working papers and report.">
+            <FormField label="Audit manager (optional)" tooltip="Reviews and signs off the lead auditor's work. Leave it empty if you are doing this audit alone: your working papers are then marked complete without approval, and your report goes straight to the Head of Internal Audit for sign-off.">
               <ScoredUserSelect role="audit_manager" auditType={effectiveAuditType} priority={priority} value={auditManagerId} onChange={setAuditManagerId} excludeIds={[leadAuditorId, auditeeId].filter(Boolean)} />
             </FormField>
           </div>
@@ -912,7 +912,7 @@ export const StartAuditWizard = ({
             {mode === 'ad_hoc' && <Row label="Priority" value={priority} />}
             <Row label="Title" value={title} />
             <Row label="Lead auditor" value={userName(leadAuditorId)} />
-            <Row label="Audit manager" value={auditManagerId ? userName(auditManagerId) : 'None: sole auditor (another auditor reviews)'} />
+            <Row label="Audit manager" value={auditManagerId ? userName(auditManagerId) : 'None: sole auditor (the Head of Internal Audit signs off the report)'} />
             <Row label="Main auditee (being audited)" value={userName(auditeeId)} />
             {extraAuditeeIds.length > 0 && <Row label="Other auditees" value={extraAuditeeIds.map(userName).join(', ')} />}
             {extraAreaIds.length > 0 && <Row label="Other areas" value={extraAreaIds.map(entityName).join(', ')} />}

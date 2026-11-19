@@ -200,9 +200,21 @@ describe('every auditor gets everything meant for an auditor (no "can’t click"
     }
   });
 
-  it('visibility is department-wide: engagements, findings and the risk register', () => {
+  it('findings and the risk register are department-wide, but engagements are not', () => {
     for (const k of AUDITORS) {
-      for (const p of ['engagement:read_all', 'finding:read_all', 'risk:read_all']) expect(perms(k).has(p)).toBe(true);
+      for (const p of ['finding:read_all', 'risk:read_all']) expect(perms(k).has(p)).toBe(true);
+    }
+  });
+
+  it('only the Head and the DG read every engagement and hear about every one: an auditor sees only their own', () => {
+    for (const k of AUDITORS) {
+      expect(perms(k).has('engagement:read_all')).toBe(false);
+      expect(perms(k).has('engagement:notify_lifecycle')).toBe(false);
+      expect(perms(k).has('engagement:read')).toBe(true);
+    }
+    for (const k of ['head_internal_audit', 'dg'] as const) {
+      expect(perms(k).has('engagement:read_all')).toBe(true);
+      expect(perms(k).has('engagement:notify_lifecycle')).toBe(true);
     }
   });
 

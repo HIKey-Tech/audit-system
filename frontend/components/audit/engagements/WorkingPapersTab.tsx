@@ -57,6 +57,10 @@ import type {
 } from '@/lib/types/domain';
 
 /** Small Write / Preview segmented toggle shared by the create and view/edit forms. */
+/** A sole auditor is both lead and manager: nobody reviews their working papers, so Submit just marks them complete. */
+const isSoleAuditorOf = (e: { leadAuditorId: string; auditManagerId: string }, userId: string): boolean =>
+  e.leadAuditorId === e.auditManagerId && e.auditManagerId === userId;
+
 const WritePreviewToggle = ({
   previewing,
   onChange,
@@ -257,7 +261,11 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
   const submitMut = useMutation({
     mutationFn: (id: string) => workingPapersApi.submit(id),
     onSuccess: (_data, id) => {
-      toastSubmitted('Submitted for review', 'audit_working_paper', id);
+      if (isSoleAuditorOf(engagement, session.id)) {
+        toast.success('Marked complete. The Head of Internal Audit reviews it when signing your report.');
+      } else {
+        toastSubmitted('Submitted for review', 'audit_working_paper', id);
+      }
       refresh();
     },
     onError: (e) => toast.error(e instanceof Error ? e.message : 'Failed'),
@@ -333,7 +341,14 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                     <div className="flex flex-wrap items-center gap-2">
                       <h3 className="font-medium text-text-primary">{wp.title}</h3>
                       <Badge tone="gray">v{wp.version ?? wp.versionNumber ?? 1}</Badge>
-                      <StatusBadge status={wp.status} explain="working_paper" />
+                      {wp.status === 'approved' && !wp.reviewerName && isSoleAuditorOf(engagement, wp.createdById) ? (
+                        <StatusBadge
+                          status="completed"
+                          tooltip="Completed by the sole auditor. There is no separate approval: the Head of Internal Audit reviews the work when signing the report."
+                        />
+                      ) : (
+                        <StatusBadge status={wp.status} explain="working_paper" />
+                      )}
                       {wp.sourceDocumentId && <Badge tone="blue">Imported</Badge>}
                     </div>
                     <p className="mt-1 text-xs text-text-secondary">
@@ -364,7 +379,7 @@ export const WorkingPapersTab = ({ engagement }: Props): JSX.Element => {
                         leftIcon={<Send className="h-3.5 w-3.5" />}
                         onClick={() => submitMut.mutate(wp.id)}
                       >
-                        Submit
+                        {isSoleAuditorOf(engagement, session.id) ? 'Mark complete' : 'Submit'}
                       </Button>
                     )}
                     {wp.status === 'submitted' && wp.createdById !== session.id && (
@@ -502,6 +517,8 @@ const CreateOrEditPaperSlideOver = ({
 }): JSX.Element => {
   const engagementId = engagement.id;
   const auditType = engagement.auditType;
+  const session = useSession();
+  const sole = isSoleAuditorOf(engagement, session.id);
   const [title, setTitle] = useState('');
   const [editorHtml, setEditorHtml] = useState('');
   const [selectedTemplateId, setSelectedTemplateId] = useState<string>('');
@@ -639,7 +656,8 @@ const CreateOrEditPaperSlideOver = ({
       if (alsoSubmit) {
         await workingPapersApi.submit(created.id);
       }
-      if (alsoSubmit) toastSubmitted('Submitted for review', 'audit_working_paper', created.id);
+      if (alsoSubmit && sole) toast.success('Marked complete. The Head of Internal Audit reviews it when signing your report.');
+      else if (alsoSubmit) toastSubmitted('Submitted for review', 'audit_working_paper', created.id);
       else toast.success('Saved as draft');
       onSaved();
       reset();
@@ -722,7 +740,7 @@ const CreateOrEditPaperSlideOver = ({
             isLoading={saving}
             disabled={templatesQuery.isLoading}
           >
-            Submit for Review
+            {sole ? 'Mark complete' : 'Submit for Review'}
           </Button>
         </div>
       }

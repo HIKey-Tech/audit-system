@@ -78,6 +78,7 @@ function buildBlockers(
 ): Blocker[] {
   const lead = e.leadAuditorName ?? 'the lead auditor';
   const manager = e.auditManagerName ?? 'the audit manager';
+  const soleAuditor = e.leadAuditorId === e.auditManagerId;
 
   switch (e.status) {
     case 'planned':
@@ -119,7 +120,11 @@ function buildBlockers(
         } else if ((wp?.rejected ?? 0) > 0) {
           out.push({ text: `The audit team to revise and resubmit ${wp?.rejected} rejected working paper${wp?.rejected === 1 ? '' : 's'}.`, });
         } else {
-          out.push({ text: `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).` });
+          out.push({
+            text: soleAuditor
+              ? `${lead} to mark working papers complete (${wp?.approved ?? 0}/${wp?.total ?? 0} complete). No separate approval: the Head of Internal Audit reviews them when signing the report.`
+              : `${manager} to approve working papers (${wp?.approved ?? 0}/${wp?.total ?? 0} approved).`,
+          });
         }
       }
       if (out.length === 0) out.push({ text: 'Fieldwork complete — moving to Quality Assurance.' });
@@ -129,7 +134,7 @@ function buildBlockers(
       const rs = e.reportStatus ?? null;
       if (!rs) return [{ text: `${lead} to draft the audit review.` }];
       if (rs === 'draft' || rs === 'rejected') return [{ text: `${lead} to submit the review for sign-off.` }];
-      if (rs === 'submitted') return [{ text: `Review awaiting sign-off — see the approval chain on the Review tab.` }];
+      if (rs === 'submitted') return [{ text: soleAuditor ? 'Review awaiting sign-off by the Head of Internal Audit — see the approval chain on the Review tab.' : `Review awaiting sign-off — see the approval chain on the Review tab.` }];
       if (rs === 'approved') {
         return [
           {

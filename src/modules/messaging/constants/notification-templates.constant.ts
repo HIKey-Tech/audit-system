@@ -550,7 +550,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDefinition[] = [
     channel: 'in_app',
     name: 'Audit Engagement Started — In-App',
     subject: null,
-    body: 'Engagement "{{engagementTitle}}" ({{engagementReference}}) on {{entityName}} has started fieldwork. Lead: {{leadAuditorName}}, Auditee: {{auditeeName}}.',
+    body: 'Engagement "{{engagementTitle}}" ({{engagementReference}}) on {{entityName}} has started fieldwork. {{peopleLine}}.',
     description:
       'In-app variant of engagement-started notification.',
   },
@@ -570,7 +570,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDefinition[] = [
     channel: 'in_app',
     name: 'Audit Engagement Stage Updated — In-App',
     subject: null,
-    body: 'Engagement "{{engagementTitle}}" ({{engagementReference}}) moved from {{previousStage}} to {{newStage}}.',
+    body: 'Engagement "{{engagementTitle}}" ({{engagementReference}}) {{transition}}. {{peopleLine}}.',
     description:
       'In-app variant of engagement stage change notification.',
   },
@@ -590,7 +590,7 @@ export const NOTIFICATION_TEMPLATES: NotificationTemplateDefinition[] = [
     channel: 'in_app',
     name: 'Audit Engagement Closed — In-App',
     subject: null,
-    body: 'Engagement "{{engagementTitle}}" ({{engagementReference}}) on {{entityName}} was closed on {{closedDate}}.',
+    body: 'Engagement "{{engagementTitle}}" ({{engagementReference}}) on {{entityName}} was closed on {{closedDate}}. {{peopleLine}}.',
     description:
       'In-app variant of engagement-closed notification.',
   },

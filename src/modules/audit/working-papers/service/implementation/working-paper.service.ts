@@ -10,7 +10,7 @@ import { workflowApprovalService } from '../../../../workflow/approval/service/i
 import { WorkflowEntityType } from '../../../../workflow/domain/enum/workflow.enum';
 import { ActorContext, ExportedAuditFile } from '../../../domain/entity/audit.entity';
 import { EngagementStatus, WorkingPaperStatus } from '../../../domain/enum/audit.enum';
-import { WP_REVIEWABLE_STATUSES, assertHasPermission } from '../../../utility/audit.utility';
+import { WP_REVIEWABLE_STATUSES, assertHasPermission, isSoleAuditor } from '../../../utility/audit.utility';
 import { assertCanViewInternalArtifacts } from '../../../engagement/utility/engagement-visibility.util';
 import {
   CreateWorkingPaperRequestDto,
@@ -186,6 +186,22 @@ export class WorkingPaperService implements IWorkingPaperService {
     if (paper.created_by_id !== actor.id) throw AppError.forbidden('Only the creator can submit this working paper');
     if (!WP_REVIEWABLE_STATUSES.includes(paper.status as WorkingPaperStatus)) {
       throw AppError.badRequest('Only draft or rejected working papers can be submitted');
+    }
+
+    // A sole auditor (lead and manager are the same person) has no one at manager level to review a working paper.
+    // It is marked complete straight away; the Head of Internal Audit reviews the work through the report.
+    if (isSoleAuditor(paper.engagement, actor.id)) {
+      const completed = await prisma.audit_Working_Paper.update({
+        where: { id },
+        data: { status: WorkingPaperStatus.Approved, rejection_reason: null, reviewed_by_id: null },
+      });
+      // Same follow-up as a normal approval: the engagement may now meet its "working papers done" gate.
+      await import('../../../engagement/service/implementation/engagement-status.reconciler')
+        .then((m) => m.reconcileEngagementForApprovalEntity('audit_working_paper', id, actor.id))
+        .catch((err: unknown) => logger.warn('Engagement reconcile after sole-auditor completion failed', { workingPaperId: id, err }));
+      logger.info('Audit working paper completed by sole auditor', { workingPaperId: id, actorId: actor.id });
+      auditLogService.logAsync({ userId: actor.id, action: 'audit.working_paper.complete_sole_auditor', module: 'audit', entityType: 'audit_working_paper', entityId: id });
+      return this._decorate(mapWorkingPaperToResponse(completed));
     }
 
     const { updated, approval } = await prisma.$transaction(async (tx) => {
