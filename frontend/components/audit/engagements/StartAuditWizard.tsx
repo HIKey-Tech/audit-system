@@ -73,9 +73,6 @@ export const StartAuditWizard = ({
   const [pasteOpen, setPasteOpen] = useState(false);
   const [pasteText, setPasteText] = useState('');
   const [pasteBusy, setPasteBusy] = useState(false);
-  // The main auditee is pre-filled from the entity's owners; remember which entity so edits are never overwritten.
-  const ownersPrefilledFor = useRef<string | null>(null);
-  const [prefilledFrom, setPrefilledFrom] = useState<string | null>(null);
   const [candidateSearch, setCandidateSearch] = useState('');
   const [start, setStart] = useState('');
   const [end, setEnd] = useState('');
@@ -105,8 +102,6 @@ export const StartAuditWizard = ({
     setUniverseId('');
     setExtraAreaIds([]);
     setExtraAuditeeIds([]);
-    ownersPrefilledFor.current = null;
-    setPrefilledFrom(null);
     setAuditType(initialAuditType ?? 'compliance');
     setPriority('medium');
     setAdhocReason('');
@@ -208,26 +203,6 @@ export const StartAuditWizard = ({
     staleTime: 5 * 60_000,
     enabled: open,
   });
-  // An entity's owner is the person who answers for it, so they are the natural main auditee. Pre-fill them (and any
-  // further owners as other auditees) once, unless an owner is actually an Internal Audit person (a data slip).
-  useEffect(() => {
-    if (step !== 2 || !primaryEntityId || auditeeId || ownersPrefilledFor.current === primaryEntityId) return;
-    const entity = (universe.data?.items ?? []).find((e) => e.id === primaryEntityId);
-    if (!entity || !usersQuery.data) return;
-    ownersPrefilledFor.current = primaryEntityId;
-    const AUDIT_TEAM = ['head_internal_audit', 'financial_auditor', 'compliance_auditor', 'system_auditor', 'dg'];
-    const isTeam = (id: string): boolean =>
-      (usersQuery.data?.items.find((u) => u.id === id)?.roles ?? []).some((r) => AUDIT_TEAM.includes(r.name));
-    const ownerIds = (entity.ownerIds && entity.ownerIds.length > 0 ? entity.ownerIds : [entity.ownerId]).filter(
-      (id) => id && !isTeam(id) && id !== leadAuditorId && id !== auditManagerId,
-    );
-    if (ownerIds.length === 0) return;
-    setAuditeeId(ownerIds[0]);
-    setExtraAuditeeIds((prev) => [...new Set([...prev, ...ownerIds.slice(1)])]);
-    setPrefilledFrom(entity.name);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step, primaryEntityId, auditeeId, universe.data, usersQuery.data]);
-
   /** Adds everyone in a pasted list of emails. People not in the system yet are created (as with 'add by email'). */
   const addPastedAuditees = async (): Promise<void> => {
     const emails = [...new Set((pasteText.match(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g) ?? []).map((e) => e.toLowerCase()))];
@@ -790,13 +765,8 @@ export const StartAuditWizard = ({
               <ScoredUserSelect role="audit_manager" auditType={effectiveAuditType} priority={priority} value={auditManagerId} onChange={setAuditManagerId} excludeIds={[leadAuditorId, auditeeId].filter(Boolean)} />
             </FormField>
           </div>
-          <FormField label="Main auditee: the owner of the area being audited" required tooltip="The person who answers for the area being audited, usually its head (the owner recorded on the entity). They are the main contact who provides evidence and management responses. Add everyone else being audited below.">
+          <FormField label="Main auditee: the person being audited" required tooltip="Choose the person in charge of what is being audited, such as the head of the department or unit. They are the main contact who is told about the audit, provides evidence and answers findings. This is NOT the auditor. Add everyone else being audited in the next box. Not signed in to IAMS yet? Use 'Add by AD corporate email'.">
             <UserSelect value={auditeeId} onChange={setAuditeeId} excludeIds={[leadAuditorId, auditManagerId, ...extraAuditeeIds].filter(Boolean)} />
-            {prefilledFrom && auditeeId && (
-              <p className="mt-1 text-[11px] text-primary">
-                Filled in from the owner of {prefilledFrom}. Change it if someone else will answer for this audit.
-              </p>
-            )}
           </FormField>
           <FormField
             label="Other people being audited (optional)"
@@ -943,7 +913,7 @@ export const StartAuditWizard = ({
             <Row label="Title" value={title} />
             <Row label="Lead auditor" value={userName(leadAuditorId)} />
             <Row label="Audit manager" value={userName(auditManagerId)} />
-            <Row label="Main auditee (area owner)" value={userName(auditeeId)} />
+            <Row label="Main auditee (being audited)" value={userName(auditeeId)} />
             {extraAuditeeIds.length > 0 && <Row label="Other auditees" value={extraAuditeeIds.map(userName).join(', ')} />}
             {extraAreaIds.length > 0 && <Row label="Other areas" value={extraAreaIds.map(entityName).join(', ')} />}
             <Row
